@@ -4,7 +4,7 @@ class pyPD(torch.nn.Module) :
 
     #refer to [Liu et al. 2017]
     def __init__(self, x, v, S, M, dt) :
-        super(pyPD, self).__init__()
+        super(ProjectiveDynamics, self).__init__()
 
         self.x = x                              #initial position
         self.v = v                              #initial velocity
