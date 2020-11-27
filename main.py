@@ -43,15 +43,6 @@ if __name__ == '__main__':
     fig = plt.figure()
     ax = fig.add_subplot(projection = '3d')
     test = ax.scatter([],[],[])
-    ax.set_xlim([-50, 50])
-    ax.set_ylim([-50, 50])
-    ax.set_zlim([-50, 50])
 
-    def update(frame) :
-      x = np.transpose(pypd.forward().numpy())
-      test._offsets3d = (x[0],x[1],x[2])
-
-    ani = FuncAnimation(fig, update, frames=5, blit=False, repeat = True)  
-    plt.show()
 
 
