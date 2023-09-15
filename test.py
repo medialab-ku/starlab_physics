@@ -32,13 +32,15 @@ mesh_list = []
 mesh_num_vert_list = []
 total_indices_list = []
 
-total_mesh = TotalMesh()
-
 @ti.dataclass
 class Grain:
-    p: vec  # Position
+    p: vec  # Prev Position
+    x: vec  # Curr Position
+    g: vec
+    h: ti.f32
     m: ti.f32  # Mass
     r: ti.f32  # Radius
+    y: vec
     v: vec  # Velocity
     a: vec  # Acceleration
     f: vec  # Force
@@ -134,7 +136,6 @@ for i in range(mesh_num):
 
 
 num_verts = sum(mesh_num_vert_list)
-total_verts = ti.field(dtype=ti.u32, shape=(num_verts, 3))
 
 total_verts_np = np.zeros((num_verts, 3), dtype=np.float32)
 for i in range(mesh_num):
@@ -143,8 +144,9 @@ for i in range(mesh_num):
 # No duplicated vertices
 assert len(np.unique(total_verts_np, axis=0)) == len(total_verts_np), "duplicated vertices"
 
-total_verts.from_numpy(total_verts_np)
-
+gf = Grain.field(shape=(num_verts, ))
+total_verts = ti.field(dtype=ti.f32, shape=(num_verts * 3,))
+total_verts.from_numpy(total_verts_np.reshape(-1))
 
 @ti.kernel
 def init():
@@ -165,29 +167,30 @@ def init():
     for e in mesh_obstacle.edges:
         e.l0 = (e.verts[0].p - e.verts[1].p).norm()
     '''
-    for t_v in total_verts:
-        t_v.r = grain_r
-        t_v.m = density * math.pi * t_v.r ** 2
+    for i in gf:
+        gf[i].p = total_verts[i]
+        gf[i].r = grain_r
+        gf[i].m = density * math.pi * gf[i].r ** 2
 
 
 @ti.kernel
 def computeExternalForce():
-    for v in total_verts.verts:
-        v.f = vec(0., gravity * v.m, 0)
+    for i in gf:
+        gf[i].f = vec(0., gravity * gf[i].m, 0)
 
 
 @ti.kernel
 def compute_y(dt: ti.f32):
-    for v in total_verts.verts:
-        v.y = v.p + v.v * dt + (v.f / v.m) * dt * dt
-        v.x = v.y
+    for i in gf:
+        gf[i].y = gf[i].p + gf[i].v * dt + (gf[i].f / gf[i].m) * dt * dt
+        gf[i].x = gf[i].y
 
 damping_factor = 0.01
 
 @ti.kernel
 def applyDamping(damping_factor: ti.f32):
-    for v in total_verts.verts:
-        v.v = (1 - damping_factor) * v.v
+    for i in gf:
+        gf[i].v = (1 - damping_factor) * gf[i].v
 
 k = 1e4
 @ti.kernel
@@ -227,21 +230,21 @@ def solveStretch(mesh: ti.template()):
 
 
 @ti.kernel
-def compute_gradient_and_hessian(mesh: ti.template()):
-    for v in mesh.verts:
-        v.g = v.m * (v.x - v.y)
-        v.h = v.m
+def compute_gradient_and_hessian():
+    for i in gf:
+        gf[i].g = gf[i].m * (gf[i].x - gf[i].y)
+        gf[i].h = gf[i].m
 
     grid_particles_count.fill(0)
-    for v in mesh.verts:
-        grid_idx = ti.floor(v.p * grid_n, int)
+    for i in gf:
+        grid_idx = ti.floor(gf[i].p * grid_n, int)
         # print(grid_idx, grid_particles_count[grid_idx])
-        ti.append(grid_particles_list.parent(), grid_idx, int(v.id))
+        ti.append(grid_particles_list.parent(), grid_idx, i)
         ti.atomic_add(grid_particles_count[grid_idx], 1)
 
     # Fast collision detection
-    for v in mesh.verts:
-        grid_idx = ti.floor(v.p * grid_n, int)
+    for i in gf:
+        grid_idx = ti.floor(gf[i].p * grid_n, int)
         x_begin = max(grid_idx[0] - 1, 0)
         x_end = min(grid_idx[0] + 2, grid_n)
 
@@ -264,74 +267,74 @@ def compute_gradient_and_hessian(mesh: ti.template()):
             for l in range(grid_particles_count[neigh_i, neigh_j, neigh_k]):
                 j = grid_particles_list[neigh_i, neigh_j, neigh_k, l]
 
-                if iscur and v.id >= j:
+                if iscur and i >= j:
                     continue
-                resolve(v.id, j)
+                resolve(i, j)
 
 
 @ti.kernel
-def update_state(mesh: ti.template()):
-    for v in mesh.verts:
-        v.x -= (v.g / v.h)
+def update_state():
+    for i in gf:
+        gf[i].x -= (gf[i].g / gf[i].h)
 
 @ti.kernel
-def computeNextState(mesh: ti.template(), dt: ti.f32):
-    for v in mesh.verts:
-        v.v = (v.x - v.p) / dt
-        v.p = v.x
+def computeNextState(dt: ti.f32):
+    for i in gf:
+        gf[i].v = (gf[i].x - gf[i].p) / dt
+        gf[i].p = gf[i].x
 
 
 
 
 @ti.kernel
-def update(mesh: ti.template()):
-    for i in range(len(mesh.verts)):
-        mesh.verts.f[i] = vec(0., gravity * mesh.verts.m[i], 0)  # Apply gravity.
-        a = mesh.verts.f[i] / mesh.verts.m[i]
-        mesh.verts.v[i] += (mesh.verts.a[i] + a) * dt / 2.0
-        mesh.verts.p[i] += mesh.verts.v[i] * dt + 0.5 * a * dt**2
-        mesh.verts.a[i] = a
+def update():
+    for i in gf:
+        gf[i].f = vec(0., gravity * gf[i].m, 0)  # Apply gravity.
+        a = gf[i].f / gf[i].m
+        gf[i].v += (gf[i].a + a) * dt / 2.0
+        gf[i].p += gf[i].v * dt + 0.5 * a * dt**2
+        gf[i].a = a
 
 
 @ti.kernel
 def apply_bc():
     bounce_coef = 0.2  # Velocity damping
-    for v in total_verts.verts:
-        x = v.x[0]
-        y = v.x[1]
-        z = v.x[2]
+    for i in gf:
+        x = gf[i].x[0]
+        y = gf[i].x[1]
+        z = gf[i].x[2]
 
-        if z - v.r < 0:
-            v.x[2] = v.r
+        if z - gf[i].r < 0:
+            gf[i].x[2] = gf[i].r
             # v.v[2] *= -bounce_coef
 
-        elif z + v.r > 1.0:
-            v.x[2] = 1.0 - v.r
+        elif z + gf[i].r > 1.0:
+            gf[i].x[2] = 1.0 - gf[i].r
             # v.v[2] *= -bounce_coef
 
-        if y - v.r < 0:
-            v.x[1] = v.r
+        if y - gf[i].r < 0:
+            gf[i].x[1] = gf[i].r
             # v.v[1] *= -bounce_coef
 
-        elif y + v.r > 1.0:
-            v.x[1] = 1.0 - v.r
+        elif y + gf[i].r > 1.0:
+            gf[i].x[1] = 1.0 - gf[i].r
             # v.v[1] *= -bounce_coef
 
-        if x - v.r < 0:
-            v.x[0] = v.r
+        if x - gf[i].r < 0:
+            gf[i].x[0] = gf[i].r
             # v.v[0] *= -bounce_coef
 
-        elif x + v.r > 1.0:
-            v.x[0] = 1.0 - v.r
+        elif x + gf[i].r > 1.0:
+            gf[i].x[0] = 1.0 - gf[i].r
             # v.v[0] *= -bounce_coef
 
 
 # TODO: combine mesh & primitive
 @ti.func
 def resolve(i, j):
-    rel_pos = total_verts.verts.x[i] - total_verts.verts.x[j]
+    rel_pos = gf[i].x - gf[j].x
     dist = ti.sqrt(rel_pos[0]**2 + rel_pos[1]**2 + rel_pos[2]**2)
-    delta = -dist + total_verts.verts.r[i] + total_verts.verts.r[j]  # delta = d - 2 * r
+    delta = -dist + gf[i].r + gf[j].r  # delta = d - 2 * r
     if delta > 0:  # in contact
         normal = rel_pos / dist
         f1 = normal * delta * stiffness
@@ -341,10 +344,10 @@ def resolve(i, j):
         # C = 2. * (1. / ti.sqrt(1. + (math.pi / ti.log(restitution_coef))**2)) * ti.sqrt(K * M)
         # V = (mesh_obstacle.verts.v[j] - mesh_obstacle.verts.v[i]) * normal
         # f2 = C * V * normal
-        total_verts.verts.g[i] -= dt * dt * f1
-        total_verts.verts.g[j] += dt * dt * f1
-        total_verts.verts.h[i] += dt * dt * stiffness
-        total_verts.verts.h[j] += dt * dt * stiffness
+        gf[i].g -= dt * dt * f1
+        gf[j].g += dt * dt * f1
+        gf[i].h += dt * dt * stiffness
+        gf[j].h += dt * dt * stiffness
 
 
 grid_particles_list = ti.field(ti.i32)
