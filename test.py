@@ -18,13 +18,13 @@ n = 9000  # Number of grains
 density = 100.0
 stiffness = 8e2
 restitution_coef = 0.001
-gravity = -5.81
+gravity = -5
 dt = 0.001  # Larger dt might lead to unstable results.
 substeps = 60
 
 mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
-mesh_scale_list = [1.0, 1.0]
-mesh_pos_list = [vec(0.5, 3.0, 0.5), vec(0.5, 0.5, 0.5)]
+mesh_scale_list = [0.05, 0.05]
+mesh_pos_list = [vec(0.5, 1.0, 0.5), vec(0.5, 0.7, 0.5)]
 mesh_num = len(mesh_path_list)
 
 num_verts = ti.i32
@@ -44,8 +44,6 @@ class Grain:
     v: vec  # Velocity
     a: vec  # Acceleration
     f: vec  # Force
-
-gf = Grain.field(shape=(n, ))
 
 grid_n = 64
 grid_size = 5.0 / grid_n  # Simulation domain of size [0, 1]
@@ -83,12 +81,20 @@ def scale(scale_factor: ti.float32, mesh: ti.template()):
     for v in mesh.verts:
         v.p = scale_factor * v.p
 
+    for e in mesh.edges:
+        e.l0 = (e.verts[0].p - e.verts[1].p).norm()
+
 @ti.kernel
 def rotate(mesh: ti.template(), rot_rad: ti.math.vec3):
     for v in mesh.verts:
         v_4d = ti.Vector([v.p[0], v.p[1], v.p[2], 1])
         rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
         v.p = ti.Vector([rv[0], rv[1], rv[2]])
+
+@ti.kernel
+def initEdges(mesh: ti.template()):
+    for e in mesh.edges:
+        e.l0 = (e.verts[0].p - e.verts[1].p).norm()
 
 def initMesh(mesh_path):
     mesh_obstacle = patcher.load_mesh(mesh_path, relations=["EV", "FV", "EF"])
@@ -109,10 +115,13 @@ def initMesh(mesh_path):
     mesh_num_vert_list.append(len(mesh_obstacle.verts))
     mesh_list.append(mesh_obstacle)
 
+    initEdges(mesh_obstacle)
+
 
 def setMeshes():
     for i in range(mesh_num):
         initMesh(mesh_path_list[i])
+        scale(mesh_scale_list[i], mesh_list[i])
         translate(mesh_list[i], mesh_pos_list[i])
 
 setMeshes()
@@ -168,9 +177,14 @@ def init():
         e.l0 = (e.verts[0].p - e.verts[1].p).norm()
     '''
     for i in gf:
-        gf[i].p = total_verts[i]
+        gf[i].p = vec(total_verts[i*3+0], total_verts[i*3+1], total_verts[i*3+2])
         gf[i].r = grain_r
         gf[i].m = density * math.pi * gf[i].r ** 2
+        gf[i].x = gf[i].p
+        gf[i].y = gf[i].p
+        gf[i].v = vec(0., 0., 0.)
+        gf[i].a = vec(0., 0., 0.)
+        gf[i].f = vec(0., 0., 0.)
 
 
 @ti.kernel
@@ -192,22 +206,39 @@ def applyDamping(damping_factor: ti.f32):
     for i in gf:
         gf[i].v = (1 - damping_factor) * gf[i].v
 
-k = 1e4
+
+
+@ti.kernel
+def set_gf_info_to_mesh(mesh: ti.template(), mesh_start: ti.i32, mesh_end: ti.i32):
+    for i in gf:
+        if i >= mesh_start and i < mesh_end:
+            mesh.verts.p[i - mesh_start] = gf[i].p
+            mesh.verts.x[i - mesh_start] = gf[i].x
+            mesh.verts.g[i - mesh_start] = gf[i].g
+            mesh.verts.h[i - mesh_start] = gf[i].h
+            mesh.verts.v[i - mesh_start] = gf[i].v
+            mesh.verts.a[i - mesh_start] = gf[i].a
+            mesh.verts.f[i - mesh_start] = gf[i].f
+
+k = 1e3
 @ti.kernel
 def solveStretch(mesh: ti.template()):
     # ti.loop_config(block_dim=self.block_size)
-    ti.mesh_local(mesh.verts.g, mesh.verts.x)
     for e in mesh.edges:
         v0, v1 = e.verts[0], e.verts[1]
+        v0.x = mesh.verts.x[v0.id]
+        v1.x = mesh.verts.x[v1.id]
         n = v0.x - v1.x
         d = n.norm()
         coeff = dt * dt * k
         f = coeff * (d - e.l0) * n.normalized(1e-12)
-        v0.g += f
-        v1.g -= f
+        # print('v0: ', v0.id, 'v0 x: ', v0.x, 'v1: ', v1.id, 'v1 x: ', v1.x, 'f: ', f)
 
-        v0.h += coeff
-        v1.h += coeff
+        mesh.verts.g[v0.id] += f
+        mesh.verts.g[v1.id] -= f
+
+        mesh.verts.h[v0.id] += coeff
+        mesh.verts.h[v1.id] += coeff
 
         '''
         # w1, w2 = v0.invM, v1.invM
@@ -227,6 +258,17 @@ def solveStretch(mesh: ti.template()):
         # v0.dp += dp * w1
         # v1.dp -= dp * w2
         '''
+
+@ti.kernel
+def set_mesh_info_to_gf(mesh: ti.template(), mesh_offset: ti.i32):
+    for v in mesh.verts:
+        gf[v.id + mesh_offset].p = v.p
+        gf[v.id + mesh_offset].x = v.x
+        gf[v.id + mesh_offset].g = v.g
+        gf[v.id + mesh_offset].h = v.h
+        gf[v.id + mesh_offset].v = v.v
+        gf[v.id + mesh_offset].a = v.a
+        gf[v.id + mesh_offset].f = v.f
 
 
 @ti.kernel
@@ -270,6 +312,7 @@ def compute_gradient_and_hessian():
                 if iscur and i >= j:
                     continue
                 resolve(i, j)
+
 
 
 @ti.kernel
@@ -383,7 +426,12 @@ while window.running:
 
         ti.deactivate_all_snodes()
         compute_gradient_and_hessian()
-        solveStretch()
+        # print(gf.g)
+        for i in range(mesh_num):
+            set_gf_info_to_mesh(mesh_list[i], sum(mesh_num_vert_list[:i]), sum(mesh_num_vert_list[:i + 1]))
+            solveStretch(mesh_list[i])
+            set_mesh_info_to_gf(mesh_list[i], sum(mesh_num_vert_list[:i]))
+        # print(gf.h)
         update_state()
         apply_bc()
         computeNextState(dt)
@@ -397,10 +445,10 @@ while window.running:
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
-    # scene.particles(mesh_obstacle.verts.p, radius= grain_r, color=(0.5, 0.5, 0.5))
+    scene.particles(gf.p, radius= grain_r, color=(0.5, 0.5, 0.5))
     # scene.particles(primitive_mesh.verts.p, radius= grain_r, color=(0.5, 0.5, 0.5))
-    for i, mesh in enumerate(mesh_list):
-        scene.mesh(mesh.verts.p, total_indices_list[i], color=(0.2, 0.3, 0.8))
+    # for i, mesh in enumerate(mesh_list):
+    #     scene.mesh(mesh.verts.p, total_indices_list[i], color=(0.2, 0.3, 0.8))
     # scene.mesh(primitive_mesh.verts.p, p_indices, color=(0.5, 0.5, 0.5))
 
     canvas.scene(scene)
