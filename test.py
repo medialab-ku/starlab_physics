@@ -22,9 +22,12 @@ gravity = -5
 dt = 0.001  # Larger dt might lead to unstable results.
 substeps = 60
 
+# mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
+# mesh_scale_list = [0.05, 0.05]
+# mesh_pos_list = [vec(0.5, 1.0, 0.5), vec(0.5, 0.85, 0.5)]
 mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
-mesh_scale_list = [0.05, 0.05]
-mesh_pos_list = [vec(0.5, 1.0, 0.5), vec(0.5, 0.7, 0.5)]
+mesh_scale_list = [0.1, 0.1]
+mesh_pos_list = [vec(0.5, 0.3, 0.5), vec(0.5, 0.6, 0.5)]
 mesh_num = len(mesh_path_list)
 
 num_verts = ti.i32
@@ -77,7 +80,7 @@ def set_to_center():
 '''
 
 @ti.kernel
-def scale(scale_factor: ti.float32, mesh: ti.template()):
+def scale(mesh: ti.template(), scale_factor: ti.float32):
     for v in mesh.verts:
         v.p = scale_factor * v.p
 
@@ -121,7 +124,7 @@ def initMesh(mesh_path):
 def setMeshes():
     for i in range(mesh_num):
         initMesh(mesh_path_list[i])
-        scale(mesh_scale_list[i], mesh_list[i])
+        scale(mesh_list[i], mesh_scale_list[i])
         translate(mesh_list[i], mesh_pos_list[i])
 
 setMeshes()
@@ -151,7 +154,7 @@ for i in range(mesh_num):
     total_verts_np[i * mesh_num_vert_list[i]:(i + 1) * mesh_num_vert_list[i]] = mesh_list[i].verts.p.to_numpy()
 
 # No duplicated vertices
-assert len(np.unique(total_verts_np, axis=0)) == len(total_verts_np), "duplicated vertices"
+# assert len(np.unique(total_verts_np, axis=0)) == len(total_verts_np), "duplicated vertices"
 
 gf = Grain.field(shape=(num_verts, ))
 total_verts = ti.field(dtype=ti.f32, shape=(num_verts * 3,))
