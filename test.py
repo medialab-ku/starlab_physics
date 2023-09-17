@@ -20,7 +20,7 @@ stiffness = 8e2
 restitution_coef = 0.001
 gravity = -5
 dt = 0.001  # Larger dt might lead to unstable results.
-substeps = 60
+substeps = 5
 
 # mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
 # mesh_scale_list = [0.05, 0.05]
@@ -33,7 +33,9 @@ mesh_num = len(mesh_path_list)
 num_verts = ti.i32
 mesh_list = []
 mesh_num_vert_list = []
+mesh_num_edges_list = []
 total_indices_list = []
+total_edges_list = []
 
 @ti.dataclass
 class Grain:
@@ -116,6 +118,7 @@ def initMesh(mesh_path):
 
     mesh_obstacle.verts.p.from_numpy(mesh_obstacle.get_position_as_numpy())
     mesh_num_vert_list.append(len(mesh_obstacle.verts))
+    mesh_num_edges_list.append(len(mesh_obstacle.edges))
     mesh_list.append(mesh_obstacle)
 
     initEdges(mesh_obstacle)
@@ -146,8 +149,8 @@ for i in range(mesh_num):
     initIndices(offset, mesh_list[i])
     offset += len(mesh_list[i].faces) * 3
 
-
 num_verts = sum(mesh_num_vert_list)
+num_edges = sum(mesh_num_edges_list)
 
 total_verts_np = np.zeros((num_verts, 3), dtype=np.float32)
 for i in range(mesh_num):
@@ -159,6 +162,22 @@ for i in range(mesh_num):
 gf = Grain.field(shape=(num_verts, ))
 total_verts = ti.field(dtype=ti.f32, shape=(num_verts * 3,))
 total_verts.from_numpy(total_verts_np.reshape(-1))
+
+total_edges = ti.field(dtype=ti.u32, shape=(num_edges * 2, ))
+total_edge_l0s = ti.field(dtype=ti.f32, shape=(num_edges, ))
+@ti.kernel
+def setEdges(mesh: ti.template(), offset: ti.i32, vert_offset: ti.i32):
+    for e in mesh.edges:
+        total_edges[(offset + e.id) * 2 + 0] = e.verts[0].id + vert_offset
+        total_edges[(offset + e.id) * 2 + 1] = e.verts[1].id + vert_offset
+        total_edge_l0s[offset + e.id] = e.l0
+        print(e.id, e.l0)
+
+for i in range(mesh_num):
+    offset = sum(mesh_num_edges_list[:i])
+    vert_offset = sum(mesh_num_vert_list[:i])
+    setEdges(mesh_list[i], offset, vert_offset)
+print(total_edges)
 
 @ti.kernel
 def init():
@@ -210,38 +229,24 @@ def applyDamping(damping_factor: ti.f32):
         gf[i].v = (1 - damping_factor) * gf[i].v
 
 
-
+k = 1e4
 @ti.kernel
-def set_gf_info_to_mesh(mesh: ti.template(), mesh_start: ti.i32, mesh_end: ti.i32):
-    for i in gf:
-        if i >= mesh_start and i < mesh_end:
-            mesh.verts.p[i - mesh_start] = gf[i].p
-            mesh.verts.x[i - mesh_start] = gf[i].x
-            mesh.verts.g[i - mesh_start] = gf[i].g
-            mesh.verts.h[i - mesh_start] = gf[i].h
-            mesh.verts.v[i - mesh_start] = gf[i].v
-            mesh.verts.a[i - mesh_start] = gf[i].a
-            mesh.verts.f[i - mesh_start] = gf[i].f
-
-k = 1e3
-@ti.kernel
-def solveStretch(mesh: ti.template()):
+def solveStretch():
     # ti.loop_config(block_dim=self.block_size)
-    for e in mesh.edges:
-        v0, v1 = e.verts[0], e.verts[1]
-        v0.x = mesh.verts.x[v0.id]
-        v1.x = mesh.verts.x[v1.id]
+    for e in range(num_edges):
+        e1, e2 = total_edges[e*2+0], total_edges[e*2+1]
+        v0, v1 = gf[e1], gf[e2]
         n = v0.x - v1.x
         d = n.norm()
         coeff = dt * dt * k
-        f = coeff * (d - e.l0) * n.normalized(1e-12)
-        # print('v0: ', v0.id, 'v0 x: ', v0.x, 'v1: ', v1.id, 'v1 x: ', v1.x, 'f: ', f)
+        f = coeff * (d - total_edge_l0s[e]) * n.normalized(1e-12)
+        # print('v0 x: ', v0.x, 'v1 x: ', v1.x, 'd: ', d, 'l0: ', total_edge_l0s[e], 'f: ', f)
 
-        mesh.verts.g[v0.id] += f
-        mesh.verts.g[v1.id] -= f
+        gf[e1].g += f
+        gf[e2].g -= f
 
-        mesh.verts.h[v0.id] += coeff
-        mesh.verts.h[v1.id] += coeff
+        gf[e1].h += coeff
+        gf[e2].h += coeff
 
         '''
         # w1, w2 = v0.invM, v1.invM
@@ -261,17 +266,6 @@ def solveStretch(mesh: ti.template()):
         # v0.dp += dp * w1
         # v1.dp -= dp * w2
         '''
-
-@ti.kernel
-def set_mesh_info_to_gf(mesh: ti.template(), mesh_offset: ti.i32):
-    for v in mesh.verts:
-        gf[v.id + mesh_offset].p = v.p
-        gf[v.id + mesh_offset].x = v.x
-        gf[v.id + mesh_offset].g = v.g
-        gf[v.id + mesh_offset].h = v.h
-        gf[v.id + mesh_offset].v = v.v
-        gf[v.id + mesh_offset].a = v.a
-        gf[v.id + mesh_offset].f = v.f
 
 
 @ti.kernel
@@ -429,16 +423,12 @@ while window.running:
 
         ti.deactivate_all_snodes()
         compute_gradient_and_hessian()
-        # print(gf.g)
-        for i in range(mesh_num):
-            set_gf_info_to_mesh(mesh_list[i], sum(mesh_num_vert_list[:i]), sum(mesh_num_vert_list[:i + 1]))
-            solveStretch(mesh_list[i])
-            set_mesh_info_to_gf(mesh_list[i], sum(mesh_num_vert_list[:i]))
-        # print(gf.h)
+        solveStretch()
         update_state()
         apply_bc()
         computeNextState(dt)
         applyDamping(damping_factor)
+    # print('step ', step, ', substeps ', substeps)
     step += 1
     camera.position(3, 2, 3)
     camera.lookat(0.5, 0.5, 0.5)
