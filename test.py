@@ -25,15 +25,20 @@ substeps = 5
 # mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
 # mesh_scale_list = [0.05, 0.05]
 # mesh_pos_list = [vec(0.5, 1.0, 0.5), vec(0.5, 0.85, 0.5)]
-mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
+mesh_path_list = ["obj_models/square.obj", "obj_models/square.obj"]
 mesh_scale_list = [0.1, 0.1]
-mesh_pos_list = [vec(0.5, 0.3, 0.5), vec(0.5, 0.6, 0.5)]
+mesh_pos_list = [vec(0.5, 0.3, 0.5), vec(0.4, 0.6, 0.4)]
+# mesh_path_list = ["obj_models/square.obj"]
+# mesh_scale_list = [0.1]
+# mesh_pos_list = [vec(0.5, 0.3, 0.5)]
 mesh_num = len(mesh_path_list)
 
 num_verts = ti.i32
 mesh_list = []
 mesh_num_vert_list = []
 mesh_num_edges_list = []
+mesh_num_faces_list = []
+total_faces_list = []
 total_indices_list = []
 total_edges_list = []
 
@@ -115,10 +120,10 @@ def initMesh(mesh_path):
                                'f': ti.math.vec3}, reorder=False)
 
     mesh_obstacle.edges.place({'l0': ti.f32}, reorder=False)
-
     mesh_obstacle.verts.p.from_numpy(mesh_obstacle.get_position_as_numpy())
     mesh_num_vert_list.append(len(mesh_obstacle.verts))
     mesh_num_edges_list.append(len(mesh_obstacle.edges))
+    mesh_num_faces_list.append(len(mesh_obstacle.faces))
     mesh_list.append(mesh_obstacle)
 
     initEdges(mesh_obstacle)
@@ -133,21 +138,27 @@ def setMeshes():
 setMeshes()
 
 total_indices_len = 0
+total_faces_len = 0
 for i in range(mesh_num):
     total_indices_len += len(mesh_list[i].faces) * 3
+    total_faces_len += len(mesh_list[i].faces)
+    print(i, total_faces_len)
 mesh_indices = ti.field(dtype=ti.u32, shape=(total_indices_len))
 
 @ti.kernel
-def initIndices(offset: int, mesh: ti.template()):
+def initIndices(offset: int, mesh: ti.template(), vert_offset: ti.i32):
     for f in mesh.faces:
-        mesh_indices[offset + f.id * 3 + 0] = f.verts[0].id
-        mesh_indices[offset + f.id * 3 + 1] = f.verts[1].id
-        mesh_indices[offset + f.id * 3 + 2] = f.verts[2].id
+        mesh_indices[offset + f.id * 3 + 0] = f.verts[0].id + vert_offset
+        mesh_indices[offset + f.id * 3 + 1] = f.verts[1].id + vert_offset
+        mesh_indices[offset + f.id * 3 + 2] = f.verts[2].id + vert_offset
 
 offset = 0
 for i in range(mesh_num):
-    initIndices(offset, mesh_list[i])
+    vert_offset = sum(mesh_num_vert_list[:i])
+    initIndices(offset, mesh_list[i], vert_offset)
     offset += len(mesh_list[i].faces) * 3
+
+print(mesh_indices.to_numpy())
 
 num_verts = sum(mesh_num_vert_list)
 num_edges = sum(mesh_num_edges_list)
@@ -171,13 +182,11 @@ def setEdges(mesh: ti.template(), offset: ti.i32, vert_offset: ti.i32):
         total_edges[(offset + e.id) * 2 + 0] = e.verts[0].id + vert_offset
         total_edges[(offset + e.id) * 2 + 1] = e.verts[1].id + vert_offset
         total_edge_l0s[offset + e.id] = e.l0
-        print(e.id, e.l0)
 
 for i in range(mesh_num):
     offset = sum(mesh_num_edges_list[:i])
     vert_offset = sum(mesh_num_vert_list[:i])
     setEdges(mesh_list[i], offset, vert_offset)
-print(total_edges)
 
 @ti.kernel
 def init():
@@ -267,6 +276,39 @@ def solveStretch():
         # v1.dp -= dp * w2
         '''
 
+@ti.func
+def compute_triangle_cells():
+    for f in range(total_faces_len):
+        p1I = ti.floor(gf[mesh_indices[f*3+0]].p * grid_n, int)
+        p2I = ti.floor(gf[mesh_indices[f*3+1]].p * grid_n, int)
+        p3I = ti.floor(gf[mesh_indices[f*3+2]].p * grid_n, int)
+
+        v1 = p2I - p1I
+        v2 = p3I - p1I
+        dot00 = v1.dot(v1)
+        dot11 = v2.dot(v2)
+        dot01 = v1.dot(v2)
+
+        # find the cells which has the triangle
+        minI = ti.min(p1I, p2I, p3I)
+        maxI = ti.max(p1I, p2I, p3I)
+
+        # print(f, p1I, p2I, p3I)
+        for i, j, k in ti.ndrange((minI[0], maxI[0]+1), (minI[1], maxI[1]+1), (minI[2], maxI[2]+1)):
+            # is_in = False
+            v0 = ti.Vector([i, j, k]) - p1I
+            dot02 = v0.dot(v1)
+            dot12 = v0.dot(v2)
+            denom = dot00 * dot11 - dot01 * dot01
+            if abs(denom) < 1e-8:
+                continue
+            u = (dot11 * dot02 - dot01 * dot12) / denom
+            v = (dot00 * dot12 - dot01 * dot02) / denom
+            w = 1 - u - v
+            if 0 <= u <= 1 and 0 <= v <= 1 and 0 <= w <= 1:
+                ti.append(grid_triangle_list.parent(), (i, j, k), f)
+                # is_in = True
+            # print(f, u, v, w, i, j, k, is_in)
 
 @ti.kernel
 def compute_gradient_and_hessian():
@@ -280,6 +322,8 @@ def compute_gradient_and_hessian():
         # print(grid_idx, grid_particles_count[grid_idx])
         ti.append(grid_particles_list.parent(), grid_idx, i)
         ti.atomic_add(grid_particles_count[grid_idx], 1)
+
+    compute_triangle_cells()
 
     # Fast collision detection
     for i in gf:
@@ -309,6 +353,14 @@ def compute_gradient_and_hessian():
                 if iscur and i >= j:
                     continue
                 resolve(i, j)
+
+            # collision with triangle
+            if grid_triangle_list[neigh_i, neigh_j, neigh_k].length() != 0:
+                for fIdx in range(grid_triangle_list[neigh_i, neigh_j, neigh_k].length()):
+                    f = grid_triangle_list[neigh_i, neigh_j, neigh_k, fIdx]
+                    if i != mesh_indices[f*3+0] and i != mesh_indices[f*3+1] and i != mesh_indices[f*3+2]:
+                        # if i is not in the triangle indices
+                        resolve_triangle(i, f)
 
 
 
@@ -390,21 +442,34 @@ def resolve(i, j):
         gf[j].h += dt * dt * stiffness
 
 
+@ti.func
+def resolve_triangle(i, f):
+    rel_pos1 = gf[i].x - gf[mesh_indices[f*3+0]].x
+    rel_pos2 = gf[i].x - gf[mesh_indices[f*3+1]].x
+    rel_pos3 = gf[i].x - gf[mesh_indices[f*3+2]].x
+
+    dist1 = ti.sqrt(rel_pos1[0]**2 + rel_pos1[1]**2 + rel_pos1[2]**2)
+    dist2 = ti.sqrt(rel_pos2[0]**2 + rel_pos2[1]**2 + rel_pos2[2]**2)
+    dist3 = ti.sqrt(rel_pos3[0]**2 + rel_pos3[1]**2 + rel_pos3[2]**2)
+
+    normal = ti.math.cross(gf[mesh_indices[f*3+1]].x - gf[mesh_indices[f*3+0]].x, gf[mesh_indices[f*3+2]].x - gf[mesh_indices[f*3+0]].x)
+    new_point_on_triangle = gf[i].x - dist1 * normal
+
+
 grid_particles_list = ti.field(ti.i32)
 grid_block = ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n))
-partical_array = grid_block.dynamic(ti.l, n)
-partical_array.place(grid_particles_list)
+particle_array = grid_block.dynamic(ti.l, n)
+particle_array.place(grid_particles_list)
 
 grid_particles_count = ti.field(ti.i32)
 ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n)).place(grid_particles_count)
 
+triangle_block = ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n))
+grid_triangle_list = ti.field(ti.i32)
+triangle_idx = triangle_block.dynamic(ti.l, total_faces_len)
+triangle_idx.place(grid_triangle_list)
 
-# set_to_center()
-# scale(4, mesh_obstacle)
-# translate(ti.math.vec3(0.5, 0.6, 0.5), mesh_obstacle)
 
-# scale(0.05, primitive_mesh)
-# translate(ti.math.vec3(0.5, 0.2, 0.5), primitive_mesh)
 init()
 window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), vsync=True)
 canvas = window.get_canvas()
@@ -428,7 +493,6 @@ while window.running:
         apply_bc()
         computeNextState(dt)
         applyDamping(damping_factor)
-    # print('step ', step, ', substeps ', substeps)
     step += 1
     camera.position(3, 2, 3)
     camera.lookat(0.5, 0.5, 0.5)
