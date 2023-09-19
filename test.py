@@ -7,27 +7,26 @@ import os
 
 from mesh import TotalMesh
 
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cuda, debug=True)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-n = 9000  # Number of grains
 
 density = 100.0
 stiffness = 8e2
 restitution_coef = 0.001
-gravity = -5
+gravity = -30
 dt = 0.001  # Larger dt might lead to unstable results.
-substeps = 5
+substeps = 3
 
 # mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
 # mesh_scale_list = [0.05, 0.05]
 # mesh_pos_list = [vec(0.5, 1.0, 0.5), vec(0.5, 0.85, 0.5)]
-mesh_path_list = ["obj_models/square.obj", "obj_models/square.obj"]
+mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
 mesh_scale_list = [0.1, 0.1]
-mesh_pos_list = [vec(0.5, 0.3, 0.5), vec(0.4, 0.6, 0.4)]
+mesh_pos_list = [vec(0.5, 0.6, 0.5), vec(0.47, 0.3, 0.45)]
 # mesh_path_list = ["obj_models/square.obj"]
 # mesh_scale_list = [0.1]
 # mesh_pos_list = [vec(0.5, 0.3, 0.5)]
@@ -63,7 +62,6 @@ grain_r = 0.01
 
 assert grain_r * 2 < grid_size
 
-region_height = n / 10
 padding = 0.2
 region_width = 1.0 - padding * 2
 
@@ -142,7 +140,6 @@ total_faces_len = 0
 for i in range(mesh_num):
     total_indices_len += len(mesh_list[i].faces) * 3
     total_faces_len += len(mesh_list[i].faces)
-    print(i, total_faces_len)
 mesh_indices = ti.field(dtype=ti.u32, shape=(total_indices_len))
 
 @ti.kernel
@@ -157,8 +154,6 @@ for i in range(mesh_num):
     vert_offset = sum(mesh_num_vert_list[:i])
     initIndices(offset, mesh_list[i], vert_offset)
     offset += len(mesh_list[i].faces) * 3
-
-print(mesh_indices.to_numpy())
 
 num_verts = sum(mesh_num_vert_list)
 num_edges = sum(mesh_num_edges_list)
@@ -190,23 +185,6 @@ for i in range(mesh_num):
 
 @ti.kernel
 def init():
-    '''
-    for v in mesh_obstacle.verts:
-        # Spread grains in a restricted area.
-        # h = i // region_height
-        # sq = i % region_height
-        # l = sq * grid_size
-
-        #  all random
-        # pos = vec(0 + ti.random() * 1, ti.random() * 0.3, ti.random() * 1)
-
-        # v.p = pos
-        v.r = grain_r
-        v.m = density * math.pi * v.r ** 2
-
-    for e in mesh_obstacle.edges:
-        e.l0 = (e.verts[0].p - e.verts[1].p).norm()
-    '''
     for i in gf:
         gf[i].p = vec(total_verts[i*3+0], total_verts[i*3+1], total_verts[i*3+2])
         gf[i].r = grain_r
@@ -243,7 +221,7 @@ k = 1e4
 def solveStretch():
     # ti.loop_config(block_dim=self.block_size)
     for e in range(num_edges):
-        e1, e2 = total_edges[e*2+0], total_edges[e*2+1]
+        e1, e2 = ti.i32(total_edges[e*2+0]), ti.i32(total_edges[e*2+1])
         v0, v1 = gf[e1], gf[e2]
         n = v0.x - v1.x
         d = n.norm()
@@ -357,9 +335,10 @@ def compute_gradient_and_hessian():
             # collision with triangle
             if grid_triangle_list[neigh_i, neigh_j, neigh_k].length() != 0:
                 for fIdx in range(grid_triangle_list[neigh_i, neigh_j, neigh_k].length()):
-                    f = grid_triangle_list[neigh_i, neigh_j, neigh_k, fIdx]
+                    f = ti.i32(grid_triangle_list[neigh_i, neigh_j, neigh_k, ti.i32(fIdx)])
                     if i != mesh_indices[f*3+0] and i != mesh_indices[f*3+1] and i != mesh_indices[f*3+2]:
                         # if i is not in the triangle indices
+                        # print(i, f)
                         resolve_triangle(i, f)
 
 
@@ -441,24 +420,54 @@ def resolve(i, j):
         gf[i].h += dt * dt * stiffness
         gf[j].h += dt * dt * stiffness
 
-
+cor = 1e3
 @ti.func
 def resolve_triangle(i, f):
-    rel_pos1 = gf[i].x - gf[mesh_indices[f*3+0]].x
-    rel_pos2 = gf[i].x - gf[mesh_indices[f*3+1]].x
-    rel_pos3 = gf[i].x - gf[mesh_indices[f*3+2]].x
+    f1 = gf[mesh_indices[f*3+0]].x
+    f2 = gf[mesh_indices[f*3+1]].x
+    f3 = gf[mesh_indices[f*3+2]].x
+    point = gf[i].x
 
-    dist1 = ti.sqrt(rel_pos1[0]**2 + rel_pos1[1]**2 + rel_pos1[2]**2)
-    dist2 = ti.sqrt(rel_pos2[0]**2 + rel_pos2[1]**2 + rel_pos2[2]**2)
-    dist3 = ti.sqrt(rel_pos3[0]**2 + rel_pos3[1]**2 + rel_pos3[2]**2)
+    e1 = f2 - f1
+    e2 = f3 - f1
+    normal = e1.cross(e2).normalized(1e-12)
+    d = point - f1
+    dist = d.dot(normal)
+    point_on_triangle = point - dist * normal
+    d1 = point_on_triangle - f1
+    d2 = point_on_triangle - f2
+    d3 = point_on_triangle - f3
 
-    normal = ti.math.cross(gf[mesh_indices[f*3+1]].x - gf[mesh_indices[f*3+0]].x, gf[mesh_indices[f*3+2]].x - gf[mesh_indices[f*3+0]].x)
-    new_point_on_triangle = gf[i].x - dist1 * normal
+    f_area = e1.cross(e2).norm() / 2
+    area1 = e1.cross(d1).norm() / 2
+    area2 = e2.cross(d2).norm() / 2
+    area3 = (f3 - f2).cross(d3).norm() / 2
+    is_in_triangle = abs(f_area - (area1 + area2 + area3)) < 1e-2
+
+    # weights (if the point_on_triangle is close to the vertex, the weight is large)
+    w1 = 1 / (d1.norm() + 1e-8)
+    w2 = 1 / (d2.norm() + 1e-8)
+    w3 = 1 / (d3.norm() + 1e-8)
+    total_w = w1 + w2 + w3
+    w1 /= total_w
+    w2 /= total_w
+    w3 /= total_w
+
+    if dist < gf[i].r and is_in_triangle:
+        gf[i].g -= dt * dt * (gf[i].r - dist) * normal * cor
+        gf[mesh_indices[f*3+0]].g += dt * dt * (gf[i].r - dist) * normal * cor * w1
+        gf[mesh_indices[f*3+1]].g += dt * dt * (gf[i].r - dist) * normal * cor * w2
+        gf[mesh_indices[f*3+2]].g += dt * dt * (gf[i].r - dist) * normal * cor * w3
+
+        gf[i].h -= dt * dt * cor
+        gf[mesh_indices[f*3+0]].h += dt * dt * cor * w1
+        gf[mesh_indices[f*3+1]].h += dt * dt * cor * w2
+        gf[mesh_indices[f*3+2]].h += dt * dt * cor * w3
 
 
 grid_particles_list = ti.field(ti.i32)
 grid_block = ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n))
-particle_array = grid_block.dynamic(ti.l, n)
+particle_array = grid_block.dynamic(ti.l, num_verts)
 particle_array.place(grid_particles_list)
 
 grid_particles_count = ti.field(ti.i32)
@@ -502,11 +511,12 @@ while window.running:
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
-    scene.particles(gf.p, radius= grain_r, color=(0.5, 0.5, 0.5))
+    # scene.particles(gf.p, radius= grain_r, color=(0.5, 0.5, 0.5))
     # scene.particles(primitive_mesh.verts.p, radius= grain_r, color=(0.5, 0.5, 0.5))
     # for i, mesh in enumerate(mesh_list):
     #     scene.mesh(mesh.verts.p, total_indices_list[i], color=(0.2, 0.3, 0.8))
-    # scene.mesh(primitive_mesh.verts.p, p_indices, color=(0.5, 0.5, 0.5))
+    scene.mesh(gf.p, mesh_indices, color=(0.5, 0.5, 0.5))
+
 
     canvas.scene(scene)
     window.show()
