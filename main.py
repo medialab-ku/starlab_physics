@@ -10,7 +10,7 @@ mf = mf.mathFunctions()
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', default="obj_models/square_big.obj")
-parser.add_argument('--sequence', default="seq_models/Kyra_DVStandClubbing/Kyra_DVStandClubbing")
+parser.add_argument('--sequence', default="seq_models/Kyra_DVStandClubbing/Kyra_DVStandClubbing_0000.obj")
 parser.add_argument('--primitive', default="obj_models/square.obj")
 parser.add_argument('--arch', default='gpu')
 parser.add_argument('--test', action='store_true')
@@ -18,7 +18,7 @@ args = parser.parse_args()
 
 ti.init(arch=getattr(ti, args.arch))
 
-mesh = Patcher.load_mesh(args.model, relations=["FV"])
+mesh = Patcher.load_mesh(args.sequence, relations=["FV"])
 mesh.verts.place({'x': ti.math.vec3,
                   'ox': ti.math.vec3,
                   'new_x': ti.math.vec3,

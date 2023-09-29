@@ -7,7 +7,7 @@ import os
 
 from mesh import TotalMesh
 
-ti.init(arch=ti.cuda, debug=True)
+ti.init(arch=ti.cuda, device_memory_fraction=0.95)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
@@ -15,21 +15,37 @@ SAVE_FRAMES = False
 window_size = 1024  # Number of pixels of the window
 
 density = 100.0
-stiffness = 8e2
+stiffness = 1e2
 restitution_coef = 0.001
-gravity = -30
+gravity = -10
 dt = 0.001  # Larger dt might lead to unstable results.
 substeps = 3
 
-# mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
-# mesh_scale_list = [0.05, 0.05]
-# mesh_pos_list = [vec(0.5, 1.0, 0.5), vec(0.5, 0.85, 0.5)]
 mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
 mesh_scale_list = [0.1, 0.1]
-mesh_pos_list = [vec(0.5, 0.6, 0.5), vec(0.47, 0.3, 0.45)]
-# mesh_path_list = ["obj_models/square.obj"]
-# mesh_scale_list = [0.1]
-# mesh_pos_list = [vec(0.5, 0.3, 0.5)]
+mesh_pos_list = [vec(0.5, 0.8, 0.5), vec(0.5, 0.5, 0.5)]
+mesh_rotate_list = [vec(0.0, 0.0, 0.0), vec(0.0, 0.0, 0.0)]
+
+# mesh_path_list = ["obj_models/bunny.obj"]
+# mesh_scale_list = [3]
+# mesh_pos_list = [vec(0.5, 0.2, 0.3)]
+# mesh_rotate_list = [vec(0.0, 0.0, 0.0)]
+
+# mesh_path_list = ["obj_models/square_big.obj"]
+# mesh_scale_list = [0.04]
+# mesh_pos_list = [vec(0.5, 0.5, 0.5)]
+# mesh_rotate_list = [vec(0.0, 0.0, 0.0)]
+
+# mesh_path_list = ["seq_models/Kyra_DVStandClubbing/Kyra_DVStandClubbing_0100.obj"]
+# mesh_scale_list = [0.4]
+# mesh_pos_list = [vec(0.5, 0.2, 0.5)]
+# mesh_rotate_list = [vec(90.0, 0.0, 0.0)]
+# updating_mesh = [False]
+
+# mesh_path_list = ["seq_models/Kyra_DVStandClubbing/Kyra_DVStandClubbing_0000.obj", "obj_models/cube.obj"]
+# mesh_scale_list = [0.4, 0.5]
+# mesh_pos_list = [vec(0.5, 0.2, 0.5), vec(0.8, 0.8, 0.8)]
+# mesh_rotate_list = [vec(90.0, 0.0, 0.0), vec(0.0, 0.0, 0.0)]
 mesh_num = len(mesh_path_list)
 
 num_verts = ti.i32
@@ -37,9 +53,12 @@ mesh_list = []
 mesh_num_vert_list = []
 mesh_num_edges_list = []
 mesh_num_faces_list = []
-total_faces_list = []
-total_indices_list = []
-total_edges_list = []
+# mesh_sum_vert_list = ti.ndarray(shape=(mesh_num), dtype=ti.i32)
+# mesh_sum_edges_list = ti.ndarray(shape=(mesh_num), dtype=ti.i32)
+# mesh_sum_faces_list = ti.ndarray(shape=(mesh_num), dtype=ti.i32)
+# mesh_sum_vert_list_np = np.empty()
+# mesh_sum_edges_list_np = np.empty()
+# mesh_sum_faces_list_np = np.empty()
 
 @ti.dataclass
 class Grain:
@@ -54,13 +73,13 @@ class Grain:
     a: vec  # Acceleration
     f: vec  # Force
 
-grid_n = 64
-grid_size = 5.0 / grid_n  # Simulation domain of size [0, 1]
+grid_n = 128
+grid_size = 1.0 / grid_n  # Simulation domain of size [0, 1]
 print(f"Grid size: {grid_n}x{grid_n}x{grid_n}")
 
-grain_r = 0.01
+grain_r = 0.001
 
-assert grain_r * 2 < grid_size
+# assert grain_r * 2 < grid_size
 
 padding = 0.2
 region_width = 1.0 - padding * 2
@@ -93,9 +112,10 @@ def scale(mesh: ti.template(), scale_factor: ti.float32):
         e.l0 = (e.verts[0].p - e.verts[1].p).norm()
 
 @ti.kernel
-def rotate(mesh: ti.template(), rot_rad: ti.math.vec3):
+def rotate(mesh: ti.template(), rot_deg: ti.math.vec3):
     for v in mesh.verts:
         v_4d = ti.Vector([v.p[0], v.p[1], v.p[2], 1])
+        rot_rad = ti.math.radians(rot_deg)
         rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
         v.p = ti.Vector([rv[0], rv[1], rv[2]])
 
@@ -122,18 +142,25 @@ def initMesh(mesh_path):
     mesh_num_vert_list.append(len(mesh_obstacle.verts))
     mesh_num_edges_list.append(len(mesh_obstacle.edges))
     mesh_num_faces_list.append(len(mesh_obstacle.faces))
+
+    # mesh_sum_vert_list_np.append(sum(mesh_num_vert_list))
+    # mesh_sum_edges_list_np.append(sum(mesh_num_edges_list))
+    # mesh_sum_faces_list_np.append(sum(mesh_num_faces_list))
     mesh_list.append(mesh_obstacle)
 
     initEdges(mesh_obstacle)
-
 
 def setMeshes():
     for i in range(mesh_num):
         initMesh(mesh_path_list[i])
         scale(mesh_list[i], mesh_scale_list[i])
+        rotate(mesh_list[i], mesh_rotate_list[i])
         translate(mesh_list[i], mesh_pos_list[i])
 
 setMeshes()
+# mesh_sum_vert_list.from_numpy(mesh_sum_vert_list_np)
+# mesh_sum_edges_list.from_numpy(mesh_sum_edges_list_np)
+# mesh_sum_faces_list.from_numpy(mesh_sum_faces_list_np)
 
 total_indices_len = 0
 total_faces_len = 0
@@ -158,9 +185,15 @@ for i in range(mesh_num):
 num_verts = sum(mesh_num_vert_list)
 num_edges = sum(mesh_num_edges_list)
 
+print("num_verts:", num_verts, ", num_edges:", num_edges)
+
 total_verts_np = np.zeros((num_verts, 3), dtype=np.float32)
 for i in range(mesh_num):
     total_verts_np[i * mesh_num_vert_list[i]:(i + 1) * mesh_num_vert_list[i]] = mesh_list[i].verts.p.to_numpy()
+
+print("vertex range: ", np.min(total_verts_np, axis=0), np.max(total_verts_np, axis=0))
+print(total_verts_np)
+print(mesh_indices)
 
 # No duplicated vertices
 # assert len(np.unique(total_verts_np, axis=0)) == len(total_verts_np), "duplicated vertices"
@@ -216,7 +249,6 @@ def applyDamping(damping_factor: ti.f32):
         gf[i].v = (1 - damping_factor) * gf[i].v
 
 
-k = 1e4
 @ti.kernel
 def solveStretch():
     # ti.loop_config(block_dim=self.block_size)
@@ -225,7 +257,7 @@ def solveStretch():
         v0, v1 = gf[e1], gf[e2]
         n = v0.x - v1.x
         d = n.norm()
-        coeff = dt * dt * k
+        coeff = dt * dt * stiffness
         f = coeff * (d - total_edge_l0s[e]) * n.normalized(1e-12)
         # print('v0 x: ', v0.x, 'v1 x: ', v1.x, 'd: ', d, 'l0: ', total_edge_l0s[e], 'f: ', f)
 
@@ -257,36 +289,29 @@ def solveStretch():
 @ti.func
 def compute_triangle_cells():
     for f in range(total_faces_len):
-        p1I = ti.floor(gf[mesh_indices[f*3+0]].p * grid_n, int)
-        p2I = ti.floor(gf[mesh_indices[f*3+1]].p * grid_n, int)
-        p3I = ti.floor(gf[mesh_indices[f*3+2]].p * grid_n, int)
+        p1I = mesh_indices[f*3+0]
+        p2I = mesh_indices[f*3+1]
+        p3I = mesh_indices[f*3+2]
 
-        v1 = p2I - p1I
-        v2 = p3I - p1I
-        dot00 = v1.dot(v1)
-        dot11 = v2.dot(v2)
-        dot01 = v1.dot(v2)
+        p1 = gf[p1I].p
+        p2 = gf[p2I].p
+        p3 = gf[p3I].p
 
-        # find the cells which has the triangle
-        minI = ti.min(p1I, p2I, p3I)
-        maxI = ti.max(p1I, p2I, p3I)
+        normal = (p2 - p1).cross(p3 - p1).normalized(1e-12)
 
-        # print(f, p1I, p2I, p3I)
+        p1g = ti.floor(p1 * grid_n, int)
+        p2g = ti.floor(p2 * grid_n, int)
+        p3g = ti.floor(p3 * grid_n, int)
+
+        minI = ti.min(p1g, p2g, p3g)
+        maxI = ti.max(p1g, p2g, p3g)
+
         for i, j, k in ti.ndrange((minI[0], maxI[0]+1), (minI[1], maxI[1]+1), (minI[2], maxI[2]+1)):
-            # is_in = False
-            v0 = ti.Vector([i, j, k]) - p1I
-            dot02 = v0.dot(v1)
-            dot12 = v0.dot(v2)
-            denom = dot00 * dot11 - dot01 * dot01
-            if abs(denom) < 1e-8:
-                continue
-            u = (dot11 * dot02 - dot01 * dot12) / denom
-            v = (dot00 * dot12 - dot01 * dot02) / denom
-            w = 1 - u - v
-            if 0 <= u <= 1 and 0 <= v <= 1 and 0 <= w <= 1:
-                ti.append(grid_triangle_list.parent(), (i, j, k), f)
-                # is_in = True
-            # print(f, u, v, w, i, j, k, is_in)
+            p = ti.Vector([(i+0.5)/grid_n, (j+0.5)/grid_n, (k+0.5)/grid_n])
+            dist = (p - p1).dot(normal)
+            if abs(dist) < (1/grid_n) * 2:
+                # print(i, j, k, f, dist)
+                ti.append(grid_triangle_list.parent(), ti.Vector([i, j, k]), f)
 
 @ti.kernel
 def compute_gradient_and_hessian():
@@ -294,12 +319,12 @@ def compute_gradient_and_hessian():
         gf[i].g = gf[i].m * (gf[i].x - gf[i].y)
         gf[i].h = gf[i].m
 
-    grid_particles_count.fill(0)
-    for i in gf:
-        grid_idx = ti.floor(gf[i].p * grid_n, int)
-        # print(grid_idx, grid_particles_count[grid_idx])
-        ti.append(grid_particles_list.parent(), grid_idx, i)
-        ti.atomic_add(grid_particles_count[grid_idx], 1)
+    # grid_particles_count.fill(0)
+    # for i in gf:
+    #     grid_idx = ti.floor(gf[i].p * grid_n, int)
+    #     # print(grid_idx, grid_particles_count[grid_idx])
+    #     ti.append(grid_particles_list.parent(), grid_idx, i)
+    #     ti.atomic_add(grid_particles_count[grid_idx], 1)
 
     compute_triangle_cells()
 
@@ -324,18 +349,19 @@ def compute_gradient_and_hessian():
             if neigh_k == grid_idx[2] and (neigh_i + neigh_j) > (grid_idx[0] + grid_idx[1]) and neigh_i <= grid_idx[0]:
                 continue
             # same grid
-            iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
-            for l in range(grid_particles_count[neigh_i, neigh_j, neigh_k]):
-                j = grid_particles_list[neigh_i, neigh_j, neigh_k, l]
-
-                if iscur and i >= j:
-                    continue
-                resolve(i, j)
+            # iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
+            # for l in range(grid_particles_count[neigh_i, neigh_j, neigh_k]):
+            #     j = grid_particles_list[neigh_i, neigh_j, neigh_k, l]
+            #
+            #     if iscur and i >= j:
+            #         continue
+            #     resolve(i, j)
 
             # collision with triangle
             if grid_triangle_list[neigh_i, neigh_j, neigh_k].length() != 0:
                 for fIdx in range(grid_triangle_list[neigh_i, neigh_j, neigh_k].length()):
-                    f = ti.i32(grid_triangle_list[neigh_i, neigh_j, neigh_k, ti.i32(fIdx)])
+                    f = grid_triangle_list[neigh_i, neigh_j, neigh_k, fIdx]
+                    # self_collsion = check_self_collision(i, f)
                     if i != mesh_indices[f*3+0] and i != mesh_indices[f*3+1] and i != mesh_indices[f*3+2]:
                         # if i is not in the triangle indices
                         # print(i, f)
@@ -420,7 +446,20 @@ def resolve(i, j):
         gf[i].h += dt * dt * stiffness
         gf[j].h += dt * dt * stiffness
 
-cor = 1e3
+# @ti.func
+# def check_self_collision(i, f):
+#     vert_idx, face_idx = -1, -1
+#     for idx in range(mesh_num):
+#         if mesh_sum_vert_list[idx] <= i < mesh_sum_vert_list[idx+1]:
+#             vert_idx = idx
+#         if mesh_sum_faces_list[idx] <= f < mesh_sum_faces_list[idx+1]:
+#             face_idx = idx
+#     if vert_idx == face_idx:
+#         return True
+#     else:
+#         return False
+
+cor = 2e1
 @ti.func
 def resolve_triangle(i, f):
     f1 = gf[mesh_indices[f*3+0]].x
@@ -438,11 +477,12 @@ def resolve_triangle(i, f):
     d2 = point_on_triangle - f2
     d3 = point_on_triangle - f3
 
-    f_area = e1.cross(e2).norm() / 2
-    area1 = e1.cross(d1).norm() / 2
-    area2 = e2.cross(d2).norm() / 2
-    area3 = (f3 - f2).cross(d3).norm() / 2
-    is_in_triangle = abs(f_area - (area1 + area2 + area3)) < 1e-2
+    area_triangle = e1.cross(e2).norm() / 2
+    area1 = d1.cross(d2).norm() / (2 * area_triangle)
+    area2 = d2.cross(d3).norm() / (2 * area_triangle)
+    area3 = d3.cross(d1).norm() / (2 * area_triangle)
+
+    is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
 
     # weights (if the point_on_triangle is close to the vertex, the weight is large)
     w1 = 1 / (d1.norm() + 1e-8)
@@ -453,11 +493,12 @@ def resolve_triangle(i, f):
     w2 /= total_w
     w3 /= total_w
 
-    if dist < gf[i].r and is_in_triangle:
-        gf[i].g -= dt * dt * (gf[i].r - dist) * normal * cor
-        gf[mesh_indices[f*3+0]].g += dt * dt * (gf[i].r - dist) * normal * cor * w1
-        gf[mesh_indices[f*3+1]].g += dt * dt * (gf[i].r - dist) * normal * cor * w2
-        gf[mesh_indices[f*3+2]].g += dt * dt * (gf[i].r - dist) * normal * cor * w3
+    if dist <= 1e-3 and is_on_triangle:
+        # print('i:', i, 'f:', f, 'point:', point, 'f1:', f1, 'f2:', f2, 'f3:', f3)
+        gf[i].g -= dt * dt * (1e-3 - dist) * normal * cor
+        gf[mesh_indices[f*3+0]].g += dt * dt * (1e-3 - dist) * normal * cor * w1
+        gf[mesh_indices[f*3+1]].g += dt * dt * (1e-3 - dist) * normal * cor * w2
+        gf[mesh_indices[f*3+2]].g += dt * dt * (1e-3 - dist) * normal * cor * w3
 
         gf[i].h -= dt * dt * cor
         gf[mesh_indices[f*3+0]].h += dt * dt * cor * w1
@@ -474,13 +515,13 @@ grid_particles_count = ti.field(ti.i32)
 ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n)).place(grid_particles_count)
 
 triangle_block = ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n))
-grid_triangle_list = ti.field(ti.i32)
-triangle_idx = triangle_block.dynamic(ti.l, total_faces_len)
+triangle_idx = triangle_block.dynamic(ti.l, total_faces_len, chunk_size=64)
+grid_triangle_list = ti.field(int)
 triangle_idx.place(grid_triangle_list)
 
 
 init()
-window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), vsync=True)
+window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), vsync=True, fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()
@@ -503,7 +544,8 @@ while window.running:
         computeNextState(dt)
         applyDamping(damping_factor)
     step += 1
-    camera.position(3, 2, 3)
+    print('step:', step)
+    camera.position(2, 2, 2)
     camera.lookat(0.5, 0.5, 0.5)
     camera.fov(30)
     camera.up(0, 1, 0)
@@ -511,11 +553,11 @@ while window.running:
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
-    # scene.particles(gf.p, radius= grain_r, color=(0.5, 0.5, 0.5))
+    scene.particles(gf.p, radius= grain_r*10, color=(0.5, 0.5, 0.5))
     # scene.particles(primitive_mesh.verts.p, radius= grain_r, color=(0.5, 0.5, 0.5))
     # for i, mesh in enumerate(mesh_list):
     #     scene.mesh(mesh.verts.p, total_indices_list[i], color=(0.2, 0.3, 0.8))
-    scene.mesh(gf.p, mesh_indices, color=(0.5, 0.5, 0.5))
+    # scene.mesh(gf.p, mesh_indices, color=(0.5, 0.5, 0.5))
 
 
     canvas.scene(scene)
