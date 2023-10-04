@@ -6,6 +6,23 @@ class contact_particle:
     vid: ti.u8
     w  : ti.math.vec3
 
+@ti.dataclass
+class edge:
+    vid: ti.math.uvec2
+    l0: ti.float32
+
+@ti.dataclass
+class node:
+    x   : ti.math.vec3
+    v   : ti.math.vec3
+    f   : ti.math.vec3
+    y   : ti.math.vec3
+    x_k : ti.math.vec3
+    m   : ti.float32
+    grad: ti.math.vec3
+    hii : ti.math.mat3
+
+
 @ti.data_oriented
 class Solver:
     def __init__(self,
@@ -30,6 +47,11 @@ class Solver:
         self.radius = 0.003
         self.contact_stiffness = 1e3
         self.contact_particle = contact_particle.field(shape=(len(self.my_mesh.mesh.verts)))
+        self.edges = edge.field(shape=len(self.my_mesh.mesh.edges))
+        self.init_edges()
+        self.nodes = node.field(shape=(len(self.my_mesh.mesh.verts)))
+        self.init_nodes()
+
         self.grid_n = 64
         self.grid_particles_list = ti.field(ti.i32)
         self.grid_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
@@ -44,6 +66,20 @@ class Solver:
 
         self.initContactParticleData()
 
+
+    @ti.kernel
+    def init_edges(self):
+        for e in self.my_mesh.mesh.edges:
+            self.edges[e.id].vid[0] = e.verts[0].id
+            self.edges[e.id].vid[1] = e.verts[1].id
+            self.edges[e.id].l0 = e.l0
+
+    @ti.kernel
+    def init_nodes(self):
+        for v in self.my_mesh.mesh.verts:
+            self.nodes[v.id].x = v.x
+            self.nodes[v.id].m = v.m
+            self.nodes[v.id].v = v.v
 
     # def setRadius(self):
     #     min = 100
@@ -76,114 +112,120 @@ class Solver:
 
     @ti.kernel
     def computeNextState(self):
-        for v in self.my_mesh.mesh.verts:
-            v.v = (v.x_k - v.x) / self.dt
-            v.x = v.x_k
+        for n in self.nodes:
+            self.nodes[n].v = (self.nodes[n].x_k - self.nodes[n].x) / self.dt
+            self.nodes[n].x = self.nodes[n].x_k
+
+        # for v in self.my_mesh.mesh.verts:
+        #     v.v = (v.x_k - v.x) / self.dt
+        #     v.x = v.x_k
 
 
     @ti.kernel
     def computeGradientAndElementWiseHessian(self):
 
         # momentum gradient M * (x - y) and hessian M
-        for v in self.my_mesh.mesh.verts:
-            v.grad = v.m * (v.x_k - v.y) - v.f * self.dtSq
-            v.hii = v.m * self.idenity3
+        for n in self.nodes:
+            self.nodes[n].grad = self.nodes[n].m * (self.nodes[n].x_k - self.nodes[n].y) - self.nodes[n].f * self.dtSq
+            self.nodes[n].hii = self.nodes[n].m * self.idenity3
 
         # elastic energy gradient \nabla E (x)
-        for e in self.my_mesh.mesh.edges:
-            l = (e.verts[0].x_k - e.verts[1].x_k).norm()
-            normal = (e.verts[0].x_k - e.verts[1].x_k).normalized(1e-12)
+        for e in self.edges:
+            v0, v1 = self.edges[e].vid[0], self.edges[e].vid[1]
+            l = (self.nodes[v0].x_k - self.nodes[v1].x_k).norm()
+            normal = (self.nodes[v0].x_k - self.nodes[v1].x_k).normalized(1e-12)
             coeff = self.dtSq * self.k
-            grad_e = coeff * (l - e.l0) * normal
-            e.verts[0].grad += grad_e
-            e.verts[1].grad -= grad_e
-            e.verts[0].hii += coeff * self.idenity3
-            e.verts[1].hii += coeff * self.idenity3
+            grad_e = coeff * (l - self.edges[e].l0) * normal
+            self.nodes[v0].grad += grad_e
+            self.nodes[v1].grad -= grad_e
+            self.nodes[v0].hii += coeff * self.idenity3
+            self.nodes[v1].hii += coeff * self.idenity3
+
 
         # handling bottom contact
-        for v in self.my_mesh.mesh.verts:
-            if (v.x_k[1] < 0):
-                depth = v.x_k[1] - self.bottom
+        for n in self.nodes:
+            if (self.nodes[n].x_k[1] < 0):
+                depth = self.nodes[n].x_k[1] - self.bottom
                 up = ti.math.vec3(0, 1, 0)
-                v.grad += self.dtSq * self.contact_stiffness * depth * up
-                v.hii  += self.dtSq * self.contact_stiffness * self.idenity3
+                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+                self.nodes[n].hii  += self.dtSq * self.contact_stiffness * self.idenity3
 
-            if (v.x_k[1] > 1):
-                depth = 1 - v.x_k[1]
+            if (self.nodes[n].x_k[1] > 1):
+                depth = 1 - self.nodes[n].x_k[1]
                 up = ti.math.vec3(0, -1, 0)
-                v.grad += self.dtSq * self.contact_stiffness * depth * up
-                v.hii  += self.dtSq * self.contact_stiffness * self.idenity3
+                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+                self.nodes[n].hii  += self.dtSq * self.contact_stiffness * self.idenity3
 
-            if (v.x_k[0] < 0):
-                depth = v.x_k[0] - self.bottom
+            if (self.nodes[n].x_k[0] < 0):
+                depth = self.nodes[n].x_k[0] - self.bottom
                 up = ti.math.vec3(1, 0, 0)
-                v.grad += self.dtSq * self.contact_stiffness * depth * up
-                v.hii += self.dtSq * self.contact_stiffness * self.idenity3
+                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+                self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
-            if (v.x_k[0] > 1):
-                depth = 1 - v.x_k[0]
+            if (self.nodes[n].x_k[0] > 1):
+                depth = 1 - self.nodes[n].x_k[0]
                 up = ti.math.vec3(-1, 0, 0)
-                v.grad += self.dtSq * self.contact_stiffness * depth * up
-                v.hii += self.dtSq * self.contact_stiffness * self.idenity3
+                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+                self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
-            if (v.x_k[2] < 0):
-                depth = v.x_k[2] - self.bottom
+            if (self.nodes[n].x_k[2] < 0):
+                depth = self.nodes[n].x_k[2] - self.bottom
                 up = ti.math.vec3(0, 0, 1)
-                v.grad += self.dtSq * self.contact_stiffness * depth * up
-                v.hii += self.dtSq * self.contact_stiffness * self.idenity3
+                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+                self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
-            if (v.x_k[2] > 1):
-                depth = 1 - v.x_k[2]
+            if (self.nodes[n].x_k[2] > 1):
+                depth = 1 - self.nodes[n].x_k[2]
                 up = ti.math.vec3(0, 0, -1)
-                v.grad += self.dtSq * self.contact_stiffness * depth * up
-                v.hii += self.dtSq * self.contact_stiffness * self.idenity3
+                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+                self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
         # handling sphere contact
-        for v in self.my_mesh.mesh.verts:
-            center = ti.math.vec3(0, -0.3, 0)
-            radius = 0.3
-            dist = (v.x_k - center).norm()
-            normal = (v.x_k - center).normalized(1e-6)
-            if(dist < radius):
-                coeff = self.dtSq * self.contact_stiffness
-                v.grad += coeff * (dist - radius) * normal
-                v.hii += coeff * self.idenity3
+        # for v in self.my_mesh.mesh.verts:
+        #     center = ti.math.vec3(0, -0.3, 0)
+        #     radius = 0.3
+        #     dist = (v.x_k - center).norm()
+        #     normal = (v.x_k - center).normalized(1e-6)
+        #     if(dist < radius):
+        #         coeff = self.dtSq * self.contact_stiffness
+        #         v.grad += coeff * (dist - radius) * normal
+        #         v.hii += coeff * self.idenity3
 
-        self.grid_particles_count.fill(0)
-        for v in self.my_mesh.mesh.verts:
-            grid_idx = ti.floor(v.x_k * self.grid_n, int)
-            ti.append(self.grid_particles_list.parent(), grid_idx, int(v.id))
-            ti.atomic_add(self.grid_particles_count[grid_idx], 1)
+        # self.grid_particles_count.fill(0)
+        # for v in self.my_mesh.mesh.verts:
+        #     grid_idx = ti.floor(v.x_k * self.grid_n, int)
+        #     ti.append(self.grid_particles_list.parent(), grid_idx, int(v.id))
+        #     ti.atomic_add(self.grid_particles_count[grid_idx], 1)
+        #
+        # for v in self.my_mesh.mesh.verts:
+        #     grid_idx = ti.floor(v.x_k * self.grid_n, int)
+        #     x_begin = max(grid_idx[0] - 1, 0)
+        #     x_end = min(grid_idx[0] + 2, self.grid_n)
+        #
+        #     y_begin = max(grid_idx[1] - 1, 0)
+        #     y_end = min(grid_idx[1] + 2, self.grid_n)
+        #
+        #     z_begin = max(grid_idx[2] - 1, 0)
+        #     # only need one side
+        #     z_end = min(grid_idx[2] + 1, self.grid_n)
+        #
+        #     # todo still serialize
+        #     for neigh_i, neigh_j, neigh_k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
+        #
+        #         # on split plane
+        #         if neigh_k == grid_idx[2] and (neigh_i + neigh_j) > (grid_idx[0] + grid_idx[1]) and neigh_i <= grid_idx[0]:
+        #             continue
+        #         # same grid
+        #         iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
+        #         for l in range(self.grid_particles_count[neigh_i, neigh_j, neigh_k]):
+        #             j = self.grid_particles_list[neigh_i, neigh_j, neigh_k, l]
+        #
+        #             if iscur and v.id >= j:
+        #                 continue
+        #             self.resolve_contact(v.id, j)
 
-        for v in self.my_mesh.mesh.verts:
-            grid_idx = ti.floor(v.x_k * self.grid_n, int)
-            x_begin = max(grid_idx[0] - 1, 0)
-            x_end = min(grid_idx[0] + 2, self.grid_n)
-
-            y_begin = max(grid_idx[1] - 1, 0)
-            y_end = min(grid_idx[1] + 2, self.grid_n)
-
-            z_begin = max(grid_idx[2] - 1, 0)
-            # only need one side
-            z_end = min(grid_idx[2] + 1, self.grid_n)
-
-            # todo still serialize
-            for neigh_i, neigh_j, neigh_k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
-
-                # on split plane
-                if neigh_k == grid_idx[2] and (neigh_i + neigh_j) > (grid_idx[0] + grid_idx[1]) and neigh_i <= grid_idx[0]:
-                    continue
-                # same grid
-                iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
-                for l in range(self.grid_particles_count[neigh_i, neigh_j, neigh_k]):
-                    j = self.grid_particles_list[neigh_i, neigh_j, neigh_k, l]
-
-                    if iscur and v.id >= j:
-                        continue
-                    self.resolve_contact(v.id, j)
-
-        for v in self.my_mesh.mesh.verts:
-            v.x_k -= v.hii.inverse() @ v.grad
+        for n in self.nodes:
+            self.nodes[n].x_k -= self.nodes[n].hii.inverse() @ self.nodes[n].grad
 
 
     # @ti.kernel
@@ -192,15 +234,19 @@ class Solver:
 
     @ti.kernel
     def computeY(self):
-        for v in self.my_mesh.mesh.verts:
-            v.y = v.x + v.v * self.dt + (v.f / v.m) * self.dtSq
+        # for v in self.my_mesh.mesh.verts:
+        #     v.y = v.x + v.v * self.dt + (v.f / v.m) * self.dtSq
+
+        for n in self.nodes:
+            self.nodes[n].y = self.nodes[n].x + self.nodes[n].v * self.dt + (self.nodes[n].f / self.nodes[n].m) * self.dtSq
 
     def update(self):
 
         # self.computeExternalForce()
-        self.my_mesh.mesh.verts.f.fill([0.0, self.gravity, 0.0])
+        # self.my_mesh.mesh.verts.f.fill([0.0, self.gravity, 0.0])
+        self.nodes.f.fill([0.0, self.gravity, 0.0])
         self.computeY()
-        self.my_mesh.mesh.verts.x_k.copy_from(self.my_mesh.mesh.verts.y)
+        self.nodes.x_k.copy_from(self.nodes.y)
         for i in range(self.max_iter):
             self.computeGradientAndElementWiseHessian()
 
