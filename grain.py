@@ -8,7 +8,7 @@ vec = ti.math.vec3
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-n = 9000  # Number of grains
+n = 10000  # Number of grains
 
 density = 100.0
 stiffness = 8e3
@@ -125,7 +125,6 @@ grid_particles_list = ti.field(ti.i32)
 grid_block = ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n))
 partical_array = grid_block.dynamic(ti.l, n)
 partical_array.place(grid_particles_list)
-
 grid_particles_count = ti.field(ti.i32)
 ti.root.dense(ti.ijk, (grid_n, grid_n, grid_n)).place(grid_particles_count)
 
