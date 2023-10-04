@@ -15,21 +15,21 @@ SAVE_FRAMES = False
 window_size = 1024  # Number of pixels of the window
 
 density = 100.0
-stiffness = 1e2
+stiffness = 1e4
 restitution_coef = 0.001
 gravity = -10
-dt = 0.001  # Larger dt might lead to unstable results.
+dt = 0.003  # Larger dt might lead to unstable results.
 substeps = 3
 
-mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
-mesh_scale_list = [0.1, 0.1]
-mesh_pos_list = [vec(0.5, 0.8, 0.5), vec(0.5, 0.5, 0.5)]
-mesh_rotate_list = [vec(0.0, 0.0, 0.0), vec(0.0, 0.0, 0.0)]
+# mesh_path_list = ["obj_models/cube.obj", "obj_models/cube.obj"]
+# mesh_scale_list = [0.1, 0.1]
+# mesh_pos_list = [vec(0.5, 0.8, 0.5), vec(0.5, 0.5, 0.5)]
+# mesh_rotate_list = [vec(0.0, 0.0, 0.0), vec(0.0, 0.0, 0.0)]
 
-# mesh_path_list = ["obj_models/bunny.obj"]
-# mesh_scale_list = [3]
-# mesh_pos_list = [vec(0.5, 0.2, 0.3)]
-# mesh_rotate_list = [vec(0.0, 0.0, 0.0)]
+mesh_path_list = ["obj_models/clubbing_dress.obj"]
+mesh_scale_list = [0.4]
+mesh_pos_list = [vec(0.4, 0.2, 0.3)]
+mesh_rotate_list = [vec(90.0, 90.0, 90.0)]
 
 # mesh_path_list = ["obj_models/square_big.obj"]
 # mesh_scale_list = [0.04]
@@ -289,9 +289,9 @@ def solveStretch():
 @ti.func
 def compute_triangle_cells():
     for f in range(total_faces_len):
-        p1I = mesh_indices[f*3+0]
-        p2I = mesh_indices[f*3+1]
-        p3I = mesh_indices[f*3+2]
+        p1I = mesh_indices[f * 3 + 0]
+        p2I = mesh_indices[f * 3 + 1]
+        p3I = mesh_indices[f * 3 + 2]
 
         p1 = gf[p1I].p
         p2 = gf[p2I].p
@@ -326,46 +326,46 @@ def compute_gradient_and_hessian():
     #     ti.append(grid_particles_list.parent(), grid_idx, i)
     #     ti.atomic_add(grid_particles_count[grid_idx], 1)
 
-    compute_triangle_cells()
-
-    # Fast collision detection
-    for i in gf:
-        grid_idx = ti.floor(gf[i].p * grid_n, int)
-        x_begin = max(grid_idx[0] - 1, 0)
-        x_end = min(grid_idx[0] + 2, grid_n)
-
-        y_begin = max(grid_idx[1] - 1, 0)
-        y_end = min(grid_idx[1] + 2, grid_n)
-
-        z_begin = max(grid_idx[2] - 1, 0)
-
-        # only need one side
-        z_end = min(grid_idx[2] + 1, grid_n)
-
-        # todo still serialize
-        for neigh_i, neigh_j, neigh_k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
-
-            # on split plane
-            if neigh_k == grid_idx[2] and (neigh_i + neigh_j) > (grid_idx[0] + grid_idx[1]) and neigh_i <= grid_idx[0]:
-                continue
-            # same grid
-            # iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
-            # for l in range(grid_particles_count[neigh_i, neigh_j, neigh_k]):
-            #     j = grid_particles_list[neigh_i, neigh_j, neigh_k, l]
-            #
-            #     if iscur and i >= j:
-            #         continue
-            #     resolve(i, j)
-
-            # collision with triangle
-            if grid_triangle_list[neigh_i, neigh_j, neigh_k].length() != 0:
-                for fIdx in range(grid_triangle_list[neigh_i, neigh_j, neigh_k].length()):
-                    f = grid_triangle_list[neigh_i, neigh_j, neigh_k, fIdx]
-                    # self_collsion = check_self_collision(i, f)
-                    if i != mesh_indices[f*3+0] and i != mesh_indices[f*3+1] and i != mesh_indices[f*3+2]:
-                        # if i is not in the triangle indices
-                        # print(i, f)
-                        resolve_triangle(i, f)
+    # compute_triangle_cells()
+    #
+    # # Fast collision detection
+    # for i in gf:
+    #     grid_idx = ti.floor(gf[i].p * grid_n, int)
+    #     x_begin = max(grid_idx[0] - 1, 0)
+    #     x_end = min(grid_idx[0] + 2, grid_n)
+    #
+    #     y_begin = max(grid_idx[1] - 1, 0)
+    #     y_end = min(grid_idx[1] + 2, grid_n)
+    #
+    #     z_begin = max(grid_idx[2] - 1, 0)
+    #
+    #     # only need one side
+    #     z_end = min(grid_idx[2] + 1, grid_n)
+    #
+    #     # todo still serialize
+    #     for neigh_i, neigh_j, neigh_k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
+    #
+    #         # on split plane
+    #         if neigh_k == grid_idx[2] and (neigh_i + neigh_j) > (grid_idx[0] + grid_idx[1]) and neigh_i <= grid_idx[0]:
+    #             continue
+    #         # same grid
+    #         # iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
+    #         # for l in range(grid_particles_count[neigh_i, neigh_j, neigh_k]):
+    #         #     j = grid_particles_list[neigh_i, neigh_j, neigh_k, l]
+    #         #
+    #         #     if iscur and i >= j:
+    #         #         continue
+    #         #     resolve(i, j)
+    #
+    #         # collision with triangle
+    #         if grid_triangle_list[neigh_i, neigh_j, neigh_k].length() != 0:
+    #             for fIdx in range(grid_triangle_list[neigh_i, neigh_j, neigh_k].length()):
+    #                 f = grid_triangle_list[neigh_i, neigh_j, neigh_k, fIdx]
+    #                 # self_collsion = check_self_collision(i, f)
+    #                 if i != mesh_indices[f*3+0] and i != mesh_indices[f*3+1] and i != mesh_indices[f*3+2]:
+    #                     # if i is not in the triangle indices
+    #                     # print(i, f)
+    #                     resolve_triangle(i, f)
 
 
 
@@ -532,17 +532,19 @@ if SAVE_FRAMES:
     os.makedirs('output', exist_ok=True)
 
 while window.running:
-    for s in range(substeps):
-        computeExternalForce()
-        compute_y(dt)
 
+    computeExternalForce()
+    compute_y(dt)
+    for s in range(substeps):
         ti.deactivate_all_snodes()
         compute_gradient_and_hessian()
         solveStretch()
         update_state()
         apply_bc()
-        computeNextState(dt)
-        applyDamping(damping_factor)
+
+    computeNextState(dt)
+    applyDamping(damping_factor)
+
     step += 1
     print('step:', step)
     camera.position(2, 2, 2)
@@ -553,7 +555,8 @@ while window.running:
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
-    scene.particles(gf.p, radius= grain_r*10, color=(0.5, 0.5, 0.5))
+    scene.particles(gf.p, radius= grain_r, color=(0.5, 0.5, 0.5))
+
     # scene.particles(primitive_mesh.verts.p, radius= grain_r, color=(0.5, 0.5, 0.5))
     # for i, mesh in enumerate(mesh_list):
     #     scene.mesh(mesh.verts.p, total_indices_list[i], color=(0.2, 0.3, 0.8))
