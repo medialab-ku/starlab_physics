@@ -7,6 +7,17 @@ class contact_particle:
     w  : ti.math.vec3
 
 @ti.dataclass
+class contact_triangle:
+    x: ti.math.vec3
+    vids: ti.math.uvec3
+    w: ti.math.vec3
+
+@ti.dataclass
+class contact_edge:
+    x: ti.math.vec3
+    w: ti.math.vec2
+
+@ti.dataclass
 class edge:
     vid: ti.math.uvec2
     l0: ti.float32
@@ -21,6 +32,10 @@ class node:
     m   : ti.float32
     grad: ti.math.vec3
     hii : ti.math.mat3
+
+@ti.dataclass
+class static_node:
+    x: ti.math.vec3
 
 
 @ti.data_oriented
@@ -44,15 +59,21 @@ class Solver:
                                       [0, 1, 0],
                                       [0, 0, 1]])
 
-        self.radius = 0.003
-        self.contact_stiffness = 1e3
-        self.contact_particle = contact_particle.field(shape=(len(self.my_mesh.mesh.verts)))
+        self.radius = 0.01
+        self.contact_stiffness = 1e5
         self.edges = edge.field(shape=len(self.my_mesh.mesh.edges))
         self.init_edges()
-        self.nodes = node.field(shape=(len(self.my_mesh.mesh.verts)))
-        self.init_nodes()
 
-        self.grid_n = 64
+        # self.contact_triangles = contact_triangle.field()
+        self.nodes = node.field(shape=(len(self.my_mesh.mesh.verts)))
+        self.num_nodes = len(self.my_mesh.mesh.verts)
+        self.num_static_verts = len(self.static_mesh.mesh.verts)
+        self.num_static_edges = len(self.static_mesh.mesh.edges)
+        self.num_static_faces = len(self.static_mesh.mesh.faces)
+        self.static_nodes = static_node.field(shape=(self.num_static_verts + self.num_static_edges + self.num_static_faces))
+        self.num_static_nodes = self.num_static_verts + self.num_static_edges + self.num_static_faces
+        self.init_nodes()
+        self.grid_n = 128
         self.grid_particles_list = ti.field(ti.i32)
         self.grid_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
         self.partical_array = self.grid_block.dynamic(ti.l, len(self.my_mesh.mesh.verts))
@@ -64,7 +85,7 @@ class Solver:
         print(f"radius: {self.radius}")
 
 
-        self.initContactParticleData()
+        # self.initContactParticleData()
 
 
     @ti.kernel
@@ -81,6 +102,16 @@ class Solver:
             self.nodes[v.id].m = v.m
             self.nodes[v.id].v = v.v
 
+        for v in self.static_mesh.mesh.verts:
+            self.static_nodes[v.id].x = v.x
+
+        for e in self.static_mesh.mesh.edges:
+            self.static_nodes[e.id + self.num_static_verts].x = 0.5 * (e.verts[0].x + e.verts[1].x)
+
+        for f in self.static_mesh.mesh.faces:
+            self.static_nodes[f.id + self.num_static_verts + self.num_static_faces].x = 0.333 * (f.verts[0].x + f.verts[1].x + f.verts[2].x)
+
+
     # def setRadius(self):
     #     min = 100
     #
@@ -89,26 +120,38 @@ class Solver:
     #             min = e.l0
     #
     #     self.radius = 0.4 * min
-
     @ti.func
     def resolve_contact(self, i, j):
         # test = i + j
-        rel_pos = self.my_mesh.mesh.verts.x_k[j] - self.my_mesh.mesh.verts.x_k[i]
+        rel_pos = self.nodes[j].x_k - self.nodes[i].x_k
         dist = rel_pos.norm()
         delta = dist - 2 * self.radius  # delta = d - 2 * r
         coeff = self.contact_stiffness * self.dtSq
         if delta < 0:  # in contact
             normal = rel_pos / dist
             f1 = normal * delta * coeff
-            # self.my_mesh.mesh.verts.grad[i] += f1
-            # self.my_mesh.mesh.verts.grad[j] -= f1
-            # self.my_mesh.mesh.verts.hii[i] += self.idenity3 * coeff
-            # self.my_mesh.mesh.verts.hii[j] += self.idenity3 * coeff
+            self.nodes[i].grad -= f1
+            self.nodes[j].grad += f1
+            self.nodes[i].hii += self.idenity3 * coeff
+            self.nodes[j].hii += self.idenity3 * coeff
 
-    @ti.kernel
-    def initContactParticleData(self):
-        for c in self.contact_particle:
-            self.contact_particle[c].vid = c
+    @ti.func
+    def resolve_contact_static(self, i, j):
+        # test = i + j
+        rel_pos = self.nodes[i].x_k - self.static_nodes[j].x
+        dist = rel_pos.norm()
+        delta = dist - 2 * self.radius  # delta = d - 2 * r
+        coeff = self.contact_stiffness * self.dtSq
+        if delta < 0:  # in contact
+            normal = rel_pos / dist
+            f1 = normal * delta * coeff
+            self.nodes[i].grad += f1
+            self.nodes[i].hii += self.idenity3 * coeff
+
+    # @ti.kernel
+    # def initContactParticleData(self):
+    #     for c in self.contact_particle:
+    #         self.contact_particle[c].vid = c
 
     @ti.kernel
     def computeNextState(self):
@@ -119,7 +162,6 @@ class Solver:
         # for v in self.my_mesh.mesh.verts:
         #     v.v = (v.x_k - v.x) / self.dt
         #     v.x = v.x_k
-
 
     @ti.kernel
     def computeGradientAndElementWiseHessian(self):
@@ -140,7 +182,6 @@ class Solver:
             self.nodes[v1].grad -= grad_e
             self.nodes[v0].hii += coeff * self.idenity3
             self.nodes[v1].hii += coeff * self.idenity3
-
 
         # handling bottom contact
         for n in self.nodes:
@@ -191,14 +232,21 @@ class Solver:
         #         v.grad += coeff * (dist - radius) * normal
         #         v.hii += coeff * self.idenity3
 
+        for i in range(self.num_nodes):
+            for j in range(i + 1, self.num_nodes):
+                self.resolve_contact(i, j)
+
+        for i in range(self.num_nodes):
+            for j in range(self.num_static_nodes):
+                self.resolve_contact_static(i, j)
         # self.grid_particles_count.fill(0)
-        # for v in self.my_mesh.mesh.verts:
-        #     grid_idx = ti.floor(v.x_k * self.grid_n, int)
-        #     ti.append(self.grid_particles_list.parent(), grid_idx, int(v.id))
+        # for n in self.nodes:
+        #     grid_idx = ti.floor(self.nodes[n].x_k * self.grid_n, int)
+        #     ti.append(self.grid_particles_list.parent(), grid_idx, int(n))
         #     ti.atomic_add(self.grid_particles_count[grid_idx], 1)
         #
-        # for v in self.my_mesh.mesh.verts:
-        #     grid_idx = ti.floor(v.x_k * self.grid_n, int)
+        # for n in self.nodes:
+        #     grid_idx = ti.floor(self.nodes[n].x_k * self.grid_n, int)
         #     x_begin = max(grid_idx[0] - 1, 0)
         #     x_end = min(grid_idx[0] + 2, self.grid_n)
         #
@@ -220,9 +268,9 @@ class Solver:
         #         for l in range(self.grid_particles_count[neigh_i, neigh_j, neigh_k]):
         #             j = self.grid_particles_list[neigh_i, neigh_j, neigh_k, l]
         #
-        #             if iscur and v.id >= j:
+        #             if iscur and n >= j:
         #                 continue
-        #             self.resolve_contact(v.id, j)
+        #             self.resolve_contact(n, j)
 
         for n in self.nodes:
             self.nodes[n].x_k -= self.nodes[n].hii.inverse() @ self.nodes[n].grad
