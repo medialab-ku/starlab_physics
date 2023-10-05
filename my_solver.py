@@ -62,10 +62,10 @@ class Solver:
                                       [0, 1, 0],
                                       [0, 0, 1]])
 
+        self.num_contacts = 0
         self.radius = 0.01
         self.contact_stiffness = 1e4
         self.edges = edge.field(shape=len(self.my_mesh.mesh.edges))
-        self.init_edges()
         self.nodes = node.field(shape=(len(self.my_mesh.mesh.verts)))
         self.num_nodes = len(self.my_mesh.mesh.verts)
         self.num_static_verts = len(self.static_mesh.mesh.verts)
@@ -78,11 +78,12 @@ class Solver:
         self.num_edges = len(self.my_mesh.mesh.edges)
         self.num_faces = len(self.my_mesh.mesh.faces)
 
-        self.static_nodes = static_node.field(shape=(self.num_static_verts + self.num_static_edges + self.num_static_faces))
-        self.static_edges = static_node.field(shape=self.num_static_edges)
+        self.static_nodes = static_node.field(shape=(self.num_static_verts))
+        self.static_edges = edge.field(shape=(self.num_static_edges))
         self.contact_triangles = contact_triangle.field(shape=len(self.my_mesh.mesh.edges))
         self.num_static_nodes = self.num_static_verts + self.num_static_edges + self.num_static_faces
         self.init_nodes()
+        self.init_edges()
         self.init_faces()
         self.grid_n = 128
         self.grid_particles_list = ti.field(ti.i32)
@@ -128,54 +129,7 @@ class Solver:
         for v in self.static_mesh.mesh.verts:
             self.static_nodes[v.id].x = v.x
 
-        for e in self.static_mesh.mesh.edges:
-            self.static_nodes[e.id + self.num_static_verts].x = 0.5 * (e.verts[0].x + e.verts[1].x)
 
-        for f in self.static_mesh.mesh.faces:
-            self.static_nodes[f.id + self.num_static_verts + self.num_static_faces].x = 0.333 * (f.verts[0].x + f.verts[1].x + f.verts[2].x)
-
-
-    # def setRadius(self):
-    #     min = 100
-    #
-    #     for e in self.my_mesh.mesh.edges:
-    #         if(min > e.l0):
-    #             min = e.l0
-    #
-    #     self.radius = 0.4 * min
-
-    # @ti.func
-    # def resolve_contact(self, i, j):
-    #     # test = i + j
-    #     i0, i1, i2 = self.contact_triangles[i].vid[0], self.contact_triangles[i].vid[1], self.contact_triangles[i].vid[2]
-    #     wi0, wi1, wi2 = self.contact_triangles[i].w[0], self.contact_triangles[i].w[1], self.contact_triangles[i].w[2]
-    #     j0, j1, j2 = self.contact_triangles[j].vid[0], self.contact_triangles[j].vid[1], self.contact_triangles[j].vid[2]
-    #     wj0, wj1, wj2 = self.contact_triangles[j].w[0], self.contact_triangles[j].w[1], self.contact_triangles[j].w[2]
-    #
-    #     rel_pos = self.contact_triangles[j].x - self.contact_triangles[i].x
-    #     dist = rel_pos.norm()
-    #     delta = dist - 2 * self.radius  # delta = d - 2 * r
-    #     coeff = self.contact_stiffness * self.dtSq
-    #     if delta < 0:  # in contact
-    #         normal = rel_pos / dist
-    #         f1 = normal * delta * coeff
-    #         self.nodes[i0].grad -= wi0 * f1
-    #         self.nodes[i1].grad -= wi1 * f1
-    #         self.nodes[i2].grad -= wi2 * f1
-    #
-    #         self.nodes[j0].grad += wj0 * f1
-    #         self.nodes[j1].grad += wj1 * f1
-    #         self.nodes[j2].grad += wj2 * f1
-    #
-    #         coef_hess = self.idenity3 * coeff
-    #
-    #         self.nodes[i0].hii += wi0 * coef_hess
-    #         self.nodes[i1].hii += wi1 * coef_hess
-    #         self.nodes[i2].hii += wi2 * coef_hess
-    #
-    #         self.nodes[j0].hii += wj0 * coef_hess
-    #         self.nodes[j1].hii += wj1 * coef_hess
-    #         self.nodes[j2].hii += wj2 * coef_hess
 
 
     @ti.kernel
@@ -247,47 +201,44 @@ class Solver:
     def resolve_edge_edge_static(self, ei, sei):
         v0, v1 = self.edges[ei].vid[0], self.edges[ei].vid[1]
         sv0, sv1 = self.static_edges[sei].vid[0], self.static_edges[sei].vid[1]
-        A = self.nodes[v0].x_k
-        B = gf[total_edges[e1 * 2 + 1]].x
-        C = gf[total_edges[e2 * 2 + 0]].x
-        D = gf[total_edges[e2 * 2 + 1]].x
+        A1 = self.nodes[v0].x_k
+        A2 = self.nodes[v1].x_k
+        B1 = self.static_nodes[sv0].x
+        B2 = self.static_nodes[sv1].x
 
-        AB = B - A
-        CD = D - C
-        nAB = AB.normalized()
+        D1 = (A2 - A1).normalized(1e-12)
+        D2 = (B2 - B1).normalized(1e-12)
 
-        nCD = CD.normalized()
+        V = A1 - B1
 
-        line = AB.cross(CD)
-        crossLineAB = line.cross(AB)
-        crossLineCD = line.cross(CD)
-        c1 = A + nAB * crossLineCD.dot(C - A) / crossLineCD.dot(nAB)
-        c2 = C + nCD * crossLineAB.dot(A - C) / crossLineAB.dot(nCD)
-        n = c2 - c1
-        dist = n.norm()
+        t1 = V.dot(D1)
+        t1 = ti.max(0.0, ti.min(1.0, t1))
 
-        w1 = 1 / (c1 - A).norm()
-        w2 = 1 / (B - c1).norm()
-        w3 = 1 / (c2 - C).norm()
-        w4 = 1 / (D - c2).norm()
-        total_w1 = w1 + w2
-        total_w2 = w3 + w4
-        w1 /= total_w1
-        w2 /= total_w1
-        w3 /= total_w2
-        w4 /= total_w2
+        w1 = t1
+        w2 = (1 - t1)
+        t2 = -V.dot(D2)
+        t2 = ti.max(0.0, ti.min(1.0, t2))
 
-        if abs(dist) < 1e-3:
-            # print('n:', n, 'dist:', dist)
-            gf[total_edges[e1 * 2 + 0]].g -= dt * dt * (1e-3 - dist) * n.normalized() * ecor * w1
-            gf[total_edges[e1 * 2 + 1]].g -= dt * dt * (1e-3 - dist) * n.normalized() * ecor * w2
-            gf[total_edges[e2 * 2 + 0]].g += dt * dt * (1e-3 - dist) * n.normalized() * ecor * w3
-            gf[total_edges[e2 * 2 + 1]].g += dt * dt * (1e-3 - dist) * n.normalized() * ecor * w4
+        p1 = A1 + t1 * D1
+        p2 = B1 + t2 * D2
 
-            gf[total_edges[e1 * 2 + 0]].h -= dt * dt * ecor * w1
-            gf[total_edges[e1 * 2 + 1]].h -= dt * dt * ecor * w2
-            gf[total_edges[e2 * 2 + 0]].h += dt * dt * ecor * w3
-            gf[total_edges[e2 * 2 + 1]].h += dt * dt * ecor * w4
+        dist = (p1 - p2).norm()
+        n = (p2 - p1).normalized(1e-12)
+
+        test = 1e-2
+        if abs(dist) < test and t1 > 0 and t1 < 1:
+            self.nodes[v0].grad -= self.dtSq * (test - dist) * n.normalized() * self.contact_stiffness * w1
+            self.nodes[v1].grad -= self.dtSq * (test - dist) * n.normalized() * self.contact_stiffness * w2
+            self.nodes[v0].hii += self.dtSq * self.contact_stiffness * w1
+            self.nodes[v1].hii += self.dtSq * self.contact_stiffness * w2
+
+
+    @ti.func
+    def reset_contact(self):
+        self.num_contacts = 0
+    @ti.func
+    def print_contact(self):
+        print(self.num_contacts)
     @ti.func
     def resolve_contact_static(self, i, j):
         # test = i + j
@@ -386,13 +337,14 @@ class Solver:
         #         v.hii += coeff * self.idenity3
 
 
-        for vi in range(self.num_nodes):
-            for sfi in range(self.num_static_faces):
-                self.resolve_vertex_triangle_static(vi, sfi)
+        # for vi in range(self.num_nodes):
+        #     for sfi in range(self.num_static_faces):
+        #         self.resolve_vertex_triangle_static(vi, sfi)
 
         for ei in range(self.num_edges):
             for sei in range(self.num_static_edges):
                 self.resolve_edge_edge_static(ei, sei)
+
 
         # for i in range(self.num_nodes):
         #     for j in range(i + 1, self.num_nodes):
