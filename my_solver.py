@@ -9,7 +9,7 @@ class contact_particle:
 @ti.dataclass
 class contact_triangle:
     x: ti.math.vec3
-    vids: ti.math.uvec3
+    vids: ti.math.ivec3
     w: ti.math.vec3
 
 @ti.dataclass
@@ -37,7 +37,6 @@ class node:
 class static_node:
     x: ti.math.vec3
 
-
 @ti.data_oriented
 class Solver:
     def __init__(self,
@@ -63,14 +62,18 @@ class Solver:
         self.contact_stiffness = 1e5
         self.edges = edge.field(shape=len(self.my_mesh.mesh.edges))
         self.init_edges()
-
-        # self.contact_triangles = contact_triangle.field()
         self.nodes = node.field(shape=(len(self.my_mesh.mesh.verts)))
         self.num_nodes = len(self.my_mesh.mesh.verts)
         self.num_static_verts = len(self.static_mesh.mesh.verts)
         self.num_static_edges = len(self.static_mesh.mesh.edges)
         self.num_static_faces = len(self.static_mesh.mesh.faces)
+
+        self.num_verts = len(self.my_mesh.mesh.verts)
+        self.num_edges = len(self.my_mesh.mesh.edges)
+        self.num_faces = len(self.my_mesh.mesh.faces)
+
         self.static_nodes = static_node.field(shape=(self.num_static_verts + self.num_static_edges + self.num_static_faces))
+        self.contact_triangles = contact_triangle.field(shape=len(self.my_mesh.mesh.edges))
         self.num_static_nodes = self.num_static_verts + self.num_static_edges + self.num_static_faces
         self.init_nodes()
         self.grid_n = 128
@@ -86,6 +89,7 @@ class Solver:
 
 
         # self.initContactParticleData()
+
 
 
     @ti.kernel
@@ -120,6 +124,62 @@ class Solver:
     #             min = e.l0
     #
     #     self.radius = 0.4 * min
+
+    # @ti.func
+    # def resolve_contact(self, i, j):
+    #     # test = i + j
+    #     i0, i1, i2 = self.contact_triangles[i].vid[0], self.contact_triangles[i].vid[1], self.contact_triangles[i].vid[2]
+    #     wi0, wi1, wi2 = self.contact_triangles[i].w[0], self.contact_triangles[i].w[1], self.contact_triangles[i].w[2]
+    #     j0, j1, j2 = self.contact_triangles[j].vid[0], self.contact_triangles[j].vid[1], self.contact_triangles[j].vid[2]
+    #     wj0, wj1, wj2 = self.contact_triangles[j].w[0], self.contact_triangles[j].w[1], self.contact_triangles[j].w[2]
+    #
+    #     rel_pos = self.contact_triangles[j].x - self.contact_triangles[i].x
+    #     dist = rel_pos.norm()
+    #     delta = dist - 2 * self.radius  # delta = d - 2 * r
+    #     coeff = self.contact_stiffness * self.dtSq
+    #     if delta < 0:  # in contact
+    #         normal = rel_pos / dist
+    #         f1 = normal * delta * coeff
+    #         self.nodes[i0].grad -= wi0 * f1
+    #         self.nodes[i1].grad -= wi1 * f1
+    #         self.nodes[i2].grad -= wi2 * f1
+    #
+    #         self.nodes[j0].grad += wj0 * f1
+    #         self.nodes[j1].grad += wj1 * f1
+    #         self.nodes[j2].grad += wj2 * f1
+    #
+    #         coef_hess = self.idenity3 * coeff
+    #
+    #         self.nodes[i0].hii += wi0 * coef_hess
+    #         self.nodes[i1].hii += wi1 * coef_hess
+    #         self.nodes[i2].hii += wi2 * coef_hess
+    #
+    #         self.nodes[j0].hii += wj0 * coef_hess
+    #         self.nodes[j1].hii += wj1 * coef_hess
+    #         self.nodes[j2].hii += wj2 * coef_hess
+
+
+    @ti.kernel
+    def init_contact_triangles(self):
+
+        for v in self.my_mesh.mesh.verts:
+            self.contact_triangles[v.id].x = v.x
+            self.contact_triangles[v.id].vids[0] = v.id
+            self.contact_triangles[v.id].vids[1] = -1
+            self.contact_triangles[v.id].vids[2] = -1
+
+        for e in self.my_mesh.mesh.edges:
+            self.contact_triangles[e.id + self.num_verts].x = 0.5 * (e.verts[0].x + e.verts[1].x)
+            self.contact_triangles[e.id + self.num_verts].vids[0] = e.verts[0].id
+            self.contact_triangles[e.id + self.num_verts].vids[1] = e.verts[1].id
+            self.contact_triangles[e.id + self.num_verts].vids[2] = -1
+
+        for f in self.my_mesh.mesh.faces:
+            self.contact_triangles[f.id + self.num_static_verts + self.num_static_faces].x = 0.333 * (f.verts[0].x + f.verts[1].x + f.verts[2].x)
+            self.contact_triangles[f.id + self.num_static_verts + self.num_static_faces].vids[0] = f.verts[0].id
+            self.contact_triangles[f.id + self.num_static_verts + self.num_static_faces].vids[1] = f.verts[1].id
+            self.contact_triangles[f.id + self.num_static_verts + self.num_static_faces].vids[2] = f.verts[2].id
+
     @ti.func
     def resolve_contact(self, i, j):
         # test = i + j
