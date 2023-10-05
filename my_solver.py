@@ -47,7 +47,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e3,
+                 k=1e5,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -56,15 +56,15 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -1.0
+        self.gravity = -6.0
         self.bottom = bottom
         self.idenity3 = ti.math.mat3([[1, 0, 0],
                                       [0, 1, 0],
                                       [0, 0, 1]])
 
         self.num_contacts = ti.field(ti.int32, shape=(1))
-        self.radius = 0.01
-        self.contact_stiffness = 1e5
+        self.radius = 0.005
+        self.contact_stiffness = 1e7
         self.edges = edge.field(shape=len(self.my_mesh.mesh.edges))
         self.nodes = node.field(shape=(len(self.my_mesh.mesh.verts)))
         self.num_nodes = len(self.my_mesh.mesh.verts)
@@ -78,10 +78,12 @@ class Solver:
         self.num_edges = len(self.my_mesh.mesh.edges)
         self.num_faces = len(self.my_mesh.mesh.faces)
 
-        self.static_nodes = static_node.field(shape=(self.num_static_verts))
         self.static_edges = edge.field(shape=(self.num_static_edges))
         self.contact_triangles = contact_triangle.field(shape=len(self.my_mesh.mesh.edges))
         self.num_static_nodes = self.num_static_verts + self.num_static_edges + self.num_static_faces
+        self.static_nodes = static_node.field(shape=(self.num_static_nodes))
+
+        self.damping_factor = 0.001
         self.init_nodes()
         self.init_edges()
         self.init_faces()
@@ -92,6 +94,9 @@ class Solver:
         self.partical_array.place(self.grid_particles_list)
         self.grid_particles_count = ti.field(ti.i32)
         ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
+
+        # self.construct_collision_grid()
+
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
         # self.setRadius()
         print(f"radius: {self.radius}")
@@ -129,8 +134,19 @@ class Solver:
         for v in self.static_mesh.mesh.verts:
             self.static_nodes[v.id].x = v.x
 
+        for e in self.static_mesh.mesh.edges:
+            self.static_nodes[e.id + self.num_static_verts].x = 0.5 * (e.verts[0].x + e.verts[1].x)
 
+        for f in self.static_mesh.mesh.faces:
+            self.static_nodes[f.id + self.num_static_verts + self.num_static_edges].x = (f.verts[0].x + f.verts[1].x + f.verts[2].x) / 3
 
+    @ti.kernel
+    def construct_collision_grid(self):
+        for sn in self.static_nodes:
+            grid_idx = ti.floor(self.static_nodes[sn].x * self.grid_n, int)
+            # print(grid_idx, grid_particles_count[grid_idx])
+            ti.append(self.grid_particles_list.parent(), grid_idx, sn)
+            ti.atomic_add(self.grid_particles_count[grid_idx], 1)
 
     @ti.kernel
     def init_contact_triangles(self):
@@ -168,6 +184,17 @@ class Solver:
             self.nodes[i].hii += self.idenity3 * coeff
             self.nodes[j].hii += self.idenity3 * coeff
 
+    @ti.func
+    def resolve_contact_static(self, i, si):
+        rel_pos = self.static_nodes[si].x - self.nodes[i].x_k
+        dist = rel_pos.norm()
+        delta = dist - 2 * self.radius  # delta = d - 2 * r
+        coeff = self.contact_stiffness * self.dtSq
+        if delta < 0:  # in contact
+            normal = rel_pos / dist
+            f1 = normal * delta * coeff
+            self.nodes[i].grad -= f1
+            self.nodes[i].hii += self.idenity3 * coeff
 
 
     @ti.func
@@ -227,20 +254,12 @@ class Solver:
 
         dist = (p1 - p2).norm()
         n = (p2 - p1).normalized(1e-12)
-
-        # print(dist)
-        # print(A)
-        # print(B)
-        # print(C)
-        # print(D)
-
-        test = 0.11
+        test = 0.01
         if dist < test:
-            print("fuck")
-            self.nodes[v0].grad += self.dtSq * (test - dist) * n.normalized() * self.contact_stiffness * w1
-            self.nodes[v1].grad += self.dtSq * (test - dist) * n.normalized() * self.contact_stiffness * w2
-            self.nodes[v0].hii += self.dtSq * self.contact_stiffness * w1
-            self.nodes[v1].hii += self.dtSq * self.contact_stiffness * w2
+            self.nodes[v0].grad += self.dtSq * (test - dist) * n.normalized() * self.contact_stiffness
+            self.nodes[v1].grad += self.dtSq * (test - dist) * n.normalized() * self.contact_stiffness
+            self.nodes[v0].hii += self.dtSq * self.contact_stiffness
+            self.nodes[v1].hii += self.dtSq * self.contact_stiffness
 
 
 
@@ -248,6 +267,7 @@ class Solver:
     def computeNextState(self):
         for n in self.nodes:
             self.nodes[n].v = (self.nodes[n].x_k - self.nodes[n].x) / self.dt
+            self.nodes[n].v*=(1 - self.damping_factor)
             self.nodes[n].x = self.nodes[n].x_k
 
         # for v in self.my_mesh.mesh.verts:
@@ -313,14 +333,41 @@ class Solver:
                 self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
 
-        for vi in range(self.num_nodes):
-            for sfi in range(self.num_static_faces):
-                self.resolve_vertex_triangle_static(vi, sfi)
+        for ni in range(self.num_verts):
+            for fi in range(self.num_static_faces):
+                self.resolve_vertex_triangle_static(ni, fi)
 
-        # for ei in range(self.num_edges):
-        #     for sei in range(self.num_static_edges):
-        #         self.resolve_edge_edge_static(0, 4)
-
+        # for ni in range(self.num_verts):
+        #     for sni in range(self.num_static_nodes):
+        #         self.resolve_contact_static(ni, sni)
+        #
+        # for n in self.nodes:
+        #     grid_idx = ti.floor(self.nodes[n].x_k * self.grid_n, int)
+        #     x_begin = max(grid_idx[0] - 1, 0)
+        #     x_end = min(grid_idx[0] + 2, self.grid_n)
+        #
+        #     y_begin = max(grid_idx[1] - 1, 0)
+        #     y_end = min(grid_idx[1] + 2, self.grid_n)
+        #
+        #     z_begin = max(grid_idx[2] - 1, 0)
+        #
+        #     # only need one side
+        #     z_end = min(grid_idx[2] + 1, self.grid_n)
+        #
+        #     # todo still serialize
+        #     for neigh_i, neigh_j, neigh_k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
+        #
+        #         # on split plane
+        #         if neigh_k == grid_idx[2] and (neigh_i + neigh_j) > (grid_idx[0] + grid_idx[1]) and neigh_i <= grid_idx[0]:
+        #             continue
+        #         # same grid
+        #         iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
+        #         for l in range(self.grid_particles_count[neigh_i, neigh_j, neigh_k]):
+        #             j = self.grid_particles_list[neigh_i, neigh_j, neigh_k, l]
+        #
+        #             if iscur and n >= j:
+        #                 continue
+        #             self.resolve_contact_static(n, j)
 
         for n in self.nodes:
             self.nodes[n].x_k -= self.nodes[n].hii.inverse() @ self.nodes[n].grad
