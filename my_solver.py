@@ -47,7 +47,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e5,
+                 k=1e6,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -56,7 +56,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -6.0
+        self.gravity = -4.0
         self.bottom = bottom
         self.idenity3 = ti.math.mat3([[1, 0, 0],
                                       [0, 1, 0],
@@ -196,6 +196,20 @@ class Solver:
             self.nodes[i].grad -= f1
             self.nodes[i].hii += self.idenity3 * coeff
 
+    @ti.func
+    def resolve_contact(self, i, j):
+        rel_pos = self.nodes[j].x_k - self.nodes[i].x_k
+        dist = rel_pos.norm()
+        delta = dist - 2 * self.radius  # delta = d - 2 * r
+        coeff = self.contact_stiffness * self.dtSq
+        if delta < 0:  # in contact
+            normal = rel_pos / dist
+            f1 = normal * delta * coeff
+            self.nodes[i].grad -= f1
+            self.nodes[j].grad += f1
+            self.nodes[i].hii += self.idenity3 * coeff
+            self.nodes[j].hii += self.idenity3 * coeff
+
 
     @ti.func
     def resolve_vertex_triangle_static(self, vi, sfi):
@@ -203,7 +217,7 @@ class Solver:
         f1, f2, f3 = self.static_nodes[v0].x, self.static_nodes[v1].x, self.static_nodes[v2].x
 
         point = self.nodes[vi].x_k
-        e1 = f2 - f1
+        e1 = f3 - f1
         e2 = f3 - f1
         normal = e1.cross(e2).normalized(1e-12)
         d = point - f1
@@ -220,8 +234,8 @@ class Solver:
 
         is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
 
-        if abs(dist) <= self.radius and is_on_triangle:
-            self.nodes[vi].grad -= self.dtSq * (self.radius - dist) * normal * self.contact_stiffness
+        if dist < 0 and abs(dist) < 3 * self.radius and is_on_triangle:
+            self.nodes[vi].grad -= self.dtSq * (dist) * normal * self.contact_stiffness
             self.nodes[vi].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
 
@@ -267,7 +281,7 @@ class Solver:
     def computeNextState(self):
         for n in self.nodes:
             self.nodes[n].v = (self.nodes[n].x_k - self.nodes[n].x) / self.dt
-            self.nodes[n].v*=(1 - self.damping_factor)
+            self.nodes[n].v *= (1 - self.damping_factor)
             self.nodes[n].x = self.nodes[n].x_k
 
         # for v in self.my_mesh.mesh.verts:
@@ -308,11 +322,11 @@ class Solver:
                 self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
                 self.nodes[n].hii  += self.dtSq * self.contact_stiffness * self.idenity3
 
-            if (self.nodes[n].x_k[0] < 0):
-                depth = self.nodes[n].x_k[0] - self.bottom
-                up = ti.math.vec3(1, 0, 0)
-                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
-                self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
+            # if (self.nodes[n].x_k[0] < 0):
+            #     depth = self.nodes[n].x_k[0] - self.bottom
+            #     up = ti.math.vec3(1, 0, 0)
+            #     self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+            #     self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
             if (self.nodes[n].x_k[0] > 1):
                 depth = 1 - self.nodes[n].x_k[0]
@@ -333,13 +347,17 @@ class Solver:
                 self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
 
+        # for ni in range(self.num_verts):
+        #     for fi in range(self.num_static_faces):
+        #         self.resolve_vertex_triangle_static(ni, fi)
+
         for ni in range(self.num_verts):
-            for fi in range(self.num_static_faces):
-                self.resolve_vertex_triangle_static(ni, fi)
+            for sni in range(self.num_static_nodes):
+                self.resolve_contact_static(ni, sni)
 
         # for ni in range(self.num_verts):
-        #     for sni in range(self.num_static_nodes):
-        #         self.resolve_contact_static(ni, sni)
+        #     for nj in range(ni+1, self.num_verts):
+        #         self.resolve_contact_static(ni, nj)
         #
         # for n in self.nodes:
         #     grid_idx = ti.floor(self.nodes[n].x_k * self.grid_n, int)
