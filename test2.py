@@ -13,8 +13,8 @@ dt = 0.001  # Larger dt might lead to unstable results.
 # mesh = Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
-mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.571, rot=ti.math.vec3(90.0, 0.0, 0.0),trans=ti.math.vec3(0.307, 0.47, 0.31))
-static_mesh =Mesh("obj_models/kyra_model_reduced.obj", scale=0.40, rot=ti.math.vec3(90.0, 00.0, 0.0), trans=ti.math.vec3(0.305, 0.58, 0.325))
+# mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.571, rot=ti.math.vec3(90.0, 0.0, 0.0),trans=ti.math.vec3(0.307, 0.47, 0.31))
+# static_mesh =Mesh("obj_models/kyra_model_reduced.obj", scale=0.40, rot=ti.math.vec3(90.0, 00.0, 0.0), trans=ti.math.vec3(0.305, 0.58, 0.325))
 
 #mesh = Mesh("tet_models/bunny_small.mesh", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/bunny.obj", scale=0.4, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, -0.5, 0.0))
@@ -25,12 +25,16 @@ static_mesh =Mesh("obj_models/kyra_model_reduced.obj", scale=0.40, rot=ti.math.v
 # static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 #case: edge vs. edge
-# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(60.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.4, 0.5))
-# static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(60.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
+# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(30.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.4, 0.5))
+# static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(30.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
 
 #case: face vs. face
 # mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
 # static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 45.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
+
+# case: vertex vs. face
+mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
+static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 
