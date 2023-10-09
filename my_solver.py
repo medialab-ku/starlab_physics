@@ -21,6 +21,7 @@ class contact_edge:
 class edge:
     vid: ti.math.uvec2
     l0: ti.float32
+    hij: ti.math.mat3
 
 @ti.dataclass
 class face:
@@ -47,7 +48,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e6,
+                 k=1e2,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -64,7 +65,7 @@ class Solver:
 
         self.num_contacts = ti.field(ti.int32, shape=(1))
         self.radius = 0.005
-        self.contact_stiffness = 1e7
+        self.contact_stiffness = 1e3
         self.edges = edge.field(shape=len(self.my_mesh.mesh.edges))
         self.nodes = node.field(shape=(len(self.my_mesh.mesh.verts)))
         self.num_nodes = len(self.my_mesh.mesh.verts)
@@ -74,9 +75,12 @@ class Solver:
 
         self.static_faces = face.field(shape=self.num_static_faces)
 
+
         self.num_verts = len(self.my_mesh.mesh.verts)
         self.num_edges = len(self.my_mesh.mesh.edges)
         self.num_faces = len(self.my_mesh.mesh.faces)
+
+        self.faces = face.field(shape=self.num_faces)
 
         self.static_edges = edge.field(shape=(self.num_static_edges))
         self.contact_triangles = contact_triangle.field(shape=len(self.my_mesh.mesh.edges))
@@ -120,6 +124,11 @@ class Solver:
     @ti.kernel
     def init_faces(self):
         for f in self.my_mesh.mesh.faces:
+            self.faces[f.id].vid[0] = f.verts[0].id
+            self.faces[f.id].vid[1] = f.verts[1].id
+            self.faces[f.id].vid[2] = f.verts[2].id
+
+        for f in self.static_mesh.mesh.faces:
             self.static_faces[f.id].vid[0] = f.verts[0].id
             self.static_faces[f.id].vid[1] = f.verts[1].id
             self.static_faces[f.id].vid[2] = f.verts[2].id
@@ -238,6 +247,82 @@ class Solver:
             self.nodes[vi].grad -= self.dtSq * (dist) * normal * self.contact_stiffness
             self.nodes[vi].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
+    @ti.func
+    def resolve_vertex_triangle(self, vi, fi):
+        v0, v1, v2 = self.faces[fi].vid[0], self.faces[fi].vid[1], self.faces[fi].vid[2]
+        f1, f2, f3 = self.nodes[v0].x_k, self.nodes[v1].x_k, self.nodes[v2].x_k
+
+        point = self.nodes[vi].x_k
+        e1 = f3 - f1
+        e2 = f3 - f1
+        normal = e1.cross(e2).normalized(1e-12)
+        d = point - f1
+        dist = d.dot(normal)
+        point_on_triangle = point - dist * normal
+        d1 = point_on_triangle - f1
+        d2 = point_on_triangle - f2
+        d3 = point_on_triangle - f3
+
+        area_triangle = e1.cross(e2).norm()
+        area1 = d1.cross(d2).norm() / area_triangle
+        area2 = d2.cross(d3).norm() / area_triangle
+        area3 = d3.cross(d1).norm() / area_triangle
+
+        w0 = area1 / area_triangle
+        w1 = area1 / area_triangle
+        w2 = area1 / area_triangle
+
+        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+
+        if dist < 0 and abs(dist) < 3 * self.radius and is_on_triangle:
+            self.nodes[vi].grad -= self.dtSq * (dist) * normal * self.contact_stiffness
+            self.nodes[vi].hii += self.dtSq * self.contact_stiffness * self.idenity3
+
+            self.nodes[v0].grad += self.dtSq * (dist) * normal * self.contact_stiffness * w0
+            self.nodes[v1].grad += self.dtSq * (dist) * normal * self.contact_stiffness * w1
+            self.nodes[v2].grad += self.dtSq * (dist) * normal * self.contact_stiffness * w2
+
+            self.nodes[v0].hii += self.dtSq * self.contact_stiffness * self.idenity3 * w0
+            self.nodes[v1].hii += self.dtSq * self.contact_stiffness * self.idenity3 * w1
+            self.nodes[v2].hii += self.dtSq * self.contact_stiffness * self.idenity3 * w2
+
+    @ti.func
+    def resolve_triangle_vertex_static(self, fi, svi):
+        v0, v1, v2 = self.faces[fi].vid[0], self.faces[fi].vid[1], self.faces[fi].vid[2]
+        f1, f2, f3 = self.nodes[v0].x, self.nodes[v1].x, self.nodes[v2].x
+
+        point = self.static_nodes[svi].x
+        e1 = f3 - f1
+        e2 = f2 - f1
+        normal = e1.cross(e2).normalized(1e-12)
+        d = point - f1
+        dist = d.dot(normal)
+        point_on_triangle = point - dist * normal
+        d1 = point_on_triangle - f1
+        d2 = point_on_triangle - f2
+        d3 = point_on_triangle - f3
+
+        area_triangle = e1.cross(e2).norm()
+        area1 = d1.cross(d2).norm() / area_triangle
+        area2 = d2.cross(d3).norm() / area_triangle
+        area3 = d3.cross(d1).norm() / area_triangle
+
+        w0 = area1 / area_triangle
+        w1 = area1 / area_triangle
+        w2 = area1 / area_triangle
+
+        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+
+        if dist < 0 and abs(dist) < 3 * self.radius and is_on_triangle:
+
+            self.nodes[v0].grad += self.dtSq * (dist) * normal * self.contact_stiffness * w0
+            self.nodes[v1].grad += self.dtSq * (dist) * normal * self.contact_stiffness * w1
+            self.nodes[v2].grad += self.dtSq * (dist) * normal * self.contact_stiffness * w2
+
+            self.nodes[v0].hii += self.dtSq * self.contact_stiffness * self.idenity3 * w0
+            self.nodes[v1].hii += self.dtSq * self.contact_stiffness * self.idenity3 * w1
+            self.nodes[v2].hii += self.dtSq * self.contact_stiffness * self.idenity3 * w2
+
 
     @ti.func
     def resolve_edge_edge_static(self, ei, sei):
@@ -275,7 +360,10 @@ class Solver:
             self.nodes[v0].hii += self.dtSq * self.contact_stiffness
             self.nodes[v1].hii += self.dtSq * self.contact_stiffness
 
-
+    @ti.kernel
+    def add(self, ans: ti.template(), a: ti.template(), k: ti.f32, b: ti.template()):
+        for i in ans:
+            ans[i] = a[i] + k * b[i]
 
     @ti.kernel
     def computeNextState(self):
@@ -347,13 +435,21 @@ class Solver:
                 self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
 
-        # for ni in range(self.num_verts):
-        #     for fi in range(self.num_static_faces):
-        #         self.resolve_vertex_triangle_static(ni, fi)
+        for vi in range(self.num_verts):
+            for fi in range(self.num_faces):
+                self.re
 
         for ni in range(self.num_verts):
-            for sni in range(self.num_static_nodes):
-                self.resolve_contact_static(ni, sni)
+            for fi in range(self.num_static_faces):
+                self.resolve_vertex_triangle_static(ni, fi)
+
+        for fi in range(self.num_faces):
+            for svi in range(self.num_static_verts):
+                self.resolve_triangle_vertex_static(fi, svi)
+
+        # for ni in range(self.num_verts):
+        #     for sni in range(self.num_static_nodes):
+        #         self.resolve_contact_static(ni, sni)
 
         # for ni in range(self.num_verts):
         #     for nj in range(ni+1, self.num_verts):
@@ -387,8 +483,59 @@ class Solver:
         #                 continue
         #             self.resolve_contact_static(n, j)
 
+
         for n in self.nodes:
             self.nodes[n].x_k -= self.nodes[n].hii.inverse() @ self.nodes[n].grad
+
+    @ti.kernel
+    def dot(self, a: ti.template(), b: ti.template()) -> ti.f32:
+        ans = 0.0
+        ti.loop_config(block_dim=32)
+        for i in a: ans += a[i].dot(b[i])
+        return ans
+
+    @ti.kernel
+    def matrix_free_Ax(self, ans: ti.template(), x: ti.template):
+
+        for vi in range(self.num_verts):
+            ans[vi] = self.nodes[vi].hii @ x[vi]
+
+        for ei in range(self.num_edges):
+            v0, v1 = self.edges.vid[0], self.edges.vid[1]
+            ans[v0] += self.edges[ei].hij @ x[v0]
+            ans[v1] += self.edges[ei].hij @ x[v1]
+
+
+
+    def solveNewtonIterationWithCG(self):
+
+        max_cg_iter = 100
+
+        b = ti.field(3, dtype=ti.f32, shape=self.num_verts)
+        x = ti.field(3, dtype=ti.f32, shape=self.num_verts)
+        r = ti.field(3, dtype=ti.f32, shape=self.num_verts)
+        p = ti.field(3, dtype=ti.f32, shape=self.num_verts)
+        b.copy_from(self.nodes.grad)
+        x.copy_from(self.nodes.grad)
+        Ap = ti.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.matrix_free_Ax(Ap, x)
+        self.add(r, Ap, -1, b)
+        p.copy_from(r)
+        r_2 = self.dot(r, r)
+
+        for i in range(max_cg_iter):
+            self.matrix_free_Ax(Ap, p)
+            self.add(r, Ap, -1, b)
+            alpha = r_2 / self.dot(p, Ap)
+            self.add(x, x, alpha, Ap)
+            self.add(r, r, -alpha, p)
+
+            r2_temp = self.dot(r, r)
+            beta = r2_temp / r_2
+            r_2 = r2_temp
+            self.add(p, r, -alpha, p)
+
+
 
 
     # @ti.kernel
@@ -412,6 +559,8 @@ class Solver:
         self.nodes.x_k.copy_from(self.nodes.y)
         for i in range(self.max_iter):
             self.computeGradientAndElementWiseHessian()
+            self.solveNewtonIterationWithCG()
+
 
         self.computeNextState()
 
