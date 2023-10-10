@@ -6,6 +6,7 @@ S = ti.root.dense(ti.i, 10).dynamic(ti.j, 1024, chunk_size=32)
 x = ti.field(int)
 S.place(x)
 
+
 @ti.kernel
 def test():
 
