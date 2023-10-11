@@ -579,6 +579,7 @@ class Solver:
 
         # for n in self.nodes:
         #     self.nodes[n].x_k -= self.nodes[n].hii.inverse() @ self.nodes[n].grad
+        # print(self.nodes.hii[0])
 
     @ti.kernel
     def dot(self, a: ti.template(), b: ti.template()) -> ti.f32:
@@ -614,17 +615,20 @@ class Solver:
 
     def solveNewtonIterationWithCG(self):
 
-        max_cg_iter = 10
+        max_cg_iter = 100
 
         self.b.copy_from(self.nodes.grad)
         self.x.fill(0.)
         self.matrix_free_Ax(self.Ap, self.x)
         self.add(self.r, self.b, -1, self.Ap)
 
+        # print(self.nodes.hii[0])
+
         r_2 = self.dot(self.r, self.r)
         self.p.copy_from(self.r)
         threshold = 1e-8
         if(r_2 < threshold):
+            self.update_xk()
             return
         #
         for i in range(1, max_cg_iter):
@@ -638,13 +642,16 @@ class Solver:
             if (r_2_next < threshold):
                 # print(self.x)
                 print(f'cg iter #: {i}')
+                self.update_xk()
                 return
+
             beta = r_2_next / r_2
 
             self.add(self.p, self.r, beta, self.p)
             r_2 = r_2_next
 
-        self.update_xk()
+
+        # self.update_xk()
 
     # @ti.kernel
     # def computeExternalForce(self):
