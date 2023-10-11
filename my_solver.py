@@ -22,6 +22,7 @@ class edge:
     vid: ti.math.uvec2
     l0: ti.float32
     hij: ti.math.mat3
+    h: ti.math.mat3
 
 @ti.dataclass
 class face:
@@ -112,10 +113,90 @@ class Solver:
         self.p = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.Ap = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
 
+        self.test()
+
 
         # self.initContactParticleData()
+    def test(self):
+
+        max_cg_iter = 100
+        threshold = 1e-4
+        self.x.fill([1., 1., 1.])
+        self.test_Ax()
+
+        # print(self.edges.hij)
+
+        #b = Ax
+        self.matrix_free_Ax(self.b, self.x)
+        print(f'b: {self.b}')
+
+        self.x.fill(0.)
+
+        self.matrix_free_Ax(self.Ap, self.x)
+        # r = b - Ax
+        self.add(self.r, self.b, -1.0, self.Ap)
+        # print(f'r: {self.r}')
+        # p = r
+        self.p.copy_from(self.r)
 
 
+        r_2 = self.dot(self.r, self.r)
+        print(r_2)
+        if (r_2 < threshold):
+            print(f'{0}')
+            return
+
+
+
+        for i in range(1, max_cg_iter):
+            self.matrix_free_Ax(self.Ap, self.p)
+            alpha = r_2 / self.dot(self.p, self.Ap)
+            self.add(self.x, self.x, alpha, self.p)
+            self.add(self.r, self.r, -alpha, self.Ap)
+            r_2_next = self.dot(self.r, self.r)
+
+            print(r_2_next)
+            if (r_2_next < threshold):
+                # print(self.x)
+                print(f'cg iter #: {i}')
+                return
+            beta = r_2_next / r_2
+
+            self.add(self.p, self.r, beta, self.p)
+            r_2 = r_2_next
+
+    @ti.func
+    def test_abT(self, a: ti.math.vec3, b: ti.math.vec3) -> ti.math.mat3:
+
+        abT = ti.math.mat3([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+
+        abT[0, 0] = a[0] * b[0]
+        abT[0, 1] = a[0] * b[1]
+        abT[0, 2] = a[0] * b[2]
+
+        abT[1, 0] = a[1] * b[0]
+        abT[1, 1] = a[1] * b[1]
+        abT[1, 2] = a[1] * b[2]
+
+        abT[2, 0] = a[2] * b[0]
+        abT[2, 1] = a[2] * b[1]
+        abT[2, 2] = a[2] * b[2]
+
+        return abT
+
+
+    @ti.kernel
+    def test_Ax(self):
+
+        for vi in range(self.num_verts):
+            self.nodes[vi].hii = self.nodes[vi].m * self.idenity3
+
+        for ei in range(self.num_edges):
+            v0, v1 = self.edges[ei].vid[0], self.edges[ei].vid[1]
+            h = self.dtSq * self.k * self.idenity3
+            self.nodes[v0].hii += h
+            self.nodes[v1].hii += h
+            self.edges[ei].hij = -h
 
     @ti.kernel
     def init_edges(self):
@@ -391,18 +472,22 @@ class Solver:
             self.nodes[n].grad = self.nodes[n].m * (self.nodes[n].x_k - self.nodes[n].y) - self.nodes[n].f * self.dtSq
             self.nodes[n].hii = self.nodes[n].m * self.idenity3
 
-        # elastic energy gradient \nabla E (x)
+        # elastic energy gradient \nabla E (x) and Hessian \nabla^2 E (x)
         for e in self.edges:
             v0, v1 = self.edges[e].vid[0], self.edges[e].vid[1]
             l = (self.nodes[v0].x_k - self.nodes[v1].x_k).norm()
-            normal = (self.nodes[v0].x_k - self.nodes[v1].x_k).normalized(1e-12)
+            x_ij = self.nodes[v0].x_k - self.nodes[v1].x_k
+            normal = x_ij.normalized(1e-12)
             coeff = self.dtSq * self.k
             grad_e = coeff * (l - self.edges[e].l0) * normal
             self.nodes[v0].grad += grad_e
             self.nodes[v1].grad -= grad_e
-            self.nodes[v0].hii += coeff * self.idenity3
-            self.nodes[v1].hii += coeff * self.idenity3
-            self.edges[e].hij = -coeff * self.idenity3
+
+            self.edges[e].h = coeff * (self.idenity3 - self.edges[e].l0 / l * (self.idenity3 - self.test_abT(x_ij, x_ij)) / ti.math.dot(x_ij, x_ij))
+
+            self.nodes[v0].hii += self.edges[e].h
+            self.nodes[v1].hii += self.edges[e].h
+            self.edges[e].hij = -self.edges[e].h
 
         # handling bottom contact
         for n in self.nodes:
@@ -418,11 +503,11 @@ class Solver:
                 self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
                 self.nodes[n].hii  += self.dtSq * self.contact_stiffness * self.idenity3
 
-            # if (self.nodes[n].x_k[0] < 0):
-            #     depth = self.nodes[n].x_k[0] - self.bottom
-            #     up = ti.math.vec3(1, 0, 0)
-            #     self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
-            #     self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
+            if (self.nodes[n].x_k[0] < 0):
+                depth = self.nodes[n].x_k[0] - self.bottom
+                up = ti.math.vec3(1, 0, 0)
+                self.nodes[n].grad += self.dtSq * self.contact_stiffness * depth * up
+                self.nodes[n].hii += self.dtSq * self.contact_stiffness * self.idenity3
 
             if (self.nodes[n].x_k[0] > 1):
                 depth = 1 - self.nodes[n].x_k[0]
@@ -447,10 +532,10 @@ class Solver:
         #     for fi in range(self.num_faces):
         #         self.re
 
-        for ni in range(self.num_verts):
-            for fi in range(self.num_static_faces):
-                self.resolve_vertex_triangle_static(ni, fi)
-
+        # for ni in range(self.num_verts):
+        #     for fi in range(self.num_static_faces):
+        #         self.resolve_vertex_triangle_static(ni, fi)
+        #
         for fi in range(self.num_faces):
             for svi in range(self.num_static_verts):
                 self.resolve_triangle_vertex_static(fi, svi)
@@ -506,57 +591,60 @@ class Solver:
     @ti.kernel
     def matrix_free_Ax(self, ans: ti.template(), x: ti.template()):
 
+        # for n in self.nodes:
+        #     self.nodes[n].x_k -= self.nodes[n].hii.inverse() @ self.nodes[n].grad
+
         for vi in range(self.num_verts):
             ans[vi] = self.nodes[vi].hii @ x[vi]
 
-        for ei in range(self.num_edges):
-            v0, v1 = self.edges[ei].vid[0], self.edges[ei].vid[1]
-            ans[v0] += self.edges[ei].hij @ x[v0]
-            ans[v1] += self.edges[ei].hij @ x[v1]
+        # for ei in range(self.num_edges):
+        #     v0, v1 = self.edges[ei].vid[0], self.edges[ei].vid[1]
+        #     ans[v0] += self.edges[ei].hij @ x[v0]
+        #     ans[v1] += self.edges[ei].hij @ x[v1]
 
 
     @ti.kernel
-    def update_xk(self, dx: ti.template()):
+    def update_xk(self):
 
-        for vi in range(self.num_verts):
-            self.nodes[vi].x_k += dx[vi]
+        for n in self.nodes:
+            self.nodes[n].x_k -= self.x[n]
+
+        # for vi in range(self.num_verts):
+        #     self.nodes[vi].x_k -= dx[vi]
 
     def solveNewtonIterationWithCG(self):
 
         max_cg_iter = 10
 
         self.b.copy_from(self.nodes.grad)
-        self.x.copy_from(self.nodes.grad)
+        self.x.fill(0.)
         self.matrix_free_Ax(self.Ap, self.x)
-        self.add(self.r, self.x, -1, self.Ap)
-
-        # self.matrix_free_Ax(Ap, x)
-        # self.add(r, Ap, -1, b)
-        # p.copy_from(r)
+        self.add(self.r, self.b, -1, self.Ap)
 
         r_2 = self.dot(self.r, self.r)
-
+        self.p.copy_from(self.r)
         threshold = 1e-8
         if(r_2 < threshold):
             return
         #
-        for i in range(max_cg_iter):
+        for i in range(1, max_cg_iter):
             self.matrix_free_Ax(self.Ap, self.p)
             alpha = r_2 / self.dot(self.p, self.Ap)
-            self.add(self.x, alpha, self.p)
-            self.add(self.r, -alpha, self.Ap)
-
-            if (r_2 < threshold):
-                print(f'{i}')
-                return
-
+            self.add(self.x, self.x, alpha, self.p)
+            self.add(self.r, self.r, -alpha, self.Ap)
             r_2_next = self.dot(self.r, self.r)
+
+            print(r_2_next)
+            if (r_2_next < threshold):
+                # print(self.x)
+                print(f'cg iter #: {i}')
+                return
             beta = r_2_next / r_2
 
-            self.add(self.r, beta, self.p)
+            self.add(self.p, self.r, beta, self.p)
             r_2 = r_2_next
 
-        self.update_xk(self.x)
+        self.update_xk()
 
     # @ti.kernel
     # def computeExternalForce(self):

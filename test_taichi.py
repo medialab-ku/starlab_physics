@@ -6,6 +6,28 @@ S = ti.root.dense(ti.i, 10).dynamic(ti.j, 1024, chunk_size=32)
 x = ti.field(int)
 S.place(x)
 
+a = ti.math.vec3([1, 1, 1])
+b = ti.math.vec3([1, 1, 1])
+
+@ti.func
+def test_abT(a: ti.math.vec3, b: ti.math.vec3) -> ti.math.mat3:
+
+    abT = ti.math.mat3([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+
+    abT[0, 0] = a[0] * b[0]
+    abT[0, 1] = a[0] * b[1]
+    abT[0, 2] = a[0] * b[2]
+
+    abT[1, 0] = a[1] * b[0]
+    abT[1, 1] = a[1] * b[1]
+    abT[1, 2] = a[1] * b[2]
+
+    abT[2, 0] = a[2] * b[0]
+    abT[2, 1] = a[2] * b[1]
+    abT[2, 2] = a[2] * b[2]
+
+    return abT
+
 
 @ti.kernel
 def test():
@@ -50,4 +72,6 @@ def add_data():
         print(x[i].length())  # will print 0
 
 
-test()
+abT = test_abT(a, b)
+
+print(abT)
