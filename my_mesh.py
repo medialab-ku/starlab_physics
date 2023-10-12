@@ -16,15 +16,10 @@ class Mesh:
                                'v': ti.math.vec3,
                                'f_ext': ti.math.vec3,
                                'y': ti.math.vec3,
+                               'ld': ti.f32,
                                'x_k': ti.math.vec3,
                                'g': ti.math.vec3,
-                               'h': ti.math.mat3,
-                               'dx': ti.math.vec3,
-                               'b': ti.math.vec3,
-                               'r': ti.math.vec3,
-                               'p': ti.math.vec3,
-                               'Ap': ti.math.vec3
-                               })
+                               'h': ti.f32})
 
 
 
@@ -34,7 +29,7 @@ class Mesh:
         self.num_verts = len(self.mesh.verts)
 
         self.mesh.edges.place({'l0': ti.f32,
-                               'hij': ti.math.mat3})
+                               'ld': ti.f32})
         self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.edges) * 2)

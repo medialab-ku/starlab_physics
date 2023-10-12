@@ -2,7 +2,7 @@ import taichi as ti
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(arch=ti.cuda, device_memory_fraction=0.95)
+ti.init(arch=ti.cuda, device_memory_fraction=0.50)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
@@ -47,9 +47,9 @@ def init_color():
 
 init_color()
 
-sim = Solver(mesh, bottom=0.0, static_mesh=static_mesh, dt=dt, max_iter=20)
+sim = Solver(mesh, bottom=0.0, static_mesh=static_mesh, dt=dt, max_iter=40)
 
-window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), vsync=True, fps_limit=200)
+window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()
