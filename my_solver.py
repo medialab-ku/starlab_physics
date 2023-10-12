@@ -35,7 +35,7 @@ class Solver:
         self.grid_particles_count = ti.field(ti.i32)
         ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
 
-        self.A = ti.linalg.SparseMatrix(n=3 * len(self.verts), m=3 * len(self.verts), dtype=ti.f32)
+        # self.A = ti.linalg.SparseMatrix(n=3 * len(self.verts), m=3 * len(self.verts), dtype=ti.f32)
         # self.construct_collision_grid()
 
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
@@ -45,7 +45,7 @@ class Solver:
     @ti.kernel
     def computeY(self):
         for v in self.verts:
-            v.y = v.x + v.v * self.dt + (v.f_ext / v.m) * self.dtSq
+            v.x_k = v.x + v.v * self.dt + (v.f_ext / v.m) * self.dtSq
 
     @ti.kernel
     def computeNextState(self):
@@ -60,121 +60,54 @@ class Solver:
             v.h = v.m
 
     @ti.kernel
-    def evaluateElasticEnergyGradientAndHessian(self):
+    def evaluateSpringConstraint(self):
         for e in self.edges:
             x_ij = e.verts[0].x_k - e.verts[1].x_k
             l_ij = x_ij.norm()
-            normal = x_ij.normalized(1e-12)
-            coeff = self.dtSq * self.k
-            e.verts[0].g += coeff * (l_ij - e.l0) * normal
-            e.verts[1].g -= coeff * (l_ij - e.l0) * normal
-
-            e.verts[0].h += coeff * self.id3
-            e.verts[1].h += coeff * self.id3
-            e.hij = -coeff * self.id3
+            C = 0.5 * (l_ij - e.l0) ** 2
+            nablaC = (1 - e.l0 / l_ij) * x_ij
+            Schur = (1./e.verts[0].h + 1./e.verts[1].h) * ti.math.dot(nablaC, nablaC)
+            e.ld = C / Schur
+            e.verts[0].g += e.ld * nablaC
+            e.verts[1].g -= e.ld * nablaC
 
     @ti.kernel
-    def evaluateCollisionEnergyGradientAndHessian(self):
+    def evaluateCollisionConstraint(self):
         for v in self.verts:
             if(v.x_k[1] < 0):
                 depth = v.x_k[1] - self.bottom
-                up = ti.math.vec3(0, 1, 0)
-                v.g += self.dtSq * self.contact_stiffness * depth * up
-                v.h += self.dtSq * self.contact_stiffness * self.id3
+                C = 0.5 * depth ** 2
+                nablaC = depth * ti.math.vec3(0, 1, 0)
+                Schur = ti.math.dot(nablaC, nablaC) / v.h
+                v.ld = C / Schur
+                v.g += v.ld * nablaC
+            else:
+                v.ld = 0.0
 
 
     @ti.kernel
-    def matrix_free_Ax(self, ans: ti.template(), x: ti.template()):
-
-        for v in self.verts:
-            ans[v.id] = v.h @ x[v.id]
-
-        for e in self.edges:
-            v0, v1 = e.verts[0], e.verts[1]
-            ans[v0.id] += e.hij @ x[v0.id]
-            ans[v1.id] += e.hij @ x[v1.id]
-
-    @ti.kernel
-    def dot(self, a: ti.template(), b: ti.template()) -> ti.f32:
-        ans = 0.0
-        ti.loop_config(block_dim=32)
-        for i in a:
-            ans += a[i].dot(b[i])
-        return ans
-
-    @ti.kernel
-    def add(self, ans: ti.template(), a: ti.template(), k: ti.f32, b: ti.template()):
-        for i in ans:
-            ans[i] = a[i] + k * b[i]
-
-
-    @ti.kernel
-    def CGoneIter(self, r_Sq: ti.f32) -> ti.f32:
-
-        # matrix-free Ap
-        # for v in self.verts:
-        #     v.Ap = v.h @ v.p
-        # for e in self.edges:
-        #     v0, v1 = e.verts[0], e.verts[1]
-        #     v0.Ap += e.hij @ v0.dx
-        #     v1.Ap += e.hij @ v1.dx
-
-        pTAp = 0.0
-        # ti.loop_config(block_dim=32)
-        # for v in self.verts:
-        #     pTAp += ti.math.dot(v.p, v.Ap)
-
-        alpha = r_Sq / pTAp
-
-        for v in self.verts:
-            v.dx += alpha * v.p
-            v.r -= alpha * v.Ap
-
-        r_Sq_next = 0.0
-        # ti.loop_config(block_dim=32)
-        # for v in self.verts:
-        #     r_Sq_next += ti.math.dot(v.r, v.r)
-
-        beta = r_Sq_next / r_Sq
-        for v in self.verts:
-            v.p = v.r + beta * v.p
-
-        return r_Sq_next
-
-    @ti.kernel
-    def test(self):
-        for v in self.verts:
-            v.x_k -= v.h.inverse()@ v.g
-
     def NewtonCG(self):
 
-        # max_cg_iter = 5
-        # self.verts.b.copy_from(self.verts.g)
-        # self.verts.r.copy_from(self.verts.g)
-        # self.verts.p.copy_from(self.verts.g)
-        #
-        # self.verts.Ap.fill(0.)
-        # self.verts.dx.fill(0.)
-        #
-        # r_Sq = self.dot(self.verts.r, self.verts.r)
-        # threshold = 1e-4
-        #
-        # for i in range(1, max_cg_iter):
-        #     r_Sq_next = self.CGoneIter(r_Sq)
-        #     if r_Sq_next < threshold:
-        #         break
-        #     r_Sq = r_Sq_next
+        for v in self.verts:
+            v.h += v.ld
 
-        self.test()
+        for e in self.edges:
+            e.verts[0].h += e.ld
+            e.verts[1].h += e.ld
+
+        for v in self.verts:
+            v.x_k -= v.g / v.h
+
 
     def update(self):
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeY()
-        self.verts.x_k.copy_from(self.verts.y)
+        self.verts.h.copy_from(self.verts.m)
         for i in range(self.max_iter):
-            self.evaluateMomentumGradientAndHessian()
-            self.evaluateElasticEnergyGradientAndHessian()
-            self.evaluateCollisionEnergyGradientAndHessian()
+            self.verts.g.fill(0.)
+            self.evaluateSpringConstraint()
+            self.evaluateCollisionConstraint()
+            self.verts.h.copy_from(self.verts.m)
             self.NewtonCG()
 
         self.computeNextState()
