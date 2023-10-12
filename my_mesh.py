@@ -11,14 +11,21 @@ class Mesh:
                  scale=1.0):
 
         self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV"])
-        self.mesh.verts.place({'x'   : ti.math.vec3,
-                               'y'   : ti.math.vec3,
-                               'x_k' : ti.math.vec3,
-                               'grad': ti.math.vec3,
-                               'hii': ti.math.mat3,
-                               'm'   : ti.f32,
-                               'f'   : ti.math.vec3,
-                               'v'   : ti.math.vec3})
+        self.mesh.verts.place({'m': ti.f32,
+                               'x': ti.math.vec3,
+                               'v': ti.math.vec3,
+                               'f_ext': ti.math.vec3,
+                               'y': ti.math.vec3,
+                               'x_k': ti.math.vec3,
+                               'g': ti.math.vec3,
+                               'h': ti.math.mat3,
+                               'dx': ti.math.vec3,
+                               'b': ti.math.vec3,
+                               'r': ti.math.vec3,
+                               'p': ti.math.vec3,
+                               'Ap': ti.math.vec3
+                               })
+
 
 
         self.mesh.verts.m.fill(1.0)
