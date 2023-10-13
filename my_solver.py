@@ -44,11 +44,17 @@ class Solver:
         # self.A = ti.linalg.SparseMatrix(n=3 * len(self.verts), m=3 * len(self.verts), dtype=ti.f32)
         # self.construct_collision_grid()
 
+        self.p1 = ti.math.vec3([0., 0., 0.])
+        self.p2 = ti.math.vec3([0., 0., 0.])
+
+        self.p = ti.Vector.field(n=3, shape=2, dtype=ti.f32)
+
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
         # self.setRadius()
         print(f"radius: {self.radius}")
 
-        # print(f'{self.edges.vid[0][0]}')
+        print(f'{self.edges.vid[0]}')
+        print(f'{self.edges_static.vid[4]}')
 
 
     @ti.kernel
@@ -77,28 +83,63 @@ class Solver:
             nablaC = (1 - e.l0 / l_ij) * x_ij
             Schur = (1./e.verts[0].m + 1./e.verts[1].m) * ti.math.dot(nablaC, nablaC)
 
-            if Schur < 1e-4:
-                Schur = 1e-4
+            ld = 0.0
+            if Schur > 1e-4:
+                ld = C / Schur
 
-            ld = C / Schur
             e.verts[0].g += ld * nablaC
             e.verts[1].g -= ld * nablaC
             e.verts[0].h += ld
             e.verts[1].h += ld
 
-    @ti.func
-    def edge_edge_static(self, ei: ti.template(), ej: ti.template()):
-        a, b = ei.verts[0], ei.verts[1]
-        c, d = ej.verts[0], ej.verts[1]
 
     @ti.kernel
     def evaluateCollisionConstraint(self):
 
-        for e in self.edges:
-            for es in range(self.num_edges_static):
-                a, b = e.verts[0].x_k, e.verts[1].x_k
-                cid, did = self.edges_static.vid[es][0], self.edges_static.vid[es][1]
-                c, d = self.verts_static.x[cid], self.verts_static.x[did]
+        # for e in self.edges:
+        #     for es in range(self.num_edges_static):
+        a, b = self.verts.x_k[1], self.verts.x_k[2]
+        # cid, did = self.edges_static.vid[es][0], self.edges_static.vid[es][1]
+        c, d = self.verts_static.x[0], self.verts_static.x[3]
+
+        ab = b - a
+        cd = d - c
+        ac = c - a
+
+        mat = ti.math.mat2([[-cd.dot(ab), ab.dot(ab)],
+                            [-cd.dot(cd), cd.dot(ab)]])
+
+        #
+        gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
+
+
+        t = mat.inverse() @ gg
+
+        t1 = t[0]
+        # t1 = ti.min(1, ti.max(t1, 0))
+
+        t2 = t[1]
+        # t2 = ti.min(1, ti.max(t2, 0))
+        self.p[0] = a + t1 * ab
+        self.p[1] = c + t2 * cd
+
+        dist = (self.p[0] - self.p[1]).norm()
+        tol = 1e-2
+        if dist < tol:
+            print("test")
+            # C = 0.5 * (dist - tol) ** 2
+            # n = (p1 - p2).normalized(1e-6)
+            # nablaC_a = (dist - tol) * t1 * n
+            # nablaC_b = (dist - tol) * (1 - t1) * n
+            # Schur = nablaC_a.dot(nablaC_a) / e.verts[0].m + nablaC_b.dot(nablaC_b) / e.verts[1].m
+            # ld = 0.0
+            # if Schur > 1e-4:
+            #     ld = C / Schur
+            #
+            # e.verts[0].g += ld * nablaC_a
+            # e.verts[1].g += ld * nablaC_b
+            # e.verts[0].h += ld
+            # e.verts[1].h += ld
 
 
         for v in self.verts:

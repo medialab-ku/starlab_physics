@@ -48,8 +48,8 @@ class Mesh:
     def computeInitialLength(self):
         for e in self.mesh.edges:
             e.l0 = (e.verts[0].x - e.verts[1].x).norm()
-            # e.vid[0] = e.verts[0].id
-            # e.vid[2] = e.verts[1].id
+            e.vid[0] = e.verts[0].id
+            e.vid[1] = e.verts[1].id
 
     @ti.kernel
     def initFaceIndices(self):
