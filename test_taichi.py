@@ -72,6 +72,4 @@ def add_data():
         print(x[i].length())  # will print 0
 
 
-abT = test_abT(a, b)
-
-print(abT)
+test()
