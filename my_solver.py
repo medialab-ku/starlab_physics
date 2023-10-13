@@ -23,6 +23,12 @@ class Solver:
 
         self.verts = self.my_mesh.mesh.verts
         self.edges = self.my_mesh.mesh.edges
+        self.faces = self.my_mesh.mesh.faces
+
+        self.verts_static = self.static_mesh.mesh.verts
+        self.edges_static = self.static_mesh.mesh.edges
+        self.num_edges_static = len(self.edges_static)
+        self.faces_static = self.static_mesh.mesh.faces
 
         self.radius = 0.005
         self.contact_stiffness = 1e3
@@ -42,10 +48,13 @@ class Solver:
         # self.setRadius()
         print(f"radius: {self.radius}")
 
+        # print(f'{self.edges.vid[0][0]}')
+
+
     @ti.kernel
     def computeY(self):
         for v in self.verts:
-            v.x_k = v.x + v.v * self.dt + (v.f_ext / v.m) * self.dtSq
+            v.y = v.x + v.v * self.dt + (v.f_ext / v.m) * self.dtSq
 
     @ti.kernel
     def computeNextState(self):
@@ -54,7 +63,7 @@ class Solver:
             v.x = v.x_k
 
     @ti.kernel
-    def evaluateMomentumGradientAndHessian(self):
+    def evaluateMomentumConstraint(self):
         for v in self.verts:
             v.g = v.m * (v.x_k - v.y)
             v.h = v.m
@@ -66,34 +75,54 @@ class Solver:
             l_ij = x_ij.norm()
             C = 0.5 * (l_ij - e.l0) ** 2
             nablaC = (1 - e.l0 / l_ij) * x_ij
-            Schur = (1./e.verts[0].h + 1./e.verts[1].h) * ti.math.dot(nablaC, nablaC)
-            e.ld = C / Schur
-            e.verts[0].g += e.ld * nablaC
-            e.verts[1].g -= e.ld * nablaC
+            Schur = (1./e.verts[0].m + 1./e.verts[1].m) * ti.math.dot(nablaC, nablaC)
+
+            if Schur < 1e-4:
+                Schur = 1e-4
+
+            ld = C / Schur
+            e.verts[0].g += ld * nablaC
+            e.verts[1].g -= ld * nablaC
+            e.verts[0].h += ld
+            e.verts[1].h += ld
+
+    @ti.func
+    def edge_edge_static(self, ei: ti.template(), ej: ti.template()):
+        a, b = ei.verts[0], ei.verts[1]
+        c, d = ej.verts[0], ej.verts[1]
 
     @ti.kernel
     def evaluateCollisionConstraint(self):
+
+        for e in self.edges:
+            for es in range(self.num_edges_static):
+                a, b = e.verts[0].x_k, e.verts[1].x_k
+                cid, did = self.edges_static.vid[es][0], self.edges_static.vid[es][1]
+                c, d = self.verts_static.x[cid], self.verts_static.x[did]
+
+
         for v in self.verts:
             if(v.x_k[1] < 0):
+                # v.x_k[1] = 0.0
                 depth = v.x_k[1] - self.bottom
                 C = 0.5 * depth ** 2
                 nablaC = depth * ti.math.vec3(0, 1, 0)
                 Schur = ti.math.dot(nablaC, nablaC) / v.h
-                v.ld = C / Schur
-                v.g += v.ld * nablaC
-            else:
-                v.ld = 0.0
+                ld = C / Schur
+                v.g += ld * nablaC
+                v.h += ld
+
 
 
     @ti.kernel
     def NewtonCG(self):
 
-        for v in self.verts:
-            v.h += v.ld
+        # for v in self.verts:
+        #     v.h += v.ld
 
-        for e in self.edges:
-            e.verts[0].h += e.ld
-            e.verts[1].h += e.ld
+        # for e in self.edges:
+        #     e.verts[0].h += e.ld
+        #     e.verts[1].h += e.ld
 
         for v in self.verts:
             v.x_k -= v.g / v.h
@@ -102,12 +131,14 @@ class Solver:
     def update(self):
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeY()
+
+        self.verts.x_k.copy_from(self.verts.y)
         self.verts.h.copy_from(self.verts.m)
+
         for i in range(self.max_iter):
-            self.verts.g.fill(0.)
+            self.evaluateMomentumConstraint()
             self.evaluateSpringConstraint()
             self.evaluateCollisionConstraint()
-            self.verts.h.copy_from(self.verts.m)
             self.NewtonCG()
 
         self.computeNextState()

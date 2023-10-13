@@ -29,7 +29,8 @@ class Mesh:
         self.num_verts = len(self.mesh.verts)
 
         self.mesh.edges.place({'l0': ti.f32,
-                               'ld': ti.f32})
+                               'ld': ti.f32,
+                               'vid': ti.math.ivec2})
         self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.edges) * 2)
@@ -47,6 +48,8 @@ class Mesh:
     def computeInitialLength(self):
         for e in self.mesh.edges:
             e.l0 = (e.verts[0].x - e.verts[1].x).norm()
+            # e.vid[0] = e.verts[0].id
+            # e.vid[2] = e.verts[1].id
 
     @ti.kernel
     def initFaceIndices(self):
