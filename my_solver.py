@@ -26,9 +26,13 @@ class Solver:
         self.faces = self.my_mesh.mesh.faces
 
         self.verts_static = self.static_mesh.mesh.verts
+        self.num_verts_static = len(self.static_mesh.mesh.verts)
         self.edges_static = self.static_mesh.mesh.edges
         self.num_edges_static = len(self.edges_static)
         self.faces_static = self.static_mesh.mesh.faces
+        self.face_indices_static = self.static_mesh.face_indices
+        self.num_faces_static = len(self.static_mesh.mesh.faces)
+
 
         self.radius = 0.001
         self.contact_stiffness = 1e3
@@ -161,9 +165,107 @@ class Solver:
 
                     self.verts.g[aid] += ld * nablaC_a
                     self.verts.g[bid] += ld * nablaC_b
-                    self.verts.h[aid] += ld
-                    self.verts.h[bid] += ld
+                    self.verts.h[aid] += ld * t1
+                    self.verts.h[bid] += ld * (1 - t1)
 
+        for v in self.verts:
+            for fi in range(self.num_faces_static):
+                fid0, fid1, fid2 = self.face_indices_static[fi * 3 + 0], self.face_indices_static[fi * 3 + 1], self.face_indices_static[fi * 3 + 2]
+
+                f1 = self.verts_static.x[fid0]
+                f2 = self.verts_static.x[fid1]
+                f3 = self.verts_static.x[fid2]
+
+                point = v.x_k
+
+                e1 = f2 - f1
+                e2 = f3 - f1
+                normal = e1.cross(e2).normalized(1e-12)
+                d = point - f1
+                dist = d.dot(normal)
+                point_on_triangle = point - dist * normal
+                d1 = point_on_triangle - f1
+                d2 = point_on_triangle - f2
+                d3 = point_on_triangle - f3
+
+                area_triangle = e1.cross(e2).norm() / 2
+                area1 = d1.cross(d2).norm() / (2 * area_triangle)
+                area2 = d2.cross(d3).norm() / (2 * area_triangle)
+                area3 = d3.cross(d1).norm() / (2 * area_triangle)
+
+                is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+
+                # weights (if the point_on_triangle is close to the vertex, the weight is large)
+                w1 = 1 / (d1.norm() + 1e-8)
+                w2 = 1 / (d2.norm() + 1e-8)
+                w3 = 1 / (d3.norm() + 1e-8)
+                total_w = w1 + w2 + w3
+                w1 /= total_w
+                w2 /= total_w
+                w3 /= total_w
+
+                tol = 1e-2
+                if abs(dist) <= tol and is_on_triangle:
+                    # print("test")
+                    C = 0.5 * (dist - tol) ** 2
+                    nablaC = (dist - tol) * normal
+                    Schur = nablaC.dot(nablaC) / v.m
+
+                    kc = 1e3
+                    ld = C / Schur
+                    v.g += ld * nablaC
+
+                    v.h += ld
+
+        # for f in self.faces:
+        #     for svid in self.num_verts_static:
+        #         fid0, fid1, fid2 = self.face_indices_static[fi * 3 + 0], self.face_indices_static[fi * 3 + 1], \
+        #                            self.face_indices_static[fi * 3 + 2]
+        #
+        #         f1 = self.verts_static.x[fid0]
+        #         f2 = self.verts_static.x[fid1]
+        #         f3 = self.verts_static.x[fid2]
+        #
+        #         point = v.x_k
+        #
+        #         e1 = f2 - f1
+        #         e2 = f3 - f1
+        #         normal = e1.cross(e2).normalized(1e-12)
+        #         d = point - f1
+        #         dist = d.dot(normal)
+        #         point_on_triangle = point - dist * normal
+        #         d1 = point_on_triangle - f1
+        #         d2 = point_on_triangle - f2
+        #         d3 = point_on_triangle - f3
+        #
+        #         area_triangle = e1.cross(e2).norm() / 2
+        #         area1 = d1.cross(d2).norm() / (2 * area_triangle)
+        #         area2 = d2.cross(d3).norm() / (2 * area_triangle)
+        #         area3 = d3.cross(d1).norm() / (2 * area_triangle)
+        #
+        #         is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+        #
+        #         # weights (if the point_on_triangle is close to the vertex, the weight is large)
+        #         w1 = 1 / (d1.norm() + 1e-8)
+        #         w2 = 1 / (d2.norm() + 1e-8)
+        #         w3 = 1 / (d3.norm() + 1e-8)
+        #         total_w = w1 + w2 + w3
+        #         w1 /= total_w
+        #         w2 /= total_w
+        #         w3 /= total_w
+        #
+        #         tol = 1e-2
+        #         if abs(dist) <= tol and is_on_triangle:
+        #             # print("test")
+        #             C = 0.5 * (dist - tol) ** 2
+        #             nablaC = (dist - tol) * normal
+        #             Schur = nablaC.dot(nablaC) / v.m
+        #
+        #             kc = 1e3
+        #             ld = C / Schur
+        #             v.g += ld * nablaC
+        #
+        #             v.h += ld
 
         for v in self.verts:
             if(v.x_k[1] < 0):
