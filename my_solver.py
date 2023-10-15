@@ -24,7 +24,7 @@ class Solver:
         self.verts = self.my_mesh.mesh.verts
         self.edges = self.my_mesh.mesh.edges
         self.faces = self.my_mesh.mesh.faces
-
+        self.face_indices = self.my_mesh.face_indices
         self.verts_static = self.static_mesh.mesh.verts
         self.num_verts_static = len(self.static_mesh.mesh.verts)
         self.edges_static = self.static_mesh.mesh.edges
@@ -100,7 +100,7 @@ class Solver:
 
 
     @ti.kernel
-    def evaluateCollisionConstraint(self):
+    def evaluateStaticCollision(self):
 
         for e in self.edges:
             for es in range(self.num_edges_static):
@@ -259,7 +259,7 @@ class Solver:
                     nablaC_b = (dist - tol) * normal * w2
                     nablaC_c = (dist - tol) * normal * w3
 
-                    Schur = nablaC_a.dot(nablaC_a) / f.verts[1].m + nablaC_a.dot(nablaC_a) / f.verts[2].m + nablaC_a.dot(nablaC_a) / f.verts[2].m
+                    Schur = nablaC_a.dot(nablaC_a) / f.verts[0].m + nablaC_a.dot(nablaC_a) / f.verts[1].m + nablaC_a.dot(nablaC_a) / f.verts[2].m
 
                     kc = 1e3
                     ld = C / Schur
@@ -282,18 +282,148 @@ class Solver:
         #         v.g += ld * nablaC
         #         v.h += ld
 
+    def evaluateSelfCollision(self):
 
+        for e in self.edges:
+            for eid in range(self.num_edges):
+                aid, bid = e.verts[0].id, e.verts[1].id
+                a, b = self.verts.x_k[aid], self.verts.x_k[bid]
+                cid, did = self.edges.vid[eid][0], self.edges.vid[eid][1]
+                c, d = self.verts.x_k[cid], self.verts.x_k[did]
+
+                ab = b - a
+                cd = d - c
+                ac = c - a
+
+                a11 = ab.dot(ab)
+                a12 = -cd.dot(ab)
+                a21 = cd.dot(ab)
+                a22 = -cd.dot(cd)
+                det = a11 * a22 - a12 * a21
+                mat = ti.math.mat2([[ab.dot(ab), -cd.dot(ab)], [cd.dot(ab), -cd.dot(cd)]])
+
+                #
+                gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
+
+                t = ti.math.vec2([0.0, 0.0])
+                if abs(det) > 1e-4:
+                    t = mat.inverse() @ gg
+
+
+                #
+                # s = (a22 * gg[0] - a12 * gg[1]) / det
+                # t = (-a21 * gg[0] + a11 * gg[1]) / det
+                # t2 = ti.min(1, ti.max(t2, 0))
+
+                t1 = t[0]
+                t2 = t[1]
+
+                if t1 < 0.0:
+                    t1 = 0.0
+
+                if t1 > 1.0:
+                    t1 = 1.0
+
+                if t2 < 0.0:
+                    t2 = 0.0
+
+                if t2 > 1.0:
+                    t2 = 1.0
+
+                p1 = a + t1 * ab
+                p2 = c + t2 * cd
+                dist = (p1 - p2).norm()
+
+                tol = 1e-2
+                if dist < tol:
+
+                    C = 0.5 * (dist - tol) ** 2
+                    n = (p1 - p2).normalized(1e-6)
+                    nablaC_a = (dist - tol) * (1 - t1) * n
+                    nablaC_b = (dist - tol) * t1 * n
+                    nablaC_c = -(dist - tol) * t1 * n
+                    nablaC_d = -(dist - tol) * t1 * n
+                    Schur = nablaC_a.dot(nablaC_a) / self.verts.m[aid] + nablaC_b.dot(nablaC_b) / self.verts.m[bid] \
+                            + nablaC_c.dot(nablaC_c) / self.verts.m[cid] + nablaC_d.dot(nablaC_d) / self.verts.m[did]
+
+                    ld = C / Schur
+
+                    self.verts.g[aid] += ld * nablaC_a
+                    self.verts.g[bid] += ld * nablaC_b
+                    self.verts.g[cid] += ld * nablaC_c
+                    self.verts.g[did] += ld * nablaC_d
+                    self.verts.h[aid] += ld
+                    self.verts.h[bid] += ld
+                    self.verts.h[cid] += ld
+                    self.verts.h[did] += ld
+
+        for v in self.verts:
+            for fi in range(self.num_faces):
+                fid0, fid1, fid2 = self.face_indices[fi * 3 + 0], self.face_indices[fi * 3 + 1], self.face_indices[fi * 3 + 2]
+
+                f1 = self.verts.x_k[fid0]
+                f2 = self.verts.x_k[fid1]
+                f3 = self.verts.x_k[fid2]
+
+                point = v.x_k
+
+                e1 = f2 - f1
+                e2 = f3 - f1
+                normal = e1.cross(e2).normalized(1e-12)
+                d = point - f1
+                dist = d.dot(normal)
+                point_on_triangle = point - dist * normal
+                d1 = point_on_triangle - f1
+                d2 = point_on_triangle - f2
+                d3 = point_on_triangle - f3
+
+                area_triangle = e1.cross(e2).norm() / 2
+                area1 = d1.cross(d2).norm() / (2 * area_triangle)
+                area2 = d2.cross(d3).norm() / (2 * area_triangle)
+                area3 = d3.cross(d1).norm() / (2 * area_triangle)
+
+                is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+
+                # weights (if the point_on_triangle is close to the vertex, the weight is large)
+                w1 = 1 / (d1.norm() + 1e-8)
+                w2 = 1 / (d2.norm() + 1e-8)
+                w3 = 1 / (d3.norm() + 1e-8)
+                total_w = w1 + w2 + w3
+                w1 /= total_w
+                w2 /= total_w
+                w3 /= total_w
+
+                tol = 1e-2
+                if abs(dist) <= tol and is_on_triangle:
+                    # print("test")
+                    C = 0.5 * (dist - tol) ** 2
+                    nablaC = (dist - tol) * normal
+                    nablaC_a = -(dist - tol) * normal * w1
+                    nablaC_b = -(dist - tol) * normal * w2
+                    nablaC_c = -(dist - tol) * normal * w3
+
+                    Schur = nablaC.dot(nablaC) / v.m \
+                            + nablaC_a.dot(nablaC_a) / self.verts.m[aid] + nablaC_b.dot(nablaC_b) / self.verts.m[bid] + nablaC_b.dot(nablaC_b) / self.verts.m[did].m
+                    #
+                    # kc = 1e3
+                    # ld = C / Schur
+                    v.g += ld * nablaC
+                    v.h += ld
+
+                    self.verts.g[aid] += ld * nablaC_a
+                    self.verts.g[bid] += ld * nablaC_b
+                    self.verts.g[cid] += ld * nablaC_c
+
+                    self.verts.h[aid] += ld
+                    self.verts.h[bid] += ld
+                    self.verts.h[cid] += ld
+
+
+    def evaluateCollisionConstraint(self):
+        self.evaluateStaticCollision()
 
     @ti.kernel
     def NewtonCG(self):
-
-        # for v in self.verts:
-        #     v.h += v.ld
-
-        # for e in self.edges:
-        #     e.verts[0].h += e.ld
-        #     e.verts[1].h += e.ld
-
         for v in self.verts:
             v.x_k -= v.g / v.h
 
