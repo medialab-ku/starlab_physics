@@ -21,8 +21,8 @@ dt = 0.003  # Larger dt might lead to unstable results.
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 # case: face vs. vertex
-mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
-static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
+# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
+# static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 #case: edge vs. edge
 # mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(30.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.4, 0.5))
@@ -36,11 +36,19 @@ static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.
 # mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.4, 0.3))
 # static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
+# mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.8, 0.5))
+# static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
+
+mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.8, 0.5))
+static_mesh =Mesh("obj_models/square_big.obj", scale=0.08, rot=ti.math.vec3(00.0, 20.0, 90.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
+
+
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
 
 debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
+
 
 @ti.kernel
 def init_color():
@@ -61,7 +69,7 @@ camera = ti.ui.Camera()
 
 while window.running:
     sim.update()
-    camera.position(0., 0.5, 2.5)
+    camera.position(0., 1.5, 2.5)
     camera.lookat(0.5, 0.5, 0.5)
     camera.fov(30)
     camera.up(0, 1, 0)
@@ -69,8 +77,8 @@ while window.running:
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
-    scene.particles(sim.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
+    # scene.particles(sim.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
+    # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
     scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
     scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
     scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
