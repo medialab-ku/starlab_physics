@@ -8,7 +8,7 @@ vec = ti.math.vec3
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.001  # Larger dt might lead to unstable results.
+dt = 0.003  # Larger dt might lead to unstable results.
 
 # mesh = Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
@@ -61,7 +61,7 @@ camera = ti.ui.Camera()
 
 while window.running:
     sim.update()
-    camera.position(0., 0.5, 2.5)
+    camera.position(0., 0.25, 1.5)
     camera.lookat(0.5, 0.5, 0.5)
     camera.fov(30)
     camera.up(0, 1, 0)
@@ -74,7 +74,7 @@ while window.running:
     scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
     scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
     scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
-    scene.lines(sim.p, width=0.5, indices=debug_edge_indices, color=(1., 0., 0.))
+    # scene.lines(sim.p, width=0.5, indices=debug_edge_indices, color=(1., 0., 0.))
     scene.lines(static_mesh.mesh.verts.x, width=0.5, indices=static_mesh.edge_indices, color=(0., 0., 0.))
     canvas.scene(scene)
     window.show()

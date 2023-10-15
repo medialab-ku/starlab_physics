@@ -32,33 +32,51 @@ def test_abT(a: ti.math.vec3, b: ti.math.vec3) -> ti.math.mat3:
 @ti.kernel
 def test():
 
-    A = ti.math.vec3([0.594281, 0.383333, 0.528867])
-    B = ti.math.vec3([0.452860, 0.312623, 0.488043])
+    a = ti.math.vec3([0.0, 0.0, 0.0])
+    b = ti.math.vec3([1.0, 0.0, 0.0])
 
-    C = ti.math.vec3([0.500000, 0.270000, 0.413397])
-    D = ti.math.vec3([0.452860, 0.274044, 0.569692])
+    c = ti.math.vec3([0.5, 0.3, 0.5])
+    d = ti.math.vec3([0.5, 0.3, -1.0])
 
+    ab = b - a
+    cd = d - c
+    ac = c - a
 
-    AB = B - A
-    CD = D - C
-    AC = C - A
+    a11 = ab.dot(ab)
+    a12 = -cd.dot(ab)
+    a21 = cd.dot(ab)
+    a22 = -cd.dot(cd)
+    det = a11 * a22 - a12 * a21
 
-    mat = ti.math.mat2([[-CD.dot(AB), AB.dot(AB)],
-                        [-CD.dot(CD), CD.dot(AB)]])
+    mat = ti.math.mat2([[ab.dot(ab), -cd.dot(ab)], [cd.dot(ab), -cd.dot(cd)]])
 
-    b = ti.math.vec2([AB.dot(AC), CD.dot(AC)])
+    #
+    gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
 
-    t = mat.inverse() @ b
+    t = mat.inverse() @ gg
+    #
+    # s = (a22 * gg[0] - a12 * gg[1]) / det
+    # t = (-a21 * gg[0] + a11 * gg[1]) / det
+    # t2 = ti.min(1, ti.max(t2, 0))
 
     t1 = t[0]
     t2 = t[1]
 
-    p1 = A + t1 * AB
-    p2 = C + t2 * CD
+    if t1 < 0.0:
+        t1 = 0.0
 
-    dist = (p1 - p2).norm()
+    if t1 > 1.0:
+        t1 = 1.0
+
+    if t2 < 0.0:
+        t2 = 0.0
+
+    if t2 > 1.0:
+        t2 = 1.0
+
+
     print(t)
-    print(dist)
+
 
 @ti.kernel
 def add_data():
