@@ -96,80 +96,73 @@ class Solver:
     @ti.kernel
     def evaluateCollisionConstraint(self):
 
-        # for e in self.edges:
-        #     for es in range(self.num_edges_static):
-        a, b = self.verts.x_k[1], self.verts.x_k[2]
-        # cid, did = self.edges_static.vid[es][0], self.edges_static.vid[es][1]
-        c, d = self.verts_static.x[0], self.verts_static.x[3]
+        for e in self.edges:
+            for es in range(self.num_edges_static):
+                aid, bid = e.verts[0].id, e.verts[1].id
+                a, b = self.verts.x_k[aid], self.verts.x_k[bid]
+                cid, did = self.edges_static.vid[es][0], self.edges_static.vid[es][1]
+                c, d = self.verts_static.x[cid], self.verts_static.x[did]
 
-        ab = b - a
-        cd = d - c
-        ac = c - a
+                ab = b - a
+                cd = d - c
+                ac = c - a
 
-        a11 = ab.dot(ab)
-        a12 = -cd.dot(ab)
-        a21 = cd.dot(ab)
-        a22 = -cd.dot(cd)
-        det = a11 * a22 - a12 * a21
-        mat = ti.math.mat2([[ab.dot(ab), -cd.dot(ab)], [cd.dot(ab), -cd.dot(cd)]])
+                a11 = ab.dot(ab)
+                a12 = -cd.dot(ab)
+                a21 = cd.dot(ab)
+                a22 = -cd.dot(cd)
+                det = a11 * a22 - a12 * a21
+                mat = ti.math.mat2([[ab.dot(ab), -cd.dot(ab)], [cd.dot(ab), -cd.dot(cd)]])
 
-        #
-        gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
+                #
+                gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
 
-        t = ti.math.vec2([0.0, 0.0])
-        if abs(det) > 1e-4:
-            t = mat.inverse() @ gg
-
-
-        #
-        # s = (a22 * gg[0] - a12 * gg[1]) / det
-        # t = (-a21 * gg[0] + a11 * gg[1]) / det
-        # t2 = ti.min(1, ti.max(t2, 0))
-
-        t1 = t[0]
-        t2 = t[1]
-
-        if t1 < 0.0:
-            t1 = 0.0
-
-        if t1 > 1.0:
-            t1 = 1.0
-
-        if t2 < 0.0:
-            t2 = 0.0
-
-        if t2 > 1.0:
-            t2 = 1.0
-
-        p1 = a + t1 * ab
-        p2 = c + t2 * cd
+                t = ti.math.vec2([0.0, 0.0])
+                if abs(det) > 1e-4:
+                    t = mat.inverse() @ gg
 
 
-        # self.p[0] = p1
-        # self.p[1] = p2
-        # p01 = self.p[0] - self.p[1]
+                #
+                # s = (a22 * gg[0] - a12 * gg[1]) / det
+                # t = (-a21 * gg[0] + a11 * gg[1]) / det
+                # t2 = ti.min(1, ti.max(t2, 0))
 
-        # print(f'{p01.dot(ab)}, {p01.dot(cd)}')
+                t1 = t[0]
+                t2 = t[1]
 
-        dist = (p1 - p2).norm()
-        # print(dist)
-        tol = 1e-2
-        if dist < tol:
-            # print("test")
-            C = 0.5 * (dist - tol) ** 2
-            n = (p1 - p2).normalized(1e-6)
-            nablaC_a = (dist - tol) * t1 * n
-            nablaC_b = (dist - tol) * (1 - t1) * n
-            Schur = nablaC_a.dot(nablaC_a) / self.verts.m[1] + nablaC_b.dot(nablaC_b) / self.verts.m[2]
+                if t1 < 0.0:
+                    t1 = 0.0
 
-            kc = 1e3
+                if t1 > 1.0:
+                    t1 = 1.0
 
-            ld = C / Schur
+                if t2 < 0.0:
+                    t2 = 0.0
 
-            self.verts.g[1] += ld * nablaC_a
-            self.verts.g[2] += ld * nablaC_b
-            self.verts.h[1] += ld
-            self.verts.h[2] += ld
+                if t2 > 1.0:
+                    t2 = 1.0
+
+                p1 = a + t1 * ab
+                p2 = c + t2 * cd
+                dist = (p1 - p2).norm()
+
+                tol = 1e-2
+                if dist < tol:
+
+                    C = 0.5 * (dist - tol) ** 2
+                    n = (p1 - p2).normalized(1e-6)
+                    nablaC_a = (dist - tol) * t1 * n
+                    nablaC_b = (dist - tol) * (1 - t1) * n
+                    Schur = nablaC_a.dot(nablaC_a) / self.verts.m[aid] + nablaC_b.dot(nablaC_b) / self.verts.m[bid]
+
+                    kc = 1e3
+
+                    ld = C / Schur
+
+                    self.verts.g[aid] += ld * nablaC_a
+                    self.verts.g[bid] += ld * nablaC_b
+                    self.verts.h[aid] += ld
+                    self.verts.h[bid] += ld
 
 
         for v in self.verts:
