@@ -78,6 +78,8 @@ class Mesh:
     @ti.kernel
     def applyTransform(self):
 
+        self.setCenterToOrigin()
+
         for v in self.mesh.verts:
             v.x *= self.scale
 
