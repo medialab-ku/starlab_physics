@@ -18,8 +18,12 @@ class Mesh:
                                'y': ti.math.vec3,
                                'ld': ti.f32,
                                'x_k': ti.math.vec3,
+                               'dx': ti.math.vec3,
+                               'alpha': ti.f32,
                                'g': ti.math.vec3,
-                               'h': ti.f32})
+                               'h': ti.f32,
+                               'aabb_min': ti.math.vec3,
+                               'aabb_max': ti.math.vec3})
 
 
 
@@ -30,7 +34,13 @@ class Mesh:
 
         self.mesh.edges.place({'l0': ti.f32,
                                'ld': ti.f32,
-                               'vid': ti.math.ivec2})
+                               'vid': ti.math.ivec2,
+                               'aabb_min': ti.math.vec3,
+                               'aabb_max': ti.math.vec3}) # bounding sphere radius
+
+        self.mesh.faces.place({'aabb_min': ti.math.vec3,
+                               'aabb_max': ti.math.vec3})  # bounding sphere radius
+
         self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.edges) * 2)
@@ -43,6 +53,7 @@ class Mesh:
 
         self.applyTransform()
         self.computeInitialLength()
+
 
     @ti.kernel
     def computeInitialLength(self):
