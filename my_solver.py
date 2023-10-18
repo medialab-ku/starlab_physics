@@ -16,7 +16,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -10.0
+        self.gravity = -4.0
         self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
@@ -501,9 +501,9 @@ class Solver:
     @ti.kernel
     def modify_velocity(self):
         for v in self.verts:
-            for fid in range(self.num_faces_static):
-                self.vertex_face_ccd(v.id, fid)
-                # self.vertex_face_dcd(v.id, fid)
+        #     for fid in range(self.num_faces_static):
+            self.vertex_face_ccd(v.id, 0)
+            # self.vertex_face_dcd(v.id, 0)
     @ti.func
     def check_point_on_triangle(self, p, f1, f2, f3):
         e1 = f2 - f1
@@ -511,18 +511,20 @@ class Solver:
         d1 = p - f1
         d2 = p - f2
         d3 = p - f3
-        area_triangle = e1.cross(e2).norm() / 2
-        area1 = d1.cross(d2).norm() / (2 * area_triangle)
-        area2 = d2.cross(d3).norm() / (2 * area_triangle)
-        area3 = d3.cross(d1).norm() / (2 * area_triangle)
-        return 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+        area_triangle = e1.cross(e2).norm()
+        area1 = d1.cross(d2).norm() / area_triangle
+        area2 = d2.cross(d3).norm() / area_triangle
+        area3 = d3.cross(d1).norm() / area_triangle
+
+
+        return 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and (area1 + area2 + area3) <=1
 
     @ti.func
     def vertex_face_ccd(self, vid: ti.int32, fid: ti.int32):
 
         # segment points p->x
         p = self.verts.x[vid]
-        x = self.verts.y[vid]
+        x = self.verts.x_k[vid]
 
         fid0 = self.face_indices_static[fid * 3 + 0]
         fid1 = self.face_indices_static[fid * 3 + 1]
@@ -541,27 +543,45 @@ class Solver:
             # calculate intersection point
             alpha = abs(dist_p) / (abs(dist_p) + abs(dist_x))
             intersection = alpha * x + (1 - alpha) * p
-
+            # self.intersect[vid] = intersection
+            if vid == 3 and fid == 0:
+                print("fuck 1")
             # check if intersection point is in triangle
-            is_on_triangle = self.check_point_on_triangle(intersection, f1, f2, f3)
+            e1 = f2 - f1
+            e2 = f3 - f1
+            d1 = intersection - f1
+            d2 = intersection - f2
+            d3 = intersection - f3
+            area_triangle = e1.cross(e2).norm()
+            area1 = d1.cross(d2).norm() / area_triangle
+            area2 = d2.cross(d3).norm() / area_triangle
+            area3 = d3.cross(d1).norm() / area_triangle
+
+            is_on_triangle = (0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and abs(area1 + area2 + area3 - 1.0) <= 1e-4)
+
+            # if vid == 3 and fid == 0:
+            #      print(f'{area1}, {area2}, {area3}, {area1 + area2 + area3}')
 
             if is_on_triangle:
-                # calculate new position
-                min_dist = 1e-3
+            # calculate new position
+                if vid == 3 and fid == 0:
+                    print("fuck 2")
+                min_dist = 1e-4
                 if abs(dist_p) < min_dist:
                     alpha /= 2
                 else:
                     # find point on segment that has min_dist distance from plane
                     alpha = (abs(dist_p) - min_dist) / (abs(dist_p) + abs(dist_x))
 
-            # self.verts.x_k[vid] = alpha * x + (1 - alpha) * p
-            self.intersect[vid] = alpha * x + (1 - alpha) * p
-
+                self.verts.x_k[vid] = alpha * x + (1 - alpha) * p
+                # self.verts.x_k[vid] = intersection
         else:
-            if abs(dist_x) > abs(dist_p):
-                self.intersect[vid] = p
-            else:
-                self.intersect[vid] = x
+            point_on_triangle = x - dist_x * n
+            is_on_triangle = self.check_point_on_triangle(point_on_triangle, f1, f2, f3)
+            tol = 1e-4
+            if abs(dist_x) <= tol and is_on_triangle:
+                self.verts.x_k[vid] = self.verts.x_k[vid] + (dist_x - tol) * n
+
 
     @ti.func
     def vertex_face_dcd(self, vid: ti.int32, fid: ti.int32):
@@ -592,7 +612,7 @@ class Solver:
         area2 = d2.cross(d3).norm() / (2 * area_triangle)
         area3 = d3.cross(d1).norm() / (2 * area_triangle)
 
-        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 <= 1
 
         # weights (if the point_on_triangle is close to the vertex, the weight is large)
         w1 = 1 / (d1.norm() + 1e-8)
@@ -604,8 +624,8 @@ class Solver:
         w3 /= total_w
 
         tol = 1e-3
-        if abs(dist) <= tol and is_on_triangle:
-            self.verts.x_k[vid] += (dist - tol) * normal
+        if abs(dist) < tol and is_on_triangle:
+            self.verts.x_k[vid] = self.verts.y[vid] + (dist - tol) * normal
 
     @ti.kernel
     def filterStepSize(self) -> ti.f32:
@@ -670,8 +690,9 @@ class Solver:
         #     self.computeCollisionAwareVelocity()
         #     # self.globalSolveVelocity()
 
-        self.computeY()
 
+        self.computeY()
+        self.verts.x_k.copy_from(self.verts.y)
         self.modify_velocity()
 
         # self.computeAABB()
@@ -680,7 +701,7 @@ class Solver:
         # self.verts.x_k.copy_from(self.verts.y)
         # self.verts.h.copy_from(self.verts.m)
 
-
+        self.computeNextState()
 
         # for i in range(self.max_iter):
         #     # self.evaluateMomentumConstraint()
