@@ -7,7 +7,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e3,
+                 k=1e4,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -16,7 +16,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -4.0
+        self.gravity = -10.0
         self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
@@ -56,6 +56,7 @@ class Solver:
         self.partical_array.place(self.grid_particles_list)
         self.grid_particles_count = ti.field(ti.i32)
         ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
+        self.x_before = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
 
 
         self.p1 = ti.math.vec3([0., 0., 0.])
@@ -228,6 +229,56 @@ class Solver:
             v.v = (v.x_k - v.x) / self.dt
             v.x = v.x_k
 
+        # for v in self.verts:
+        #     for fid in range(self.num_faces_static):
+        #         self.vertex_face_velocity(v.id, fid)
+
+    @ti.func
+    def vertex_face_velocity(self, vid: ti.int32, fid: ti.int32):
+        fid0 = self.face_indices_static[fid * 3 + 0]
+        fid1 = self.face_indices_static[fid * 3 + 1]
+        fid2 = self.face_indices_static[fid * 3 + 2]
+
+        f1 = self.verts_static.x[fid0]
+        f2 = self.verts_static.x[fid1]
+        f3 = self.verts_static.x[fid2]
+
+        point = self.verts.x_k[vid]
+
+        e1 = f2 - f1
+        e2 = f3 - f1
+        normal = e1.cross(e2).normalized(1e-12)
+        d = point - f1
+        dist = d.dot(normal)
+
+        point_on_triangle = point - dist * normal
+
+        d1 = point_on_triangle - f1
+        d2 = point_on_triangle - f2
+        d3 = point_on_triangle - f3
+
+        area_triangle = e1.cross(e2).norm() / 2
+        area1 = d1.cross(d2).norm() / (2 * area_triangle)
+        area2 = d2.cross(d3).norm() / (2 * area_triangle)
+        area3 = d3.cross(d1).norm() / (2 * area_triangle)
+
+        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+
+        # weights (if the point_on_triangle is close to the vertex, the weight is large)
+        w1 = 1 / (d1.norm() + 1e-8)
+        w2 = 1 / (d2.norm() + 1e-8)
+        w3 = 1 / (d3.norm() + 1e-8)
+        total_w = w1 + w2 + w3
+        w1 /= total_w
+        w2 /= total_w
+        w3 /= total_w
+
+        tol = 1e-3
+        if abs(dist) <= tol and is_on_triangle:
+            v = self.verts.v[vid]
+            self.verts.v[vid] -= v.dot(normal) * normal
+
+
     @ti.kernel
     def evaluateMomentumConstraint(self):
         for v in self.verts:
@@ -247,10 +298,10 @@ class Solver:
             if Schur > 1e-4:
                 ld = C / Schur
 
-            e.verts[0].g += ld * nablaC
-            e.verts[1].g -= ld * nablaC
-            e.verts[0].h += ld
-            e.verts[1].h += ld
+            e.verts[0].g += self.k * nablaC
+            e.verts[1].g -= self.k * nablaC
+            e.verts[0].h += self.k
+            e.verts[1].h += self.k
 
 
     @ti.kernel
@@ -425,8 +476,12 @@ class Solver:
         #             f.verts[1].h += ld
         #             f.verts[2].h += ld
 
-        for i in range(self.candidatesVT.length()):
-            self.resolve_VT(vid=self.candidatesVT[i][0], tid=self.candidatesVT[i][1])
+        # for i in range(self.candidatesVT.length()):
+        #     self.resolve_VT(vid=self.candidatesVT[i][0], tid=self.candidatesVT[i][1])
+
+        for v in self.verts:
+            for fid in range(self.num_faces_static):
+                self.vertex_face_ccd(v.id, fid)
 
         # for v in self.verts:
         #     if(v.x_k[1] < 0):
@@ -439,6 +494,108 @@ class Solver:
         #         v.g += ld * nablaC
         #         v.h += ld
 
+
+    @ti.kernel
+    def modify_velocity(self):
+        for v in self.verts:
+            for fid in range(self.num_faces_static):
+                self.vertex_face_ccd(v.id, fid)
+                # self.vertex_face_dcd(v.id, fid)
+    @ti.func
+    def check_point_on_triangle(self, p, f1, f2, f3):
+        e1 = f2 - f1
+        e2 = f3 - f1
+        d1 = p - f1
+        d2 = p - f2
+        d3 = p - f3
+        area_triangle = e1.cross(e2).norm() / 2
+        area1 = d1.cross(d2).norm() / (2 * area_triangle)
+        area2 = d2.cross(d3).norm() / (2 * area_triangle)
+        area3 = d3.cross(d1).norm() / (2 * area_triangle)
+        return 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+
+    @ti.func
+    def vertex_face_ccd(self, vid: ti.int32, fid: ti.int32):
+
+        # segment points p->x
+        p = self.verts.x[vid]
+        x = self.verts.x_k[vid]
+
+        fid0 = self.face_indices_static[fid * 3 + 0]
+        fid1 = self.face_indices_static[fid * 3 + 1]
+        fid2 = self.face_indices_static[fid * 3 + 2]
+
+        f1 = self.verts_static.x[fid0]
+        f2 = self.verts_static.x[fid1]
+        f3 = self.verts_static.x[fid2]
+
+        # calculate distance from point to plane
+        n = (f2 - f1).cross(f3 - f1).normalized()
+        dist_p = (p - f1).dot(n)
+        dist_x = (x - f1).dot(n)
+
+        if dist_p * dist_x < 0:
+            # calculate intersection point
+            alpha = abs(dist_p) / (abs(dist_p) + abs(dist_x))
+            intersection = alpha * x + (1 - alpha) * p
+
+            # check if intersection point is in triangle
+            is_on_triangle = self.check_point_on_triangle(intersection, f1, f2, f3)
+
+            if is_on_triangle:
+                # calculate new position
+                min_dist = 1e-3
+                if abs(dist_p) < min_dist:
+                    alpha /= 2
+                else:
+                    # find point on segment that has min_dist distance from plane
+                    alpha = (abs(dist_p) - min_dist) / (abs(dist_p) + abs(dist_x))
+
+            self.verts.x_k[vid] = alpha * x + (1 - alpha) * p
+
+    @ti.func
+    def vertex_face_dcd(self, vid: ti.int32, fid: ti.int32):
+        fid0 = self.face_indices_static[fid * 3 + 0]
+        fid1 = self.face_indices_static[fid * 3 + 1]
+        fid2 = self.face_indices_static[fid * 3 + 2]
+
+        f1 = self.verts_static.x[fid0]
+        f2 = self.verts_static.x[fid1]
+        f3 = self.verts_static.x[fid2]
+
+        point = self.verts.x_k[vid]
+
+        e1 = f2 - f1
+        e2 = f3 - f1
+        normal = e1.cross(e2).normalized(1e-12)
+        d = point - f1
+        dist = d.dot(normal)
+
+        point_on_triangle = point - dist * normal
+
+        d1 = point_on_triangle - f1
+        d2 = point_on_triangle - f2
+        d3 = point_on_triangle - f3
+
+        area_triangle = e1.cross(e2).norm() / 2
+        area1 = d1.cross(d2).norm() / (2 * area_triangle)
+        area2 = d2.cross(d3).norm() / (2 * area_triangle)
+        area3 = d3.cross(d1).norm() / (2 * area_triangle)
+
+        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
+
+        # weights (if the point_on_triangle is close to the vertex, the weight is large)
+        w1 = 1 / (d1.norm() + 1e-8)
+        w2 = 1 / (d2.norm() + 1e-8)
+        w3 = 1 / (d3.norm() + 1e-8)
+        total_w = w1 + w2 + w3
+        w1 /= total_w
+        w2 /= total_w
+        w3 /= total_w
+
+        tol = 1e-3
+        if abs(dist) <= tol and is_on_triangle:
+            self.verts.x_k[vid] += (dist - tol) * normal
 
     @ti.kernel
     def filterStepSize(self) -> ti.f32:
@@ -490,9 +647,12 @@ class Solver:
 
 
     def update(self):
-        self.verts.f_ext.fill([0.0, self.gravity, 0.0])
 
+        self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeVtemp()
+
+        self.x_before.copy_from(self.verts.x)
+        # self.modify_velocity()
         #
         # self.verts.g.fill(0.0)
         # self.verts.h.copy_from(self.verts.m)
@@ -501,18 +661,18 @@ class Solver:
         #     # self.globalSolveVelocity()
 
         self.computeY()
-        self.computeAABB()
-        self.compute_candidates()
+        # self.computeAABB()
+        # self.compute_candidates()
 
         self.verts.x_k.copy_from(self.verts.y)
         self.verts.h.copy_from(self.verts.m)
 
         for i in range(self.max_iter):
-            self.evaluateMomentumConstraint()
-            self.evaluateSpringConstraint()
+            # self.evaluateMomentumConstraint()
+            # self.evaluateSpringConstraint()
             self.evaluateCollisionConstraint()
             # self.filterStepSize()
-            self.NewtonCG()
+            # self.NewtonCG()
 
         self.computeNextState()
 
