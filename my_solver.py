@@ -64,6 +64,9 @@ class Solver:
 
         self.p = ti.Vector.field(n=3, shape=2, dtype=ti.f32)
 
+        self.intersect = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
+
+
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
         # self.setRadius()
         print(f"radius: {self.radius}")
@@ -519,7 +522,7 @@ class Solver:
 
         # segment points p->x
         p = self.verts.x[vid]
-        x = self.verts.x_k[vid]
+        x = self.verts.y[vid]
 
         fid0 = self.face_indices_static[fid * 3 + 0]
         fid1 = self.face_indices_static[fid * 3 + 1]
@@ -551,7 +554,14 @@ class Solver:
                     # find point on segment that has min_dist distance from plane
                     alpha = (abs(dist_p) - min_dist) / (abs(dist_p) + abs(dist_x))
 
-            self.verts.x_k[vid] = alpha * x + (1 - alpha) * p
+            # self.verts.x_k[vid] = alpha * x + (1 - alpha) * p
+            self.intersect[vid] = alpha * x + (1 - alpha) * p
+
+        else:
+            if abs(dist_x) > abs(dist_p):
+                self.intersect[vid] = p
+            else:
+                self.intersect[vid] = x
 
     @ti.func
     def vertex_face_dcd(self, vid: ti.int32, fid: ti.int32):
@@ -651,7 +661,7 @@ class Solver:
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeVtemp()
 
-        self.x_before.copy_from(self.verts.x)
+        # self.x_before.copy_from(self.verts.x)
         # self.modify_velocity()
         #
         # self.verts.g.fill(0.0)
@@ -661,19 +671,24 @@ class Solver:
         #     # self.globalSolveVelocity()
 
         self.computeY()
+
+        self.modify_velocity()
+
         # self.computeAABB()
         # self.compute_candidates()
 
-        self.verts.x_k.copy_from(self.verts.y)
-        self.verts.h.copy_from(self.verts.m)
+        # self.verts.x_k.copy_from(self.verts.y)
+        # self.verts.h.copy_from(self.verts.m)
 
-        for i in range(self.max_iter):
-            # self.evaluateMomentumConstraint()
-            # self.evaluateSpringConstraint()
-            self.evaluateCollisionConstraint()
-            # self.filterStepSize()
-            # self.NewtonCG()
 
-        self.computeNextState()
+
+        # for i in range(self.max_iter):
+        #     # self.evaluateMomentumConstraint()
+        #     # self.evaluateSpringConstraint()
+        #     self.evaluateCollisionConstraint()
+        #     # self.filterStepSize()
+        #     # self.NewtonCG()
+        #
+        # self.computeNextState()
 
 
