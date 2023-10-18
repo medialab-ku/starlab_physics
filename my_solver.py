@@ -501,9 +501,13 @@ class Solver:
     @ti.kernel
     def modify_velocity(self):
         for v in self.verts:
-        #     for fid in range(self.num_faces_static):
-            self.vertex_face_ccd(v.id, 0)
+            for fid in range(self.num_faces_static):
+                self.vertex_face_ccd(v.id, fid)
             # self.vertex_face_dcd(v.id, 0)
+
+        for v in self.verts:
+            if v.nc >= 1:
+                v.x_k = v.p / v.nc
     @ti.func
     def check_point_on_triangle(self, p, f1, f2, f3):
         e1 = f2 - f1
@@ -544,8 +548,8 @@ class Solver:
             alpha = abs(dist_p) / (abs(dist_p) + abs(dist_x))
             intersection = alpha * x + (1 - alpha) * p
             # self.intersect[vid] = intersection
-            if vid == 3 and fid == 0:
-                print("fuck 1")
+            # if vid == 3 and fid == 0:
+            #     print("fuck 1")
             # check if intersection point is in triangle
             e1 = f2 - f1
             e2 = f3 - f1
@@ -564,8 +568,8 @@ class Solver:
 
             if is_on_triangle:
             # calculate new position
-                if vid == 3 and fid == 0:
-                    print("fuck 2")
+            #     if vid == 3 and fid == 0:
+            #         print("fuck 2")
                 min_dist = 1e-4
                 if abs(dist_p) < min_dist:
                     alpha /= 2
@@ -573,15 +577,16 @@ class Solver:
                     # find point on segment that has min_dist distance from plane
                     alpha = (abs(dist_p) - min_dist) / (abs(dist_p) + abs(dist_x))
 
-                self.verts.x_k[vid] = alpha * x + (1 - alpha) * p
+                self.verts.p[vid] += alpha * x + (1 - alpha) * p
+                self.verts.nc[vid] += 1
                 # self.verts.x_k[vid] = intersection
         else:
             point_on_triangle = x - dist_x * n
             is_on_triangle = self.check_point_on_triangle(point_on_triangle, f1, f2, f3)
             tol = 1e-4
             if abs(dist_x) <= tol and is_on_triangle:
-                self.verts.x_k[vid] = self.verts.x_k[vid] + (dist_x - tol) * n
-
+                self.verts.p[vid] += self.verts.x_k[vid] + (dist_x - tol) * n
+                self.verts.nc[vid] += 1
 
     @ti.func
     def vertex_face_dcd(self, vid: ti.int32, fid: ti.int32):
@@ -693,6 +698,8 @@ class Solver:
 
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
+        self.verts.p.fill(0.)
+        self.verts.nc.fill(0)
         self.modify_velocity()
 
         # self.computeAABB()
