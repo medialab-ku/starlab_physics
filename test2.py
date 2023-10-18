@@ -8,7 +8,7 @@ vec = ti.math.vec3
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.003  # Larger dt might lead to unstable results.
+dt = 0.03  # Larger dt might lead to unstable results.
 
 # mesh = Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
@@ -26,7 +26,7 @@ dt = 0.003  # Larger dt might lead to unstable results.
 
 
 # case: face vs. face
-mesh = Mesh("obj_models/tetrahedron.obj", scale=0.2, rot=ti.math.vec3(0.0, 10.0, 0.0),trans=ti.math.vec3(0.8, 0.5, 0.3))
+mesh = Mesh("obj_models/tetrahedron.obj", scale=0.2, rot=ti.math.vec3(0.0, 10.0, 0.0),trans=ti.math.vec3(0.22, 0.5, 0.3))
 static_mesh = Mesh("obj_models/square.obj", scale=1.0, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
 
 #case: edge vs. edge
