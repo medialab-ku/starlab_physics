@@ -21,8 +21,8 @@ dt = 0.005  # Larger dt might lead to unstable results.
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 # case: face vs. vertex
-# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
-# static_mesh = Mesh("obj_models/square.obj", scale=0.2, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
+# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
+# static_mesh = Mesh("obj_models/square.obj", scale=0.4, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
 
 
 # case: face vs. face
@@ -66,7 +66,7 @@ init_color()
 
 sim = Solver(mesh, bottom=0.0, static_mesh=static_mesh, dt=dt, max_iter=10)
 
-window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), vsync=True, fps_limit=200)
+window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()

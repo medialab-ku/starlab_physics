@@ -523,7 +523,15 @@ class Solver:
         for v in self.verts:
             for fid in range(self.num_faces_static):
                 self.vertex_face_ccd(v.id, fid)
-            # self.vertex_face_dcd(v.id, 0)
+
+        for e in self.edges:
+            for eid in range(self.num_edges_static):
+                self.edge_edge_ccd(e.id, eid)
+
+        for f in self.faces:
+            for vid in range(self.num_verts_static):
+                fvid0, fvid1, fvid2 = f.verts[0].id, f.verts[1].id, f.verts[2].id
+                self.face_vertex_ccd(fvid0, fvid1, fvid2, vid)
 
         for v in self.verts:
             if v.nc >= 1:
@@ -540,12 +548,10 @@ class Solver:
         area2 = d2.cross(d3).norm() / area_triangle
         area3 = d3.cross(d1).norm() / area_triangle
 
-
-        return 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and (area1 + area2 + area3) <=1
+        return 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and abs(area1 + area2 + area3 - 1.0) <= 1e-4
 
     @ti.func
     def vertex_face_ccd(self, vid: ti.int32, fid: ti.int32):
-
         # segment points p->x
         p = self.verts.x[vid]
         x = p + self.verts.v[vid] * self.dt
@@ -611,6 +617,135 @@ class Solver:
             if abs(dist_x) <= tol and is_on_triangle:
                 self.verts.p[vid] += (x - p) / self.dt
                 self.verts.nc[vid] += 1
+
+    @ti.func
+    def edge_edge_ccd(self, eid: ti.int32, eid_s: ti.int32):
+
+        vid0 = self.edges.vid[eid][0]
+        vid1 = self.edges.vid[eid][1]
+
+        vid2 = self.edges.vid[eid_s][0]
+        vid3 = self.edges.vid[eid_s][1]
+
+        a, b = self.verts.x[vid0], self.verts.x[vid1]
+        c, d = self.verts_static.x[vid2], self.verts_static.x[vid3]
+
+        ab = b - a
+        cd = d - c
+        ac = c - a
+
+        a11 = ab.dot(ab)
+        a12 = -cd.dot(ab)
+        a21 = cd.dot(ab)
+        a22 = -cd.dot(cd)
+        det = a11 * a22 - a12 * a21
+        mat = ti.math.mat2([[ab.dot(ab), -cd.dot(ab)], [cd.dot(ab), -cd.dot(cd)]])
+
+        #
+        gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
+
+        t = ti.math.vec2([0.0, 0.0])
+        if abs(det) > 1e-4:
+            t = mat.inverse() @ gg
+
+
+        #
+        # s = (a22 * gg[0] - a12 * gg[1]) / det
+        # t = (-a21 * gg[0] + a11 * gg[1]) / det
+        # t2 = ti.min(1, ti.max(t2, 0))
+
+        t1 = t[0]
+        t2 = t[1]
+
+        if t1 < 0.0:
+            t1 = 0.0
+
+        if t1 > 1.0:
+            t1 = 1.0
+
+        if t2 < 0.0:
+            t2 = 0.0
+
+        if t2 > 1.0:
+            t2 = 1.0
+
+        p1 = a + t1 * ab
+        p2 = c + t2 * cd
+        dist = (p1 - p2).norm()
+
+        # tol = 1e-2
+        # if dist < tol:
+        #     C = 0.5 * (dist - tol) ** 2
+        #     n = (p1 - p2).normalized(1e-6)
+        #     nablaC_a = (dist - tol) * (1 - t1) * n
+        #     nablaC_b = (dist - tol) * t1 * n
+        #     Schur = nablaC_a.dot(nablaC_a) / self.verts.m[aid] + nablaC_b.dot(nablaC_b) / self.verts.m[bid]
+        #
+        #     ld = C / Schur
+        #
+        #     self.verts.p[vid0] += ( -) / self.dt
+        #     self.verts.p[vid1] += () / self.dt
+        #     self.verts.nc[vid0] += 1
+        #     self.verts.nc[vid1] += 1
+
+    @ti.func
+    def face_vertex_ccd(self, fvid0: ti.int32, fvid1: ti.int32, fvid2: ti.int32, vid: ti.int32):
+
+            f1 = self.verts.x[fvid0]
+            f2 = self.verts.x[fvid1]
+            f3 = self.verts.x[fvid2]
+
+            point = self.verts_static.x[vid]
+
+            e1 = f2 - f1
+            e2 = f3 - f1
+            normal = e1.cross(e2).normalized(1e-12)
+            d = point - f1
+            dist = d.dot(normal)
+            point_on_triangle = point - dist * normal
+            d1 = point_on_triangle - f1
+            d2 = point_on_triangle - f2
+            d3 = point_on_triangle - f3
+
+            area_triangle = e1.cross(e2).norm() / 2
+            area1 = d1.cross(d2).norm() / (2 * area_triangle)
+            area2 = d2.cross(d3).norm() / (2 * area_triangle)
+            area3 = d3.cross(d1).norm() / (2 * area_triangle)
+
+            is_on_triangle = self.check_point_on_triangle(point_on_triangle, f1, f2, f3)
+            # weights (if the point_on_triangle is close to the vertex, the weight is large)
+            w1 = 1 / (d1.norm() + 1e-8)
+            w2 = 1 / (d2.norm() + 1e-8)
+            w3 = 1 / (d3.norm() + 1e-8)
+            total_w = w1 + w2 + w3
+            w1 /= total_w
+            w2 /= total_w
+            w3 /= total_w
+
+            tol = 1e-2
+            if abs(dist) <= tol and is_on_triangle:
+
+                self.verts.nc[fvid0] += 1
+                self.verts.nc[fvid1] += 1
+                self.verts.nc[fvid2] += 1
+
+            #     # print("test")
+            #     C = 0.5 * (dist - tol) ** 2
+            #     nablaC_a = (dist - tol) * normal * w1
+            #     nablaC_b = (dist - tol) * normal * w2
+            #     nablaC_c = (dist - tol) * normal * w3
+            #
+            #     Schur = nablaC_a.dot(nablaC_a) / f.verts[1].m + nablaC_a.dot(nablaC_a) / f.verts[2].m + nablaC_a.dot(nablaC_a) / f.verts[2].m
+            #
+            #     kc = 1e3
+            #     ld = C / Schur
+            #     f.verts[0].g += ld * nablaC_a
+            #     f.verts[1].g += ld * nablaC_b
+            #     f.verts[2].g += ld * nablaC_c
+            #
+            #     f.verts[0].h += ld
+            #     f.verts[1].h += ld
+            #     f.verts[2].h += ld
 
     @ti.func
     def vertex_face_dcd(self, vid: ti.int32, fid: ti.int32):
