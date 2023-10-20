@@ -12,6 +12,7 @@ class Mesh:
 
         self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV"])
         self.mesh.verts.place({'m': ti.f32,
+                               'x0': ti.math.vec3,
                                'x': ti.math.vec3,
                                'v': ti.math.vec3,
                                'f_ext': ti.math.vec3,
@@ -55,6 +56,7 @@ class Mesh:
 
         self.applyTransform()
         self.computeInitialLength()
+        self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
 
     @ti.kernel
