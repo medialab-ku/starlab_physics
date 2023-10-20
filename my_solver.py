@@ -41,12 +41,12 @@ class Solver:
         self.S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
         self.x = ti.field(ti.math.uvec2)
         self.S.place(self.x)
-        self.test()
+        # self.test()
         #
         # self.normals = ti.Vector.field(n=3, dtype=ti.f32, shape=2 * self.num_faces)
         self.normals_static = ti.Vector.field(n=3, dtype=ti.f32, shape=2 * self.num_faces_static)
 
-        self.radius = 0.001
+        self.radius = 0.01
         self.contact_stiffness = 1e3
         self.damping_factor = 0.001
         self.grid_n = 128
@@ -58,6 +58,8 @@ class Solver:
         ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
         self.x_before = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
 
+
+        self.dist_tol = 1e-2
 
         self.p1 = ti.math.vec3([0., 0., 0.])
         self.p2 = ti.math.vec3([0., 0., 0.])
@@ -72,8 +74,14 @@ class Solver:
         print(f"radius: {self.radius}")
 
         print(f'{self.edges.vid[0]}')
-        print(f'{self.edges_static.vid[4]}')
+        print(f'{self.edges_static.vid[5]}')
 
+        # self.reset()
+
+
+    def reset(self):
+        self.verts.x.copy_from(self.verts.x0)
+        self.verts.v.fill(0.0)
 
     @ti.kernel
     def test(self):
@@ -95,55 +103,6 @@ class Solver:
                 a_min[2] <= b_max[2] and \
                 a_max[2] >= b_min[2]
 
-    @ti.func
-    def resolve_VT(self, vid: ti.uint32, tid: ti.uint32):
-            fid0, fid1, fid2 = self.face_indices_static[tid * 3 + 0], self.face_indices_static[tid * 3 + 1], self.face_indices_static[tid * 3 + 2]
-
-            f1 = self.verts_static.x[fid0]
-            f2 = self.verts_static.x[fid1]
-            f3 = self.verts_static.x[fid2]
-
-            point = self.verts.x_k[vid]
-
-            e1 = f2 - f1
-            e2 = f3 - f1
-            normal = e1.cross(e2).normalized(1e-12)
-            d = point - f1
-            dist = d.dot(normal)
-
-            point_on_triangle = point - dist * normal
-
-            d1 = point_on_triangle - f1
-            d2 = point_on_triangle - f2
-            d3 = point_on_triangle - f3
-
-            area_triangle = e1.cross(e2).norm() / 2
-            area1 = d1.cross(d2).norm() / (2 * area_triangle)
-            area2 = d2.cross(d3).norm() / (2 * area_triangle)
-            area3 = d3.cross(d1).norm() / (2 * area_triangle)
-
-            is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
-
-            # weights (if the point_on_triangle is close to the vertex, the weight is large)
-            w1 = 1 / (d1.norm() + 1e-8)
-            w2 = 1 / (d2.norm() + 1e-8)
-            w3 = 1 / (d3.norm() + 1e-8)
-            total_w = w1 + w2 + w3
-            w1 /= total_w
-            w2 /= total_w
-            w3 /= total_w
-
-            tol = 1e-2
-            if abs(dist) <= tol and is_on_triangle:
-                # print("test")
-                C = 0.5 * (dist - tol) ** 2
-                nablaC = (dist - tol) * normal
-                Schur = nablaC.dot(nablaC) / self.verts.m[vid]
-
-                kc = 1e3
-                ld = C / Schur
-                self.verts.g[vid] -= ld * nablaC
-                self.verts.h[vid] += ld
 
     @ti.kernel
     def compute_candidates(self):
@@ -166,61 +125,6 @@ class Solver:
         for v in self.verts:
             v.v -= v.g / v.h
 
-    def computeCollisionAwareVelocity(self):
-        self.handleStaticCollisionVel()
-        self.globalSolveVelocity()
-
-    @ti.kernel
-    def handleStaticCollisionVel(self):
-        for v in self.verts:
-            for fi in range(self.num_faces_static):
-                fid0, fid1, fid2 = self.face_indices_static[fi * 3 + 0], self.face_indices_static[fi * 3 + 1], self.face_indices_static[fi * 3 + 2]
-
-                f1 = self.verts_static.x[fid0]
-                f2 = self.verts_static.x[fid1]
-                f3 = self.verts_static.x[fid2]
-
-                point = v.x
-                vel = v.v
-
-                e1 = f2 - f1
-                e2 = f3 - f1
-                normal = e1.cross(e2).normalized(1e-12)
-                d = point - f1
-                dist = d.dot(normal)
-                # if dist < 0.0:
-                #     normal = -normal
-
-                point_on_triangle = point - dist * normal
-                d1 = point_on_triangle - f1
-                d2 = point_on_triangle - f2
-                d3 = point_on_triangle - f3
-
-                area_triangle = e1.cross(e2).norm() / 2
-                area1 = d1.cross(d2).norm() / (2 * area_triangle)
-                area2 = d2.cross(d3).norm() / (2 * area_triangle)
-                area3 = d3.cross(d1).norm() / (2 * area_triangle)
-
-                is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
-
-                # weights (if the point_on_triangle is close to the vertex, the weight is large)
-                w1 = 1 / (d1.norm() + 1e-8)
-                w2 = 1 / (d2.norm() + 1e-8)
-                w3 = 1 / (d3.norm() + 1e-8)
-                total_w = w1 + w2 + w3
-                w1 /= total_w
-                w2 /= total_w
-                w3 /= total_w
-
-                tol = 1e-2
-                # dd = ti.math.dot(normal, vel)
-                # print(dd)
-                dd = normal.dot(vel)
-                if abs(dist) <= tol and is_on_triangle and dd < 0.0:
-                    # print("test")
-                    ld = dd / v.m
-                    v.v -= ld * normal
-
     @ti.kernel
     def computeY(self):
         for v in self.verts:
@@ -231,58 +135,6 @@ class Solver:
         for v in self.verts:
             # v.v = (v.x_k - v.x) / self.dt
             v.x += v.v * self.dt
-
-        # for v in self.verts:
-        #     for fid in range(self.num_faces_static):
-        #         self.vertex_face_velocity(v.id, fid)
-
-
-
-    @ti.func
-    def vertex_face_velocity(self, vid: ti.int32, fid: ti.int32):
-        fid0 = self.face_indices_static[fid * 3 + 0]
-        fid1 = self.face_indices_static[fid * 3 + 1]
-        fid2 = self.face_indices_static[fid * 3 + 2]
-
-        f1 = self.verts_static.x[fid0]
-        f2 = self.verts_static.x[fid1]
-        f3 = self.verts_static.x[fid2]
-
-        point = self.verts.x[vid]
-
-        e1 = f2 - f1
-        e2 = f3 - f1
-        normal = e1.cross(e2).normalized(1e-12)
-        d = point - f1
-        dist = d.dot(normal)
-
-        point_on_triangle = point - dist * normal
-
-        d1 = point_on_triangle - f1
-        d2 = point_on_triangle - f2
-        d3 = point_on_triangle - f3
-
-        area_triangle = e1.cross(e2).norm() / 2
-        area1 = d1.cross(d2).norm() / (2 * area_triangle)
-        area2 = d2.cross(d3).norm() / (2 * area_triangle)
-        area3 = d3.cross(d1).norm() / (2 * area_triangle)
-
-        is_on_triangle = (0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and abs(area1 + area2 + area3 - 1.0) <= 1e-4)
-
-        # weights (if the point_on_triangle is close to the vertex, the weight is large)
-        w1 = 1 / (d1.norm() + 1e-8)
-        w2 = 1 / (d2.norm() + 1e-8)
-        w3 = 1 / (d3.norm() + 1e-8)
-        total_w = w1 + w2 + w3
-        w1 /= total_w
-        w2 /= total_w
-        w3 /= total_w
-
-        tol = 1e-3
-        if abs(dist) <= tol and is_on_triangle:
-            v = self.verts.v[vid]
-            self.verts.v[vid] += v.dot(normal) * normal
-
 
     @ti.kernel
     def evaluateMomentumConstraint(self):
@@ -300,26 +152,12 @@ class Solver:
             l0 = e.l0
             p0 = center + l0 * (m0 / msum) * dir
             p1 = center - l0 * (m1 / msum) * dir
-            # x_ij = e.verts[0].x_k - e.verts[1].x_k
-            # l_ij = x_ij.norm()
-            # C = 0.5 * (l_ij - e.l0) ** 2
-            # nablaC = (1 - e.l0 / l_ij) * x_ij
-            # Schur = (1./e.verts[0].m + 1./e.verts[1].m) * ti.math.dot(nablaC, nablaC)
-            #
-            # ld = 0.0
-            # if Schur > 1e-4:
-            #     ld = C / Schur
 
             e.verts[0].p += p0
             e.verts[1].p += p1
 
             e.verts[0].nc += 1
             e.verts[1].nc += 1
-            #
-            # e.verts[0].g += self.k * nablaC
-            # e.verts[1].g -= self.k * nablaC
-            # e.verts[0].h += self.k
-            # e.verts[1].h += self.k
 
     @ti.kernel
     def global_solve(self):
@@ -327,195 +165,17 @@ class Solver:
         for v in self.verts:
             v.x_k = v.p / v.nc
             v.v = (v.x_k - v.x) / self.dt
+
     @ti.kernel
     def evaluateCollisionConstraint(self):
 
-        # for e in self.edges:
-        #     for es in range(self.num_edges_static):
-        #         aid, bid = e.verts[0].id, e.verts[1].id
-        #         a, b = self.verts.x_k[aid], self.verts.x_k[bid]
-        #         cid, did = self.edges_static.vid[es][0], self.edges_static.vid[es][1]
-        #         c, d = self.verts_static.x[cid], self.verts_static.x[did]
-        #
-        #         ab = b - a
-        #         cd = d - c
-        #         ac = c - a
-        #
-        #         a11 = ab.dot(ab)
-        #         a12 = -cd.dot(ab)
-        #         a21 = cd.dot(ab)
-        #         a22 = -cd.dot(cd)
-        #         det = a11 * a22 - a12 * a21
-        #         mat = ti.math.mat2([[ab.dot(ab), -cd.dot(ab)], [cd.dot(ab), -cd.dot(cd)]])
-        #
-        #         #
-        #         gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
-        #
-        #         t = ti.math.vec2([0.0, 0.0])
-        #         if abs(det) > 1e-4:
-        #             t = mat.inverse() @ gg
-        #
-        #
-        #         #
-        #         # s = (a22 * gg[0] - a12 * gg[1]) / det
-        #         # t = (-a21 * gg[0] + a11 * gg[1]) / det
-        #         # t2 = ti.min(1, ti.max(t2, 0))
-        #
-        #         t1 = t[0]
-        #         t2 = t[1]
-        #
-        #         if t1 < 0.0:
-        #             t1 = 0.0
-        #
-        #         if t1 > 1.0:
-        #             t1 = 1.0
-        #
-        #         if t2 < 0.0:
-        #             t2 = 0.0
-        #
-        #         if t2 > 1.0:
-        #             t2 = 1.0
-        #
-        #         p1 = a + t1 * ab
-        #         p2 = c + t2 * cd
-        #         dist = (p1 - p2).norm()
-        #
-        #         tol = 1e-2
-        #         if dist < tol:
-        #
-        #             C = 0.5 * (dist - tol) ** 2
-        #             n = (p1 - p2).normalized(1e-6)
-        #             nablaC_a = (dist - tol) * (1 - t1) * n
-        #             nablaC_b = (dist - tol) * t1 * n
-        #             Schur = nablaC_a.dot(nablaC_a) / self.verts.m[aid] + nablaC_b.dot(nablaC_b) / self.verts.m[bid]
-        #
-        #             ld = C / Schur
-        #
-        #             self.verts.g[aid] += ld * nablaC_a
-        #             self.verts.g[bid] += ld * nablaC_b
-        #             self.verts.h[aid] += ld
-        #             self.verts.h[bid] += ld
-        #
-        # for v in self.verts:
-        #     for fi in range(self.num_faces_static):
-        #         fid0, fid1, fid2 = self.face_indices_static[fi * 3 + 0], self.face_indices_static[fi * 3 + 1], self.face_indices_static[fi * 3 + 2]
-        #
-        #         f1 = self.verts_static.x[fid0]
-        #         f2 = self.verts_static.x[fid1]
-        #         f3 = self.verts_static.x[fid2]
-        #
-        #         point = v.x_k
-        #
-        #         e1 = f2 - f1
-        #         e2 = f3 - f1
-        #         normal = e1.cross(e2).normalized(1e-12)
-        #         d = point - f1
-        #         dist = d.dot(normal)
-        #         point_on_triangle = point - dist * normal
-        #         d1 = point_on_triangle - f1
-        #         d2 = point_on_triangle - f2
-        #         d3 = point_on_triangle - f3
-        #
-        #         area_triangle = e1.cross(e2).norm() / 2
-        #         area1 = d1.cross(d2).norm() / (2 * area_triangle)
-        #         area2 = d2.cross(d3).norm() / (2 * area_triangle)
-        #         area3 = d3.cross(d1).norm() / (2 * area_triangle)
-        #
-        #         is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
-        #
-        #         # weights (if the point_on_triangle is close to the vertex, the weight is large)
-        #         w1 = 1 / (d1.norm() + 1e-8)
-        #         w2 = 1 / (d2.norm() + 1e-8)
-        #         w3 = 1 / (d3.norm() + 1e-8)
-        #         total_w = w1 + w2 + w3
-        #         w1 /= total_w
-        #         w2 /= total_w
-        #         w3 /= total_w
-        #
-        #         tol = 1e-2
-        #         if abs(dist) <= tol and is_on_triangle:
-        #             # print("test")
-        #             C = 0.5 * (dist - tol) ** 2
-        #             nablaC = (dist - tol) * normal
-        #             Schur = nablaC.dot(nablaC) / v.m
-        #
-        #             kc = 1e3
-        #             ld = C / Schur
-        #             v.g += ld * nablaC
-        #
-        #             v.h += ld
-        #
-        # for f in self.faces:
-        #     for svid in range(self.num_verts_static):
-        #         f1 = f.verts[0].x_k
-        #         f2 = f.verts[1].x_k
-        #         f3 = f.verts[2].x_k
-        #
-        #         point = self.verts_static.x[svid]
-        #
-        #         e1 = f2 - f1
-        #         e2 = f3 - f1
-        #         normal = e1.cross(e2).normalized(1e-12)
-        #         d = point - f1
-        #         dist = d.dot(normal)
-        #         point_on_triangle = point - dist * normal
-        #         d1 = point_on_triangle - f1
-        #         d2 = point_on_triangle - f2
-        #         d3 = point_on_triangle - f3
-        #
-        #         area_triangle = e1.cross(e2).norm() / 2
-        #         area1 = d1.cross(d2).norm() / (2 * area_triangle)
-        #         area2 = d2.cross(d3).norm() / (2 * area_triangle)
-        #         area3 = d3.cross(d1).norm() / (2 * area_triangle)
-        #
-        #         is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 == 1
-        #
-        #         # weights (if the point_on_triangle is close to the vertex, the weight is large)
-        #         w1 = 1 / (d1.norm() + 1e-8)
-        #         w2 = 1 / (d2.norm() + 1e-8)
-        #         w3 = 1 / (d3.norm() + 1e-8)
-        #         total_w = w1 + w2 + w3
-        #         w1 /= total_w
-        #         w2 /= total_w
-        #         w3 /= total_w
-        #
-        #         tol = 1e-2
-        #         if abs(dist) <= tol and is_on_triangle:
-        #             # print("test")
-        #             C = 0.5 * (dist - tol) ** 2
-        #             nablaC_a = (dist - tol) * normal * w1
-        #             nablaC_b = (dist - tol) * normal * w2
-        #             nablaC_c = (dist - tol) * normal * w3
-        #
-        #             Schur = nablaC_a.dot(nablaC_a) / f.verts[1].m + nablaC_a.dot(nablaC_a) / f.verts[2].m + nablaC_a.dot(nablaC_a) / f.verts[2].m
-        #
-        #             kc = 1e3
-        #             ld = C / Schur
-        #             f.verts[0].g += ld * nablaC_a
-        #             f.verts[1].g += ld * nablaC_b
-        #             f.verts[2].g += ld * nablaC_c
-        #
-        #             f.verts[0].h += ld
-        #             f.verts[1].h += ld
-        #             f.verts[2].h += ld
-
-        # for i in range(self.candidatesVT.length()):
-        #     self.resolve_VT(vid=self.candidatesVT[i][0], tid=self.candidatesVT[i][1])
-
         for v in self.verts:
             for fid in range(self.num_faces_static):
-                self.vertex_face_ccd(v.id, fid)
+                self.vertex_face_dcd(v.id, fid)
 
-        # for v in self.verts:
-        #     if(v.x_k[1] < 0):
-        #         # v.x_k[1] = 0.0
-        #         depth = v.x_k[1] - self.bottom
-        #         C = 0.5 * depth ** 2
-        #         nablaC = depth * ti.math.vec3(0, 1, 0)
-        #         Schur = ti.math.dot(nablaC, nablaC) / v.h
-        #         ld = C / Schur
-        #         v.g += ld * nablaC
-        #         v.h += ld
+        # for e in self.edges:
+        #     for eid in range(self.num_edges_static):
+        self.edge_edge_dcd(0, 4)
 
 
     @ti.kernel
@@ -524,14 +184,14 @@ class Solver:
             for fid in range(self.num_faces_static):
                 self.vertex_face_ccd(v.id, fid)
 
-        for e in self.edges:
-            for eid in range(self.num_edges_static):
-                self.edge_edge_ccd(e.id, eid)
+        # for e in self.edges:
+        #     for eid in range(self.num_edges_static):
+        #         self.edge_edge_ccd(e.id, eid)
 
-        for f in self.faces:
-            for vid in range(self.num_verts_static):
-                fvid0, fvid1, fvid2 = f.verts[0].id, f.verts[1].id, f.verts[2].id
-                self.face_vertex_ccd(fvid0, fvid1, fvid2, vid)
+        # for f in self.faces:
+        #     for vid in range(self.num_verts_static):
+        #         fvid0, fvid1, fvid2 = f.verts[0].id, f.verts[1].id, f.verts[2].id
+        #         self.face_vertex_ccd(fvid0, fvid1, fvid2, vid)
 
         for v in self.verts:
             if v.nc >= 1:
@@ -600,7 +260,9 @@ class Solver:
                 if abs(dist_p) < min_dist:
                     alpha = 0
                     v = self.verts.v[vid]
-                    vp = v - v.dot(n) * n
+                    vp = self.verts.v[vid]
+                    if v.dot(n) < 0.0:
+                        vp = v - v.dot(n) * n
                     self.verts.p[vid] += vp
                     self.verts.nc[vid] += 1
                 else:
@@ -619,7 +281,7 @@ class Solver:
                 self.verts.nc[vid] += 1
 
     @ti.func
-    def edge_edge_ccd(self, eid: ti.int32, eid_s: ti.int32):
+    def edge_edge_dcd(self, eid: ti.int32, eid_s: ti.int32):
 
         vid0 = self.edges.vid[eid][0]
         vid1 = self.edges.vid[eid][1]
@@ -627,64 +289,49 @@ class Solver:
         vid2 = self.edges.vid[eid_s][0]
         vid3 = self.edges.vid[eid_s][1]
 
-        a, b = self.verts.x[vid0], self.verts.x[vid1]
-        c, d = self.verts_static.x[vid2], self.verts_static.x[vid3]
+        e1, e2 = self.verts.x_k[vid0], self.verts.x_k[vid1]
+        s1, s2 = self.verts_static.x[vid2], self.verts_static.x[vid3]
 
-        ab = b - a
-        cd = d - c
-        ac = c - a
 
-        a11 = ab.dot(ab)
-        a12 = -cd.dot(ab)
-        a21 = cd.dot(ab)
-        a22 = -cd.dot(cd)
-        det = a11 * a22 - a12 * a21
-        mat = ti.math.mat2([[ab.dot(ab), -cd.dot(ab)], [cd.dot(ab), -cd.dot(cd)]])
+        e12 = e2 - e1
+        s12 = s2 - s1
+        nE = e12.normalized()
+        nS = s12.normalized()
 
+        line = e12.cross(s12)
+        crossLineE = line.cross(e12)
+        crossLineS = line.cross(s12)
+
+        w1 = crossLineS.dot(s1 - e1) / crossLineS.dot(nE) * e12.norm()
+        w2 = crossLineE.dot(e1 - s1) / crossLineE.dot(nS) * s12.norm()
+
+        c1 = e1 + nE * w1
+        c2 = s1 + nS * w2
+        n = c2 - c1
+
+
+        self.p[0] = c1
+        self.p[1] = c2
+
+        # dist = (p1 - p2).norm()
         #
-        gg = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
-
-        t = ti.math.vec2([0.0, 0.0])
-        if abs(det) > 1e-4:
-            t = mat.inverse() @ gg
-
-
+        # p12 = p1 - p2
         #
-        # s = (a22 * gg[0] - a12 * gg[1]) / det
-        # t = (-a21 * gg[0] + a11 * gg[1]) / det
-        # t2 = ti.min(1, ti.max(t2, 0))
-
-        t1 = t[0]
-        t2 = t[1]
-
-        if t1 < 0.0:
-            t1 = 0.0
-
-        if t1 > 1.0:
-            t1 = 1.0
-
-        if t2 < 0.0:
-            t2 = 0.0
-
-        if t2 > 1.0:
-            t2 = 1.0
-
-        p1 = a + t1 * ab
-        p2 = c + t2 * cd
-        dist = (p1 - p2).norm()
-
-        # tol = 1e-2
-        # if dist < tol:
-        #     C = 0.5 * (dist - tol) ** 2
-        #     n = (p1 - p2).normalized(1e-6)
-        #     nablaC_a = (dist - tol) * (1 - t1) * n
-        #     nablaC_b = (dist - tol) * t1 * n
-        #     Schur = nablaC_a.dot(nablaC_a) / self.verts.m[aid] + nablaC_b.dot(nablaC_b) / self.verts.m[bid]
+        # n = (p1 - p2).normalized(1e-12)
+        # v1, v2 = self.verts.v[vid0], self.verts.v[vid1]
         #
-        #     ld = C / Schur
+        # if dist < self.dist_tol:
+        #     # print("test")
+        #     p_c = p1 - (dist - self.dist_tol) * n
+        #     Schur = (1.0 - t1) ** 2 / self.verts.m[vid0] + (t1 ** 2) / self.verts.m[vid1]
+        #     ld = (p_c - p1) / Schur
         #
-        #     self.verts.p[vid0] += ( -) / self.dt
-        #     self.verts.p[vid1] += () / self.dt
+        #     p0 = a - (1.0 - t1) * (ld / self.verts.m[vid0])
+        #     p2 = b - t1 * (ld / self.verts.m[vid1])
+        #
+        #     self.verts.p[vid0] += p0
+        #     self.verts.p[vid1] += p2
+        #
         #     self.verts.nc[vid0] += 1
         #     self.verts.nc[vid1] += 1
 
@@ -699,35 +346,39 @@ class Solver:
 
             e1 = f2 - f1
             e2 = f3 - f1
-            normal = e1.cross(e2).normalized(1e-12)
-            d = point - f1
-            dist = d.dot(normal)
-            point_on_triangle = point - dist * normal
-            d1 = point_on_triangle - f1
-            d2 = point_on_triangle - f2
-            d3 = point_on_triangle - f3
 
-            area_triangle = e1.cross(e2).norm() / 2
-            area1 = d1.cross(d2).norm() / (2 * area_triangle)
-            area2 = d2.cross(d3).norm() / (2 * area_triangle)
-            area3 = d3.cross(d1).norm() / (2 * area_triangle)
+            a = ti.math.vec3(1, 0, 0)
+            b = ti.math.vec3(0, 1, 0)
+            normal = e1.normalized()
+            # print(normal)
+            # d = point - f1
+            # dist = d.dot(normal)
+            # point_on_triangle = point - dist * normal
+            # d1 = point_on_triangle - f1
+            # d2 = point_on_triangle - f2
+            # d3 = point_on_triangle - f3
+            #
+            # area_triangle = e1.cross(e2).norm()
+            # area1 = d1.cross(d2).norm() / area_triangle
+            # area2 = d2.cross(d3).norm() / area_triangle
+            # area3 = d3.cross(d1).norm() / area_triangle
 
-            is_on_triangle = self.check_point_on_triangle(point_on_triangle, f1, f2, f3)
-            # weights (if the point_on_triangle is close to the vertex, the weight is large)
-            w1 = 1 / (d1.norm() + 1e-8)
-            w2 = 1 / (d2.norm() + 1e-8)
-            w3 = 1 / (d3.norm() + 1e-8)
-            total_w = w1 + w2 + w3
-            w1 /= total_w
-            w2 /= total_w
-            w3 /= total_w
+            # is_on_triangle = self.check_point_on_triangle(point_on_triangle, f1, f2, f3)
+            # # weights (if the point_on_triangle is close to the vertex, the weight is large)
+            # w1 = 1 / (d1.norm() + 1e-8)
+            # w2 = 1 / (d2.norm() + 1e-8)
+            # w3 = 1 / (d3.norm() + 1e-8)
+            # total_w = w1 + w2 + w3
+            # w1 /= total_w
+            # w2 /= total_w
+            # w3 /= total_w
 
             tol = 1e-2
-            if abs(dist) <= tol and is_on_triangle:
-
-                self.verts.nc[fvid0] += 1
-                self.verts.nc[fvid1] += 1
-                self.verts.nc[fvid2] += 1
+            # if abs(dist) <= tol and is_on_triangle:
+            #
+            #     self.verts.nc[fvid0] += 1
+            #     self.verts.nc[fvid1] += 1
+            #     self.verts.nc[fvid2] += 1
 
             #     # print("test")
             #     C = 0.5 * (dist - tol) ** 2
@@ -776,21 +427,10 @@ class Solver:
         area2 = d2.cross(d3).norm() / (2 * area_triangle)
         area3 = d3.cross(d1).norm() / (2 * area_triangle)
 
-        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and area1 + area2 + area3 <= 1
-
-        # weights (if the point_on_triangle is close to the vertex, the weight is large)
-        w1 = 1 / (d1.norm() + 1e-8)
-        w2 = 1 / (d2.norm() + 1e-8)
-        w3 = 1 / (d3.norm() + 1e-8)
-        total_w = w1 + w2 + w3
-        w1 /= total_w
-        w2 /= total_w
-        w3 /= total_w
-
-        tol = 1e-3
-        if abs(dist) < tol and is_on_triangle:
-            self.verts.x_k[vid] = self.verts.y[vid] + (dist - tol) * normal
-
+        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and abs(area1 + area2 + area3 - 1) <= 1e-3
+        if abs(dist) < self.dist_tol and is_on_triangle:
+            self.verts.p[vid] += (point + (self.dist_tol - abs(dist)) * normal)
+            self.verts.nc[vid] += 1
     @ti.kernel
     def filterStepSize(self) -> ti.f32:
 
@@ -849,6 +489,7 @@ class Solver:
             self.verts.p.fill(0.)
             self.verts.nc.fill(0)
             self.evaluateSpringConstraint()
+            self.evaluateCollisionConstraint()
             self.global_solve()
 
         for i in range(self.max_iter):
