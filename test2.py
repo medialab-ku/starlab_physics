@@ -73,6 +73,9 @@ canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()
 camera = ti.ui.Camera()
 camera.position(1., 2.0, 3.5)
+camera.lookat(0.5, 0.5, 0.5)
+camera.fov(30)
+camera.up(0, 1, 0)
 # x0 = sim.verts.x
 # sim.update()
 # x1 = sim.verts.y
@@ -80,7 +83,6 @@ camera.position(1., 2.0, 3.5)
 run_sim = True
 
 while window.running:
-
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
             run_sim = not run_sim
@@ -91,10 +93,7 @@ while window.running:
 
     if run_sim:
         sim.update()
-    camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
-    camera.lookat(0.5, 0.5, 0.5)
-    camera.fov(30)
-    camera.up(0, 1, 0)
+    camera.track_user_inputs(window, movement_speed=0.01, hold_key=ti.ui.RMB)
     scene.set_camera(camera)
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))

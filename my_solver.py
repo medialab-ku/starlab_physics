@@ -298,12 +298,12 @@ class Solver:
         nE = e12.normalized()
         nS = s12.normalized()
 
-        line = e12.cross(s12)
-        crossLineE = line.cross(e12)
-        crossLineS = line.cross(s12)
+        line = nE.cross(nS)
+        crossLineE = line.cross(nE)
+        crossLineS = line.cross(nS)
 
-        w1 = crossLineS.dot(s1 - e1) / crossLineS.dot(nE) * e12.norm()
-        w2 = crossLineE.dot(e1 - s1) / crossLineE.dot(nS) * s12.norm()
+        w1 = crossLineS.dot(s1 - e1) / crossLineS.dot(nE)
+        w2 = crossLineE.dot(e1 - s1) / crossLineE.dot(nS)
 
         c1 = e1 + nE * w1
         c2 = s1 + nS * w2
