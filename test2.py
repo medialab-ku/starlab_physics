@@ -26,16 +26,16 @@ dt = 0.001  # Larger dt might lead to unstable results.
 
 
 # case: face vs. face
-# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 10.0, 0.0), trans=ti.math.vec3(0.22, 0.5, 0.3))
-# static_mesh = Mesh("obj_models/square.obj", scale=1.0, rot=ti.math.vec3(0.0, 20.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
+# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.4, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.4, 0.5, 0.5))
+# static_mesh = Mesh("obj_models/square.obj", scale=0.4, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
 
 #case: edge vs. edge
-mesh = Mesh("obj_models/tetrahedron.obj", scale=0.4, rot=ti.math.vec3(60.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.8, 0.5))
-static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.3, rot=ti.math.vec3(60.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
+# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.4, rot=ti.math.vec3(60.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.8, 0.5))
+# static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.3, rot=ti.math.vec3(60.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
 
 #case: face vs. face
-# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
-# static_mesh =Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 45.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
+mesh = Mesh("obj_models/tetrahedron.obj", scale=0.3, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.6, 0.3))
+static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.3, rot=ti.math.vec3(180.0, 0.0, 45.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 # case: vertex vs. face
 # mesh = Mesh("obj_models/tetrahedron.obj", scale=0.3, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.9, 0.3))
@@ -44,9 +44,9 @@ static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.3, rot=ti.math.vec3(60.
 # mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.8, 0.5))
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
 #
-
-# mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 0.8, 0.5))
-# static_mesh =Mesh("obj_models/square_big.obj", scale=0.08, rot=ti.math.vec3(0.0, 20.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
+#
+mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 0.8, 0.5))
+static_mesh =Mesh("obj_models/square_big.obj", scale=0.08, rot=ti.math.vec3(0.0, 20.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
 
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
@@ -65,7 +65,7 @@ def init_color():
 
 init_color()
 
-sim = Solver(mesh, bottom=0.0, static_mesh=static_mesh, dt=dt, max_iter=10)
+sim = Solver(mesh, bottom=0.0, static_mesh=static_mesh, dt=dt, max_iter=20)
 
 window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), vsync=True, fps_limit=200)
 canvas = window.get_canvas()
@@ -73,7 +73,6 @@ canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()
 camera = ti.ui.Camera()
 camera.position(1., 2.0, 3.5)
-camera.lookat(0.5, 0.5, 0.5)
 camera.fov(30)
 camera.up(0, 1, 0)
 # x0 = sim.verts.x
@@ -94,14 +93,15 @@ while window.running:
     if run_sim:
         sim.update()
     camera.track_user_inputs(window, movement_speed=0.01, hold_key=ti.ui.RMB)
+    camera.lookat(0.5, 0.5, 0.5)
     scene.set_camera(camera)
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
     # scene.particles(sim.verts.x, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
     # scene.particles(sim.intersect, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
+    # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
+    # scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
     scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
     scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(x1, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
