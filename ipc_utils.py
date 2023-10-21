@@ -3,11 +3,47 @@ import taichi as ti
 
 @ti.func
 def d_type_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3) -> ti.int32:
+
     v12 = v2 - v1
     v13 = v3 - v1
-    n = v12.cross(v13).cross()
+    n = v12.cross(v13)
+    v13n = v12.cross(n)
+    v10 = v0 - v1
 
-    p = v0 + n.dot(v0 - v1) * n
+    A = ti.math.mat2([[v12.dot(v12), v12.dot(v13n)],
+                      [v13n.dot(v12), v13n.dot(v13n)]])
+
+    v10_proj = ti.math.vec2([v12.dot(v10), v13n.dot(v10)])
+    param0 = A.inverse() @ v10_proj
+    dtype = -1
+    if param0[0]>0.0 and param0[0]<1.0 and param0[1]>=0: dtype = 3
+    else:
+        v32 = v3 - v2
+        v32n = v32.cross(n)
+        v20 = v0 - v2
+        A = ti.math.mat2([[v32.dot(v32), v32.dot(v32n)],
+                          [v32n.dot(v32), v32n.dot(v32n)]])
+
+        v20_proj = ti.math.vec2([v32.dot(v20), v32n.dot(v20)])
+        param1 = A.inverse() @ v20_proj
+        if param1[0]>0.0 and param1[0]<1.0 and param1[1]>=0: dtype = 4
+        else:
+            v31 = v1 - v3
+            v31n = v31.cross(n)
+            v30 = v0 - v3
+            A = ti.math.mat2([[v31.dot(v31), v31.dot(v31n)],
+                              [v31n.dot(v31), v31n.dot(v31n)]])
+            v30_proj = ti.math.vec2([v31.dot(v30), v31n.dot(v30)])
+            param2 = A.inverse() @ v30_proj
+
+            if param2[0]>0.0 and param2[0]<1.0 and param2[1]>=0: dtype = 5
+            else:
+                if   param0[0] <= 0.0 and param2[0] >= 1.0: dtype = 0
+                elif param1[0] <= 0.0 and param0[0] >= 1.0: dtype = 1
+                elif param2[0] <= 0.0 and param1[0] >= 1.0: dtype = 2
+                else:                                       dtype = 6
+
+    return dtype
 
 @ti.func
 def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3) -> ti.int32:
@@ -36,7 +72,7 @@ def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.
         defaultCase = 5
     else:
         tN = (a * e - b * d)
-        if (tN > 0.0 and tN < tD and (u.cross(v).dot(w) == 0.0 or u.cross(v).squaredNorm() < 1.0e-20 * a * c)):
+        if tN > 0.0 and tN < tD and (u.cross(v).dot(w) == 0.0 or u.cross(v).squaredNorm() < 1.0e-20 * a * c):
             if sN < D / 2:
                 tN = e
                 tD = c
@@ -55,25 +91,27 @@ def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.
 
     elif tN >= tD:
         if (-d + b) <= 0.0: return 1
-        elif ((-d + b) >= a): return 4
+        elif (-d + b) >= a: return 4
         else: return 7
 
     return default_case
 
 @ti.func
 def d_PP(v0: ti.math.vec3, v1: ti.math.vec3) -> ti.f32:
-    return (v0 - v1).squaredNorm()
+    return (v0 - v1).dot(v0 - v1)
 
 @ti.func
 def d_PE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3) -> ti.f32:
-    return (v1 - v0).cross(v2 - v0).squaredNorm() / (v2 - v1).squaredNorm()
+    a = (v1 - v0).cross(v2 - v0)
+    v12 = v2 - v1
+    return a.dot(a) / v12.dot(v12)
 
 @ti.func
 def d_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3) -> ti.f32:
 
     b = (v2 - v1).cross(v3 - v1)
     aTb = (v0 - v1).dot(b)
-    return aTb * aTb / b.squaredNorm()
+    return aTb * aTb / b.dot(b)
 
 @ti.func
 def g_PP(v0: ti.math.vec3, v1: ti.math.vec3):
