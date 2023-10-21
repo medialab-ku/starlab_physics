@@ -1,6 +1,6 @@
 import taichi as ti
 import meshtaichi_patcher as Patcher
-import collision_utils as cu
+import ipc_utils as cu
 
 
 
@@ -46,7 +46,7 @@ class Solver:
         self.S.place(self.mmcvid)
         # self.test()
         #
-        # self.normals = ti.Vector.field(n=3, dtype=ti.f32, shape=2 * self.num_faces)
+        # self.normals = ti.Vector.field(n=3, dtype = ti.f32, shape = 2 * self.num_faces)
         self.normals_static = ti.Vector.field(n=3, dtype=ti.f32, shape=2 * self.num_faces_static)
 
         self.radius = 0.01
@@ -129,7 +129,9 @@ class Solver:
 
     @ti.kernel
     def compute_candidates(self):
+
         self.candidatesVT.deactivate()
+
         for v in self.verts:
             for fi in range(self.num_faces_static):
                 f_aabb_min, f_aabb_max = self.faces_static.aabb_min[fi], self.faces_static.aabb_max[fi]
@@ -523,109 +525,122 @@ class Solver:
 
             f.aabb_min -= padding
             f.aabb_max += padding
+    @ti.func
+    def computeConstraintSet_PT(self, pid: ti.int32, tid: ti.int32):
+
+        dHat = 1e-3
+        v0 = pid
+        v1 = self.face_indices_static[3 * tid + 0]
+        v2 = self.face_indices_static[3 * tid + 1]
+        v3 = self.face_indices_static[3 * tid + 2]
+
+        # print(f'{v0}, {v1}, {v2}, {v3}')
+
+        x0 = self.verts.x_k[v0]
+        x1 = self.verts_static.x[v1]   #r
+        x2 = self.verts_static.x[v2]   #g
+        x3 = self.verts_static.x[v3]   #c
+
+        dtype = cu.d_type_PT(x0, x1, x2, x3)
+        # print(dtype)
+        # if dtype == 0:           #r
+        #     d = cu.d_PP(x0, x1)
+        #     if d < dHat:
+        #         print(dtype)
+        #         # self.mmcvid.append(ti.math.ivec4[v1, v0, -1, -1])
+        #
+        # elif dtype == 1:
+        #     d = cu.d_PP(x0, x2)  #g
+        #     if d < dHat:
+        #         print(dtype)
+        #         # self.mmcvid.append(ti.math.ivec4[v2, v0, -1, -1])
+        #
+        # elif dtype == 2:
+        #     d = cu.d_PP(x0, x3) #c
+        #     if d < dHat:
+        #         print(dtype)
+        #         # self.mmcvid.append(ti.math.ivec4[v3, v0, -1, -1])
+        #
+        # elif dtype == 3:
+        #     d = cu.d_PE(x0, x1, x2) # r-g
+        #     if d < dHat:
+        #         print(dtype)
+        #         # self.mmcvid.append(ti.math.ivec4[v1, v2, v0, -1])
+        #
+        # elif dtype == 4:
+        #     d = cu.d_PE(x0, x2, x3) #g-c
+        #     if d < dHat:
+        #         print(dtype)
+        #         # self.mmcvid.append(ti.math.ivec4[v2, v3, v0, -1])
+        #
+        # elif dtype == 5:
+        #     d = cu.d_PE(x0, x3, x1) #c-r
+        #     if d < dHat:
+        #         print(dtype)
+        #         # self.mmcvid.append(ti.math.ivec4[v3, v1, v0, -1])
+        #
+        # elif dtype == 6:            # inside triangle
+        #     d = cu.d_PT(x0, x1, x2, x3)
+        #     if d < dHat:
+        #         print(dtype)
+        #         # self.mmcvid.append(ti.math.ivec4[v1, v2, v3, v0])
 
     @ti.kernel
     def computeConstraintSet(self):
-        dHat =1e-3
         # point - triangle
-        for v in self.verts:
-            for fid in range(self.num_faces_static):
-                v0 = v.id
-                v1 = self.face_indices_static[3 * fid + 0]
-                v2 = self.face_indices_static[3 * fid + 1]
-                v3 = self.face_indices_static[3 * fid + 2]
+        # for v in self.verts:
+        #     for fid in range(self.num_faces_static):
+        self.computeConstraintSet_PT(2, 0)
 
-                x0 = v.x_k
-                x1 = self.static_mesh.x[v1]
-                x2 = self.static_mesh.x[v2]
-                x3 = self.static_mesh.x[v3]
-
-                dtype = cu.d_type_PT(x0, x1, x2, x3)
-
-                if dtype == 0:
-                    d = cu.d_PP(x0, x1)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v1, v0, -1, -1])
-
-                elif dtype == 1:
-                    d = cu.d_PP(x0, x2)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v2, v0, -1, -1])
-
-                elif dtype == 2:
-                    d = cu.d_PP(x0, x3)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v3, v0, -1, -1])
-
-                elif dtype == 3:
-                    d = cu.d_PE(x0, x1, x2)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v1, v2, v0, -1])
-
-                elif dtype == 4:
-                    d = cu.d_PE(x0, x2, x3)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v2, v3, v0, -1])
-
-                elif dtype == 5:
-                    d = cu.d_PE(x0, x3, x1)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v3, v1, v0, -1])
-
-                elif dtype == 6:
-                    d = cu.d_PT(x0, x1, x2, x3)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v1, v2, v3, v0])
-
-        # triangle - vertex
-        for f in self.faces:
-            for vid in range(self.num_verts_static):
-                v0 = vid
-                v1 = f.verts[0].id
-                v2 = f.verts[1].id
-                v3 = f.verts[2].id
-
-                x0 = self.verts_static.x[vid]
-                x1 = f.verts[0].x_k
-                x2 = f.verts[1].x_k
-                x3 = f.verts[2].x_k
-
-                dtype = cu.d_type_PT(x0, x1, x2, x3)
-
-                if dtype == 0:
-                    d = cu.d_PP(x0, x1)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v1, v0, -1, -1])
-
-                elif dtype == 1:
-                    d = cu.d_PP(x0, x2)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v2, v0, -1, -1])
-
-                elif dtype == 2:
-                    d = cu.d_PP(x0, x3)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v3, v0, -1, -1])
-
-                elif dtype == 3:
-                    d = cu.d_PE(x0, x1, x2)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v1, v2, v0, -1])
-
-                elif dtype == 4:
-                    d = cu.d_PE(x0, x2, x3)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v2, v3, v0, -1])
-
-                elif dtype == 5:
-                    d = cu.d_PE(x0, x3, x1)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v3, v1, v0, -1])
-
-                elif dtype == 6:
-                    d = cu.d_PT(x0, x1, x2, x3)
-                    if d < dHat:
-                        self.mmcvid.append(ti.math.ivec4[v1, v2, v3, v0])
+        # triangle - point
+        # for f in self.faces:
+        #     for vid in range(self.num_verts_static):
+        #         v0 = vid
+        #         v1 = f.verts[0].id
+        #         v2 = f.verts[1].id
+        #         v3 = f.verts[2].id
+        #
+        #         x0 = self.verts_static.x[vid]
+        #         x1 = f.verts[0].x_k
+        #         x2 = f.verts[1].x_k
+        #         x3 = f.verts[2].x_k
+        #
+        #         dtype = cu.d_type_PT(x0, x1, x2, x3)
+        #
+        #         if dtype == 0:
+        #             d = cu.d_PP(x0, x1)
+        #             if d < dHat:
+        #                 self.mmcvid.append(ti.math.ivec4[v1, v0, -1, -1])
+        #
+        #         elif dtype == 1:
+        #             d = cu.d_PP(x0, x2)
+        #             if d < dHat:
+        #                 self.mmcvid.append(ti.math.ivec4[v2, v0, -1, -1])
+        #
+        #         elif dtype == 2:
+        #             d = cu.d_PP(x0, x3)
+        #             if d < dHat:
+        #                 self.mmcvid.append(ti.math.ivec4[v3, v0, -1, -1])
+        #
+        #         elif dtype == 3:
+        #             d = cu.d_PE(x0, x1, x2)
+        #             if d < dHat:
+        #                 self.mmcvid.append(ti.math.ivec4[v1, v2, v0, -1])
+        #
+        #         elif dtype == 4:
+        #             d = cu.d_PE(x0, x2, x3)
+        #             if d < dHat:
+        #                 self.mmcvid.append(ti.math.ivec4[v2, v3, v0, -1])
+        #
+        #         elif dtype == 5:
+        #             d = cu.d_PE(x0, x3, x1)
+        #             if d < dHat:
+        #                 self.mmcvid.append(ti.math.ivec4[v3, v1, v0, -1])
+        #
+        #         elif dtype == 6:
+        #             d = cu.d_PT(x0, x1, x2, x3)
+        #             if d < dHat:
+        #                 self.mmcvid.append(ti.math.ivec4[v1, v2, v3, v0])
 
     def update(self):
 
@@ -638,9 +653,9 @@ class Solver:
             self.verts.p.fill(0.)
             self.verts.nc.fill(0)
             self.evaluateSpringConstraint()
-            self.mmcvid.deactivate()
+            # self.mmcvid.deactivate()
             self.computeConstraintSet()
-            self.evaluateCollisionConstraint()
+            # self.evaluateCollisionConstraint()
             self.global_solve()
 
         # for i in range(self.max_iter):

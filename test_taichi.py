@@ -83,6 +83,10 @@ b = ti.math.vec3([1.0, 1.0, 1.0])
 c = ti.math.vec3([0.5, 0.5, 1.1])
 d = ti.math.vec3([1.5, 1.5, 1.5])
 
+e = ti.math.mat3([a, b, c])
+
+print(e)
+
 @ti.kernel
 def test_max():
 

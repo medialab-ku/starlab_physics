@@ -43,11 +43,42 @@ static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.3, rot=ti.math.vec3(180
 
 # mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.8, 0.5))
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
-#
-#
-mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 0.8, 0.5))
-static_mesh =Mesh("obj_models/square_big.obj", scale=0.08, rot=ti.math.vec3(0.0, 20.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
 
+
+#line r g, dtype = 3
+# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.0, 0.7, 1.01))
+# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
+#line c g, dtype = 4
+# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.6, 0.7, 0.5))
+# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
+#line r c, dtype = 5
+# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(0.7, 0.7,0.7))
+# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
+#point r, dtype = 0
+# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.7, 1.1))
+# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
+#point g, dtype = 1
+# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.7, 0.7, 1.7))
+# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
+#point c, dtype = 2
+# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.7, 0.7, -0.1))
+# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
+#triangle r g c, dtype = 6
+mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.1, 0.7, 0.7))
+static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
+
+
+
+# mesh = Mesh("obj_models/square_big.obj", scale=0.05, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 0.8, 0.5))
+# static_mesh =Mesh("obj_models/square_big.obj", scale=0.08, rot=ti.math.vec3(0.0, 20.0, 0.0), trans=ti.math.vec3(0.5, 0.21, 0.5))
+#
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
@@ -79,7 +110,7 @@ camera.up(0, 1, 0)
 # sim.update()
 # x1 = sim.verts.y
 
-run_sim = True
+run_sim = False
 
 while window.running:
     if window.get_event(ti.ui.PRESS):
@@ -98,9 +129,9 @@ while window.running:
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
-    # scene.particles(sim.verts.x, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
+    scene.particles(sim.verts.x, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
     # scene.particles(sim.intersect, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
+    scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
     # scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
     scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
     scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
