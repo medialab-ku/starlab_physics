@@ -2,8 +2,6 @@ import taichi as ti
 import meshtaichi_patcher as Patcher
 import ipc_utils as cu
 
-
-
 @ti.data_oriented
 class Solver:
     def __init__(self,
@@ -28,6 +26,7 @@ class Solver:
         self.verts = self.my_mesh.mesh.verts
         self.edges = self.my_mesh.mesh.edges
         self.faces = self.my_mesh.mesh.faces
+        self.face_indices = self.my_mesh.face_indices
 
         self.verts_static = self.static_mesh.mesh.verts
         self.num_verts_static = len(self.static_mesh.mesh.verts)
@@ -42,8 +41,9 @@ class Solver:
         self.snode.place(self.candidatesVT)
 
         self.S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.mmcvid = ti.field(ti.math.uvec4)
+        self.mmcvid = ti.field(ti.math.ivec4)
         self.S.place(self.mmcvid)
+        self.dHat = 1e-4
         # self.test()
         #
         # self.normals = ti.Vector.field(n=3, dtype = ti.f32, shape = 2 * self.num_faces)
@@ -107,39 +107,6 @@ class Solver:
                 a_min[2] <= b_max[2] and \
                 a_max[2] >= b_min[2]
 
-    @ti.func
-    def face_face_dcd(self, fi1: ti.int32, fi2: ti.int32):
-
-        vi11 = self.face_indices_static[fi1 * 3 + 0]
-        vi12 = self.face_indices_static[fi1 * 3 + 1]
-        vi13 = self.face_indices_static[fi1 * 3 + 2]
-
-        vi21 = self.face_indices_static[fi2 * 3 + 0]
-        vi22 = self.face_indices_static[fi2 * 3 + 1]
-        vi23 = self.face_indices_static[fi2 * 3 + 2]
-
-        d_type1 = cu.d_type_PT(vi11, vi21, vi22, vi23)
-        d_type2 = cu.d_type_PT(vi12, vi21, vi22, vi23)
-        d_type3 = cu.d_type_PT(vi13, vi21, vi22, vi23)
-
-        d_type1 = cu.d_type_PT(vi21, vi11, vi12, vi13)
-        d_type2 = cu.d_type_PT(vi22, vi11, vi12, vi13)
-        d_type3 = cu.d_type_PT(vi23, vi11, vi12, vi13)
-
-
-    @ti.kernel
-    def compute_candidates(self):
-
-        self.candidatesVT.deactivate()
-
-        for v in self.verts:
-            for fi in range(self.num_faces_static):
-                f_aabb_min, f_aabb_max = self.faces_static.aabb_min[fi], self.faces_static.aabb_max[fi]
-                if self.aabb_intersect(v.aabb_min, v.aabb_max, f_aabb_min, f_aabb_max):
-                    self.candidatesVT.append(ti.math.uvec2(v.id, fi))
-
-        # print(self.candidatesVT.length())
-
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
@@ -195,35 +162,30 @@ class Solver:
 
     @ti.kernel
     def evaluateCollisionConstraint(self):
-
-        # for v in self.verts:
-        #     for fid in range(self.num_faces_static):
-        #         self.vertex_face_dcd(v.id, fid)
-        #
-        # for e in self.edges:
-        #     for eid in range(self.num_edges_static):
-        #         self.edge_edge_dcd(e.id, eid)
-
-        # for f in self.faces:
-        #     for fid in range(self.num_faces_static):
-        #         self.face_face_dcd(f.id, fid)
-
-        for mmvcid in self.mmcvid:
-            if mmvcid[0] >= 0:
-                cu.g_EE()
+        for i in self.mmcvid:
+            mi = self.mmcvid[i]
+            if mi[0] >= 0:
+                print("EE")
+                # cu.g_EE()
             else:
-                if mmvcid[1] >=0:
-                    if mmvcid[2] < 0:
-                        cu.g_PP()
-                    elif mmvcid[3] < 0:
+                if mi[1] >= 0:
+                    vi = -mi[0]-1
+                    if mi[2] < 0:
+                        cu.g_PP(vi, mi[1])
+                        print("PP")
+                    elif mi[3] < 0:
                         cu.g_PE()
+                        print("PE")
                     else:
-                        cu.g_PT()
+                        # cu.g_PT()
+                        print("PT")
                 else:
-                    if mmvcid[2] < 0:
-                        cu.g_PT()
+                    if mi[2] < 0:
+                        # cu.g_PT()
+                        print("PT")
                     else:
-                        cu.g_PE()
+                        # cu.g_PE()
+                        print("PE")
     @ti.kernel
     def modify_velocity(self):
         for v in self.verts:
@@ -528,13 +490,11 @@ class Solver:
     @ti.func
     def computeConstraintSet_PT(self, pid: ti.int32, tid: ti.int32):
 
-        dHat = 1e-3
         v0 = pid
         v1 = self.face_indices_static[3 * tid + 0]
         v2 = self.face_indices_static[3 * tid + 1]
         v3 = self.face_indices_static[3 * tid + 2]
 
-        # print(f'{v0}, {v1}, {v2}, {v3}')
 
         x0 = self.verts.x_k[v0]
         x1 = self.verts_static.x[v1]   #r
@@ -542,105 +502,270 @@ class Solver:
         x3 = self.verts_static.x[v3]   #c
 
         dtype = cu.d_type_PT(x0, x1, x2, x3)
-        # print(dtype)
-        # if dtype == 0:           #r
-        #     d = cu.d_PP(x0, x1)
-        #     if d < dHat:
-        #         print(dtype)
-        #         # self.mmcvid.append(ti.math.ivec4[v1, v0, -1, -1])
-        #
-        # elif dtype == 1:
-        #     d = cu.d_PP(x0, x2)  #g
-        #     if d < dHat:
-        #         print(dtype)
-        #         # self.mmcvid.append(ti.math.ivec4[v2, v0, -1, -1])
-        #
-        # elif dtype == 2:
-        #     d = cu.d_PP(x0, x3) #c
-        #     if d < dHat:
-        #         print(dtype)
-        #         # self.mmcvid.append(ti.math.ivec4[v3, v0, -1, -1])
-        #
-        # elif dtype == 3:
-        #     d = cu.d_PE(x0, x1, x2) # r-g
-        #     if d < dHat:
-        #         print(dtype)
-        #         # self.mmcvid.append(ti.math.ivec4[v1, v2, v0, -1])
-        #
-        # elif dtype == 4:
-        #     d = cu.d_PE(x0, x2, x3) #g-c
-        #     if d < dHat:
-        #         print(dtype)
-        #         # self.mmcvid.append(ti.math.ivec4[v2, v3, v0, -1])
-        #
-        # elif dtype == 5:
-        #     d = cu.d_PE(x0, x3, x1) #c-r
-        #     if d < dHat:
-        #         print(dtype)
-        #         # self.mmcvid.append(ti.math.ivec4[v3, v1, v0, -1])
-        #
-        # elif dtype == 6:            # inside triangle
-        #     d = cu.d_PT(x0, x1, x2, x3)
-        #     if d < dHat:
-        #         print(dtype)
-        #         # self.mmcvid.append(ti.math.ivec4[v1, v2, v3, v0])
+        if dtype == 0:           #r
+            d = cu.d_PP(x0, x1)
+            if d < self.dHat:
+                g0, g1 = cu.g_PP(x0, x1)
+                n = g0.normalized(1e-4)
+                p0 = x0 - (d-self.dHat) * n
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+
+
+        elif dtype == 1:
+            d = cu.d_PP(x0, x2)  #g
+            if d < self.dHat:
+                g0, g2 = cu.g_PP(x0, x2)
+                n = g0.normalized(1e-4)
+                p0 = x0 - (d - self.dHat) * n
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+
+        elif dtype == 2:
+            d = cu.d_PP(x0, x3) #c
+            if d < self.dHat:
+                g0, g3 = cu.g_PP(x0, x3)
+                n = g0.normalized(1e-4)
+                p0 = x0 - (d - self.dHat) * n
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+              # s
+
+        elif dtype == 3:
+            d = cu.d_PE(x0, x1, x2) # r-g
+            if d < self.dHat:
+                g0, g1, g2 = cu.g_PE(x0, x1, x2)
+                n = g0.normalized(1e-4)
+                p0 = x0 - (d - self.dHat) * n
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+                self.mmcvid.append(ti.math.ivec4([-v0-1, v1, v2, -1]))
+
+        elif dtype == 4:
+            d = cu.d_PE(x0, x2, x3) #g-c
+            if d < self.dHat:
+                g0, g2, g3 = cu.g_PE(x0, x1, x2)
+                n = g0.normalized(1e-4)
+                p0 = x0 - (d - self.dHat) * n
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+
+        elif dtype == 5:
+            d = cu.d_PE(x0, x3, x1) #c-r
+            if d < self.dHat:
+                g0, g3, g1 = cu.g_PE(x0, x3, x1)
+                n = g0.normalized(1e-4)
+                p0 = x0 - (d - self.dHat) * n
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+
+        elif dtype == 6:            # inside triangle
+            d = cu.d_PT(x0, x1, x2, x3)
+            if d < self.dHat:
+                g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
+                n = g0.normalized(1e-4)
+                p0 = x0 - (d - self.dHat) * n
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+
+    @ti.func
+    def computeConstraintSet_TP(self, tid: ti.int32, pid: ti.int32):
+
+        dHat = 1e-3
+        v0 = pid
+        v1 = self.face_indices[3 * tid + 0]
+        v2 = self.face_indices[3 * tid + 1]
+        v3 = self.face_indices[3 * tid + 2]
+
+        # print(f'{v0}, {v1}, {v2}, {v3}')
+
+        x0 = self.verts_static.x[v0]
+        x1 = self.verts.x_k[v1]   #r
+        x2 = self.verts.x_k[v2]   #g
+        x3 = self.verts.x_k[v3]   #c
+
+        dtype = cu.d_type_PT(x0, x1, x2, x3)
+        if dtype == 0:           #r
+            d = cu.d_PP(x0, x1)
+            if d < self.dHat:
+                g0, g1 = cu.g_PP(x0, x1)
+                n = g1.normalized(1e-4)
+                p1 = x1 - (d - self.dHat) * n
+                # self.verts.p[v1] += p1
+                # self.verts.nc[v1] += 1
+                # self.mmcvid.append(ti.math.ivec4([-v1-1, v0, -1, -1]))
+
+        elif dtype == 1:
+            d = cu.d_PP(x0, x2)  #g
+            if d < self.dHat:
+                g0, g2 = cu.g_PP(x0, x2)
+                n = g2.normalized(1e-4)
+                p2 = x2 - (d - self.dHat) * n
+                # self.verts.p[v2] += p2
+                # self.verts.nc[v2] += 1
+                # self.mmcvid.append(ti.math.ivec4([-v2-1, v0, -1, -1]))
+
+        elif dtype == 2:
+            d = cu.d_PP(x0, x3) #c
+            if d < self.dHat:
+                g0, g3 = cu.g_PP(x0, x3)
+                n = g3.normalized(1e-4)
+                p3 = x3 - (d - self.dHat) * n
+                # self.verts.p[v3] += p3
+                # self.verts.nc[v3] += 1
+              # self.mmcvid.append(ti.math.ivec4([-v3-1, v0, -1, -1]))
+
+        elif dtype == 3:
+            d = cu.d_PE(x0, x1, x2) # r-g
+            if d < self.dHat:
+                g0, g1, g2 = cu.g_PE(x0, x1, x2)
+                sch = g1.dot(g1) + g2.dot(g2)
+                step_size = (d - self.dHat) / sch
+                p1 = x1 - step_size * g1
+                p2 = x2 - step_size * g2
+                # self.verts.p[v1] += p1
+                # self.verts.p[v2] += p2
+                # self.verts.nc[v1] += 1
+                # self.verts.nc[v2] += 1
+                # self.mmcvid.append(ti.math.ivec4([-v1-1, -v2-1, v0, -1]))
+
+        elif dtype == 4:
+            d = cu.d_PE(x0, x2, x3) #g-c
+            if d < self.dHat:
+                g0, g2, g3 = cu.g_PE(x0, x1, x2)
+                sch = g2.dot(g3) + g2.dot(g2)
+                step_size = (d - self.dHat) / sch
+                p2 = x1 - step_size * g2
+                p3 = x2 - step_size * g3
+                # self.verts.p[v2] += p2
+                # self.verts.p[v3] += p3
+                # self.verts.nc[v2] += 1
+                # self.verts.nc[v3] += 1
+                # self.mmcvid.append(ti.math.ivec4([-v2-1, -v3-1, v0, -1]))
+
+        elif dtype == 5:
+            d = cu.d_PE(x0, x3, x1) #c-r
+            if d < self.dHat:
+                g0, g3, g1 = cu.g_PE(x0, x3, x1)
+                sch = g3.dot(g3) + g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+                p3 = x3 - step_size * g3
+                p1 = x1 - step_size * g1
+                # self.verts.p[v3] += p3
+                # self.verts.p[v1] += p1
+                # self.verts.nc[v3] += 1
+                # self.verts.nc[v1] += 1
+                # self.mmcvid.append(ti.math.ivec4([-v3-1, -v1-1, v0, -1]))
+
+        elif dtype == 6:            # inside triangle
+            d = cu.d_PT(x0, x1, x2, x3)
+            if d < self.dHat:
+                g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
+                sch = g2.dot(g2) + g1.dot(g1) + g3.dot(g3)
+                step_size = (d - self.dHat) / sch
+                p1 = x1 - step_size * g1
+                p2 = x2 - step_size * g2
+                p3 = x3 - step_size * g3
+                self.verts.p[v1] += p1
+                self.verts.p[v2] += p2
+                self.verts.p[v3] += p3
+                self.verts.nc[v1] += 1
+                self.verts.nc[v2] += 1
+                self.verts.nc[v3] += 1
+                # self.mmcvid.append(ti.math.ivec4([-v1-1, -v2-1, -v3-1, v0]))
+
+    @ti.func
+    def computeConstraintSet_EE(self, eid0: ti.int32, eid1: ti.int32):
+
+        v0 = self.edges.vid[eid0][0]
+        v1 = self.edges.vid[eid0][1]
+        v2 = self.edges_static.vid[eid1][0]
+        v3 = self.edges_static.vid[eid1][1]
+
+        x0 = self.verts.x_k[v0]
+        x1 = self.verts.x_k[v1]
+        x2 = self.verts_static.x[v2]
+        x3 = self.verts_static.x[v3]
+
+        d_type = cu.d_type_EE(x0, x1, x2, x3)
+        # print(d_type)
+
+        if d_type == 0:
+            d = cu.d_PP(x0, x2)
+            if(d < self.dHat):
+                g0, g2 = cu.g_PP(x0, x2)
+        elif d_type == 1:
+            d = cu.d_PP(x0, x3)
+            if (d < self.dHat):
+                g0, g3 = cu.g_PP(x0, x3)
+        elif d_type == 2:
+            d = cu.d_PE(x0, x2, x3)
+            if (d < self.dHat):
+                g0, g1, g2 = cu.g_PE(x0, x2, x3)
+        elif d_type == 3:
+            d = cu.d_PP(x1, x2)
+            if (d < self.dHat):
+                g1, g2 = cu.g_PP(x1, x2)
+        elif d_type == 4:
+            d = cu.d_PP(x1, x3)
+            if (d < self.dHat):
+                g1, g3 = cu.g_PP(x1, x3)
+
+        elif d_type == 5:
+            d = cu.d_PE(x1, x2, x3)
+            if (d < self.dHat):
+                g1, g1, g2 = cu.g_PE(x1, x2, x3)
+
+        elif d_type == 6:
+            d = cu.d_PE(x1, x2, x3)
+            if (d < self.dHat):
+                g1, g1, g2 = cu.g_PE(x1, x2, x3)
+
+        elif d_type == 7:
+            d = cu.d_PE(x1, x2, x3)
+            if (d < self.dHat):
+                g1, g1, g2 = cu.g_PE(x1, x2, x3)
+
+        elif d_type == 8:
+            d = cu.d_EE(x0, x1, x2, x3)
+            if (d < self.dHat):
+                g0, g1, g2, g3 = cu.g_EE(x0, x1, x2, x3)
+                sch = g0.dot(g0) + g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+
+                p0 = x0 - step_size * g0
+                p1 = x1 - step_size * g1
+
+                self.verts.p[v0] += p0
+                self.verts.p[v1] += p1
+
+                self.verts.nc[v0] += 1
+                self.verts.nc[v1] += 1
+
+
 
     @ti.kernel
     def computeConstraintSet(self):
-        # point - triangle
-        # for v in self.verts:
-        #     for fid in range(self.num_faces_static):
-        self.computeConstraintSet_PT(2, 0)
 
+        # self.mmcvid.deactivate()
+
+        # point - triangle
+        for v in self.verts:
+            for fid in range(self.num_faces_static):
+                self.computeConstraintSet_PT(v.id, fid)
+
+        # print(self.mmcvid.length())
         # triangle - point
         # for f in self.faces:
         #     for vid in range(self.num_verts_static):
-        #         v0 = vid
-        #         v1 = f.verts[0].id
-        #         v2 = f.verts[1].id
-        #         v3 = f.verts[2].id
-        #
-        #         x0 = self.verts_static.x[vid]
-        #         x1 = f.verts[0].x_k
-        #         x2 = f.verts[1].x_k
-        #         x3 = f.verts[2].x_k
-        #
-        #         dtype = cu.d_type_PT(x0, x1, x2, x3)
-        #
-        #         if dtype == 0:
-        #             d = cu.d_PP(x0, x1)
-        #             if d < dHat:
-        #                 self.mmcvid.append(ti.math.ivec4[v1, v0, -1, -1])
-        #
-        #         elif dtype == 1:
-        #             d = cu.d_PP(x0, x2)
-        #             if d < dHat:
-        #                 self.mmcvid.append(ti.math.ivec4[v2, v0, -1, -1])
-        #
-        #         elif dtype == 2:
-        #             d = cu.d_PP(x0, x3)
-        #             if d < dHat:
-        #                 self.mmcvid.append(ti.math.ivec4[v3, v0, -1, -1])
-        #
-        #         elif dtype == 3:
-        #             d = cu.d_PE(x0, x1, x2)
-        #             if d < dHat:
-        #                 self.mmcvid.append(ti.math.ivec4[v1, v2, v0, -1])
-        #
-        #         elif dtype == 4:
-        #             d = cu.d_PE(x0, x2, x3)
-        #             if d < dHat:
-        #                 self.mmcvid.append(ti.math.ivec4[v2, v3, v0, -1])
-        #
-        #         elif dtype == 5:
-        #             d = cu.d_PE(x0, x3, x1)
-        #             if d < dHat:
-        #                 self.mmcvid.append(ti.math.ivec4[v3, v1, v0, -1])
-        #
-        #         elif dtype == 6:
-        #             d = cu.d_PT(x0, x1, x2, x3)
-        #             if d < dHat:
-        #                 self.mmcvid.append(ti.math.ivec4[v1, v2, v3, v0])
+        #         self.computeConstraintSet_TP(f.id, vid)
+
+        for e in self.edges:
+            for eid in range(self.num_edges_static):
+                self.computeConstraintSet_EE(e.id, eid)
+
+
+
 
     def update(self):
 
@@ -653,7 +778,6 @@ class Solver:
             self.verts.p.fill(0.)
             self.verts.nc.fill(0)
             self.evaluateSpringConstraint()
-            # self.mmcvid.deactivate()
             self.computeConstraintSet()
             # self.evaluateCollisionConstraint()
             self.global_solve()
@@ -667,31 +791,5 @@ class Solver:
 
 
 
-
-        # self.x_before.copy_from(self.verts.x)
-        # self.modify_velocity()
-        #
-        # self.verts.g.fill(0.0)
-        # self.verts.h.copy_from(self.verts.m)
-        # for i in range(self.max_iter):
-        #     self.computeCollisionAwareVelocity()
-        #     # self.globalSolveVelocity()
-
-
-        # self.computeY()
-        # self.verts.x_k.copy_from(self.verts.y)
-
-
-        # self.computeAABB()
-        # self.compute_candidates()
-
-        # self.verts.x_k.copy_from(self.verts.y)
-        # self.verts.h.copy_from(self.verts.m)
-        #     # self.evaluateMomentumConstraint()
-        #     # self.evaluateSpringConstraint()
-        #     self.evaluateCollisionConstraint()
-        #     # self.filterStepSize()
-        #     # self.NewtonCG()
-        #
 
 

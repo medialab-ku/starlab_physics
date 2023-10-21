@@ -1,11 +1,6 @@
 import taichi as ti
 
 ti.init(arch=ti.cuda)
-
-S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-x = ti.field(ti.math.uvec2)
-S.place(x)
-
 a = ti.math.vec3([1, 1, 1])
 b = ti.math.vec3([1, 1, 1])
 
@@ -87,6 +82,12 @@ e = ti.math.mat3([a, b, c])
 
 print(e)
 
+@ti.func
+def ret():
+    a = ti.math.vec3([0.0, 0.0, 0.0])
+    b = ti.math.vec3([1.0, 1.0, 1.0])
+    return a, b
+
 @ti.kernel
 def test_max():
 
@@ -104,18 +105,32 @@ def aabb_intersect(a_min: ti.math.vec3, a_max: ti.math.vec3, b_min: ti.math.vec3
                 a_min[2] <= b_max[2] and \
                 a_max[2] >= b_min[2]
 
+
+S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
+x = ti.field(ti.math.uvec4)
+S.place(x)
+
 @ti.kernel
 def add_data():
-    for i in range(10):
-        x.append(ti.math.ivec2([i, 2 * i]))
 
-    print(x.length())
-    x.deactivate()
-    print(x.length())
+    a, b = ret()
+    print(a)
+    print(b)
+
+    # for i in range(10):
+    #     x.append(ti.math.uvec4([4 * i + 0, 4 * i + 1, 4 * i + 2, 4 * i + 3]))
+    # #
+    #
+    # for xi in x:
+    #     print(x[xi][0])
+    #
+    # print(x.length())
+    # print(x[0])
+    # x.deactivate()
+    # print(x.length())
 
 
 # print(aabb_intersect(a, b, c, d))
 
-test_max()
-
-# add_data()
+# test_max()
+add_data()
