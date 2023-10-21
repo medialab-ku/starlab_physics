@@ -43,7 +43,7 @@ class Solver:
         self.S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
         self.mmcvid = ti.field(ti.math.ivec4)
         self.S.place(self.mmcvid)
-        self.dHat = 1e-4
+        self.dHat = 1e-3
         # self.test()
         #
         # self.normals = ti.Vector.field(n=3, dtype = ti.f32, shape = 2 * self.num_faces)
@@ -77,7 +77,9 @@ class Solver:
         print(f"radius: {self.radius}")
 
         print(f'{self.edges.vid[0]}')
-        print(f'{self.edges_static.vid[5]}')
+        print(f'{self.edges_static.vid[4]}')
+
+
 
 
         # self.reset()
@@ -186,261 +188,7 @@ class Solver:
                     else:
                         # cu.g_PE()
                         print("PE")
-    @ti.kernel
-    def modify_velocity(self):
-        for v in self.verts:
-            for fid in range(self.num_faces_static):
-                self.vertex_face_ccd(v.id, fid)
 
-        # for e in self.edges:
-        #     for eid in range(self.num_edges_static):
-        #         self.edge_edge_ccd(e.id, eid)
-
-        # for f in self.faces:
-        #     for vid in range(self.num_verts_static):
-        #         fvid0, fvid1, fvid2 = f.verts[0].id, f.verts[1].id, f.verts[2].id
-        #         self.face_vertex_ccd(fvid0, fvid1, fvid2, vid)
-
-        for v in self.verts:
-            if v.nc >= 1:
-                v.v = v.p / v.nc
-    @ti.func
-    def check_point_on_triangle(self, p, f1, f2, f3):
-        e1 = f2 - f1
-        e2 = f3 - f1
-        d1 = p - f1
-        d2 = p - f2
-        d3 = p - f3
-        area_triangle = e1.cross(e2).norm()
-        area1 = d1.cross(d2).norm() / area_triangle
-        area2 = d2.cross(d3).norm() / area_triangle
-        area3 = d3.cross(d1).norm() / area_triangle
-
-        return 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and abs(area1 + area2 + area3 - 1.0) <= 1e-4
-
-    @ti.func
-    def vertex_face_ccd(self, vid: ti.int32, fid: ti.int32):
-        # segment points p->x
-        p = self.verts.x[vid]
-        x = p + self.verts.v[vid] * self.dt
-
-        fid0 = self.face_indices_static[fid * 3 + 0]
-        fid1 = self.face_indices_static[fid * 3 + 1]
-        fid2 = self.face_indices_static[fid * 3 + 2]
-
-        f1 = self.verts_static.x[fid0]
-        f2 = self.verts_static.x[fid1]
-        f3 = self.verts_static.x[fid2]
-
-        # calculate distance from point to plane
-        n = (f2 - f1).cross(f3 - f1).normalized()
-        dist_p = (p - f1).dot(n)
-        dist_x = (x - f1).dot(n)
-
-        if dist_p * dist_x < 0:
-            # calculate intersection point
-            alpha = abs(dist_p) / (abs(dist_p) + abs(dist_x))
-            intersection = alpha * x + (1 - alpha) * p
-            # self.intersect[vid] = intersection
-            # if vid == 3 and fid == 0:
-            #     print("fuck 1")
-            # check if intersection point is in triangle
-            e1 = f2 - f1
-            e2 = f3 - f1
-            d1 = intersection - f1
-            d2 = intersection - f2
-            d3 = intersection - f3
-            area_triangle = e1.cross(e2).norm()
-            area1 = d1.cross(d2).norm() / area_triangle
-            area2 = d2.cross(d3).norm() / area_triangle
-            area3 = d3.cross(d1).norm() / area_triangle
-
-            is_on_triangle = (0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and abs(area1 + area2 + area3 - 1.0) <= 1e-4)
-
-            # if vid == 3 and fid == 0:
-            #      print(f'{area1}, {area2}, {area3}, {area1 + area2 + area3}')
-
-            if is_on_triangle:
-            # calculate new position
-            #     if vid == 3 and fid == 0:
-            #         print("fuck 2")
-                min_dist = 1e-3
-                if abs(dist_p) < min_dist:
-                    alpha = 0
-                    v = self.verts.v[vid]
-                    vp = self.verts.v[vid]
-                    if v.dot(n) < 0.0:
-                        vp = v - v.dot(n) * n
-                    self.verts.p[vid] += vp
-                    self.verts.nc[vid] += 1
-                else:
-                    # find point on segment that has min_dist distance from plane
-                    alpha = (abs(dist_p) - min_dist) / (abs(dist_p) + abs(dist_x))
-                    intersect = alpha * x + (1 - alpha) * p
-                    self.verts.p[vid] += (intersect - p) / self.dt
-                    self.verts.nc[vid] += 1
-                # self.verts.x_k[vid] = intersection
-        else:
-            point_on_triangle = x - dist_x * n
-            is_on_triangle = self.check_point_on_triangle(point_on_triangle, f1, f2, f3)
-            tol = 1e-4
-            if abs(dist_x) <= tol and is_on_triangle:
-                self.verts.p[vid] += (x - p) / self.dt
-                self.verts.nc[vid] += 1
-
-    @ti.func
-    def edge_edge_dcd(self, eid: ti.int32, eid_s: ti.int32):
-
-        vid0 = self.edges.vid[eid][0]
-        vid1 = self.edges.vid[eid][1]
-
-        vid2 = self.edges.vid[eid_s][0]
-        vid3 = self.edges.vid[eid_s][1]
-
-        e1, e2 = self.verts.x_k[vid0], self.verts.x_k[vid1]
-        s1, s2 = self.verts_static.x[vid2], self.verts_static.x[vid3]
-
-
-        e12 = e2 - e1
-        s12 = s2 - s1
-        nE = e12.normalized()
-        nS = s12.normalized()
-
-        line = nE.cross(nS)
-        crossLineE = line.cross(nE)
-        crossLineS = line.cross(nS)
-
-        w1 = crossLineS.dot(s1 - e1) / crossLineS.dot(nE)
-        w2 = crossLineE.dot(e1 - s1) / crossLineE.dot(nS)
-
-        if w1 > 1.0: w1 = 1.0
-        if w1 < 0.0: w1 = 0.0
-
-        if w2 > 1.0: w2 = 1.0
-        if w2 < 0.0: w2 = 0.0
-
-
-        c1 = e1 + nE * w1
-        c2 = s1 + nS * w2
-
-
-        c21 = c1 - c2
-        dist = c21.norm()
-        n = c21.normalized(1e-12)
-        self.p[0] = c2 + self.dist_tol * n
-        self.p[1] = c2
-
-        if dist <= self.dist_tol:
-            # print("test")
-            m1, m2 = self.verts.m[vid0], self.verts.m[vid1]
-            ld = (dist - self.dist_tol) * n / (w1 ** 2 + (1. - w1) ** 2)
-
-            p1 = e1 + w1 * ld
-            p2 = e2 + (1. - w1) * ld
-
-            self.verts.p[vid0] += p1
-            self.verts.p[vid1] += p2
-
-            self.verts.nc[vid0] += 1
-            self.verts.nc[vid1] += 1
-
-    @ti.func
-    def face_vertex_ccd(self, fvid0: ti.int32, fvid1: ti.int32, fvid2: ti.int32, vid: ti.int32):
-
-            f1 = self.verts.x[fvid0]
-            f2 = self.verts.x[fvid1]
-            f3 = self.verts.x[fvid2]
-
-            point = self.verts_static.x[vid]
-
-            e1 = f2 - f1
-            e2 = f3 - f1
-
-            a = ti.math.vec3(1, 0, 0)
-            b = ti.math.vec3(0, 1, 0)
-            normal = e1.normalized()
-            # print(normal)
-            # d = point - f1
-            # dist = d.dot(normal)
-            # point_on_triangle = point - dist * normal
-            # d1 = point_on_triangle - f1
-            # d2 = point_on_triangle - f2
-            # d3 = point_on_triangle - f3
-            #
-            # area_triangle = e1.cross(e2).norm()
-            # area1 = d1.cross(d2).norm() / area_triangle
-            # area2 = d2.cross(d3).norm() / area_triangle
-            # area3 = d3.cross(d1).norm() / area_triangle
-
-            # is_on_triangle = self.check_point_on_triangle(point_on_triangle, f1, f2, f3)
-            # # weights (if the point_on_triangle is close to the vertex, the weight is large)
-            # w1 = 1 / (d1.norm() + 1e-8)
-            # w2 = 1 / (d2.norm() + 1e-8)
-            # w3 = 1 / (d3.norm() + 1e-8)
-            # total_w = w1 + w2 + w3
-            # w1 /= total_w
-            # w2 /= total_w
-            # w3 /= total_w
-
-            tol = 1e-2
-            # if abs(dist) <= tol and is_on_triangle:
-            #
-            #     self.verts.nc[fvid0] += 1
-            #     self.verts.nc[fvid1] += 1
-            #     self.verts.nc[fvid2] += 1
-
-            #     # print("test")
-            #     C = 0.5 * (dist - tol) ** 2
-            #     nablaC_a = (dist - tol) * normal * w1
-            #     nablaC_b = (dist - tol) * normal * w2
-            #     nablaC_c = (dist - tol) * normal * w3
-            #
-            #     Schur = nablaC_a.dot(nablaC_a) / f.verts[1].m + nablaC_a.dot(nablaC_a) / f.verts[2].m + nablaC_a.dot(nablaC_a) / f.verts[2].m
-            #
-            #     kc = 1e3
-            #     ld = C / Schur
-            #     f.verts[0].g += ld * nablaC_a
-            #     f.verts[1].g += ld * nablaC_b
-            #     f.verts[2].g += ld * nablaC_c
-            #
-            #     f.verts[0].h += ld
-            #     f.verts[1].h += ld
-            #     f.verts[2].h += ld
-
-    @ti.func
-    def vertex_face_dcd(self, vid: ti.int32, fid: ti.int32):
-
-        fid0 = self.face_indices_static[fid * 3 + 0]
-        fid1 = self.face_indices_static[fid * 3 + 1]
-        fid2 = self.face_indices_static[fid * 3 + 2]
-
-        f1 = self.verts_static.x[fid0]
-        f2 = self.verts_static.x[fid1]
-        f3 = self.verts_static.x[fid2]
-
-        point = self.verts.x_k[vid]
-
-        e1 = f2 - f1
-        e2 = f3 - f1
-        normal = e1.cross(e2).normalized(1e-12)
-        d = point - f1
-        dist = d.dot(normal)
-
-        point_on_triangle = point - dist * normal
-
-        d1 = point_on_triangle - f1
-        d2 = point_on_triangle - f2
-        d3 = point_on_triangle - f3
-
-        area_triangle = e1.cross(e2).norm() / 2
-        area1 = d1.cross(d2).norm() / (2 * area_triangle)
-        area2 = d2.cross(d3).norm() / (2 * area_triangle)
-        area3 = d3.cross(d1).norm() / (2 * area_triangle)
-
-        is_on_triangle = 0 <= area1 <= 1 and 0 <= area2 <= 1 and 0 <= area3 <= 1 and abs(area1 + area2 + area3 - 1) <= 1e-3
-        if abs(dist) < self.dist_tol and is_on_triangle:
-            self.verts.p[vid] += (point + (self.dist_tol - abs(dist)) * normal)
-            self.verts.nc[vid] += 1
     @ti.kernel
     def filterStepSize(self) -> ti.f32:
 
@@ -728,7 +476,9 @@ class Solver:
 
         elif d_type == 8:
             d = cu.d_EE(x0, x1, x2, x3)
+            # print(d)
             if (d < self.dHat):
+                # print("test")
                 g0, g1, g2, g3 = cu.g_EE(x0, x1, x2, x3)
                 sch = g0.dot(g0) + g1.dot(g1)
                 step_size = (d - self.dHat) / sch
@@ -756,9 +506,9 @@ class Solver:
 
         # print(self.mmcvid.length())
         # triangle - point
-        # for f in self.faces:
-        #     for vid in range(self.num_verts_static):
-        #         self.computeConstraintSet_TP(f.id, vid)
+        for f in self.faces:
+            for vid in range(self.num_verts_static):
+                self.computeConstraintSet_TP(f.id, vid)
 
         for e in self.edges:
             for eid in range(self.num_edges_static):
