@@ -49,9 +49,9 @@ def d_type_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.
 def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3) -> ti.int32:
     u, v, w = v1 - v0, v3 - v2, v0 - v2
 
-    a = u.squaredNorm()
+    a = u.dot(u)
     b = u.dot(v)
-    c = v.squaredNorm()
+    c = v.dot(v)
     d = u.dot(w)
     e = v.dot(w)
 
@@ -72,7 +72,7 @@ def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.
         defaultCase = 5
     else:
         tN = (a * e - b * d)
-        if tN > 0.0 and tN < tD and (u.cross(v).dot(w) == 0.0 or u.cross(v).squaredNorm() < 1.0e-20 * a * c):
+        if tN > 0.0 and tN < tD and (u.cross(v).dot(w) == 0.0 or u.cross(v).dot(u.cross(v)) < 1.0e-20 * a * c):
             if sN < D / 2:
                 tN = e
                 tD = c
@@ -84,15 +84,15 @@ def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.
 
 
     if (tN <= 0.0):
-        if -d <= 0.0: return 0
-        elif -d >= a: return 3
-        else: return 6
+        if -d <= 0.0: defaultCase = 0
+        elif -d >= a: defaultCase = 3
+        else: defaultCase = 6
 
 
     elif tN >= tD:
-        if (-d + b) <= 0.0: return 1
-        elif (-d + b) >= a: return 4
-        else: return 7
+        if (-d + b) <= 0.0: defaultCase = 1
+        elif (-d + b) >= a: defaultCase = 4
+        else: defaultCase = 7
 
     return default_case
 
@@ -114,8 +114,16 @@ def d_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3)
     return aTb * aTb / b.dot(b)
 
 @ti.func
+def d_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3) -> ti.f32:
+
+    b = (v1 - v0).cross(v3 - v2)
+    aTb = (v2 - v0).dot(b)
+
+    return aTb * aTb / b.dot(b)
+@ti.func
 def g_PP(v0: ti.math.vec3, v1: ti.math.vec3):
     grad = 2.0 * (v0 - v1)
+    return grad, -grad
 @ti.func
 def g_PE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3):
     v01, v02, v03 = v0[0], v0[1], v0[2]
@@ -144,13 +152,19 @@ def g_PE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3):
     g0 = t42 * (t24 * t44 * 2.0 + t25 * t45 * 2.0)
     g1 = -t42 * (t23 * t44 * 2.0 - t25 * t46 * 2.0)
     g2 = -t42 * (t23 * t45 * 2.0 + t24 * t46 * 2.0)
+
+    gvec31 = ti.math.vec3([g0, g1, g2])
+
     g3 = -t51 - t42 * (t21 * t44 * 2.0 + t22 * t45 * 2.0)
     g4 = -t52 + t42 * (t20 * t44 * 2.0 - t22 * t46 * 2.0)
     g5 = -t43 + t42 * (t20 * t45 * 2.0 + t21 * t46 * 2.0)
+    gvec32 = ti.math.vec3([g3, g4, g5])
     g6 = t51 + t42 * (t18 * t44 * 2.0 + t19 * t45 * 2.0)
     g7 = t52 - t42 * (t17 * t44 * 2.0 - t19 * t46 * 2.0)
     g8 = t43 - t42 * (t17 * t45 * 2.0 + t18 * t46 * 2.0)
+    gvec33 = ti.math.vec3([g6, g7, g8])
 
+    return gvec31, gvec32, gvec33
 
 @ti.func
 def g_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3):
@@ -181,17 +195,25 @@ def g_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3)
     g0 = t34 * t43 * t45 * 2.0
     g1 = t33 * t43 * t45 * -2.0
     g2 = t32 * t43 * t45 * 2.0
+
+    gvec31 = ti.math.vec3([g0, g1, g2])
+
     t45 *= t43
     g3 = -t44 * t46 * (t21 * t32 * 2.0 + t22 * t33 * 2.0) - t45 * ((t34 + t12 * t22) - t13 * t21) * 2.0
     t43 = t44 * t46
     g4 = t43 * (t20 * t32 * 2.0 - t22 * t34 * 2.0) + t45 * ((t33 + t11 * t22) - t13 * t20) * 2.0
     g5 = t43 * (t20 * t33 * 2.0 + t21 * t34 * 2.0) - t45 * ((t32 + t11 * t21) - t12 * t20) * 2.0
+    gvec32 = ti.math.vec3([g3, g4, g5])
     g6 = t45 * (t12 * t19 - t13 * t18) * 2.0 + t43 * (t18 * t32 * 2.0 + t19 * t33 * 2.0)
     g7 = t45 * (t11 * t19 - t13 * t17) * -2.0 - t43 * (t17 * t32 * 2.0 - t19 * t34 * 2.0)
     g8 = t45 * (t11 * t18 - t12 * t17) * 2.0 - t43 * (t17 * t33 * 2.0 + t18 * t34 * 2.0)
+    gvec33 = ti.math.vec3([g6, g7, g8])
     g9 = t45 * (t12 * t16 - t13 * t15) * -2.0 - t43 * (t15 * t32 * 2.0 + t16 * t33 * 2.0)
     g10 = t45 * (t11 * t16 - t13 * t14) * 2.0 + t43 * (t14 * t32 * 2.0 - t16 * t34 * 2.0)
     g11 = t45 * (t11 * t15 - t12 * t14) * -2.0 + t43 * (t14 * t33 * 2.0 + t15 * t34 * 2.0)
+    gvec34 = ti.math.vec3([g9, g10, g11])
+
+    return gvec31, gvec32, gvec33, gvec34
 
 @ti.func
 def g_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3):
@@ -232,15 +254,28 @@ def g_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3)
     g0 = -t81 + t76 * ((-t36 + t37) + t46) * 2.0
     g1 = t19 - t76 * ((-t34 + t35) + t45) * 2.0
     g2 = t18 + t76 * ((-t32 + t33) + t44) * 2.0
+
+    gvec31 = ti.math.vec3(g0, g1, g2)
+
     g3 = t81 + t76 * (t36 - t37) * 2.0
     g4 = -t19 - t76 * (t34 - t35) * 2.0
     g5 = -t18 + t76 * (t32 - t33) * 2.0
+
+    gvec32 = ti.math.vec3(g3, g4, g5)
+
     t17 = t12 * t16 + -(t13 * t15)
     g6 = t79 - t76 * (t17 + t46) * 2.0
     t18 = t11 * t16 + -(t13 * t14)
     g7 = -t83 + t76 * (t18 + t45) * 2.0
     t19 = t11 * t15 + -(t12 * t14)
     g8 = -t80 - t76 * (t19 + t44) * 2.0
+
+    gvec33 = ti.math.vec3(g6, g7, g8)
+
     g9 = -t79 + t76 * t17 * 2.0
     g10 = t83 - t76 * t18 * 2.0
     g11 = t80 + t76 * t19 * 2.0
+
+    gvec34 = ti.math.vec3(g9, g10, g11)
+
+    return gvec31, gvec32, gvec33, gvec34
