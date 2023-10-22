@@ -42,7 +42,7 @@ class Solver:
         self.snode.place(self.candidatesVT)
 
         self.S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.mmcvid = ti.field(ti.math.ivec4)
+        self.mmcvid = ti.field(ti.math.ivec2)
         self.S.place(self.mmcvid)
         self.dHat = 1e-3
         # self.test()
@@ -258,6 +258,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+                self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
 
         elif dtype == 1:
@@ -271,6 +272,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+                self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 2:
             d = cu.d_PP(x0, x3) #c
@@ -283,6 +285,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+                self.mmcvid.append(ti.math.ivec2([pid, tid]))
               # s
 
         elif dtype == 3:
@@ -295,6 +298,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+                self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 4:
             d = cu.d_PE(x0, x2, x3) #g-c
@@ -306,6 +310,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+                self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 5:
             d = cu.d_PE(x0, x3, x1) #c-r
@@ -318,6 +323,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+                self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 6:            # inside triangle
             d = cu.d_PT(x0, x1, x2, x3)
@@ -328,6 +334,7 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+                self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
 
     @ti.func
@@ -677,7 +684,7 @@ class Solver:
     @ti.kernel
     def computeConstraintSet(self):
 
-        # self.mmcvid.deactivate()
+        self.mmcvid.deactivate()
 
         # # point - triangle
         for v in self.verts:
@@ -690,9 +697,9 @@ class Solver:
         #     for vid in range(self.num_verts_static):
         #         self.computeConstraintSet_TP(f.id, vid)
 
-        for e in self.edges:
-            for eid in range(self.num_edges_static):
-                self.computeConstraintSet_EE(e.id, eid)
+        # for e in self.edges:
+        #     for eid in range(self.num_edges_static):
+        #         self.computeConstraintSet_EE(e.id, eid)
 
 
 
@@ -700,13 +707,13 @@ class Solver:
 
         alpha = 1.0
         e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
-        for i in range(10):
+        for i in range(5):
             self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
             e = self.compute_spring_energy(self.x_t) + self.compute_collision_energy(self.x_t)
             if(e_cur < e):
                 alpha /= 2.0
             else:
-                print(i)
+                # print(i)
                 break
         return alpha
 
@@ -714,9 +721,8 @@ class Solver:
     def compute_collision_energy(self, x: ti.template()) -> ti.f32:
 
         collision_e_total = 0.0
-        for v in self.verts:
-            for fid in range(self.num_faces_static):
-                collision_e_total += self.compute_constraint_energy_PT(x, v.id, fid)
+        for i in self.mmcvid:
+            collision_e_total += self.compute_constraint_energy_PT(x, self.mmcvid[i][0], self.mmcvid[i][1])
         return collision_e_total
     @ti.kernel
     def compute_spring_energy(self, x: ti.template()) -> ti.f32:
@@ -746,7 +752,7 @@ class Solver:
             self.computeConstraintSet()
             self.compute_search_dir()
             alpha = self.line_search()
-            # print(alpha)
+            # alpha = 1.0
             self.step_forward(alpha)
 
         self.computeNextState()
