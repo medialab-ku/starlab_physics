@@ -74,10 +74,10 @@ class Solver:
 
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
         # self.setRadius()
-        print(f"radius: {self.radius}")
-
-        print(f'{self.edges.vid[0]}')
-        print(f'{self.edges_static.vid[4]}')
+        # print(f"radius: {self.radius}")
+        #
+        # print(f'{self.edges.vid}')
+        # print(f'{self.edges_static.vid[4]}')
 
 
 
@@ -339,8 +339,8 @@ class Solver:
                 g0, g1 = cu.g_PP(x0, x1)
                 n = g1.normalized(1e-4)
                 p1 = x1 - (d - self.dHat) * n
-                # self.verts.p[v1] += p1
-                # self.verts.nc[v1] += 1
+                self.verts.p[v1] += p1
+                self.verts.nc[v1] += 1
                 # self.mmcvid.append(ti.math.ivec4([-v1-1, v0, -1, -1]))
 
         elif dtype == 1:
@@ -349,8 +349,8 @@ class Solver:
                 g0, g2 = cu.g_PP(x0, x2)
                 n = g2.normalized(1e-4)
                 p2 = x2 - (d - self.dHat) * n
-                # self.verts.p[v2] += p2
-                # self.verts.nc[v2] += 1
+                self.verts.p[v2] += p2
+                self.verts.nc[v2] += 1
                 # self.mmcvid.append(ti.math.ivec4([-v2-1, v0, -1, -1]))
 
         elif dtype == 2:
@@ -359,8 +359,8 @@ class Solver:
                 g0, g3 = cu.g_PP(x0, x3)
                 n = g3.normalized(1e-4)
                 p3 = x3 - (d - self.dHat) * n
-                # self.verts.p[v3] += p3
-                # self.verts.nc[v3] += 1
+                self.verts.p[v3] += p3
+                self.verts.nc[v3] += 1
               # self.mmcvid.append(ti.math.ivec4([-v3-1, v0, -1, -1]))
 
         elif dtype == 3:
@@ -371,10 +371,10 @@ class Solver:
                 step_size = (d - self.dHat) / sch
                 p1 = x1 - step_size * g1
                 p2 = x2 - step_size * g2
-                # self.verts.p[v1] += p1
-                # self.verts.p[v2] += p2
-                # self.verts.nc[v1] += 1
-                # self.verts.nc[v2] += 1
+                self.verts.p[v1] += p1
+                self.verts.p[v2] += p2
+                self.verts.nc[v1] += 1
+                self.verts.nc[v2] += 1
                 # self.mmcvid.append(ti.math.ivec4([-v1-1, -v2-1, v0, -1]))
 
         elif dtype == 4:
@@ -385,10 +385,10 @@ class Solver:
                 step_size = (d - self.dHat) / sch
                 p2 = x1 - step_size * g2
                 p3 = x2 - step_size * g3
-                # self.verts.p[v2] += p2
-                # self.verts.p[v3] += p3
-                # self.verts.nc[v2] += 1
-                # self.verts.nc[v3] += 1
+                self.verts.p[v2] += p2
+                self.verts.p[v3] += p3
+                self.verts.nc[v2] += 1
+                self.verts.nc[v3] += 1
                 # self.mmcvid.append(ti.math.ivec4([-v2-1, -v3-1, v0, -1]))
 
         elif dtype == 5:
@@ -399,10 +399,10 @@ class Solver:
                 step_size = (d - self.dHat) / sch
                 p3 = x3 - step_size * g3
                 p1 = x1 - step_size * g1
-                # self.verts.p[v3] += p3
-                # self.verts.p[v1] += p1
-                # self.verts.nc[v3] += 1
-                # self.verts.nc[v1] += 1
+                self.verts.p[v3] += p3
+                self.verts.p[v1] += p1
+                self.verts.nc[v3] += 1
+                self.verts.nc[v1] += 1
                 # self.mmcvid.append(ti.math.ivec4([-v3-1, -v1-1, v0, -1]))
 
         elif dtype == 6:            # inside triangle
@@ -436,43 +436,113 @@ class Solver:
         x3 = self.verts_static.x[v3]
 
         d_type = cu.d_type_EE(x0, x1, x2, x3)
+        x01 = x1-x0
+        x32 = x2-x3
         # print(d_type)
+        is_para = False
+        if (x01.cross(x32).norm() < 1e-3):
+            is_para = True
+
+
+        # print(f'{d_type}, {is_para}')
 
         if d_type == 0:
             d = cu.d_PP(x0, x2)
             if(d < self.dHat):
                 g0, g2 = cu.g_PP(x0, x2)
+                sch = g0.dot(g0)
+                step_size = (d - self.dHat) / sch
+                p0 = x0 - step_size * g0
+
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+
         elif d_type == 1:
             d = cu.d_PP(x0, x3)
             if (d < self.dHat):
                 g0, g3 = cu.g_PP(x0, x3)
+                sch = g0.dot(g0)
+                step_size = (d - self.dHat) / sch
+                p0 = x0 - step_size * g0
+
+                self.verts.p[v0] += p0
+                self.verts.nc[v0] += 1
+
         elif d_type == 2:
             d = cu.d_PE(x0, x2, x3)
             if (d < self.dHat):
                 g0, g1, g2 = cu.g_PE(x0, x2, x3)
+                sch = g0.dot(g0) + g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+                p0 = x0 - step_size * g0
+                p1 = x1 - step_size * g1
+
+                self.verts.p[v0] += p0
+                self.verts.p[v1] += p1
+                self.verts.nc[v0] += 1
+                self.verts.nc[v1] += 1
+
         elif d_type == 3:
             d = cu.d_PP(x1, x2)
             if (d < self.dHat):
                 g1, g2 = cu.g_PP(x1, x2)
+                sch = g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+                p1 = x1 - step_size * g1
+
+                self.verts.p[v1] += p1
+                self.verts.nc[v1] += 1
+
         elif d_type == 4:
             d = cu.d_PP(x1, x3)
             if (d < self.dHat):
                 g1, g3 = cu.g_PP(x1, x3)
+                sch = g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+                p1 = x1 - step_size * g1
+
+                self.verts.p[v1] += p1
+                self.verts.nc[v1] += 1
 
         elif d_type == 5:
             d = cu.d_PE(x1, x2, x3)
             if (d < self.dHat):
-                g1, g1, g2 = cu.g_PE(x1, x2, x3)
+                g1, g2, g3 = cu.g_PE(x1, x2, x3)
+                sch = g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+                p1 = x1 - step_size * g1
+
+                self.verts.p[v1] += p1
+                self.verts.nc[v1] += 1
 
         elif d_type == 6:
-            d = cu.d_PE(x1, x2, x3)
+            d = cu.d_PE(x2, x0, x1)
             if (d < self.dHat):
-                g1, g1, g2 = cu.g_PE(x1, x2, x3)
+                g2, g0, g1 = cu.g_PE(x2, x0, x1)
+                sch = g0.dot(g0) + g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+                p0 = x0 - step_size * g0
+                p1 = x1 - step_size * g1
+
+                self.verts.p[v0] += p0
+                self.verts.p[v1] += p1
+                self.verts.nc[v0] += 1
+                self.verts.nc[v1] += 1
 
         elif d_type == 7:
-            d = cu.d_PE(x1, x2, x3)
+            d = cu.d_PE(x3, x0, x1)
             if (d < self.dHat):
-                g1, g1, g2 = cu.g_PE(x1, x2, x3)
+                g3, g0, g1 = cu.g_PE(x3, x0, x1)
+                sch = g0.dot(g0) + g1.dot(g1)
+                step_size = (d - self.dHat) / sch
+
+                p0 = x0 - step_size * g0
+                p1 = x1 - step_size * g1
+
+                self.verts.p[v0] += p0
+                self.verts.p[v1] += p1
+                self.verts.nc[v0] += 1
+                self.verts.nc[v1] += 1
 
         elif d_type == 8:
             d = cu.d_EE(x0, x1, x2, x3)
@@ -499,20 +569,21 @@ class Solver:
 
         # self.mmcvid.deactivate()
 
-        # point - triangle
-        for v in self.verts:
-            for fid in range(self.num_faces_static):
-                self.computeConstraintSet_PT(v.id, fid)
-
-        # print(self.mmcvid.length())
-        # triangle - point
+        # # point - triangle
+        # for v in self.verts:
+        #     for fid in range(self.num_faces_static):
+        #         self.computeConstraintSet_PT(v.id, fid)
+        #
+        # # print(self.mmcvid.length())
+        # # triangle - point
         for f in self.faces:
             for vid in range(self.num_verts_static):
                 self.computeConstraintSet_TP(f.id, vid)
 
-        for e in self.edges:
-            for eid in range(self.num_edges_static):
-                self.computeConstraintSet_EE(e.id, eid)
+        # for e in self.edges:
+        #     for eid in range(self.num_edges_static):
+        #         self.computeConstraintSet_EE(e.id, eid)
+
 
 
 

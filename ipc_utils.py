@@ -65,34 +65,35 @@ def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.
     if sN <= 0.0:
         tN = e
         tD = c
-        defaultCase = 2
+        default_case = 2
+
     elif sN >= D:
         tN = e + b
         tD = c
-        defaultCase = 5
+        default_case = 5
     else:
         tN = (a * e - b * d)
-        if tN > 0.0 and tN < tD and (u.cross(v).dot(w) == 0.0 or u.cross(v).dot(u.cross(v)) < 1.0e-20 * a * c):
+        if tN > 0.0 and tN < tD and (u.cross(v).dot(w) < 1e-4 or u.cross(v).dot(u.cross(v)) < 1.0e-20 * a * c):
             if sN < D / 2:
                 tN = e
                 tD = c
-            defaultCase = 2
-        else:
-            tN = e + b
-            tD = c
-            defaultCase = 5
+                default_case = 2
+            else:
+                tN = e + b
+                tD = c
+                default_case = 5
 
 
-    if (tN <= 0.0):
-        if -d <= 0.0: defaultCase = 0
-        elif -d >= a: defaultCase = 3
-        else: defaultCase = 6
+    if tN <= 0.0:
+        if -d <= 0.0: default_case = 0
+        elif -d >= a: default_case = 3
+        else: default_case = 6
 
 
     elif tN >= tD:
-        if (-d + b) <= 0.0: defaultCase = 1
-        elif (-d + b) >= a: defaultCase = 4
-        else: defaultCase = 7
+        if (-d + b) <= 0.0: default_case = 1
+        elif (-d + b) >= a: default_case = 4
+        else: default_case = 7
 
     return default_case
 
