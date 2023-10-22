@@ -19,6 +19,7 @@ class Mesh:
                                'y': ti.math.vec3,
                                'ld': ti.f32,
                                'x_k': ti.math.vec3,
+                               'x_temp': ti.math.vec3,
                                'p': ti.math.vec3,
                                'nc': ti.uint32,
                                'dx': ti.math.vec3,

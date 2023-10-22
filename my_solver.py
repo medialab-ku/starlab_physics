@@ -1,6 +1,7 @@
 import taichi as ti
 import meshtaichi_patcher as Patcher
 import ipc_utils as cu
+import barrier_functions as barrier
 
 @ti.data_oriented
 class Solver:
@@ -59,13 +60,14 @@ class Solver:
         self.partical_array.place(self.grid_particles_list)
         self.grid_particles_count = ti.field(ti.i32)
         ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
-        self.x_before = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
+        self.x_t = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
 
 
         self.dist_tol = 1e-2
 
         self.p1 = ti.math.vec3([0., 0., 0.])
         self.p2 = ti.math.vec3([0., 0., 0.])
+        self.alpha = ti.math.vec3([0., 0., 0.])
 
         self.p = ti.Vector.field(n=3, shape=2, dtype=ti.f32)
 
@@ -120,6 +122,11 @@ class Solver:
             v.v -= v.g / v.h
 
     @ti.kernel
+    def add(self, ans: ti.template(), a: ti.template(), k: ti.f32, b: ti.template()):
+        for i in ans:
+            ans[i] = a[i] + k * b[i]
+
+    @ti.kernel
     def computeY(self):
         for v in self.verts:
             v.y = v.x + v.v * self.dt
@@ -160,10 +167,15 @@ class Solver:
             e.verts[1].h += coeff
 
     @ti.kernel
-    def global_solve(self):
+    def compute_search_dir(self):
 
         for v in self.verts:
-            v.x_k -= (v.g / v.h)
+            v.dx = -(v.g / v.h)
+
+    @ti.kernel
+    def step_forward(self, step_size: ti.f32):
+        for v in self.verts:
+            v.x_k += step_size * v.dx
 
     @ti.kernel
     def evaluateCollisionConstraint(self):
@@ -192,24 +204,6 @@ class Solver:
                         # cu.g_PE()
                         print("PE")
 
-    @ti.kernel
-    def filterStepSize(self) -> ti.f32:
-
-        alpha = 1.0
-        for v in self.verts:
-            alpha = ti.min(alpha, v.alpha)
-
-        return alpha
-
-    @ti.kernel
-    def NewtonCG(self):
-        for v in self.verts:
-            v.dx = -v.g / v.h
-
-        self.verts.alpha.fill(1.0)
-        alpha = 1.0
-        for v in self.verts:
-            v.x_k += alpha * v.dx
 
     @ti.kernel
     def computeAABB(self):
@@ -257,6 +251,8 @@ class Solver:
             d = cu.d_PP(x0, x1)
             if d < self.dHat:
                 g0, g1 = cu.g_PP(x0, x1)
+
+                ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
 
@@ -268,6 +264,8 @@ class Solver:
             d = cu.d_PP(x0, x2)  #g
             if d < self.dHat:
                 g0, g2 = cu.g_PP(x0, x2)
+
+                ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
 
@@ -278,6 +276,8 @@ class Solver:
             d = cu.d_PP(x0, x3) #c
             if d < self.dHat:
                 g0, g3 = cu.g_PP(x0, x3)
+
+                ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
 
@@ -289,6 +289,7 @@ class Solver:
             d = cu.d_PE(x0, x1, x2) # r-g
             if d < self.dHat:
                 g0, g1, g2 = cu.g_PE(x0, x1, x2)
+                ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
 
@@ -299,6 +300,7 @@ class Solver:
             d = cu.d_PE(x0, x2, x3) #g-c
             if d < self.dHat:
                 g0, g2, g3 = cu.g_PE(x0, x1, x2)
+                ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
 
@@ -309,6 +311,8 @@ class Solver:
             d = cu.d_PE(x0, x3, x1) #c-r
             if d < self.dHat:
                 g0, g3, g1 = cu.g_PE(x0, x3, x1)
+
+                ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
 
@@ -319,11 +323,95 @@ class Solver:
             d = cu.d_PT(x0, x1, x2, x3)
             if d < self.dHat:
                 g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
+                ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
 
+
+    @ti.func
+    def compute_constraint_energy_PT(self, x: ti.template(), pid: ti.int32, tid: ti.int32) -> ti.f32:
+
+        energy = 0.0
+        v0 = pid
+        v1 = self.face_indices_static[3 * tid + 0]
+        v2 = self.face_indices_static[3 * tid + 1]
+        v3 = self.face_indices_static[3 * tid + 2]
+
+
+        x0 = x[v0]
+        x1 = self.verts_static.x[v1]   #r
+        x2 = self.verts_static.x[v2]   #g
+        x3 = self.verts_static.x[v3]   #c
+
+        dtype = cu.d_type_PT(x0, x1, x2, x3)
+        if dtype == 0:           #r
+            d = cu.d_PP(x0, x1)
+            if d < self.dHat:
+                g0, g1 = cu.g_PP(x0, x1)
+
+                ld = barrier.compute_g_b(d, self.dHat)
+                sch = g0.dot(g0) / self.verts.h[v0]
+                ld = (d - self.dHat) / sch
+                energy = 0.5 * ld * (d - self.dHat)
+
+        elif dtype == 1:
+            d = cu.d_PP(x0, x2)  #g
+            if d < self.dHat:
+                g0, g2 = cu.g_PP(x0, x2)
+
+                ld = barrier.compute_g_b(d, self.dHat)
+                sch = g0.dot(g0) / self.verts.h[v0]
+                ld = (d - self.dHat) / sch
+                energy = 0.5 * ld * (d - self.dHat)
+
+        elif dtype == 2:
+            d = cu.d_PP(x0, x3) #c
+            if d < self.dHat:
+                g0, g3 = cu.g_PP(x0, x3)
+
+                ld = barrier.compute_g_b(d, self.dHat)
+                sch = g0.dot(g0) / self.verts.h[v0]
+                ld = (d - self.dHat) / sch
+                energy = 0.5 * ld * (d - self.dHat)
+
+        elif dtype == 3:
+            d = cu.d_PE(x0, x1, x2) # r-g
+            if d < self.dHat:
+                g0, g1, g2 = cu.g_PE(x0, x1, x2)
+                ld = barrier.compute_g_b(d, self.dHat)
+                sch = g0.dot(g0) / self.verts.h[v0]
+                ld = (d - self.dHat) / sch
+                energy = 0.5 * ld * (d - self.dHat)
+
+        elif dtype == 4:
+            d = cu.d_PE(x0, x2, x3) #g-c
+            if d < self.dHat:
+                g0, g2, g3 = cu.g_PE(x0, x1, x2)
+                ld = barrier.compute_g_b(d, self.dHat)
+                sch = g0.dot(g0) / self.verts.h[v0]
+                ld = (d - self.dHat) / sch
+                energy = 0.5 * ld * (d - self.dHat)
+
+        elif dtype == 5:
+            d = cu.d_PE(x0, x3, x1) #c-r
+            if d < self.dHat:
+                g0, g3, g1 = cu.g_PE(x0, x3, x1)
+
+                ld = barrier.compute_g_b(d, self.dHat)
+                sch = g0.dot(g0) / self.verts.h[v0]
+                ld = (d - self.dHat) / sch
+                energy = 0.5 * ld * (d - self.dHat)
+        elif dtype == 6:            # inside triangle
+            d = cu.d_PT(x0, x1, x2, x3)
+            if d < self.dHat:
+                g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
+                ld = barrier.compute_g_b(d, self.dHat)
+                sch = g0.dot(g0) / self.verts.h[v0]
+                ld = (d - self.dHat) / sch
+                energy = 0.5 * ld * (d - self.dHat)
+        return energy
     @ti.func
     def computeConstraintSet_TP(self, tid: ti.int32, pid: ti.int32):
 
@@ -344,8 +432,9 @@ class Solver:
             d = cu.d_PP(x0, x1)
             if d < self.dHat:
                 g0, g1 = cu.g_PP(x0, x1)
-                sch = g1.dot(g1) / self.verts.h[v1]
-                ld = (d - self.dHat) / sch
+                ld = barrier.compute_g_b(d, self.dHat)
+                # sch = g1.dot(g1) / self.verts.h[v1]
+                # ld = (d - self.dHat) / sch
 
                 self.verts.g[v1] += ld * g1
                 self.verts.h[v1] += ld
@@ -356,8 +445,9 @@ class Solver:
             d = cu.d_PP(x0, x2)  #g
             if d < self.dHat:
                 g0, g2 = cu.g_PP(x0, x2)
-                sch = g2.dot(g2) / self.verts.h[v2]
-                ld = (d - self.dHat) / sch
+                ld = barrier.compute_g_b(d, self.dHat)
+                # sch = g2.dot(g2) / self.verts.h[v2]
+                # ld = (d - self.dHat) / sch
 
                 self.verts.g[v2] += ld * g2
                 self.verts.h[v2] += ld
@@ -366,8 +456,9 @@ class Solver:
             d = cu.d_PP(x0, x3) #c
             if d < self.dHat:
                 g0, g3 = cu.g_PP(x0, x3)
-                sch = g3.dot(g3) / self.verts.h[v3]
-                ld = (d - self.dHat) / sch
+                ld = barrier.compute_g_b(d, self.dHat)
+                # sch = g3.dot(g3) / self.verts.h[v3]
+                # ld = (d - self.dHat) / sch
 
                 self.verts.g[v3] += ld * g3
                 self.verts.h[v3] += ld
@@ -378,8 +469,9 @@ class Solver:
             d = cu.d_PE(x0, x1, x2) # r-g
             if d < self.dHat:
                 g0, g1, g2 = cu.g_PE(x0, x1, x2)
-                sch = g1.dot(g1) / self.verts.h[v1] + g2.dot(g2) / self.verts.h[v2]
-                ld = (d - self.dHat) / sch
+                ld = barrier.compute_g_b(d, self.dHat)
+                # sch = g1.dot(g1) / self.verts.h[v1] + g2.dot(g2) / self.verts.h[v2]
+                # ld = (d - self.dHat) / sch
 
                 self.verts.g[v1] += ld * g1
                 self.verts.g[v2] += ld * g2
@@ -391,8 +483,9 @@ class Solver:
             d = cu.d_PE(x0, x2, x3) #g-c
             if d < self.dHat:
                 g0, g2, g3 = cu.g_PE(x0, x2, x3)
-                sch = g2.dot(g2) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
-                ld = (d - self.dHat) / sch
+                ld = barrier.compute_g_b(d, self.dHat)
+                # sch = g2.dot(g2) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
+                # ld = (d - self.dHat) / sch
 
                 self.verts.g[v2] += ld * g2
                 self.verts.g[v3] += ld * g3
@@ -405,8 +498,9 @@ class Solver:
             d = cu.d_PE(x0, x3, x1) #c-r
             if d < self.dHat:
                 g0, g3, g1 = cu.g_PE(x0, x3, x1)
-                sch = g1.dot(g1) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
-                ld = (d - self.dHat) / sch
+                ld = barrier.compute_g_b(d, self.dHat)
+                # sch = g1.dot(g1) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
+                # ld = (d - self.dHat) / sch
 
                 self.verts.g[v1] += ld * g1
                 self.verts.g[v3] += ld * g3
@@ -419,8 +513,9 @@ class Solver:
             d = cu.d_PT(x0, x1, x2, x3)
             if d < self.dHat:
                 g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
-                sch = g1.dot(g1) / self.verts.h[v1] + g2.dot(g2) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
-                ld = (d - self.dHat) / sch
+                ld = barrier.compute_g_b(d, self.dHat)
+                # sch = g1.dot(g1) / self.verts.h[v1] + g2.dot(g2) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
+                # ld = (d - self.dHat) / sch
 
                 self.verts.g[v1] += ld * g1
                 self.verts.g[v2] += ld * g2
@@ -452,8 +547,8 @@ class Solver:
         if (x01.cross(x32).norm() < 1e-3):
             is_para = True
 
-        if is_para:
-            print("para")
+        # if is_para:
+        #     print("para")
         # print(f'{d_type}, {is_para}')
 
         if d_type == 0:
@@ -591,16 +686,50 @@ class Solver:
         #
         # # print(self.mmcvid.length())
         # # triangle - point
-        for f in self.faces:
-            for vid in range(self.num_verts_static):
-                self.computeConstraintSet_TP(f.id, vid)
+        # for f in self.faces:
+        #     for vid in range(self.num_verts_static):
+        #         self.computeConstraintSet_TP(f.id, vid)
 
-        # for e in self.edges:
-        #     for eid in range(self.num_edges_static):
-        #         self.computeConstraintSet_EE(e.id, eid)
+        for e in self.edges:
+            for eid in range(self.num_edges_static):
+                self.computeConstraintSet_EE(e.id, eid)
 
 
 
+    def line_search(self):
+
+        alpha = 1.0
+        e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
+        for i in range(10):
+            self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
+            e = self.compute_spring_energy(self.x_t) + self.compute_collision_energy(self.x_t)
+            if(e_cur < e):
+                alpha /= 2.0
+            else:
+                print(i)
+                break
+        return alpha
+
+    @ti.kernel
+    def compute_collision_energy(self, x: ti.template()) -> ti.f32:
+
+        collision_e_total = 0.0
+        for v in self.verts:
+            for fid in range(self.num_faces_static):
+                collision_e_total += self.compute_constraint_energy_PT(x, v.id, fid)
+        return collision_e_total
+    @ti.kernel
+    def compute_spring_energy(self, x: ti.template()) -> ti.f32:
+
+        spring_e_total = 0.0
+        for e in self.edges:
+            v0, v1 = e.verts[0].id, e.verts[1].id
+            xij = x[v0] - x[v1]
+            l = xij.norm()
+            coeff = 0.5 * self.dtSq * self.k
+            spring_e_total += coeff * (l - e.l0) ** 2
+
+        return spring_e_total
 
 
     def update(self):
@@ -615,8 +744,10 @@ class Solver:
             self.verts.h.copy_from(self.verts.m)
             self.evaluateSpringConstraint()
             self.computeConstraintSet()
-            # self.evaluateCollisionConstraint()
-            self.global_solve()
+            self.compute_search_dir()
+            alpha = self.line_search()
+            # print(alpha)
+            self.step_forward(alpha)
 
         self.computeNextState()
         # for i in range(self.max_iter):
