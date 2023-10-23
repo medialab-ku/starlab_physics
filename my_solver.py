@@ -11,7 +11,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e3,
+                 k=1e5,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -20,7 +20,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -9.81
+        self.gravity = -5.81
         self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
@@ -59,7 +59,7 @@ class Solver:
 
         self.radius = 0.01
         self.contact_stiffness = 1e3
-        self.damping_factor = 0.002
+        self.damping_factor = 0.001
         self.grid_n = 128
         self.grid_particles_list = ti.field(ti.i32)
         self.grid_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
@@ -94,6 +94,7 @@ class Solver:
         self.b = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.r = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.p = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.Ap = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.mul_ans =  ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
 
@@ -142,7 +143,7 @@ class Solver:
     @ti.kernel
     def computeNextState(self):
         for v in self.verts:
-            v.v = (1 - self.damping_factor) * (v.x_k - v.x) / self.dt
+            v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
             v.x = v.x_k
 
     @ti.kernel
@@ -183,7 +184,7 @@ class Solver:
     @ti.kernel
     def step_forward(self, step_size: ti.f32):
         for v in self.verts:
-            v.x_k -= step_size * v.dx
+            v.x_k += step_size * v.dx
 
     @ti.kernel
     def evaluateCollisionConstraint(self):
@@ -562,8 +563,8 @@ class Solver:
         if (x01.cross(x32).norm() < 1e-3):
             is_para = True
 
-        # if is_para:
-        #     print("para")
+        if is_para:
+            print("para")                                                 
         # print(f'{d_type}, {is_para}')
 
         if d_type == 0:
@@ -828,6 +829,33 @@ class Solver:
 
 
     @ti.kernel
+    def cg_iterate(self, r_2_new: ti.f32):
+
+        # Ap = A * x
+        for v in self.verts:
+            self.Ap[v.id] = self.p[v.id] * v.m + v.h * self.p[v.id]
+
+        ti.mesh_local(self.Ap, self.p)
+        for e in self.edges:
+            u = e.verts[0].id
+            v = e.verts[1].id
+            coeff = self.dtSq * self.k
+            self.Ap[u] += coeff * self.p[v]
+            self.Ap[v] += coeff * self.p[u]
+
+        pAp = 0.0
+        for v in self.verts:
+            pAp += self.p[v.id].dot(self.Ap[v.id])
+
+        alpha = r_2_new / pAp
+        for v in self.verts:
+            v.dx += alpha * self.p[v.id]
+            self.r[v.id] -= alpha * self.Ap[v.id]
+
+        for v in self.verts:
+            self.z[v.id] = self.r[v.id] / v.h
+
+    @ti.kernel
     def matrix_free_Ax(self, x: ti.template()):
         for v in self.verts:
             self.mul_ans[v.id] = x[v.id] * self.verts.m[v.id] + v.h * x[v.id]
@@ -848,7 +876,7 @@ class Solver:
         self.apply_precondition(self.z, self.r)
         self.p.copy_from(self.z)
         r_2 = self.dot(self.z, self.r)
-        n_iter = 30  # CG iterations
+        n_iter = 10  # CG iterations
         epsilon = 1e-5
         r_2_init = r_2
         r_2_new = r_2
@@ -856,15 +884,13 @@ class Solver:
         for iter in range(n_iter):
 
             self.matrix_free_Ax(self.p)
-
             alpha = r_2_new / self.dot(self.p, self.mul_ans)
-
             self.add(self.verts.dx, self.verts.dx, alpha, self.p)
             self.add(self.r, self.r, -alpha, self.mul_ans)
             self.apply_precondition(self.z, self.r)
 
             r_2 = r_2_new
-            r_2_new = self.dot(self.z, self.r)
+            r_2_new = self.dot(self.r, self.z)
 
             if r_2_new <= r_2_init * epsilon ** 2:
                 break
@@ -872,6 +898,9 @@ class Solver:
             beta = r_2_new / r_2
 
             self.add(self.p, self.z, beta, self.p)
+
+
+        self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
 
     def update(self):
@@ -894,7 +923,7 @@ class Solver:
             # self.compute_search_dir()
             # alpha = self.line_search()
             alpha = 1.0
-            self.step_forward(alpha)
+            # self.step_forward(alpha)
 
         self.computeNextState()
 
