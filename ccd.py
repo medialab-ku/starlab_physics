@@ -73,7 +73,7 @@ def point_triangle_ccd(p  : ti.math.vec3,
                        dt2: ti.math.vec3,
                        eta: ti.f32,
                        thickness: ti.f32,
-                       toc: ti.f32) -> ti.f32:
+                       toc: ti.f32):
     mov = 0.25 * (dt0 + dt1 + dt2 + dp)
     dt0 -= mov
     dt1 -= mov
