@@ -1,5 +1,7 @@
 import taichi as ti
 import meshtaichi_patcher as Patcher
+
+import ccd as ccd
 import ipc_utils as cu
 import barrier_functions as barrier
 
@@ -701,11 +703,37 @@ class Solver:
         #     for eid in range(self.num_edges_static):
         #         self.computeConstraintSet_EE(e.id, eid)
 
+    @ti.kernel
+    def ccd_alpha(self) -> ti.f32:
+        alpha = 1.0
+        for i in self.mmcvid:
+            tid, fid = self.mmcvid[i][0], self.mmcvid[i][1]
+            x0 = self.verts.x_k[tid]
+            dx0 = self.verts.dx[tid]
+
+            v1 = self.face_indices_static[3 * tid + 0]
+            v2 = self.face_indices_static[3 * tid + 1]
+            v3 = self.face_indices_static[3 * tid + 2]
+
+            x1 = self.verts_static.x[v1]
+            x2 = self.verts_static.x[v2]
+            x3 = self.verts_static.x[v3]
+
+            dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
+
+            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.0, 0.0, 0.0)
+
+            if alpha > alpha_ccd:
+                alpha = alpha_ccd
+
+        return alpha
+
 
 
     def line_search(self):
 
-        alpha = 1.0
+        alpha = min(1.0, self.ccd_alpha())
+
         e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
         for i in range(5):
             self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
