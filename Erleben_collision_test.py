@@ -8,13 +8,13 @@ vec = ti.math.vec3
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.01  # Larger dt might lead to unstable results.
+dt = 0.001  # Larger dt might lead to unstable results.
 
 ######### Erleben's collision test cases #########
 # https://dl.acm.org/doi/10.1145/3096239
 # spike vs. spike
-# mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
-# static_mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
+static_mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
 
 # spike vs. wedge
 # mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
@@ -41,7 +41,7 @@ dt = 0.01  # Larger dt might lead to unstable results.
 # static_mesh = Mesh("obj_models/square.obj", scale=1.0)
 
 # sliding wedge (initial velocity = (1.0, 0.0, 0.0))
-# mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 1.0, 0.0))
+# mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 1.01, 0.0))
 # static_mesh = Mesh("obj_models/square.obj", scale=1.0)
 
 # internal edges
@@ -49,11 +49,11 @@ dt = 0.01  # Larger dt might lead to unstable results.
 # static_mesh = Mesh("obj_models/erleben/internal_edges.obj", scale=0.5)
 
 # cliff edges
-# mesh = Mesh("obj_models/cube.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.505, 0.0))
+# mesh = Mesh("obj_models/cube.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.51, 0.0))
 # static_mesh = Mesh("obj_models/erleben/cliff.obj", scale=0.5)
 
-mesh = Mesh("obj_models/square_big.obj", scale=0.2, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 1.0, 0.5))
-static_mesh =Mesh("obj_models/square_big.obj", scale=0.4, rot=ti.math.vec3(0.0, 20.0, 0.0), trans=ti.math.vec3(0.5, 0.0, 0.5))
+# mesh = Mesh("obj_models/square_big.obj", scale=0.2, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 1.0, 0.5))
+# static_mesh =Mesh("obj_models/square_big.obj", scale=0.4, rot=ti.math.vec3(0.0, 20.0, 0.0), trans=ti.math.vec3(0.5, 0.0, 0.5))
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)

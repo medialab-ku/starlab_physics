@@ -29,7 +29,9 @@ class Solver:
         self.verts = self.my_mesh.mesh.verts
         self.num_verts = len(self.my_mesh.mesh.verts)
         self.edges = self.my_mesh.mesh.edges
+        self.num_edges = len(self.edges)
         self.faces = self.my_mesh.mesh.faces
+        self.num_faces = len(self.my_mesh.mesh.faces)
         self.face_indices = self.my_mesh.face_indices
 
         self.verts_static = self.static_mesh.mesh.verts
@@ -46,7 +48,9 @@ class Solver:
 
         self.S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
         self.mmcvid = ti.field(ti.math.ivec2)
+        # self.mmcvid_ee = ti.field(ti.math.ivec2)
         self.S.place(self.mmcvid)
+        # self.S.place(self.mmcvid_ee)
         self.dHat = 1e-4
         # self.test()
         #
@@ -84,26 +88,19 @@ class Solver:
         #
         # print(f'{self.edges.vid}')
         # print(f'{self.edges_static.vid[4]}')
-
-
-
-
         # self.reset()
+
+        # for PCG
+        self.b = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.r = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.p = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.mul_ans =  ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
 
 
     def reset(self):
         self.verts.x.copy_from(self.verts.x0)
         self.verts.v.fill(0.0)
-
-    @ti.kernel
-    def test(self):
-        for i in range(10):
-            self.x.append(ti.math.uvec2([i, 2 * i]))
-
-        print(self.x.length())
-        self.x.deactivate()
-        print(self.x.length())
-
     @ti.func
     def aabb_intersect(self, a_min: ti.math.vec3, a_max: ti.math.vec3,
                        b_min: ti.math.vec3, b_max: ti.math.vec3):
@@ -129,6 +126,13 @@ class Solver:
     def add(self, ans: ti.template(), a: ti.template(), k: ti.f32, b: ti.template()):
         for i in ans:
             ans[i] = a[i] + k * b[i]
+
+    @ti.kernel
+    def dot(self, a: ti.template(), b: ti.template()) -> ti.f32:
+        ans = 0.0
+        ti.loop_config(block_dim=32)
+        for i in a: ans += a[i].dot(b[i])
+        return ans
 
     @ti.kernel
     def computeY(self):
@@ -179,7 +183,7 @@ class Solver:
     @ti.kernel
     def step_forward(self, step_size: ti.f32):
         for v in self.verts:
-            v.x_k += step_size * v.dx
+            v.x_k -= step_size * v.dx
 
     @ti.kernel
     def evaluateCollisionConstraint(self):
@@ -689,7 +693,7 @@ class Solver:
     def computeConstraintSet(self):
 
         self.mmcvid.deactivate()
-
+        # self.mmcvid_ee.deactivate()
         # # point - triangle
         # for v in self.verts:
         #     for fid in range(self.num_faces_static):
@@ -700,6 +704,12 @@ class Solver:
             pid = i // self.num_faces_static
             fid = i % self.num_faces_static
             self.computeConstraintSet_PT(pid, fid)
+
+        num = self.num_faces * self.num_verts_static
+        for i in range(num):
+            pid = i // self.num_verts_static
+            fid = i % self.num_verts_static
+            self.computeConstraintSet_TP(fid, pid)
         #
         # # print(self.mmcvid.length())
         # # triangle - point
@@ -707,6 +717,11 @@ class Solver:
         #     for vid in range(self.num_verts_static):
         #         self.computeConstraintSet_TP(f.id, vid)
 
+        num = self.num_edges * self.num_edges_static
+        for i in range(num):
+            ei0 = i // self.num_edges_static
+            ei1 = i % self.num_edges_static
+            self.computeConstraintSet_EE(ei0, ei1)
         # for e in self.edges:
         #     for eid in range(self.num_edges_static):
         #         self.computeConstraintSet_EE(e.id, eid)
@@ -806,26 +821,80 @@ class Solver:
             if v.nc > 1:
                 v.v = v.p / v.nc
 
+    @ti.kernel
+    def apply_precondition(self, z: ti.template(), r: ti.template()):
+        for i in z:
+            z[i] = r[i] / self.verts.h[i]
+
+
+    @ti.kernel
+    def matrix_free_Ax(self, x: ti.template()):
+        for v in self.verts:
+            self.mul_ans[v.id] = x[v.id] * self.verts.m[v.id] + v.h * x[v.id]
+
+        ti.mesh_local(self.mul_ans, x)
+        for e in self.edges:
+            u = e.verts[0].id
+            v = e.verts[1].id
+            coeff = self.dtSq * self.k
+            self.mul_ans[u] += coeff * x[v]
+            self.mul_ans[v] += coeff * x[u]
+
+    def NewtonPCG(self):
+
+        self.verts.dx.fill(0.0)
+        self.r.copy_from(self.verts.g)
+
+        self.apply_precondition(self.z, self.r)
+        self.p.copy_from(self.z)
+        r_2 = self.dot(self.z, self.r)
+        n_iter = 30  # CG iterations
+        epsilon = 1e-5
+        r_2_init = r_2
+        r_2_new = r_2
+
+        for iter in range(n_iter):
+
+            self.matrix_free_Ax(self.p)
+
+            alpha = r_2_new / self.dot(self.p, self.mul_ans)
+
+            self.add(self.verts.dx, self.verts.dx, alpha, self.p)
+            self.add(self.r, self.r, -alpha, self.mul_ans)
+            self.apply_precondition(self.z, self.r)
+
+            r_2 = r_2_new
+            r_2_new = self.dot(self.z, self.r)
+
+            if r_2_new <= r_2_init * epsilon ** 2:
+                break
+
+            beta = r_2_new / r_2
+
+            self.add(self.p, self.z, beta, self.p)
+
+
     def update(self):
 
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeVtemp()
 
-        for i in range(self.max_iter):
-            self.modify_velocity()
+        # for i in range(self.max_iter):
+        #     self.modify_velocity()
 
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
 
-        # for i in range(self.max_iter):
-        #     self.verts.g.fill(0.)
-        #     self.verts.h.copy_from(self.verts.m)
-        #     self.evaluateSpringConstraint()
-        #     self.computeConstraintSet()
-        #     self.compute_search_dir()
-        #     # alpha = self.line_search()
-        #     alpha = 1.0
-        #     self.step_forward(alpha)
+        for i in range(self.max_iter):
+            self.verts.g.fill(0.)
+            self.verts.h.copy_from(self.verts.m)
+            self.evaluateSpringConstraint()
+            self.computeConstraintSet()
+            self.NewtonPCG()
+            # self.compute_search_dir()
+            # alpha = self.line_search()
+            alpha = 1.0
+            self.step_forward(alpha)
 
         self.computeNextState()
 
