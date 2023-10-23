@@ -829,8 +829,7 @@ class Solver:
 
 
     @ti.kernel
-    def cg_iterate(self, r_2_new: ti.f32):
-
+    def cg_iterate(self, r_2: ti.f32) -> ti.f32:
         # Ap = A * x
         for v in self.verts:
             self.Ap[v.id] = self.p[v.id] * v.m + v.h * self.p[v.id]
@@ -847,13 +846,24 @@ class Solver:
         for v in self.verts:
             pAp += self.p[v.id].dot(self.Ap[v.id])
 
-        alpha = r_2_new / pAp
+        alpha = r_2 / pAp
         for v in self.verts:
             v.dx += alpha * self.p[v.id]
             self.r[v.id] -= alpha * self.Ap[v.id]
 
         for v in self.verts:
             self.z[v.id] = self.r[v.id] / v.h
+
+        r_2_new = 0.0
+        for v in self.verts:
+            r_2_new += self.z[v.id].dot(self.r[v.id])
+
+        beta = r_2_new / r_2
+        for v in self.verts:
+            self.p[v.id] = self.z[v.id] + beta * self.p[v.id]
+
+        return r_2_new
+
 
     @ti.kernel
     def matrix_free_Ax(self, x: ti.template()):
@@ -876,28 +886,14 @@ class Solver:
         self.apply_precondition(self.z, self.r)
         self.p.copy_from(self.z)
         r_2 = self.dot(self.z, self.r)
-        n_iter = 10  # CG iterations
+        n_iter = 4  # CG iterations
         epsilon = 1e-5
         r_2_init = r_2
         r_2_new = r_2
 
         for iter in range(n_iter):
-
-            self.matrix_free_Ax(self.p)
-            alpha = r_2_new / self.dot(self.p, self.mul_ans)
-            self.add(self.verts.dx, self.verts.dx, alpha, self.p)
-            self.add(self.r, self.r, -alpha, self.mul_ans)
-            self.apply_precondition(self.z, self.r)
-
-            r_2 = r_2_new
-            r_2_new = self.dot(self.r, self.z)
-
-            if r_2_new <= r_2_init * epsilon ** 2:
-                break
-
-            beta = r_2_new / r_2
-
-            self.add(self.p, self.z, beta, self.p)
+           r_2_new = self.cg_iterate(r_2)
+           r_2 = self.cg_iterate(r_2_new)
 
 
         self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
