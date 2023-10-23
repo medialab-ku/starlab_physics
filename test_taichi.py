@@ -1,5 +1,5 @@
 import taichi as ti
-
+import ccd as ccd
 ti.init(arch=ti.cuda)
 a = ti.math.vec3([1, 1, 1])
 b = ti.math.vec3([1, 1, 1])
@@ -110,14 +110,18 @@ S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
 x = ti.field(ti.math.uvec4)
 S.place(x)
 
+@ti.func
+def test(i: ti.int32)-> ti.int32:
+    return i
 @ti.kernel
 def add_data():
 
-    a = ti.Vector([1.0, 2.0, 3.0])
+
     min = 4.0
-    for i in a:
-        if min > a[i]:
-            min = a[i]
+    for i in range(10):
+        a = test(i)
+        if min > a:
+            min = a
 
     print(min)
     # for i in range(10):
@@ -132,8 +136,25 @@ def add_data():
     # x.deactivate()
     # print(x.length())
 
+@ti.kernel
+def test_ccd():
+    x0 = ti.math.vec3([0.5, 0.5, 0.5])
+    dx0 = ti.math.vec3([0.0, -10.0, 0.0])
 
+
+    x1 = ti.math.vec3([1.0, 0.0, 0.])
+    x2 = ti.math.vec3([0., 0.0, 1.])
+    x3 = ti.math.vec3([0., 0.0, 0.])
+
+    dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
+
+    alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, 0.01, 1.0)
+
+    x = x0 + alpha_ccd * dx0
+
+    print(x.y)
+    print(alpha_ccd)
 # print(aabb_intersect(a, b, c, d))
 
-# test_max()
 add_data()
+# test_ccd()
