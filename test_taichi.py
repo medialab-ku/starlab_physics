@@ -113,10 +113,13 @@ S.place(x)
 @ti.kernel
 def add_data():
 
-    a, b = ret()
-    print(a)
-    print(b)
+    a = ti.Vector([1.0, 2.0, 3.0])
+    min = 4.0
+    for i in a:
+        if min > a[i]:
+            min = a[i]
 
+    print(min)
     # for i in range(10):
     #     x.append(ti.math.uvec4([4 * i + 0, 4 * i + 1, 4 * i + 2, 4 * i + 3]))
     # #
