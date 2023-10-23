@@ -79,34 +79,41 @@ def point_triangle_ccd(p  : ti.math.vec3,
     dt1 -= mov
     dt2 -= mov
     dp -= mov
+
     maxDispMag = dp.norm() + ti.math.sqrt(ti.max(dt0.dot(dt0), dt1.dot(dt1), dt2.dot(dt2)))
 
-    toc = 1.0
+    t = 1.0
     if (maxDispMag > 0.0):
         dist2_cur = Point_Triangle_Distance_Unclassified(p, t0, t1, t2)
 
         dist_cur = ti.sqrt(dist2_cur)
+        # print(f'{dist_cur}')
 
         gap = eta * (dist2_cur - thickness * thickness) / (dist_cur + thickness)
 
-        toc_prev = toc
-        toc = 0
+        t = 0
         while True:
+
             tocLowerBound = (1 - eta) * (dist2_cur - thickness * thickness) / ((dist_cur + thickness) * maxDispMag)
+            # print(f'{tocLowerBound}')
             p  += tocLowerBound * dp
             t0 += tocLowerBound * dt0
             t1 += tocLowerBound * dt1
             t2 += tocLowerBound * dt2
+
             dist2_cur = Point_Triangle_Distance_Unclassified(p, t0, t1, t2)
             dist_cur = ti.math.sqrt(dist2_cur)
-            if toc > 0.0 and ((dist2_cur - thickness * thickness) / (dist_cur + thickness) < gap):
+            if t > 0.0 and (dist2_cur - thickness ** 2) / (dist_cur + thickness) < gap:
                 break
 
-            toc += tocLowerBound
-            if (toc > toc_prev):
-                toc = 1.0
+            t += tocLowerBound
+            # print(t)
+            if (t > toc):
+                t = toc
+                break
 
-    return 1.0
+
+    return t
 
 @ti.kernel
 def edge_edge_ccd( ea0  : ti.math.vec3,

@@ -27,6 +27,7 @@ class Solver:
                                  [0, 0, 1]])
 
         self.verts = self.my_mesh.mesh.verts
+        self.num_verts = len(self.my_mesh.mesh.verts)
         self.edges = self.my_mesh.mesh.edges
         self.faces = self.my_mesh.mesh.faces
         self.face_indices = self.my_mesh.face_indices
@@ -46,7 +47,7 @@ class Solver:
         self.S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
         self.mmcvid = ti.field(ti.math.ivec2)
         self.S.place(self.mmcvid)
-        self.dHat = 1e-3
+        self.dHat = 1e-4
         # self.test()
         #
         # self.normals = ti.Vector.field(n=3, dtype = ti.f32, shape = 2 * self.num_faces)
@@ -74,6 +75,7 @@ class Solver:
         self.p = ti.Vector.field(n=3, shape=2, dtype=ti.f32)
 
         self.intersect = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
+
 
 
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
@@ -689,9 +691,15 @@ class Solver:
         self.mmcvid.deactivate()
 
         # # point - triangle
-        for v in self.verts:
-            for fid in range(self.num_faces_static):
-                self.computeConstraintSet_PT(v.id, fid)
+        # for v in self.verts:
+        #     for fid in range(self.num_faces_static):
+        #         self.computeConstraintSet_PT(v.id, fid)
+        #
+        num = self.num_verts * self.num_faces_static
+        for i in range(num):
+            pid = i // self.num_faces_static
+            fid = i % self.num_faces_static
+            self.computeConstraintSet_PT(pid, fid)
         #
         # # print(self.mmcvid.length())
         # # triangle - point
@@ -721,8 +729,8 @@ class Solver:
 
             dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
 
-            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.0, 0.0, 0.0)
-
+            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, self.dHat, 1.0)
+            # print(alpha_ccd)
             if alpha > alpha_ccd:
                 alpha = alpha_ccd
 
@@ -765,30 +773,61 @@ class Solver:
 
         return spring_e_total
 
+    @ti.kernel
+    def modify_velocity(self):
+
+        num = self.num_verts * self.num_faces_static
+        # alpha = 1.0
+        self.verts.p.fill(0.0)
+        self.verts.nc.fill(0)
+        for i in range(num):
+            pid = i // self.num_faces_static
+            fid = i % self.num_faces_static
+
+            x0 = self.verts.x[pid]
+            dx0 = self.verts.v[pid] * self.dt
+
+            v1 = self.face_indices_static[3 * fid + 0]
+            v2 = self.face_indices_static[3 * fid + 1]
+            v3 = self.face_indices_static[3 * fid + 2]
+
+            x1 = self.verts_static.x[v1]
+            x2 = self.verts_static.x[v2]
+            x3 = self.verts_static.x[v3]
+
+            dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
+
+            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, 1e-6, 1.0)
+
+            self.verts.p[pid] += alpha_ccd * self.verts.v[pid]
+            self.verts.nc[pid] += 1
+
+        for v in self.verts:
+            if v.nc > 1:
+                v.v = v.p / v.nc
 
     def update(self):
 
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeVtemp()
+
+        for i in range(self.max_iter):
+            self.modify_velocity()
+
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
 
-        for i in range(self.max_iter):
-            self.verts.g.fill(0.)
-            self.verts.h.copy_from(self.verts.m)
-            self.evaluateSpringConstraint()
-            self.computeConstraintSet()
-            self.compute_search_dir()
-            alpha = self.line_search()
-            # alpha = 1.0
-            self.step_forward(alpha)
+        # for i in range(self.max_iter):
+        #     self.verts.g.fill(0.)
+        #     self.verts.h.copy_from(self.verts.m)
+        #     self.evaluateSpringConstraint()
+        #     self.computeConstraintSet()
+        #     self.compute_search_dir()
+        #     # alpha = self.line_search()
+        #     alpha = 1.0
+        #     self.step_forward(alpha)
 
         self.computeNextState()
-        # for i in range(self.max_iter):
-        #     self.verts.p.fill(0.)
-        #     self.verts.nc.fill(0)
-        #     self.modify_velocity()
-
 
 
 
