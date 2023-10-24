@@ -139,7 +139,7 @@ def add_data():
 @ti.kernel
 def test_ccd():
     x0 = ti.math.vec3([0.5, 0.5, 0.5])
-    dx0 = ti.math.vec3([0.0, -10.0, 0.0])
+    dx0 = ti.math.vec3([0.0, -1.0, 0.0])
 
 
     x1 = ti.math.vec3([1.0, 0.0, 0.])
@@ -148,7 +148,7 @@ def test_ccd():
 
     dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
 
-    alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, 0.01, 1.0)
+    alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.0, 0.01, 1.0)
 
     x = x0 + alpha_ccd * dx0
 
@@ -156,5 +156,5 @@ def test_ccd():
     print(alpha_ccd)
 # print(aabb_intersect(a, b, c, d))
 
-add_data()
-# test_ccd()
+# add_data()
+test_ccd()
