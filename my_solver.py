@@ -5,6 +5,13 @@ import ccd as ccd
 import ipc_utils as cu
 import barrier_functions as barrier
 
+# @ti.dataclass
+# class TP:
+#     tid: ti.uint32
+#     fid: ti.uint32
+
+
+
 @ti.data_oriented
 class Solver:
     def __init__(self,
@@ -42,14 +49,12 @@ class Solver:
         self.face_indices_static = self.static_mesh.face_indices
         self.num_faces_static = len(self.static_mesh.mesh.faces)
 
-        self.snode = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.candidatesVT = ti.field(ti.math.uvec2)
-        self.snode.place(self.candidatesVT)
-
-        self.S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.mmcvid = ti.field(ti.math.ivec2)
+        self.rd_TP = ti.root.dynamic(ti.i, 1024, chunk_size=32)
+        # self.rd_ee = ti.root.dynamic(ti.i, 1024, chunk_size=32)
+        self.candidatesPT = ti.field(ti.math.uvec2)
+        self.rd_TP.place(self.candidatesPT)
         # self.mmcvid_ee = ti.field(ti.math.ivec2)
-        self.S.place(self.mmcvid)
+        # self.S.place(self.mmcvid)
         # self.S.place(self.mmcvid_ee)
         self.dHat = 1e-4
         # self.test()
@@ -69,7 +74,6 @@ class Solver:
         ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
         self.x_t = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
 
-
         self.dist_tol = 1e-2
 
         self.p1 = ti.math.vec3([0., 0., 0.])
@@ -79,8 +83,6 @@ class Solver:
         self.p = ti.Vector.field(n=3, shape=2, dtype=ti.f32)
 
         self.intersect = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
-
-
 
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
         # self.setRadius()
@@ -112,6 +114,19 @@ class Solver:
                 a_max[1] >= b_min[1] and \
                 a_min[2] <= b_max[2] and \
                 a_max[2] >= b_min[2]
+
+    @ti.kernel
+    def compute_candidates_PT(self):
+
+        self.candidatesPT.deactivate()
+
+        for v in self.verts:
+            for tid in range(self.num_faces_static):
+                a_min_p, a_max_p = v.aabb_min, v.aabb_max
+                a_min_t, a_max_t = self.faces_static.aabb_min[tid], self.faces_static.aabb_max[tid]
+
+                if self.aabb_intersect(a_min_p, a_max_p, a_min_t, a_max_t):
+                    self.candidatesPT.append(ti.math.uvec2(v.id, tid))
 
     @ti.kernel
     def computeVtemp(self):
@@ -215,7 +230,7 @@ class Solver:
 
 
     @ti.kernel
-    def computeAABB(self):
+    def compute_aabb(self):
 
         padding_size = 1e-2
         padding = ti.math.vec3([padding_size, padding_size, padding_size])
@@ -228,19 +243,6 @@ class Solver:
             v.aabb_max += padding
             v.aabb_min -= padding
 
-
-        for f in self.faces_static:
-
-            x0 = f.verts[0].x
-            x1 = f.verts[1].x
-            x2 = f.verts[2].x
-
-            for i in range(3):
-                f.aabb_min[i] = ti.min(x0[i], x1[i], x2[i])
-                f.aabb_max[i] = ti.max(x0[i], x1[i], x2[i])
-
-            f.aabb_min -= padding
-            f.aabb_max += padding
     @ti.func
     def computeConstraintSet_PT(self, pid: ti.int32, tid: ti.int32):
 
@@ -267,7 +269,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                self.mmcvid.append(ti.math.ivec2([pid, tid]))
+                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
 
         elif dtype == 1:
@@ -281,7 +283,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                self.mmcvid.append(ti.math.ivec2([pid, tid]))
+                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 2:
             d = cu.d_PP(x0, x3) #c
@@ -294,7 +296,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                self.mmcvid.append(ti.math.ivec2([pid, tid]))
+                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
               # s
 
         elif dtype == 3:
@@ -307,7 +309,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                self.mmcvid.append(ti.math.ivec2([pid, tid]))
+                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 4:
             d = cu.d_PE(x0, x2, x3) #g-c
@@ -319,7 +321,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                self.mmcvid.append(ti.math.ivec2([pid, tid]))
+                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 5:
             d = cu.d_PE(x0, x3, x1) #c-r
@@ -332,7 +334,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                self.mmcvid.append(ti.math.ivec2([pid, tid]))
+                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 6:            # inside triangle
             d = cu.d_PT(x0, x1, x2, x3)
@@ -343,7 +345,7 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                self.mmcvid.append(ti.math.ivec2([pid, tid]))
+                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
 
     @ti.func
@@ -560,7 +562,7 @@ class Solver:
         x32 = x2-x3
         # print(d_type)
         is_para = False
-        if (x01.cross(x32).norm() < 1e-3):
+        if x01.cross(x32).norm() < 1e-3:
             is_para = True
 
         if is_para:
@@ -675,7 +677,6 @@ class Solver:
             # print(d)
             if (d < self.dHat):
                 # print("test")
-
                 # if is_para:
                 #     eps_x = cu.compute_eps_x(x0, x1, x2, x3)
                 #     e = cu.compute_e(x0, x1, x2, x3, eps_x)
@@ -921,6 +922,9 @@ class Solver:
 
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeVtemp()
+
+        self.compute_aabb()
+        self.compute_candidates_PT()
 
         for i in range(10):
             self.modify_velocity()

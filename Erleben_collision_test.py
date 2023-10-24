@@ -17,12 +17,12 @@ dt = 0.001  # Larger dt might lead to unstable results.
 # static_mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
 
 # spike vs. wedge
-mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
-static_mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
+# static_mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
 
 # wedge vs. wedge
-# mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
-# static_mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
+static_mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
 
 # spike in hole (initial velocity = (1.0, 0.0, 0.0)
 # mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 1.2, 0.0))

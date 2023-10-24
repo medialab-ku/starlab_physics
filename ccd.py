@@ -124,7 +124,7 @@ def edge_edge_ccd( ea0  : ti.math.vec3,
                    dea1: ti.math.vec3,
                    deb0: ti.math.vec3,
                    deb1: ti.math.vec3,
-                   eta: ti.f32,
+                   eta: ti.f32, #0.1
                    thickness: ti.f32,
                    toc: ti.f32) -> ti.f32:
 
@@ -172,6 +172,5 @@ def edge_edge_ccd( ea0  : ti.math.vec3,
             if (t > toc):
                 t = toc
                 break
-
 
     return t
