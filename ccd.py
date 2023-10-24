@@ -135,7 +135,6 @@ def edge_edge_ccd( ea0  : ti.math.vec3,
     deb1 -= mov
 
     maxDispMag = ti.math.sqrt(ti.max(dea0.dot(dea0), dea1.dot(dea1))) + ti.math.sqrt(ti.max(deb0.dot(deb0), deb1.dot(deb1)))
-    alpha = 1.0
     if maxDispMag > 0.0:
 
         dist2_cur = Edge_Edge_Distance_Unclassified(ea0, ea1, eb0, eb1)
@@ -145,3 +144,34 @@ def edge_edge_ccd( ea0  : ti.math.vec3,
             dFunc = dist2_cur - thickness * thickness
 
         dist_cur = ti.math.sqrt(dist2_cur)
+        gap = eta * dFunc / (dist_cur + thickness)
+
+        t = 0
+        while True:
+
+            tocLowerBound = (1 - eta) * (dist2_cur - thickness * thickness) / ((dist_cur + thickness) * maxDispMag)
+            # print(f'{tocLowerBound}')
+            ea0 += tocLowerBound * dea0
+            ea1 += tocLowerBound * dea1
+            eb0 += tocLowerBound * dea0
+            eb1 += tocLowerBound * dea1
+
+            dist2_cur = Edge_Edge_Distance_Unclassified(ea0, ea1, eb0, eb1)
+            dFunc = dist2_cur - thickness * thickness
+            if (dFunc <= 0):
+                dist2_cur = ti.math.min((ea0 - eb0).dot(ea0 - eb0), (ea0 - eb1).dot(ea0 - eb1), (ea1 - eb0).dot(ea1 - eb0), (ea1 - eb1).dot(ea1 - eb1))
+                dFunc = dist2_cur - thickness * thickness
+
+            dist_cur = ti.sqrt(dist2_cur)
+
+            if t > 0.0 and (dFunc - thickness ** 2) / (dist_cur + thickness) < gap:
+                break
+
+            t += tocLowerBound
+            # print(t)
+            if (t > toc):
+                t = toc
+                break
+
+
+    return t
