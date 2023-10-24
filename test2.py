@@ -8,7 +8,7 @@ vec = ti.math.vec3
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.01  # Larger dt might lead to unstable results.
+dt = 0.001  # Larger dt might lead to unstable results.
 
 # mesh = Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
@@ -98,9 +98,9 @@ dt = 0.01  # Larger dt might lead to unstable results.
 # static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
 
 # PE(x1, x2, x3) dtype = 5
-# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.5, 0.7, 0.6))
-# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
-#
+mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.5, 0.7, 0.6))
+static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+
 
 mesh = Mesh("obj_models/square_big.obj", scale=0.2, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 1.0, 0.5))
 static_mesh =Mesh("obj_models/square_big.obj", scale=0.4, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.0, 0.5))
@@ -159,10 +159,10 @@ while window.running:
     # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
     scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
     scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
-    scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
+    # scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(x1, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
-    scene.lines(sim.p, width=0.5, indices=debug_edge_indices, color=(1., 0., 0.))
-    scene.lines(static_mesh.mesh.verts.x, width=0.5, indices=static_mesh.edge_indices, color=(0., 0., 0.))
+    # scene.lines(sim.p, width=0.5, indices=debug_edge_indices, color=(1., 0., 0.))
+    # scene.lines(static_mesh.mesh.verts.x, width=0.5, indices=static_mesh.edge_indices, color=(0., 0., 0.))
     canvas.scene(scene)
     window.show()
     # window.save_image(f'results/test/{step:06d}.jpg')

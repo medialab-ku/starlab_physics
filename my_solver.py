@@ -84,7 +84,7 @@ class Solver:
 
         self.intersect = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
 
-        print(f"verts #: {len(self.my_mesh.mesh.verts)}, elements #: {len(self.my_mesh.mesh.edges)}")
+        print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
         # self.setRadius()
         # print(f"radius: {self.radius}")
         #
@@ -98,7 +98,7 @@ class Solver:
         self.p = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.Ap = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
-        self.mul_ans =  ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.mul_ans = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
 
 
     def reset(self):
@@ -119,7 +119,6 @@ class Solver:
     def compute_candidates_PT(self):
 
         self.candidatesPT.deactivate()
-
         for v in self.verts:
             for tid in range(self.num_faces_static):
                 a_min_p, a_max_p = v.aabb_min, v.aabb_max
@@ -127,6 +126,8 @@ class Solver:
 
                 if self.aabb_intersect(a_min_p, a_max_p, a_min_t, a_max_t):
                     self.candidatesPT.append(ti.math.uvec2(v.id, tid))
+
+        # print(self.candidatesPT.length())
 
     @ti.kernel
     def computeVtemp(self):
@@ -232,16 +233,32 @@ class Solver:
     @ti.kernel
     def compute_aabb(self):
 
-        padding_size = 1e-2
+        padding_size = 1e-1
         padding = ti.math.vec3([padding_size, padding_size, padding_size])
 
         for v in self.verts:
-            for i in range(3):
-                v.aabb_min[i] = ti.min(v.x[i], v.y[i])
-                v.aabb_max[i] = ti.max(v.x[i], v.y[i])
+            dx = v.v * self.dt
+            v.aabb_max = ti.max(v.x + dx, v.x - dx)
+            v.aabb_min = ti.max(v.x + dx, v.x - dx)
 
-            v.aabb_max += padding
-            v.aabb_min -= padding
+        for f in self.faces:
+            x0, x1, x2 = f.verts[0].x, f.verts[1].x, f.verts[2].x
+            v0, v1, v2 = f.verts[0].v, f.verts[1].v, f.verts[2].v
+
+            dx0 = v0 * self.dt
+            dx1 = v1 * self.dt
+            dx2 = v2 * self.dt
+
+            f.aabb_max = ti.max(x0 + dx0, x0 - dx0, x1 + dx1, x1 - dx1, x2 + dx2, x2 - dx2)
+            f.aabb_min = ti.min(x0 + dx0, x0 - dx0, x1 + dx1, x1 - dx1, x2 + dx2, x2 - dx2)
+
+        for f in self.faces_static:
+            x0, x1, x2 = f.verts[0].x, f.verts[1].x, f.verts[2].x
+
+            f.aabb_max = ti.max(x0, x1, x2) + padding
+            f.aabb_min = ti.min(x0, x1, x2) - padding
+
+
 
     @ti.func
     def computeConstraintSet_PT(self, pid: ti.int32, tid: ti.int32):
@@ -269,7 +286,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
+
 
 
         elif dtype == 1:
@@ -283,7 +300,6 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
 
         elif dtype == 2:
             d = cu.d_PP(x0, x3) #c
@@ -296,8 +312,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
-              # s
+
 
         elif dtype == 3:
             d = cu.d_PE(x0, x1, x2) # r-g
@@ -309,7 +324,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
+
 
         elif dtype == 4:
             d = cu.d_PE(x0, x2, x3) #g-c
@@ -321,7 +336,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
+
 
         elif dtype == 5:
             d = cu.d_PE(x0, x3, x1) #c-r
@@ -334,7 +349,7 @@ class Solver:
 
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
+
 
         elif dtype == 6:            # inside triangle
             d = cu.d_PT(x0, x1, x2, x3)
@@ -345,7 +360,7 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # self.mmcvid.append(ti.math.ivec2([pid, tid]))
+
 
 
     @ti.func
@@ -711,24 +726,29 @@ class Solver:
     @ti.kernel
     def computeConstraintSet(self):
 
-        self.mmcvid.deactivate()
+        # self.mmcvid.deactivate()
         # self.mmcvid_ee.deactivate()
         # # point - triangle
         # for v in self.verts:
         #     for fid in range(self.num_faces_static):
         #         self.computeConstraintSet_PT(v.id, fid)
         #
-        num = self.num_verts * self.num_faces_static
-        for i in range(num):
-            pid = i // self.num_faces_static
-            fid = i % self.num_faces_static
+        # num = self.num_verts * self.num_faces_static
+
+        for cid in self.candidatesPT:
+            pid, fid = self.candidatesPT[cid]
             self.computeConstraintSet_PT(pid, fid)
 
-        num = self.num_faces * self.num_verts_static
-        for i in range(num):
-            pid = i // self.num_verts_static
-            fid = i % self.num_verts_static
-            self.computeConstraintSet_TP(fid, pid)
+        # for i in range(num):
+        #     pid = i // self.num_faces_static
+        #     fid = i % self.num_faces_static
+        #     self.computeConstraintSet_PT(pid, fid)
+        #
+        # num = self.num_faces * self.num_verts_static
+        # for i in range(num):
+        #     pid = i // self.num_verts_static
+        #     fid = i % self.num_verts_static
+        #     self.computeConstraintSet_TP(fid, pid)
         #
         # # print(self.mmcvid.length())
         # # triangle - point
@@ -736,11 +756,7 @@ class Solver:
         #     for vid in range(self.num_verts_static):
         #         self.computeConstraintSet_TP(f.id, vid)
 
-        num = self.num_edges * self.num_edges_static
-        for i in range(num):
-            ei0 = i // self.num_edges_static
-            ei1 = i % self.num_edges_static
-            self.computeConstraintSet_EE(ei0, ei1)
+
         # for e in self.edges:
         #     for eid in range(self.num_edges_static):
         #         self.computeConstraintSet_EE(e.id, eid)
@@ -926,8 +942,8 @@ class Solver:
         self.compute_aabb()
         self.compute_candidates_PT()
 
-        for i in range(10):
-            self.modify_velocity()
+        # for i in range(10):
+        #     self.modify_velocity()
 
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
