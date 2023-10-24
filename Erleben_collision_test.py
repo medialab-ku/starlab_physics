@@ -13,12 +13,12 @@ dt = 0.001  # Larger dt might lead to unstable results.
 ######### Erleben's collision test cases #########
 # https://dl.acm.org/doi/10.1145/3096239
 # spike vs. spike
-mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
-static_mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
+# static_mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
 
 # spike vs. wedge
-# mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
-# static_mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/erleben/spike.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))
+static_mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 0.0, 0.0))
 
 # wedge vs. wedge
 # mesh = Mesh("obj_models/erleben/wedge.obj", scale=0.5, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.0, 2.5, 0.0))

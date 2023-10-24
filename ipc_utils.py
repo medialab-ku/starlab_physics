@@ -280,3 +280,109 @@ def g_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3)
     gvec34 = ti.math.vec3(g9, g10, g11)
 
     return gvec31, gvec32, gvec33, gvec34
+
+
+
+@ti.func
+def compute_q(input: ti.f32, eps_x: ti.f32)-> ti.f32:
+
+    input_div_eps_x = input / eps_x
+    return (-input_div_eps_x + 2.0) * input_div_eps_x
+
+
+@ti.func
+def compute_q_g(input: ti.f32, eps_x: ti.f32)-> ti.f32:
+
+    one_div_eps_x = 1.0 / eps_x
+    return 2.0 * one_div_eps_x * (-one_div_eps_x * input + 1.0)
+
+
+@ti.func
+def compute_q_H(input: ti.f32, eps_x: ti.f32) -> ti.f32:
+
+    return -2.0 / (eps_x * eps_x)
+
+
+
+@ti.func
+def compute_eps_x(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3) -> ti.f32:
+    return 1.0e-3 * (v0 - v1).dot(v0 - v1) * (v2 - v3).dot(v2 - v3)
+
+@ti.func
+def compute_e(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3, eps_x: ti.f32) -> ti.f32:
+
+    cross = (v1 - v0).cross(v3 - v2)
+    sq_norm = cross.dot(cross)
+
+    e = 1.0
+    if sq_norm < eps_x:
+        compute_q(sq_norm, eps_x)
+
+    return e
+
+@ti.func
+def compute_e_g(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3, eps_x: ti.f32):
+
+    cross = (v1 - v0).cross(v3 - v2)
+    sq_norm = cross.dot(cross)
+
+    g0 = ti.math.vec3(0.0, 0.0, 0.0)
+    g1 = ti.math.vec3(0.0, 0.0, 0.0)
+    g2 = ti.math.vec3(0.0, 0.0, 0.0)
+    g3 = ti.math.vec3(0.0, 0.0, 0.0)
+
+    if sq_norm < eps_x:
+        q_g = compute_q_g(sq_norm, eps_x)
+        g0, g1, g2, g3 = computeEECrossSqNormGradient(v0, v1, v2, v3)
+        g0 *= q_g
+        g1 *= q_g
+        g2 *= q_g
+        g3 *= q_g
+
+    return g0, g1, g2, g3
+
+@ti.func
+def computeEECrossSqNormGradient(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3):
+
+    t8 = -v1.x + v0.x
+    t9 = -v1.y + v0.y
+    t10 = -v1.z + v0.z
+    t11 = -v3.x + v2.x
+    t12 = -v3.y + v2.y
+    t13 = -v3.z + v2.z
+    t23 = t8 * t12 + -(t9 * t11)
+    t24 = t8 * t13 + -(t10 * t11)
+    t25 = t9 * t13 + -(t10 * t12)
+    t26 = t8 * t23 * 2.0
+    t27 = t9 * t23 * 2.0
+    t28 = t8 * t24 * 2.0
+    t29 = t10 * t24 * 2.0
+    t30 = t9 * t25 * 2.0
+    t31 = t10 * t25 * 2.0
+    t32 = t11 * t23 * 2.0
+    t33 = t12 * t23 * 2.0
+    t23 = t11 * t24 * 2.0
+    t10 = t13 * t24 * 2.0
+    t9 = t12 * t25 * 2.0
+    t8 = t13 * t25 * 2.0
+
+    g0 = t33 + t10
+    g1 = -t32 + t8
+    g2 = -t23 - t9
+
+    gvec0 = ti.math.vec3(g0, g1, g2)
+
+    g3 = -t33 - t10
+    g4 = t32 - t8
+    g5 = t23 + t9
+    gvec1 = ti.math.vec3(g3, g4, g5)
+    g6 = -t27 - t29
+    g7 = t26 - t31
+    g8 = t28 + t30
+    gvec2 = ti.math.vec3(g6, g7, g8)
+    g9 = t27 + t29
+    g10 = -t26 + t31
+    g11 = -t28 - t30
+    gvec3 = ti.math.vec3(g9, g10, g11)
+
+    return gvec0, gvec1, gvec2, gvec3

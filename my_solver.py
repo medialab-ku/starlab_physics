@@ -11,7 +11,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e5,
+                 k=1e2,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -675,6 +675,24 @@ class Solver:
             # print(d)
             if (d < self.dHat):
                 # print("test")
+
+                # if is_para:
+                #     eps_x = cu.compute_eps_x(x0, x1, x2, x3)
+                #     e = cu.compute_e(x0, x1, x2, x3, eps_x)
+                #     g0, g1, g2, g3 = cu.compute_e_g(x0, x1, x2, x3, eps_x)
+                #     sch = g0.dot(g0) / self.verts.h[v0] + g1.dot(g1) / self.verts.h[v1]
+                #
+                #     # ld = 0
+                #     # if abs(sch) > 1e-6:
+                #     ld = (d - self.dHat) / sch
+                #
+                #     self.verts.g[v0] += ld * g0
+                #     self.verts.g[v1] += ld * g1
+                #
+                #     self.verts.h[v0] += ld
+                #     self.verts.h[v1] += ld
+                # else:
+
                 g0, g1, g2, g3 = cu.g_EE(x0, x1, x2, x3)
                 sch = g0.dot(g0) / self.verts.h[v0] + g1.dot(g1) / self.verts.h[v1]
 
@@ -687,7 +705,6 @@ class Solver:
 
                 self.verts.h[v0] += ld
                 self.verts.h[v1] += ld
-
 
 
     @ti.kernel
@@ -813,10 +830,11 @@ class Solver:
 
             dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
 
-            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, 1e-6, 1.0)
+            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, 1e-3, 1.0)
 
-            self.verts.p[pid] += alpha_ccd * self.verts.v[pid]
-            self.verts.nc[pid] += 1
+            if(alpha_ccd < 1.0):
+                self.verts.p[pid] += alpha_ccd * self.verts.v[pid]
+                self.verts.nc[pid] += 1
 
         for v in self.verts:
             if v.nc > 1:
@@ -886,7 +904,7 @@ class Solver:
         self.apply_precondition(self.z, self.r)
         self.p.copy_from(self.z)
         r_2 = self.dot(self.z, self.r)
-        n_iter = 4  # CG iterations
+        n_iter = 3  # CG iterations
         epsilon = 1e-5
         r_2_init = r_2
         r_2_new = r_2
@@ -904,8 +922,8 @@ class Solver:
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeVtemp()
 
-        # for i in range(self.max_iter):
-        #     self.modify_velocity()
+        for i in range(10):
+            self.modify_velocity()
 
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
@@ -915,11 +933,11 @@ class Solver:
             self.verts.h.copy_from(self.verts.m)
             self.evaluateSpringConstraint()
             self.computeConstraintSet()
-            self.NewtonPCG()
-            # self.compute_search_dir()
+            # self.NewtonPCG()
+            self.compute_search_dir()
             # alpha = self.line_search()
             alpha = 1.0
-            # self.step_forward(alpha)
+            self.step_forward(alpha)
 
         self.computeNextState()
 
