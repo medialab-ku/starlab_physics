@@ -2,13 +2,13 @@ import taichi as ti
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(arch=ti.cuda, device_memory_fraction=0.50)
+ti.init(arch=ti.cuda)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.01  # Larger dt might lead to unstable results.
+dt = 0.001  # Larger dt might lead to unstable results.
 
 # mesh = Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
@@ -21,8 +21,8 @@ dt = 0.01  # Larger dt might lead to unstable results.
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 # case: face vs. vertex
-# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
-# static_mesh = Mesh("obj_models/square.obj", scale=0.4, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
+mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
+static_mesh = Mesh("obj_models/square.obj", scale=0.4, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
 
 
 # case: face vs. face
@@ -98,19 +98,24 @@ dt = 0.01  # Larger dt might lead to unstable results.
 # static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
 
 # PE(x1, x2, x3) dtype = 5
-mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.5, 0.7, 0.6))
-static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
 
 
-mesh = Mesh("obj_models/square_big.obj", scale=0.2, rot=ti.math.vec3(0.0, 0.0, 20.0), trans=ti.math.vec3(0.5, 1.0, 0.5))
-static_mesh =Mesh("obj_models/square_big.obj", scale=0.4, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.0, 0.5))
+
+# mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.5, 0.7, 0.6))
+# static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
+#
+#
+# mesh = Mesh("obj_models/square_big.obj", scale=0.2, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 1.0, 0.5))
+# static_mesh =Mesh("obj_models/square_big.obj", scale=0.4, rot=ti.math.vec3(0.0, 10.0, 0.0), trans=ti.math.vec3(0.5, 0.0, 0.5))
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
 
 debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
-
+#
+# mesh = Mesh("obj_models/square_huge.obj", scale=0.4, trans=ti.math.vec3(0, 1, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/sphere1K.obj", scale=3.0, trans=ti.math.vec3(0, -2, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 @ti.kernel
 def init_color():
