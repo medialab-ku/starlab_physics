@@ -18,7 +18,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e2,
+                 k=1e4,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -27,7 +27,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -5.81
+        self.gravity = -9.81
         self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
@@ -99,11 +99,46 @@ class Solver:
         self.Ap = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.mul_ans = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+        self.K = ti.linalg.SparseMatrixBuilder(3 * self.num_verts, 3 * self.num_verts, max_num_triplets=self.num_verts)
+        self.solver = ti.linalg.SparseSolver(solver_type="LLT")
+        self.test_x = ti.ndarray(ti.f32, 3 * self.num_verts)
+        self.test()
 
+    def test(self):
+
+        self.construct_hessian(self.K, self.test_x)
+        A = self.K.build()
+        solver = ti.linalg.SparseSolver(solver_type="LLT")
+        solver.analyze_pattern(A)
+        solver.compute(A)
+        x = solver.solve(self.test_x)
+        self.copy_to(x)
+
+        print(self.verts.x)
 
     def reset(self):
         self.verts.x.copy_from(self.verts.x0)
         self.verts.v.fill(0.0)
+
+    @ti.kernel
+    def construct_hessian(self, M: ti.types.sparse_matrix_builder(), x: ti.types.ndarray()):
+
+        for i in range(self.num_verts):
+            M[3 * i + 0, 3 * i + 0] += 1.0
+            M[3 * i + 1, 3 * i + 1] += 1.0
+            M[3 * i + 2, 3 * i + 2] += 1.0
+
+            x[3 * i + 0] = 1.0
+            x[3 * i + 1] = 1.0
+            x[3 * i + 2] = 1.0
+
+    @ti.kernel
+    def copy_to(self, src: ti.types.ndarray()):
+        for i in range(self.num_verts):
+           self.verts.x[i].x = src[3 * i + 0]
+           self.verts.x[i].y = src[3 * i + 1]
+           self.verts.x[i].z = src[3 * i + 2]
+
     @ti.func
     def aabb_intersect(self, a_min: ti.math.vec3, a_max: ti.math.vec3,
                        b_min: ti.math.vec3, b_max: ti.math.vec3):
@@ -127,7 +162,7 @@ class Solver:
                 if self.aabb_intersect(a_min_p, a_max_p, a_min_t, a_max_t):
                     self.candidatesPT.append(ti.math.ivec3(v.id, tid, 0))
 
-        # print(self.candidatesPT.length())
+        print(self.candidatesPT.length())
 
     @ti.kernel
     def computeVtemp(self):
@@ -261,7 +296,7 @@ class Solver:
 
 
     @ti.func
-    def computeConstraintSet_PT(self, pid: ti.int32, tid: ti.int32):
+    def compute_gradient_PT(self, pid: ti.int32, tid: ti.int32):
 
         v0 = pid
         v1 = self.face_indices_static[3 * tid + 0]
@@ -403,7 +438,6 @@ class Solver:
             d = cu.d_PP(x0, x3) #c
             if d < self.dHat:
                 g0, g3 = cu.g_PP(x0, x3)
-
                 ld = barrier.compute_g_b(d, self.dHat)
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
@@ -436,6 +470,7 @@ class Solver:
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
                 energy = 0.5 * ld * (d - self.dHat)
+
         elif dtype == 6:            # inside triangle
             d = cu.d_PT(x0, x1, x2, x3)
             if d < self.dHat:
@@ -444,6 +479,7 @@ class Solver:
                 sch = g0.dot(g0) / self.verts.h[v0]
                 ld = (d - self.dHat) / sch
                 energy = 0.5 * ld * (d - self.dHat)
+
         return energy
     @ti.func
     def computeConstraintSet_TP(self, tid: ti.int32, pid: ti.int32):
@@ -737,7 +773,7 @@ class Solver:
 
         for cid in self.candidatesPT:
             pid, fid, d_type = self.candidatesPT[cid]
-            d_type = self.computeConstraintSet_PT(pid, fid)
+            d_type = self.compute_gradient_PT(pid, fid)
             self.candidatesPT[cid][2] = d_type
 
 
@@ -793,24 +829,27 @@ class Solver:
     def line_search(self):
 
         alpha = self.ccd_alpha()
-        print(alpha)
-        # e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
-        # for i in range(5):
-        #     self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
-        #     e = self.compute_spring_energy(self.x_t) + self.compute_collision_energy(self.x_t)
-        #     if(e_cur < e):
-        #         alpha /= 2.0
-        #     else:
-        #         # print(i)
-        #         break
+        # print(alpha)
+        e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
+        # print(e_cur)
+        for i in range(5):
+            self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
+            e = self.compute_spring_energy(self.x_t) + self.compute_collision_energy(self.x_t)
+            # print(e)
+            if(e_cur < e):
+                alpha /= 2.0
+            else:
+                # print(i)
+                break
         return alpha
 
     @ti.kernel
     def compute_collision_energy(self, x: ti.template()) -> ti.f32:
 
         collision_e_total = 0.0
-        for i in self.mmcvid:
-            collision_e_total += self.compute_constraint_energy_PT(x, self.mmcvid[i][0], self.mmcvid[i][1])
+        for cid in self.candidatesPT:
+            pid, fid, d_type = self.candidatesPT[cid]
+            collision_e_total += self.compute_constraint_energy_PT(x, pid, fid)
         return collision_e_total
     @ti.kernel
     def compute_spring_energy(self, x: ti.template()) -> ti.f32:
@@ -939,8 +978,8 @@ class Solver:
         self.compute_aabb()
         self.compute_candidates_PT()
 
-        for i in range(10):
-         self.modify_velocity()
+        # for i in range(10):
+        # self.modify_velocity()
 
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
@@ -952,8 +991,9 @@ class Solver:
             self.computeConstraintSet()
             # self.NewtonPCG()
             self.compute_search_dir()
-            alpha = self.line_search()
-            # alpha = 1.0
+            # alpha = self.line_search()
+            # print(alpha)
+            alpha = 1.0
             self.step_forward(alpha)
 
         self.computeNextState()

@@ -45,7 +45,7 @@ class Mesh:
         self.mesh.faces.place({'aabb_min': ti.math.vec3,
                                'aabb_max': ti.math.vec3})  # bounding sphere radius
 
-        self.setCenterToOrigin()
+        # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.edges) * 2)
         self.initFaceIndices()
@@ -94,7 +94,7 @@ class Mesh:
     @ti.kernel
     def applyTransform(self):
 
-        self.setCenterToOrigin()
+        # self.setCenterToOrigin()
 
         for v in self.mesh.verts:
             v.x *= self.scale

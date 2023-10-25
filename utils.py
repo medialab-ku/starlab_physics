@@ -1,24 +1,43 @@
 import taichi as ti
 
-@ti.func
-def edge_edge_dist(a: ti.math.vec3, b: ti.math.vec3, c: ti.math.vec3, d: ti.math.vec3, t: ti.math.vec2) -> ti.f32:
-    ab = b - a
-    cd = d - c
-    ac = c - a
 
-    mat = ti.math.mat2([[-cd.dot(ab), ab.dot(ab)],
-                        [-cd.dot(cd), cd.dot(ab)]])
+ti.init(arch=ti.cuda)
+n = 4
+K = ti.linalg.SparseMatrixBuilder(n, n, max_num_triplets=100)
+b = ti.ndarray(ti.f32, shape=n)
 
-    b = ti.math.vec2([ab.dot(ac), cd.dot(ac)])
+@ti.kernel
+def fill(A: ti.types.sparse_matrix_builder(), b: ti.types.ndarray(), interval: ti.i32):
+    for i in range(n):
+        A[i, i] += 2.0
 
-    t = mat.inverse() @ b
+        if i % interval == 0:
+            b[i] += 1.0
 
-    t1 = t[0]
-    t2 = t[1]
+fill(K, b, 3)
 
-    p1 = a + t1 * ab
-    p2 = c + t2 * cd
-
-    dist = (p1 - p2).norm()
-
-    return dist
+A = K.build()
+print(">>>> Matrix A:")
+print(A)
+print(">>>> Vector b:")
+print(b)
+# outputs:
+# >>>> Matrix A:
+# [2, 0, 0, 0]
+# [0, 2, 0, 0]
+# [0, 0, 2, 0]
+# [0, 0, 0, 2]
+# >>>> Vector b:
+# [1. 0. 0. 1.]
+solver = ti.linalg.SparseSolver(solver_type="LLT")
+solver.analyze_pattern(A)
+solver.factorize(A)
+x = solver.solve(b)
+# isSuccess = solver.info()
+print(">>>> Solve sparse linear systems Ax = b with the solution x:")
+print(x)
+# print(f">>>> Computation was successful?: {isSuccess}")
+# outputs:
+# >>>> Solve sparse linear systems Ax = b with the solution x:
+# [0.5 0.  0.  0.5]
+# >>>> Computation was successful?: True
