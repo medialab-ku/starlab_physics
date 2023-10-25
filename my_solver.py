@@ -51,7 +51,7 @@ class Solver:
 
         self.rd_TP = ti.root.dynamic(ti.i, 1024, chunk_size=32)
         # self.rd_ee = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.candidatesPT = ti.field(ti.math.uvec2)
+        self.candidatesPT = ti.field(ti.math.ivec3)
         self.rd_TP.place(self.candidatesPT)
         # self.mmcvid_ee = ti.field(ti.math.ivec2)
         # self.S.place(self.mmcvid)
@@ -125,7 +125,7 @@ class Solver:
                 a_min_t, a_max_t = self.faces_static.aabb_min[tid], self.faces_static.aabb_max[tid]
 
                 if self.aabb_intersect(a_min_p, a_max_p, a_min_t, a_max_t):
-                    self.candidatesPT.append(ti.math.uvec2(v.id, tid))
+                    self.candidatesPT.append(ti.math.ivec3(v.id, tid, 0))
 
         # print(self.candidatesPT.length())
 
@@ -361,7 +361,7 @@ class Solver:
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
 
-
+        return dtype
 
     @ti.func
     def compute_constraint_energy_PT(self, x: ti.template(), pid: ti.int32, tid: ti.int32) -> ti.f32:
@@ -736,8 +736,10 @@ class Solver:
         # num = self.num_verts * self.num_faces_static
 
         for cid in self.candidatesPT:
-            pid, fid = self.candidatesPT[cid]
-            self.computeConstraintSet_PT(pid, fid)
+            pid, fid, d_type = self.candidatesPT[cid]
+            d_type = self.computeConstraintSet_PT(pid, fid)
+            self.candidatesPT[cid][2] = d_type
+
 
         # for i in range(num):
         #     pid = i // self.num_faces_static
@@ -764,14 +766,14 @@ class Solver:
     @ti.kernel
     def ccd_alpha(self) -> ti.f32:
         alpha = 1.0
-        for i in self.mmcvid:
-            tid, fid = self.mmcvid[i][0], self.mmcvid[i][1]
-            x0 = self.verts.x_k[tid]
-            dx0 = self.verts.dx[tid]
+        for cid in self.candidatesPT:
+            pid, fid, d_type = self.candidatesPT[cid]
+            x0 = self.verts.x_k[pid]
+            dx0 = self.verts.dx[fid]
 
-            v1 = self.face_indices_static[3 * tid + 0]
-            v2 = self.face_indices_static[3 * tid + 1]
-            v3 = self.face_indices_static[3 * tid + 2]
+            v1 = self.face_indices_static[3 * fid + 0]
+            v2 = self.face_indices_static[3 * fid + 1]
+            v3 = self.face_indices_static[3 * fid + 2]
 
             x1 = self.verts_static.x[v1]
             x2 = self.verts_static.x[v2]
@@ -790,17 +792,17 @@ class Solver:
 
     def line_search(self):
 
-        alpha = min(1.0, self.ccd_alpha())
-
-        e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
-        for i in range(5):
-            self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
-            e = self.compute_spring_energy(self.x_t) + self.compute_collision_energy(self.x_t)
-            if(e_cur < e):
-                alpha /= 2.0
-            else:
-                # print(i)
-                break
+        alpha = self.ccd_alpha()
+        print(alpha)
+        # e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
+        # for i in range(5):
+        #     self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
+        #     e = self.compute_spring_energy(self.x_t) + self.compute_collision_energy(self.x_t)
+        #     if(e_cur < e):
+        #         alpha /= 2.0
+        #     else:
+        #         # print(i)
+        #         break
         return alpha
 
     @ti.kernel
@@ -826,16 +828,11 @@ class Solver:
     @ti.kernel
     def modify_velocity(self):
 
-        num = self.num_verts * self.num_faces_static
-        # alpha = 1.0
-        self.verts.p.fill(0.0)
-        self.verts.nc.fill(0)
-        for i in range(num):
-            pid = i // self.num_faces_static
-            fid = i % self.num_faces_static
-
+        alpha = 1.0
+        for cid in self.candidatesPT:
+            pid, fid, d_type = self.candidatesPT[cid]
             x0 = self.verts.x[pid]
-            dx0 = self.verts.v[pid] * self.dt
+            dx0 = self.verts.v[fid] * self.dt
 
             v1 = self.face_indices_static[3 * fid + 0]
             v2 = self.face_indices_static[3 * fid + 1]
@@ -847,15 +844,15 @@ class Solver:
 
             dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
 
-            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, 1e-3, 1.0)
-
-            if(alpha_ccd < 1.0):
-                self.verts.p[pid] += alpha_ccd * self.verts.v[pid]
-                self.verts.nc[pid] += 1
+            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, self.dHat, 1.0)
+            # print(alpha_ccd)
+            if alpha > alpha_ccd:
+                alpha = alpha_ccd
 
         for v in self.verts:
-            if v.nc > 1:
-                v.v = v.p / v.nc
+            v.v *= alpha
+
+
 
     @ti.kernel
     def apply_precondition(self, z: ti.template(), r: ti.template()):
@@ -942,8 +939,8 @@ class Solver:
         self.compute_aabb()
         self.compute_candidates_PT()
 
-        # for i in range(10):
-        #     self.modify_velocity()
+        for i in range(10):
+         self.modify_velocity()
 
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
@@ -955,8 +952,8 @@ class Solver:
             self.computeConstraintSet()
             # self.NewtonPCG()
             self.compute_search_dir()
-            # alpha = self.line_search()
-            alpha = 1.0
+            alpha = self.line_search()
+            # alpha = 1.0
             self.step_forward(alpha)
 
         self.computeNextState()
