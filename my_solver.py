@@ -100,17 +100,48 @@ class Solver:
         self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.mul_ans = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         test = 9 * self.num_verts ** 2
-        self.K = ti.linalg.SparseMatrixBuilder(3 * self.num_verts, 3 * self.num_verts)
+        # self.K = ti.linalg.SparseMatrixBuilder(3 * self.num_verts, 3 * self.num_verts)
         # self.A = ti.linalg.SparseMatrix(3 * self.num_verts, 3 * self.num_verts)
-        self.solver = ti.linalg.SparseSolver(solver_type="LLT")
+        # self.solver = ti.linalg.SparseSolver(solver_type="LLT")
         self.test_x = ti.ndarray(ti.f32, 3 * self.num_verts)
         self.grad = ti.ndarray(ti.f32, 3 * self.num_verts)
-        self.test()
+        # self.test()
 
     def test(self):
 
-        self.construct_hessian(self.K)
-        A = self.K.build()
+        self.v.fill(0.0)  # reuse `v` here as dx
+        self.r.copy_from(self.b)
+
+        self.apply_precondition(self.z, self.r)
+        self.p.copy_from(self.z)
+        r_2 = self.dot(self.z, self.r)
+        n_iter = 30  # CG iterations
+        epsilon = 1e-5
+        r_2_init = r_2
+        r_2_new = r_2
+
+        for iter in range(n_iter):
+
+            self.matrix_free_Ax(self.p)
+
+            alpha = r_2_new / self.dot(self.p, self.mul_ans)
+
+            self.add(self.v, self.v, alpha, self.p)
+            self.add(self.r, self.r, -alpha, self.mul_ans)
+            self.apply_precondition(self.z, self.r)
+
+            r_2 = r_2_new
+            r_2_new = self.dot(self.z, self.r)
+
+            if r_2_new <= r_2_init * epsilon ** 2:
+                break
+
+            beta = r_2_new / r_2
+
+            self.add(self.p, self.z, beta, self.p)
+
+    # self.construct_hessian(self.K)
+        # A = self.K.build()
         # print(self.A)
 
         # x = self.A @ self.grad
@@ -239,12 +270,7 @@ class Solver:
             v.h = v.m
 
     @ti.kernel
-    def evaluate_gradient_and_hessian(self, M: ti.types.sparse_matrix_builder()):
-
-        for v in self.verts:
-            M[3 * v.id + 0, 3 * v.id + 0] += v.m
-            M[3 * v.id + 1, 3 * v.id + 1] += v.m
-            M[3 * v.id + 2, 3 * v.id + 2] += v.m
+    def evaluate_gradient_and_hessian(self):
 
         for e in self.edges:
             ei, ej = e.verts[0].id, e.verts[1].id
@@ -254,22 +280,6 @@ class Solver:
             dir = (e.verts[0].x_k - e.verts[1].x_k).normalized(1e-4)
             e.verts[0].g -= grad
             e.verts[1].g += grad
-
-            M[3 * ei + 0, 3 * ei + 0] += coef
-            M[3 * ei + 1, 3 * ei + 1] += coef
-            M[3 * ei + 2, 3 * ei + 2] += coef
-
-            M[3 * ej + 0, 3 * ej + 0] += coef
-            M[3 * ej + 1, 3 * ej + 1] += coef
-            M[3 * ej + 2, 3 * ej + 2] += coef
-
-            M[3 * ei + 0, 3 * ej + 0] -= coef
-            M[3 * ei + 1, 3 * ej + 1] -= coef
-            M[3 * ei + 2, 3 * ej + 2] -= coef
-
-            M[3 * ej + 0, 3 * ei + 0] -= coef
-            M[3 * ej + 1, 3 * ei + 1] -= coef
-            M[3 * ej + 2, 3 * ei + 2] -= coef
 
 
         for cid in self.candidatesPT:
@@ -319,13 +329,6 @@ class Solver:
 
                     ld = barrier.compute_g_b(d, self.dHat)
 
-
-
-
-                    M[3 * v0 + 0, 3 * v0 + 0] += ld
-                    M[3 * v0 + 1, 3 * v0 + 1] += ld
-                    M[3 * v0 + 2, 3 * v0 + 2] += ld
-
             elif dtype == 3:
                 d = cu.d_PE(x0, x1, x2) # r-g
                 if d < self.dHat:
@@ -335,9 +338,7 @@ class Solver:
                     ld = (d - self.dHat) / sch
                     self.verts.g[v0] += ld * g0
                     self.verts.h[v0] += ld
-                    M[3 * v0 + 0, 3 * v0 + 0] += ld
-                    M[3 * v0 + 1, 3 * v0 + 1] += ld
-                    M[3 * v0 + 2, 3 * v0 + 2] += ld
+
 
             elif dtype == 4:
                 d = cu.d_PE(x0, x2, x3) #g-c
@@ -349,10 +350,6 @@ class Solver:
                     self.verts.g[v0] += ld * g0
                     self.verts.h[v0] += ld
 
-                    M[3 * v0 + 0, 3 * v0 + 0] += ld
-                    M[3 * v0 + 1, 3 * v0 + 1] += ld
-                    M[3 * v0 + 2, 3 * v0 + 2] += ld
-
             elif dtype == 5:
                 d = cu.d_PE(x0, x3, x1) #c-r
                 if d < self.dHat:
@@ -363,9 +360,7 @@ class Solver:
                     ld = (d - self.dHat) / sch
                     self.verts.g[v0] += ld * g0
                     self.verts.h[v0] += ld
-                    M[3 * v0 + 0, 3 * v0 + 0] += ld
-                    M[3 * v0 + 1, 3 * v0 + 1] += ld
-                    M[3 * v0 + 2, 3 * v0 + 2] += ld
+
 
             elif dtype == 6:            # inside triangle
                 d = cu.d_PT(x0, x1, x2, x3)
@@ -377,9 +372,6 @@ class Solver:
                     self.verts.g[v0] += ld * g0                       
                     self.verts.h[v0] += ld
 
-                    M[3 * v0 + 0, 3 * v0 + 0] += ld
-                    M[3 * v0 + 1, 3 * v0 + 1] += ld
-                    M[3 * v0 + 2, 3 * v0 + 2] += ld
 
 
 
@@ -496,10 +488,6 @@ class Solver:
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
 
-
-
-
-
         elif dtype == 2:
             d = cu.d_PP(x0, x3) #c
             if d < self.dHat:
@@ -510,9 +498,7 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # M[3 * v0 + 0, 3 * v0 + 0] += ld
-                # M[3 * v0 + 1, 3 * v0 + 1] += ld
-                # M[3 * v0 + 2, 3 * v0 + 2] += ld
+
 
         elif dtype == 3:
             d = cu.d_PE(x0, x1, x2) # r-g
@@ -523,9 +509,6 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # M[3 * v0 + 0, 3 * v0 + 0] += ld
-                # M[3 * v0 + 1, 3 * v0 + 1] += ld
-                # M[3 * v0 + 2, 3 * v0 + 2] += ld
 
         elif dtype == 4:
             d = cu.d_PE(x0, x2, x3) #g-c
@@ -537,9 +520,6 @@ class Solver:
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
 
-                # M[3 * v0 + 0, 3 * v0 + 0] += ld
-                # M[3 * v0 + 1, 3 * v0 + 1] += ld
-                # M[3 * v0 + 2, 3 * v0 + 2] += ld
 
         elif dtype == 5:
             d = cu.d_PE(x0, x3, x1) #c-r
@@ -551,9 +531,7 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
-                # M[3 * v0 + 0, 3 * v0 + 0] += ld
-                # M[3 * v0 + 1, 3 * v0 + 1] += ld
-                # M[3 * v0 + 2, 3 * v0 + 2] += ld
+
 
         elif dtype == 6:            # inside triangle
             d = cu.d_PT(x0, x1, x2, x3)
@@ -565,9 +543,6 @@ class Solver:
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
 
-                # M[3 * v0 + 0, 3 * v0 + 0] += ld
-                # M[3 * v0 + 1, 3 * v0 + 1] += ld
-                # M[3 * v0 + 2, 3 * v0 + 2] += ld
 
         return ld
 
@@ -1165,17 +1140,18 @@ class Solver:
     @ti.kernel
     def matrix_free_Ax(self, x: ti.template()):
         for v in self.verts:
-            self.mul_ans[v.id] = x[v.id] * self.verts.m[v.id] + v.h * x[v.id]
+            self.Ap[v.id] = self.verts.m[v.id] * x[v.id] + v.h * x[v.id]
 
-        ti.mesh_local(self.mul_ans, x)
+        ti.mesh_local(self.Ap, x)
         for e in self.edges:
             u = e.verts[0].id
             v = e.verts[1].id
             coeff = self.dtSq * self.k
-            self.mul_ans[u] += coeff * x[v]
-            self.mul_ans[v] += coeff * x[u]
+            self.Ap[u] += coeff * x[v]
+            self.Ap[v] += coeff * x[u]
 
     def NewtonPCG(self):
+
 
         self.verts.dx.fill(0.0)
         self.r.copy_from(self.verts.g)
@@ -1183,14 +1159,34 @@ class Solver:
         self.apply_precondition(self.z, self.r)
         self.p.copy_from(self.z)
         r_2 = self.dot(self.z, self.r)
-        n_iter = 3  # CG iterations
+
+        n_iter = 30  # CG iterations
+
         epsilon = 1e-5
+
         r_2_init = r_2
         r_2_new = r_2
 
         for iter in range(n_iter):
-           r_2_new = self.cg_iterate(r_2)
-           r_2 = self.cg_iterate(r_2_new)
+
+            self.matrix_free_Ax(self.p)
+
+            alpha = r_2_new / self.dot(self.p, self.Ap)
+
+            self.add(self.verts.dx, self.verts.dx, alpha, self.p)
+            self.add(self.r, self.r, -alpha, self.Ap)
+
+            self.apply_precondition(self.z, self.r)
+
+            r_2 = r_2_new
+            r_2_new = self.dot(self.z, self.r)
+
+            if r_2_new <= epsilon:
+                break
+
+            beta = r_2_new / r_2
+
+            self.add(self.p, self.z, beta, self.p)
 
 
         self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
@@ -1205,17 +1201,14 @@ class Solver:
         self.compute_candidates_PT()
 
         self.computeY()
-        # self.modify_velocity()
-        # for i in range(10):
-        # self.modify_velocity()
         self.verts.x_k.copy_from(self.verts.y)
 
         for i in range(self.max_iter):
             self.verts.g.fill(0.)
             self.verts.h.copy_from(self.verts.m)
-            self.evaluate_gradient_and_hessian(self.K)
-
-            self.compute_search_dir()
+            self.evaluate_gradient_and_hessian()
+            self.NewtonPCG()
+            # self.compute_search_dir()
             alpha = 1.0
             self.step_forward(alpha)
 
