@@ -1,7 +1,7 @@
 import taichi as ti
 
 
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cpu)
 n = 4
 K = ti.linalg.SparseMatrixBuilder(n, n, max_num_triplets=100)
 b = ti.ndarray(ti.f32, shape=n)
@@ -14,11 +14,25 @@ def fill(A: ti.types.sparse_matrix_builder(), b: ti.types.ndarray(), interval: t
         if i % interval == 0:
             b[i] += 1.0
 
+@ti.kernel
+def fill2(A: ti.types.sparse_matrix_builder(), b: ti.types.ndarray(), interval: ti.i32):
+    for i in range(n):
+        A[i, i] += 1.0
+
+    for i in range(n):
+        A[i, i] += 3.0
+
+
 fill(K, b, 3)
 
 A = K.build()
 print(">>>> Matrix A:")
 print(A)
+B = fill2(K, b, 3)
+
+B = K.build()
+print(B)
+
 print(">>>> Vector b:")
 print(b)
 # outputs:

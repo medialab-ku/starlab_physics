@@ -2,7 +2,7 @@ import taichi as ti
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cpu)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
