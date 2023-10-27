@@ -955,17 +955,18 @@ class Solver:
     def cg_iterate(self, r_2: ti.f32) -> ti.f32:
         # Ap = A * x
         for v in self.verts:
-            self.Ap[v.id] = self.p[v.id] * v.m + v.h * self.p[v.id]
+            self.Ap[v.id] = self.p[v.id] * v.m
 
         ti.mesh_local(self.Ap, self.p)
         for e in self.edges:
             u = e.verts[0].id
             v = e.verts[1].id
-            coeff = self.dtSq * self.k
-            self.Ap[u] += coeff * self.p[v]
-            self.Ap[v] += coeff * self.p[u]
+            d = e.hij @ (self.p[u] - self.p[v])
+            self.Ap[u] += d
+            self.Ap[v] -= d
 
         pAp = 0.0
+        ti.loop_config(block_dim=32)
         for v in self.verts:
             pAp += self.p[v.id].dot(self.Ap[v.id])
 
@@ -978,6 +979,7 @@ class Solver:
             self.z[v.id] = self.r[v.id] / v.h
 
         r_2_new = 0.0
+        ti.loop_config(block_dim=32)
         for v in self.verts:
             r_2_new += self.z[v.id].dot(self.r[v.id])
 
@@ -1002,20 +1004,6 @@ class Solver:
             self.Ap[v] -= d
 
 
-    # @ti.kernel
-    # def PCG_iter(self, rSq: ti.f32) -> ti.f32:
-    #
-    #     for v in self.verts:
-    #         self.Ap[v.id] = self.verts.m[v.id] * self.p[v.id] + v.h * self.p[v.id]
-    #
-    #     ti.mesh_local(self.Ap, self.p)
-    #     for e in self.edges:
-    #         u = e.verts[0].id
-    #         v = e.verts[1].id
-    #         coeff = self.dtSq * self.k
-    #         self.Ap[u] += coeff * x[v]
-    #         self.Ap[v] += coeff * x[u]
-
     def NewtonPCG(self):
 
 
@@ -1025,32 +1013,14 @@ class Solver:
         self.apply_precondition(self.z, self.r)
         self.p.copy_from(self.z)
         r_2 = self.dot(self.z, self.r)
-
         n_iter = 1000  # CG iterations
+        epsilon = 1e-5
 
-        epsilon = 1e-12
-
-        r_2_init = r_2
         r_2_new = r_2
         i = 0
         for iter in range(n_iter):
             i += 1
-
-            self.matrix_free_Ax(self.p)
-
-            alpha = r_2_new / self.dot(self.p, self.Ap)
-
-            self.add(self.verts.dx, self.verts.dx, alpha, self.p)
-            self.add(self.r, self.r, -alpha, self.Ap)
-
-            self.apply_precondition(self.z, self.r)
-
-            r_2 = r_2_new
-            r_2_new = self.dot(self.z, self.r)
-
-            beta = r_2_new / r_2
-
-            self.add(self.p, self.z, beta, self.p)
+            r_2_new = self.cg_iterate(r_2_new)
 
             if r_2_new <= epsilon:
                 break
