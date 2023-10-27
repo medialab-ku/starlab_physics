@@ -5,12 +5,6 @@ import ccd as ccd
 import ipc_utils as cu
 import barrier_functions as barrier
 
-# @ti.dataclass
-# class TP:
-#     tid: ti.uint32
-#     fid: ti.uint32
-
-
 
 @ti.data_oriented
 class Solver:
@@ -49,10 +43,24 @@ class Solver:
         self.face_indices_static = self.static_mesh.face_indices
         self.num_faces_static = len(self.static_mesh.mesh.faces)
 
-        self.rd_TP = ti.root.dynamic(ti.i, 1024, chunk_size=32)
+        self.rd_PT = ti.root.dynamic(ti.i, 1024, chunk_size=32)
         # self.rd_ee = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.candidatesPT = ti.field(ti.math.ivec3)
-        self.rd_TP.place(self.candidatesPT)
+        # TP = ti.types.struct(pid=ti.uint16, fid=ti.uint16, dtype=ti.uint16)
+        self.PT_type = ti.types.struct(pid=ti.uint16, tid=ti.uint16, d_type=ti.uint16,
+                                       h11=ti.math.mat3,
+                                       h12=ti.math.mat3,
+                                       h13=ti.math.mat3,
+                                       h14=ti.math.mat3,
+                                       h22=ti.math.mat3,
+                                       h23=ti.math.mat3,
+                                       h24=ti.math.mat3,
+                                       h33=ti.math.mat3,
+                                       h34=ti.math.mat3,
+                                       h44=ti.math.mat3)
+        self.candidatesPT = self.PT_type.field()
+        # S.place(x)
+        # self.candidatesPT = TP.field()
+        self.rd_PT.place(self.candidatesPT)
         # self.mmcvid_ee = ti.field(ti.math.ivec2)
         # self.S.place(self.mmcvid)
         # self.S.place(self.mmcvid_ee)
@@ -105,14 +113,18 @@ class Solver:
         # self.solver = ti.linalg.SparseSolver(solver_type="LLT")
         self.test_x = ti.ndarray(ti.f32, 3 * self.num_verts)
         self.grad = ti.ndarray(ti.f32, 3 * self.num_verts)
-        # self.test()
+        self.test()
 
 
 
     def reset(self):
+
         self.verts.x.copy_from(self.verts.x0)
         self.verts.v.fill(0.0)
 
+    @ti.kernel
+    def test(self):
+        print(self.candidatesPT.length())
 
     @ti.func
     def aabb_intersect(self, a_min: ti.math.vec3, a_max: ti.math.vec3,
@@ -135,7 +147,7 @@ class Solver:
                 a_min_t, a_max_t = self.faces_static.aabb_min[tid], self.faces_static.aabb_max[tid]
 
                 if self.aabb_intersect(a_min_p, a_max_p, a_min_t, a_max_t):
-                    self.candidatesPT.append(ti.math.ivec3(v.id, tid, 0))
+                    self.candidatesPT.append(self.PT_type(pid=v.id, tid=tid))
 
         # print(self.candidatesPT.length())
 
@@ -220,13 +232,11 @@ class Solver:
     @ti.kernel
     def evaluate_gradient_and_hessian(self):
 
+        coef = self.dtSq * self.k
         for e in self.edges:
-            ei, ej = e.verts[0].id, e.verts[1].id
             xij = e.verts[0].x_k - e.verts[1].x_k
             lij = xij.norm()
-            coef = self.dtSq * self.k
             grad = coef * (xij - e.l0 * xij.normalized(1e-6))
-            dir = (e.verts[0].x_k - e.verts[1].x_k).normalized(1e-4)
             e.verts[0].g -= grad
             e.verts[1].g += grad
             e.verts[0].h += coef
@@ -242,9 +252,11 @@ class Solver:
             hij = U @ sig @ V.transpose()
             e.hij = hij
 
-        # for cid in self.candidatesPT:
-        #     pid, fid, d_type = self.candidatesPT[cid]
-        #     ld = self.compute_gradient_and_hessian_PT(pid, fid)
+        for cid in self.candidatesPT:
+            pid = self.candidatesPT[cid].pid
+            tid = self.candidatesPT[cid].tid
+            d_type = self.compute_gradient_and_hessian_PT(pid, tid)
+            self.candidatesPT[cid].d_type = d_type
 
     @ti.kernel
     def compute_search_dir(self):
@@ -327,6 +339,8 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+            else:
+                dtype = -1
 
 
 
@@ -340,6 +354,8 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+            else:
+                dtype = -1
 
         elif dtype == 2:
             d = cu.d_PP(x0, x3) #c
@@ -351,6 +367,8 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+            else:
+                dtype = -1
 
 
         elif dtype == 3:
@@ -362,6 +380,8 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+            else:
+                dtype = -1
 
         elif dtype == 4:
             d = cu.d_PE(x0, x2, x3) #g-c
@@ -372,6 +392,8 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+            else:
+                dtype = -1
 
 
         elif dtype == 5:
@@ -384,6 +406,8 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+            else:
+                dtype = -1
 
 
         elif dtype == 6:            # inside triangle
@@ -395,9 +419,10 @@ class Solver:
                 ld = (d - self.dHat) / sch
                 self.verts.g[v0] += ld * g0
                 self.verts.h[v0] += ld
+            else:
+                dtype = -1
 
-
-        return ld
+        return dtype
 
     @ti.func
     def compute_constraint_energy_PT(self, x: ti.template(), pid: ti.int32, tid: ti.int32) -> ti.f32:
@@ -811,14 +836,14 @@ class Solver:
                 break
         return alpha
 
-    @ti.kernel
-    def compute_collision_energy(self, x: ti.template()) -> ti.f32:
-
-        collision_e_total = 0.0
-        for cid in self.candidatesPT:
-            pid, fid, d_type = self.candidatesPT[cid]
-            collision_e_total += self.compute_constraint_energy_PT(x, pid, fid)
-        return collision_e_total
+    # @ti.kernel
+    # def compute_collision_energy(self, x: ti.template()) -> ti.f32:
+    #
+    #     collision_e_total = 0.0
+    #     for cid in self.candidatesPT:
+    #         pid, fid, d_type = self.candidatesPT[cid]
+    #         collision_e_total += self.compute_constraint_energy_PT(x, pid, fid)
+    #     return collision_e_total
     @ti.kernel
     def compute_spring_energy(self, x: ti.template()) -> ti.f32:
 
@@ -1004,7 +1029,7 @@ class Solver:
             self.Ap[v] -= d
 
 
-    def NewtonPCG(self):
+    def newton_pcg(self):
 
 
         self.verts.dx.fill(0.0)
@@ -1012,20 +1037,22 @@ class Solver:
 
         self.apply_precondition(self.z, self.r)
         self.p.copy_from(self.z)
+
         r_2 = self.dot(self.z, self.r)
+
         n_iter = 1000  # CG iterations
         epsilon = 1e-5
 
         r_2_new = r_2
-        i = 0
+        # i = 0
         for iter in range(n_iter):
-            i += 1
+            # i += 1
             r_2_new = self.cg_iterate(r_2_new)
 
             if r_2_new <= epsilon:
                 break
 
-        print(f'cg iter: {i}')
+        # print(f'cg iter: {i}')
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
 
@@ -1040,13 +1067,11 @@ class Solver:
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
 
-        for i in range(1):
+        for i in range(2):
             self.verts.g.fill(0.)
             self.verts.h.copy_from(self.verts.m)
             self.evaluate_gradient_and_hessian()
-            # self.compute_search_dir()
-
-            self.NewtonPCG()
+            self.newton_pcg()
             alpha = 1.0
             self.step_forward(alpha)
 
