@@ -32,6 +32,7 @@ class Solver:
         self.edges = self.my_mesh.mesh.edges
         self.num_edges = len(self.edges)
         self.faces = self.my_mesh.mesh.faces
+         
         self.num_faces = len(self.my_mesh.mesh.faces)
         self.face_indices = self.my_mesh.face_indices
 
