@@ -39,7 +39,7 @@ class Mesh:
         self.mesh.edges.place({'l0': ti.f32,
                                'ld': ti.f32,
                                'vid': ti.math.ivec2,
-                               'hij': ti.f32,
+                               'hij': ti.math.mat3,
                                'aabb_min': ti.math.vec3,
                                'aabb_max': ti.math.vec3}) # bounding sphere radius
 

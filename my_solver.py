@@ -232,15 +232,14 @@ class Solver:
             e.verts[0].h += coef
             e.verts[1].h += coef
 
-            hij = coef
-                          # - e.l0 / lij * (self.id3 - (self.abT(xij, xij)) / (lij ** 2)))
-            # U, sig, V = ti.svd(hij)
-            #
-            # for i in range(3):
-            #     if sig[i, i] < 1e-6:
-            #         sig[i, i] = 1e-6
-            #
-            # hij = U @ sig @ V.transpose()
+            hij = coef * (self.id3 - e.l0 / lij * (self.id3 - (self.abT(xij, xij)) / (lij ** 2)))
+            U, sig, V = ti.svd(hij)
+
+            for i in range(3):
+                if sig[i, i] < 1e-6:
+                    sig[i, i] = 1e-6
+
+            hij = U @ sig @ V.transpose()
             e.hij = hij
 
         # for cid in self.candidatesPT:
@@ -992,15 +991,15 @@ class Solver:
     @ti.kernel
     def matrix_free_Ax(self, x: ti.template()):
         for v in self.verts:
-            self.Ap[v.id] = self.verts.m[v.id] * x[v.id] + v.h * x[v.id]
+            self.Ap[v.id] = self.verts.m[v.id] * x[v.id]
 
         ti.mesh_local(self.Ap, x)
         for e in self.edges:
             u = e.verts[0].id
             v = e.verts[1].id
-            d = e.hij
-            self.Ap[u] -= e.hij * x[v]
-            self.Ap[v] -= e.hij * x[u]
+            d = e.hij @ (x[u] - x[v])
+            self.Ap[u] += d
+            self.Ap[v] -= d
 
 
     # @ti.kernel
