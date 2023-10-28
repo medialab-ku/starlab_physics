@@ -21,8 +21,8 @@ dt = 0.003  # Larger dt might lead to unstable results.
 # static_mesh =Mesh("obj_models/cube.obj", scale=0.1, rot=ti.math.vec3(90.0, 0.0, 0.0), trans=ti.math.vec3(0.3, 0.2, 0.3))
 
 # case: face vs. vertex
-# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
-# static_mesh = Mesh("obj_models/square.obj", scale=0.4, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
+mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.3, 0.5, 0.3))
+static_mesh = Mesh("obj_models/square.obj", scale=0.4, rot=ti.math.vec3(180.0, 0.0, 0.0), trans=ti.math.vec3(0.2, 0.2, 0.3))
 
 
 # case: face vs. face
@@ -104,9 +104,9 @@ dt = 0.003  # Larger dt might lead to unstable results.
 # mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.5, 0.7, 0.6))
 # static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
 #
-#
-mesh = Mesh("obj_models/square_huge.obj", scale=0.2, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 1.3, 0.5))
-static_mesh =Mesh("obj_models/square_big.obj", scale=0.4, rot=ti.math.vec3(0.0, 10.0, 0.0), trans=ti.math.vec3(0.5, 0.0, 0.5))
+# #
+# mesh = Mesh("obj_models/square_huge.obj", scale=0.2, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 1.3, 0.5))
+# static_mesh =Mesh("obj_models/square_big.obj", scale=0.4, rot=ti.math.vec3(0.0, 10.0, 0.0), trans=ti.math.vec3(0.5, 0.0, 0.5))
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
