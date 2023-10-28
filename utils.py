@@ -8,6 +8,8 @@ SphereType = ti.types.struct(center=ti.math.vec3, radius=float)
 x = SphereType.field()
 S.place(x)
 
+test = ti.Matrix.field
+
 @ti.kernel
 def test():
 
