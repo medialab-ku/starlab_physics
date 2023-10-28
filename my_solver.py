@@ -12,7 +12,7 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  bottom,
-                 k=1e4,
+                 k=1e6,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -21,7 +21,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -9.81
+        self.gravity = -1.0
         self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
@@ -45,13 +45,15 @@ class Solver:
         self.num_faces_static = len(self.static_mesh.mesh.faces)
 
         self.rd_PT = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        # self.rd_ee = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        # TP = ti.types.struct(pid=ti.uint16, fid=ti.uint16, dtype=ti.uint16)
-        self.PT_type = ti.types.struct(pid=ti.uint16, tid=ti.uint16, d_type=ti.uint16, ld=ti.f32)
+        self.PT_type = ti.types.struct(pid=ti.uint16, tid=ti.uint16)
         self.candidatesPT = self.PT_type.field()
-        # S.place(x)
-        # self.candidatesPT = TP.field()
         self.rd_PT.place(self.candidatesPT)
+
+        self.rd_PC = ti.root.dynamic(ti.i, 1024, chunk_size=32)
+        self.PC_type = ti.types.struct(pid=ti.uint16, h=ti.f32)
+        self.candidatesPC = self.PC_type.field()
+        self.rd_PC.place(self.candidatesPC)
+        self.kappa = 1e5
         # self.mmcvid_ee = ti.field(ti.math.ivec2)
         # self.S.place(self.mmcvid)
         # self.S.place(self.mmcvid_ee)
@@ -138,7 +140,7 @@ class Solver:
                 a_min_t, a_max_t = self.faces_static.aabb_min[tid], self.faces_static.aabb_max[tid]
 
                 if self.aabb_intersect(a_min_p, a_max_p, a_min_t, a_max_t):
-                    self.candidatesPT.append(self.PT_type(pid=v.id, tid=tid, d_type=-1, ld=0.0))
+                    self.candidatesPT.append(self.PT_type(pid=v.id, tid=tid))
 
         # print(self.candidatesPT.length())
 
@@ -201,18 +203,13 @@ class Solver:
 
     @ti.kernel
     def computeNextState(self):
+
         for v in self.verts:
-            v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
+            v.v = (v.x_k - v.x) / self.dt
             v.x = v.x_k
 
-        center = ti.math.vec3(0.5, 0.5, 0.5)
-        rad = 0.4
-        # # coef = self.dtSq * 1e6
-        # for v in self.verts:
-        #     dist = (v.x - center).norm()
-        #     nor = (v.x - center).normalized(1e-12)
-        #     if dist < rad:
-        #         v.x = center + rad * nor
+
+
 
     @ti.kernel
     def evaluateMomentumConstraint(self):
@@ -222,7 +219,7 @@ class Solver:
 
     @ti.kernel
     def evaluate_gradient_and_hessian(self):
-
+        self.candidatesPC.deactivate()
         coef = self.dtSq * self.k
         for e in self.edges:
             xij = e.verts[0].x_k - e.verts[1].x_k
@@ -243,17 +240,18 @@ class Solver:
             hij = U @ sig @ V.transpose()
             e.hij = hij
 
-        for cid in self.candidatesPT:
-            pid = self.candidatesPT[cid].pid
-            tid = self.candidatesPT[cid].tid
-            d_type, ld = self.compute_gradient_and_hessian_PT(pid, tid)
-            self.candidatesPT[cid].d_type = d_type
-            self.candidatesPT[cid].ld = ld
-
-    @ti.kernel
-    def compute_search_dir(self):
+        normal = ti.math.vec3([0, 1, 0.1])
+        normal = normal.normalized(eps=1e-6)
+        k = self.dtSq * 1e4
         for v in self.verts:
-            v.dx = v.g / v.h
+            center = ti.math.vec3([0.5, 0.8, 0.5])
+            dist = (v.x - center).dot(normal)
+            if dist < 0.0:
+                p = v.x - dist * normal
+                v.g -= k * (v.x - p)
+                v.h += k
+                self.candidatesPC.append(self.PC_type(pid=v.id, h=k))
+
 
 
     @ti.kernel
@@ -264,14 +262,22 @@ class Solver:
             else:
                 v.x_k += step_size * v.dx
 
-        center = ti.math.vec3(0.5, 0.5, 0.5)
-        rad = 0.4
-        # coef = self.dtSq * 1e6
+        # center = ti.math.vec3([0.5, 0.5, 0.5])
+        # rad = 0.4
+        # k = 1e6 * self.dtSq
         # for v in self.verts:
-        #     dist = (v.x_k - center).norm()
-        #     nor = (v.x_k - center).normalized(1e-12)
-        #     if dist < rad:
-        #         v.x_k = center + rad * nor
+        #     len = (v.x_k - center).norm()
+        #     # if len < rad:
+        #     normal = (v.x_k - center).normalized()
+        #     p = center + rad * normal
+        #     v.x_k = p
+        # center = ti.math.vec3(0.5, 0.5, 0.5)
+        # rad = 0.4
+        # # coef = self.dtSq * 1e6
+        # for v in self.verts:
+        #     if v.x_k.y < 0.4:
+        #         v.x_k.y = 0.4
+
 
 
 
@@ -950,7 +956,98 @@ class Solver:
                     self.verts.g[pid] += ld * g0
                     self.verts.h[pid] += ld
 
+    @ti.kernel
+    def handle_collisions(self):
 
+        self.verts.nc.fill(0)
+        self.verts.p.fill(0.0)
+        for cid in self.candidatesPT:
+            pid = self.candidatesPT[cid].pid
+            fid = self.candidatesPT[cid].tid
+
+            v0 = pid
+            x0 = self.verts.x_k[pid]
+            dx0 = self.verts.dx[fid]
+
+            v1 = self.face_indices_static[3 * fid + 0]
+            v2 = self.face_indices_static[3 * fid + 1]
+            v3 = self.face_indices_static[3 * fid + 2]
+
+            x1 = self.verts_static.x[v1]
+            x2 = self.verts_static.x[v2]
+            x3 = self.verts_static.x[v3]
+
+            dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
+
+            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, self.dHat, 1.0)
+
+            if alpha_ccd < 0.0:
+                # x0 += dx0
+                dtype = cu.d_type_PT(x0, x1, x2, x3)
+                if dtype == 0:  # r
+                    self.verts.p[v0] += x1
+                    self.verts.nc[v0] += 1
+
+                elif dtype == 1:
+                    self.verts.p[v0] += x2
+                    self.verts.nc[v0] += 1
+
+                elif dtype == 2:
+
+                    self.verts.p[v0] += x3
+                    self.verts.nc[v0] += 1
+
+                elif dtype == 3:
+
+                    x12 = x2 - x1
+                    x10 = x0 - x1
+
+                    xp1 = x12.dot(x10.normalized(1e-6))
+                    p = x1 + xp1
+
+                    self.verts.p[v0] += p
+                    self.verts.nc[v0] += 1
+
+                elif dtype == 4:
+
+                    x23 = x3 - x2
+                    x20 = x0 - x2
+
+                    xp2 = x23.dot(x20.normalized(1e-6))
+                    p = x1 + xp2
+
+                    self.verts.p[v0] += p
+                    self.verts.h[v0] += 1
+
+                elif dtype == 5:
+                    x31 = x1 - x3
+                    x30 = x0 - x3
+
+                    xp3 = x31.dot(x30.normalized(1e-6))
+                    p = x1 + xp3
+
+                    self.verts.p[v0] += p
+                    self.verts.nc[v0] += 1
+
+                elif dtype == 6:  # inside triangle
+
+                    x12 = x2 - x1
+                    x13 = x3 - x1
+                    x03 = x0 - x1
+
+                    nor = x12.cross(x13)
+                    nor = nor.normalized(1e-6)
+
+                    p = x0 + nor.dot(x03) * nor
+
+
+                    self.verts.p[v0] += p
+                    self.verts.nc[v0] += 1
+
+
+                for v in self.verts:
+                    if v.nc > 1:
+                        v.x_k = v.p / v.nc
 
     @ti.kernel
     def apply_precondition(self, z: ti.template(), r: ti.template()):
@@ -972,14 +1069,10 @@ class Solver:
             self.Ap[u] += d
             self.Ap[v] -= d
 
-        for cid in self.candidatesPT:
-            pid = self.candidatesPT[cid].pid
-            tid = self.candidatesPT[cid].tid
-            d_type = self.candidatesPT[cid].d_type
-            ld = self.candidatesPT[cid].ld
-
-            if d_type > 0:
-                self.Ap[pid] += ld * self.p[pid]
+        for cid in self.candidatesPC:
+            pid = self.candidatesPC[cid].pid
+            h = self.candidatesPC[cid].h
+            self.Ap[pid] += h * self.p[pid]
 
 
         pAp = 0.0
@@ -1010,7 +1103,6 @@ class Solver:
 
     def newton_pcg(self):
 
-
         self.verts.dx.fill(0.0)
         self.r.copy_from(self.verts.g)
 
@@ -1019,19 +1111,19 @@ class Solver:
 
         r_2 = self.dot(self.z, self.r)
 
-        n_iter = 1000  # CG iterations
-        epsilon = 1e-5
+        n_iter = 10000  # CG iterations
+        epsilon = 1e-12
 
         r_2_new = r_2
-        # i = 0
+        i = 0
         for iter in range(n_iter):
-            # i += 1
+            i += 1
             r_2_new = self.cg_iterate(r_2_new)
 
             if r_2_new <= epsilon:
                 break
 
-        # print(f'cg iter: {i}')
+        print(f'cg iter: {i}')
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
 
@@ -1040,18 +1132,19 @@ class Solver:
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.computeVtemp()
 
-        self.compute_aabb()
-        self.compute_candidates_PT()
+        # self.compute_aabb()
+        # self.compute_candidates_PT()
 
         self.computeY()
         self.verts.x_k.copy_from(self.verts.y)
 
-        for i in range(2):
+        for i in range(1):
             self.verts.g.fill(0.)
             self.verts.h.copy_from(self.verts.m)
             self.evaluate_gradient_and_hessian()
             self.newton_pcg()
             alpha = 1.0
+            # self.handle_collisions()
             self.step_forward(alpha)
 
         self.computeNextState()
