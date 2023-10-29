@@ -147,10 +147,10 @@ class Solver:
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            if v.id == 61 or v.id == 78:
-                v.v = ti.math.vec3(0.0, 0.0, 0.0)
-            else:
-                v.v += (v.f_ext / v.m) * self.dt
+            # if v.id == 61 or v.id == 78:
+            #     v.v = ti.math.vec3(0.0, 0.0, 0.0)
+            # else:
+            v.v += (v.f_ext / v.m) * self.dt
 
     @ti.kernel
     def globalSolveVelocity(self):
@@ -262,10 +262,10 @@ class Solver:
     @ti.kernel
     def step_forward(self, step_size: ti.f32):
         for v in self.verts:
-            if v.id == 61 or v.id == 78:
-                v.x_k = v.x_k
-            else:
-                v.x_k += step_size * v.dx
+            # if v.id == 61 or v.id == 78:
+            #     v.x_k = v.x_k
+            # else:
+            v.x_k += step_size * v.dx
 
         # center = ti.math.vec3([0.5, 0.5, 0.5])
         # rad = 0.4
@@ -330,108 +330,102 @@ class Solver:
         x2 = self.verts_static.x[v2]   #g
         x3 = self.verts_static.x[v3]   #c
 
-
-        f_normal = (x2 - x1).cross(x3 - x1)
-        f_normal = f_normal.normalized(1e-4)
-
         ld = 0.0
         dtype = cu.d_type_PT(x0, x1, x2, x3)
-        # if dtype == 0:           #r
-        #     d = cu.d_PP(x0, x1)
-        #     if d < self.dHat:
-        #         g0, g1 = cu.g_PP(x0, x1)
-        #
-        #         ld = barrier.compute_g_b(d, self.dHat)
-        #         sch = g0.dot(g0) / self.verts.h[v0]
-        #         ld = (d - self.dHat) / sch
-        #         self.verts.g[v0] += ld * g0
-        #         self.verts.h[v0] += ld
-        #     else:
-        #         dtype = -1
-        #
-        #
-        #
-        # elif dtype == 1:
-        #     d = cu.d_PP(x0, x2)  #g
-        #     if d < self.dHat:
-        #         g0, g2 = cu.g_PP(x0, x2)
-        #
-        #         ld = barrier.compute_g_b(d, self.dHat)
-        #         sch = g0.dot(g0) / self.verts.h[v0]
-        #         ld = (d - self.dHat) / sch
-        #         self.verts.g[v0] += ld * g0
-        #         self.verts.h[v0] += ld
-        #     else:
-        #         dtype = -1
-        #
-        # elif dtype == 2:
-        #     d = cu.d_PP(x0, x3) #c
-        #     if d < self.dHat:
-        #         g0, g3 = cu.g_PP(x0, x3)
-        #
-        #         ld = barrier.compute_g_b(d, self.dHat)
-        #         sch = g0.dot(g0) / self.verts.h[v0]
-        #         ld = (d - self.dHat) / sch
-        #         self.verts.g[v0] += ld * g0
-        #         self.verts.h[v0] += ld
-        #     else:
-        #         dtype = -1
-        #
-        #
-        # elif dtype == 3:
-        #     d = cu.d_PE(x0, x1, x2) # r-g
-        #     if d < self.dHat:
-        #         g0, g1, g2 = cu.g_PE(x0, x1, x2)
-        #         ld = barrier.compute_g_b(d, self.dHat)
-        #         sch = g0.dot(g0) / self.verts.h[v0]
-        #         ld = (d - self.dHat) / sch
-        #         self.verts.g[v0] += ld * g0
-        #         self.verts.h[v0] += ld
-        #     else:
-        #         dtype = -1
-        #
-        # elif dtype == 4:
-        #     d = cu.d_PE(x0, x2, x3) #g-c
-        #     if d < self.dHat:
-        #         g0, g2, g3 = cu.g_PE(x0, x1, x2)
-        #         ld = barrier.compute_g_b(d, self.dHat)
-        #         sch = g0.dot(g0) / self.verts.h[v0]
-        #         ld = (d - self.dHat) / sch
-        #         self.verts.g[v0] += ld * g0
-        #         self.verts.h[v0] += ld
-        #     else:
-        #         dtype = -1
-        #
-        #
-        # elif dtype == 5:
-        #     d = cu.d_PE(x0, x3, x1) #c-r
-        #     if d < self.dHat:
-        #         g0, g3, g1 = cu.g_PE(x0, x3, x1)
-        #
-        #         ld = barrier.compute_g_b(d, self.dHat)
-        #         sch = g0.dot(g0) / self.verts.h[v0]
-        #         ld = (d - self.dHat) / sch
-        #         self.verts.g[v0] += ld * g0
-        #         self.verts.h[v0] += ld
-        #     else:
-        #         dtype = -1
+        if dtype == 0:           #r
+            d = (x0 - x1).norm()
+            # d = cu.d_PP(x0, x1)
+            if d < self.dHat:
+                normal = (x0 - x1).normalized()
+                ld = self.dtSq * 1e3
+                p = x1 + self.dHat * normal
+                self.verts.g[v0] += ld * (p - x0)
+                self.verts.h[v0] += ld
 
 
-        if dtype == 6:            # inside triangle
-            d = f_normal.dot(x0 - x1)
+        elif dtype == 1:
+            d = (x0 - x2).norm()
+            # d = cu.d_PP(x0, x1)
+            if d < self.dHat:
+                normal = (x0 - x1).normalized()
+                p = x1 + self.dHat * normal
+                ld = self.dtSq * 1e3
+                self.verts.g[v0] += ld * (p - x0)
+                self.verts.h[v0] += ld
+
+        elif dtype == 2:
+            d = (x0 - x3).norm()
+            # d = cu.d_PP(x0, x1)
+            if d < self.dHat:
+                normal = (x0 - x1).normalized()
+                p = x1 + self.dHat * normal
+                ld = self.dtSq * 1e3
+                self.verts.g[v0] += ld * (p - x0)
+                self.verts.h[v0] += ld
+        #
+        #
+        elif dtype == 3:
+            dir = (x2 - x1).normalized(1e-4)
+            p = (x0 - x1).dot(dir) * dir + x1
+            d = (x0 - p).norm()
+            # d = cu.d_PE(x0, x3, x1) #c-r
+            if d < self.dHat:
+                normal = (x0 - p).normalized(1e-4)
+                ld = self.dtSq * 1e3
+                p += self.dHat * normal
+                self.verts.g[v0] += ld * (p - x0)
+                self.verts.h[v0] += ld
+
+        elif dtype == 4:
+                dir = (x3 - x2).normalized(1e-4)
+                p = (x0 - x2).dot(dir) * dir + x2
+                d = (x0 - p).norm()
+                # d = cu.d_PE(x0, x3, x1) #c-r
+                if d < self.dHat:
+                    normal = (x0 - p).normalized(1e-4)
+                    ld = self.dtSq * 1e3
+                    p += self.dHat * normal
+                    self.verts.g[v0] += ld * (p - x0)
+                    self.verts.h[v0] += ld
+
+        elif dtype == 5:
+            dir = (x1 - x3).normalized(1e-4)
+            p = (x0 - x3).dot(dir) * dir + x3
+            d = (x0 - p).norm()
+            # d = cu.d_PE(x0, x3, x1) #c-r
+            if d < self.dHat:
+                normal = (x0 - p).normalized(1e-4)
+                ld = self.dtSq * 1e3
+                p += self.dHat * normal
+                self.verts.g[v0] += ld * (p - x0)
+                self.verts.h[v0] += ld
+
+
+        elif dtype == 6:            # inside triangle
+
+            normal = (x2 - x1).cross(x3 - x1)
+            normal = normal.normalized(1e-4)
+            d = normal.dot(x0 - x1)
             if d < 0:
-                f_normal = -f_normal
+                f_normal = -normal
             d = ti.abs(d)
             # d = cu.d_PT(x0, x1, x2, x3)  # c-r
             if d < self.dHat:
-                print("test")
-                ld = self.dtSq * 1e6
+                # print("test")
+                b = barrier.compute_b(d, self.dHat)
+                ld = self.dtSq * 1e7
                 # g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
-                p = x0 + (self.dHat - d) * f_normal
-                # sch = g0.dot(g0) / self.verts.h[v0]
-                # ld = (d - self.dHat) / sch
-                self.verts.g[v0] -= ld * (p - x0)
+                p = x0 - d * normal
+
+                p += self.dHat * normal
+                g0 = (p - x0)
+
+                Ainv_g = self.verts.g[v0] / self.verts.h[v0]
+                sch = g0.dot(g0) / self.verts.h[v0]
+                # ld = (d - self.dHat - Ainv_g.dot(g0)) / sch + self.dtSq * 1e5
+                self.verts.g[v0] += ld * (p - x0)
                 self.verts.h[v0] += ld
+
         return ld
 
     @ti.func
@@ -1148,7 +1142,7 @@ class Solver:
             self.computeVtemp()
 
             self.compute_aabb()
-            self.compute_candidates_PT()
+            # self.compute_candidates_PT()
 
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
