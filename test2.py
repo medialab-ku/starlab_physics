@@ -2,7 +2,7 @@ import taichi as ti
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(arch=ti.cuda, device_memory_GB=4)
+ti.init(arch=ti.cuda, device_memory_GB=8)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
@@ -102,8 +102,12 @@ dt = 0.01  # Larger dt might lead to unstable results.
 # mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(90, 0.0, 0.0),trans=ti.math.vec3(1.5, 0.7, 0.6))
 # static_mesh = Mesh("obj_models/triangle.obj", scale=0.5, rot=ti.math.vec3(0.0, 0.0, 0.0),trans=ti.math.vec3(0.5, 0.1, 0.5))
 
-mesh = Mesh("obj_models/square_big.obj", scale=0.08, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.8, 0.5))
-static_mesh =Mesh("obj_models/sphere1K.obj", scale=2.0, rot=ti.math.vec3(45.0, 0.0, 0.0), trans=ti.math.vec3(0.5, -1.0, 0.5))
+# mesh = Mesh("obj_models/clubbing_dress.obj", scale=1.0, trans=ti.math.vec3(0, 0, 0), rot=ti.math.vec3(90.0, 0.0, 0.0))
+# static_mesh = Mesh("seq_models/Kyra_DVStandingClubbing_modified/Kyra_DVStandClubbing_0000.obj", scale=1, trans=ti.math.vec3(0, 0, 0), rot=ti.math.vec3(90.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/kyra_model_reduced.obj", scale=1, trans=ti.math.vec3(0, 0, 0), rot=ti.math.vec3(90.0, 0.0, 0.0))
+
+# mesh = Mesh("obj_models/square_huge.obj", scale=0.08, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, 0.8, 0.5))
+# static_mesh =Mesh("obj_models/plane.obj", scale=2.0, rot=ti.math.vec3(0.0, 0.0, 0.0), trans=ti.math.vec3(0.5, -1.0, 0.5))
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
@@ -114,8 +118,8 @@ center[0] = ti.math.vec3(0.5, 0.5, 0.5)
 debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
 #
-# mesh = Mesh("obj_models/square_huge.obj", scale=0.4, trans=ti.math.vec3(0, 1, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# static_mesh = Mesh("obj_models/sphere1K.obj", scale=3.0, trans=ti.math.vec3(0, -2, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/square_huge.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+static_mesh = Mesh("obj_models/sphere1K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 @ti.kernel
 def init_color():
@@ -160,11 +164,11 @@ while window.running:
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
     # scene.particles(centers=center, radius=0.3, color=(1, 0, 0))
-    # scene.particles(sim.verts.x, radius=0.01, color=(0, 1, 0))
+    scene.particles(sim.verts.x, radius=sim.radius, color=(1, 0.5, 0))
     # scene.particles(sim.intersect, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
-    scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
+    scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0))
+    # scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
+    # scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
     scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(x1, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(sim.p, width=0.5, indices=debug_edge_indices, color=(1., 0., 0.))

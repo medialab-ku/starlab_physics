@@ -21,7 +21,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -1.0
+        self.gravity = -9.81
         self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
@@ -44,54 +44,30 @@ class Solver:
         self.face_indices_static = self.static_mesh.face_indices
         self.num_faces_static = len(self.static_mesh.mesh.faces)
 
-        self.rd_PT = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.PT_type = ti.types.struct(pid=ti.uint16, tid=ti.uint16, ld=ti.f32)
-        self.candidatesPT = self.PT_type.field()
-        self.rd_PT.place(self.candidatesPT)
-
-        self.rd_PC = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.PC_type = ti.types.struct(pid=ti.uint16, h=ti.f32)
-        self.candidatesPC = self.PC_type.field()
-        self.rd_PC.place(self.candidatesPC)
-        self.kappa = 1e5
-        # self.mmcvid_ee = ti.field(ti.math.ivec2)
-        # self.S.place(self.mmcvid)
-        # self.S.place(self.mmcvid_ee)
         self.dHat = 1e-3
-        # self.test()
-        #
-        # self.normals = ti.Vector.field(n=3, dtype = ti.f32, shape = 2 * self.num_faces)
-        self.normals_static = ti.Vector.field(n=3, dtype=ti.f32, shape=2 * self.num_faces_static)
 
         self.radius = 0.01
         self.contact_stiffness = 1e3
-        self.damping_factor = 0.0
-        self.grid_n = 128
-        self.grid_particles_list = ti.field(ti.i32)
-        self.grid_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
-        self.partical_array = self.grid_block.dynamic(ti.l, len(self.my_mesh.mesh.verts))
-        self.partical_array.place(self.grid_particles_list)
-        self.grid_particles_count = ti.field(ti.i32)
-        ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
-        self.x_t = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
+        self.damping_factor = 1e-5
+        self.grid_n = 32
+        # self.grid_particles_list = ti.field(ti.i32)
+        # self.grid_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
+        # self.partical_array = self.grid_block.dynamic(ti.l, self.num_verts_static)
+        # self.partical_array.place(self.grid_particles_list)
+        # self.grid_particles_count = ti.field(ti.i32)
+        # ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
 
-        self.dist_tol = 1e-2
+        self.list_head = ti.field(dtype=ti.i32, shape=self.grid_n ** 3)
+        self.list_cur = ti.field(dtype=ti.i32, shape=self.grid_n ** 3)
+        self.list_tail = ti.field(dtype=ti.i32, shape=self.grid_n ** 3)
 
-        self.p1 = ti.math.vec3([0., 0., 0.])
-        self.p2 = ti.math.vec3([0., 0., 0.])
-        self.alpha = ti.math.vec3([0., 0., 0.])
-
-        self.p = ti.Vector.field(n=3, shape=2, dtype=ti.f32)
-
-        self.intersect = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.verts))
-
+        self.grain_count = ti.field(dtype=ti.i32,
+                               shape=(self.grid_n, self.grid_n, self.grid_n),
+                               name="grain_count")
+        self.column_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="column_sum")
+        self.prefix_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="prefix_sum")
+        self.particle_id = ti.field(dtype=ti.i32, shape=self.num_verts, name="particle_id")
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
-        # self.setRadius()
-        # print(f"radius: {self.radius}")
-        #
-        # print(f'{self.edges.vid}')
-        # print(f'{self.edges_static.vid[4]}')
-        # self.reset()
 
         # for PCG
         self.b = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
@@ -99,15 +75,6 @@ class Solver:
         self.p = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.Ap = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
-        self.mul_ans = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
-        test = 9 * self.num_verts ** 2
-        # self.K = ti.linalg.SparseMatrixBuilder(3 * self.num_verts, 3 * self.num_verts)
-        # self.A = ti.linalg.SparseMatrix(3 * self.num_verts, 3 * self.num_verts)
-        # self.solver = ti.linalg.SparseSolver(solver_type="LLT")
-        self.test_x = ti.ndarray(ti.f32, 3 * self.num_verts)
-        self.grad = ti.ndarray(ti.f32, 3 * self.num_verts)
-        self.test()
-
 
 
     def reset(self):
@@ -115,9 +82,6 @@ class Solver:
         self.verts.x.copy_from(self.verts.x0)
         self.verts.v.fill(0.0)
 
-    @ti.kernel
-    def test(self):
-        print(self.candidatesPT.length())
 
     @ti.func
     def aabb_intersect(self, a_min: ti.math.vec3, a_max: ti.math.vec3,
@@ -147,10 +111,10 @@ class Solver:
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            # if v.id == 61 or v.id == 78:
-            #     v.v = ti.math.vec3(0.0, 0.0, 0.0)
-            # else:
-            v.v += (v.f_ext / v.m) * self.dt
+            if v.id == 61 or v.id == 78:
+                v.v = ti.math.vec3(0.0, 0.0, 0.0)
+            else:
+                v.v += (v.f_ext / v.m) * self.dt
 
     @ti.kernel
     def globalSolveVelocity(self):
@@ -205,8 +169,9 @@ class Solver:
     def computeNextState(self):
 
         for v in self.verts:
-            v.v = (v.x_k - v.x) / self.dt
+            v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
             v.x = v.x_k
+
 
 
 
@@ -240,11 +205,11 @@ class Solver:
             hij = U @ sig @ V.transpose()
             e.hij = hij
 
-        for cid in self.candidatesPT:
-            pid = self.candidatesPT[cid].pid
-            tid = self.candidatesPT[cid].tid
-            ld = self.compute_gradient_and_hessian_PT(pid, tid)
-            self.candidatesPT[cid].ld = ld
+        # for cid in self.candidatesPT:
+        #     pid = self.candidatesPT[cid].pid
+        #     tid = self.candidatesPT[cid].tid
+        #     ld = self.compute_gradient_and_hessian_PT(pid, tid)
+        #     self.candidatesPT[cid].ld = ld
         # normal = ti.math.vec3([0, 1, 0.1])
         # normal = normal.normalized(eps=1e-6)
         # k = self.dtSq * 1e4
@@ -262,798 +227,77 @@ class Solver:
     @ti.kernel
     def step_forward(self, step_size: ti.f32):
         for v in self.verts:
-            # if v.id == 61 or v.id == 78:
-            #     v.x_k = v.x_k
-            # else:
-            v.x_k += step_size * v.dx
+            if v.id == 61 or v.id == 78:
+                v.x_k = v.x_k
+            else:
+                v.x_k += step_size * v.dx
 
-        # center = ti.math.vec3([0.5, 0.5, 0.5])
-        # rad = 0.4
-        # k = 1e6 * self.dtSq
-        # for v in self.verts:
-        #     len = (v.x_k - center).norm()
-        #     # if len < rad:
-        #     normal = (v.x_k - center).normalized()
-        #     p = center + rad * normal
-        #     v.x_k = p
-        # center = ti.math.vec3(0.5, 0.5, 0.5)
-        # rad = 0.4
-        # # coef = self.dtSq * 1e6
-        # for v in self.verts:
-        #     if v.x_k.y < 0.4:
-        #         v.x_k.y = 0.4
-
-
-
-
-    @ti.kernel
-    def compute_aabb(self):
-
-        padding_size = 1e-1
-        padding = ti.math.vec3([padding_size, padding_size, padding_size])
+        start_idx = ti.math.vec3(-3, -3, -3)
+        for v in self.verts:
+            for s in range(self.num_verts_static):
+                self.resolve(v.id, s)
 
         for v in self.verts:
-            dx = v.v * self.dt
-            v.aabb_max = ti.max(v.x + dx, v.x - dx)
-            v.aabb_min = ti.max(v.x + dx, v.x - dx)
-
-        for f in self.faces:
-            x0, x1, x2 = f.verts[0].x, f.verts[1].x, f.verts[2].x
-            v0, v1, v2 = f.verts[0].v, f.verts[1].v, f.verts[2].v
-
-            dx0 = v0 * self.dt
-            dx1 = v1 * self.dt
-            dx2 = v2 * self.dt
-
-            f.aabb_max = ti.max(x0 + dx0, x0 - dx0, x1 + dx1, x1 - dx1, x2 + dx2, x2 - dx2)
-            f.aabb_min = ti.min(x0 + dx0, x0 - dx0, x1 + dx1, x1 - dx1, x2 + dx2, x2 - dx2)
-
-        for f in self.faces_static:
-            x0, x1, x2 = f.verts[0].x, f.verts[1].x, f.verts[2].x
-
-            f.aabb_max = ti.max(x0, x1, x2) + padding
-            f.aabb_min = ti.min(x0, x1, x2) - padding
-
-
-
-    @ti.func
-    def compute_gradient_and_hessian_PT(self, pid: ti.int32, tid: ti.int32):
-
-        v0 = pid
-        v1 = self.face_indices_static[3 * tid + 0]
-        v2 = self.face_indices_static[3 * tid + 1]
-        v3 = self.face_indices_static[3 * tid + 2]
-
-
-        x0 = self.verts.x_k[v0]
-        x1 = self.verts_static.x[v1]   #r
-        x2 = self.verts_static.x[v2]   #g
-        x3 = self.verts_static.x[v3]   #c
-
-        ld = 0.0
-        dtype = cu.d_type_PT(x0, x1, x2, x3)
-        if dtype == 0:           #r
-            d = (x0 - x1).norm()
-            # d = cu.d_PP(x0, x1)
-            if d < self.dHat:
-                normal = (x0 - x1).normalized()
-                ld = self.dtSq * 1e3
-                p = x1 + self.dHat * normal
-                self.verts.g[v0] += ld * (p - x0)
-                self.verts.h[v0] += ld
+            for s in range(v.id + 1, self.num_verts):
+                self.resolve_self(v.id, s)
+            # grid_idx = ti.floor((v.x - start_idx) * (self.grid_n / 6.0), int)
+            # x_begin = max(grid_idx[0] - 1, 0)
+            # x_end = min(grid_idx[0] + 2, self.grid_n)
+            #
+            # y_begin = max(grid_idx[1] - 1, 0)
+            # y_end = min(grid_idx[1] + 2, self.grid_n)
+            #
+            # z_begin = max(grid_idx[2] - 1, 0)
+            #
+            # # only need one side
+            # z_end = min(grid_idx[2] + 1, self.grid_n)
+            #
+            # # todo still serialize
+            # for neigh_i, neigh_j, neigh_k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
+            #
+            #     # on split plane
+            #     if neigh_k == grid_idx[2] and (neigh_i + neigh_j) > (grid_idx[0] + grid_idx[1]) and neigh_i <= grid_idx[0]:
+            #         continue
+            #     # same grid
+            #     iscur = neigh_i == grid_idx[0] and neigh_j == grid_idx[1] and neigh_k == grid_idx[2]
+            #
+            #     neigh_linear_idx = neigh_i * self.grid_n * self.grid_n + neigh_j * self.grid_n + neigh_k
+            #     for p_idx in range(self.list_head[neigh_linear_idx], self.list_tail[neigh_linear_idx]):
+            #         j = self.particle_id[p_idx]
+            #         if iscur and v.id >= j:
+            #             continue
+            #         self.resolve(v.id, j)
 
 
-        elif dtype == 1:
-            d = (x0 - x2).norm()
-            # d = cu.d_PP(x0, x1)
-            if d < self.dHat:
-                normal = (x0 - x1).normalized()
-                p = x1 + self.dHat * normal
-                ld = self.dtSq * 1e3
-                self.verts.g[v0] += ld * (p - x0)
-                self.verts.h[v0] += ld
-
-        elif dtype == 2:
-            d = (x0 - x3).norm()
-            # d = cu.d_PP(x0, x1)
-            if d < self.dHat:
-                normal = (x0 - x1).normalized()
-                p = x1 + self.dHat * normal
-                ld = self.dtSq * 1e3
-                self.verts.g[v0] += ld * (p - x0)
-                self.verts.h[v0] += ld
-        #
-        #
-        elif dtype == 3:
-            dir = (x2 - x1).normalized(1e-4)
-            p = (x0 - x1).dot(dir) * dir + x1
-            d = (x0 - p).norm()
-            # d = cu.d_PE(x0, x3, x1) #c-r
-            if d < self.dHat:
-                normal = (x0 - p).normalized(1e-4)
-                ld = self.dtSq * 1e3
-                p += self.dHat * normal
-                self.verts.g[v0] += ld * (p - x0)
-                self.verts.h[v0] += ld
-
-        elif dtype == 4:
-                dir = (x3 - x2).normalized(1e-4)
-                p = (x0 - x2).dot(dir) * dir + x2
-                d = (x0 - p).norm()
-                # d = cu.d_PE(x0, x3, x1) #c-r
-                if d < self.dHat:
-                    normal = (x0 - p).normalized(1e-4)
-                    ld = self.dtSq * 1e3
-                    p += self.dHat * normal
-                    self.verts.g[v0] += ld * (p - x0)
-                    self.verts.h[v0] += ld
-
-        elif dtype == 5:
-            dir = (x1 - x3).normalized(1e-4)
-            p = (x0 - x3).dot(dir) * dir + x3
-            d = (x0 - p).norm()
-            # d = cu.d_PE(x0, x3, x1) #c-r
-            if d < self.dHat:
-                normal = (x0 - p).normalized(1e-4)
-                ld = self.dtSq * 1e3
-                p += self.dHat * normal
-                self.verts.g[v0] += ld * (p - x0)
-                self.verts.h[v0] += ld
-
-
-        elif dtype == 6:            # inside triangle
-
-            normal = (x2 - x1).cross(x3 - x1)
-            normal = normal.normalized(1e-4)
-            d = normal.dot(x0 - x1)
-            if d < 0:
-                f_normal = -normal
-            d = ti.abs(d)
-            # d = cu.d_PT(x0, x1, x2, x3)  # c-r
-            if d < self.dHat:
-                # print("test")
-                b = barrier.compute_b(d, self.dHat)
-                ld = self.dtSq * 1e7
-                # g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
-                p = x0 - d * normal
-
-                p += self.dHat * normal
-                g0 = (p - x0)
-
-                Ainv_g = self.verts.g[v0] / self.verts.h[v0]
-                sch = g0.dot(g0) / self.verts.h[v0]
-                # ld = (d - self.dHat - Ainv_g.dot(g0)) / sch + self.dtSq * 1e5
-                self.verts.g[v0] += ld * (p - x0)
-                self.verts.h[v0] += ld
-
-        return ld
+        for v in self.verts:
+            if v.nc > 0:
+                v.x_k = v.p / v.nc
 
     @ti.func
-    def compute_constraint_energy_PT(self, x: ti.template(), pid: ti.int32, tid: ti.int32) -> ti.f32:
+    def resolve(self, i, j):
+        dx = self.verts.x_k[i] - self.verts_static.x[j]
+        d = dx.norm()
 
-        energy = 0.0
-        v0 = pid
-        v1 = self.face_indices_static[3 * tid + 0]
-        v2 = self.face_indices_static[3 * tid + 1]
-        v3 = self.face_indices_static[3 * tid + 2]
-
-
-        x0 = x[v0]
-        x1 = self.verts_static.x[v1]   #r
-        x2 = self.verts_static.x[v2]   #g
-        x3 = self.verts_static.x[v3]   #c
-
-        dtype = cu.d_type_PT(x0, x1, x2, x3)
-        if dtype == 0:           #r
-            d = cu.d_PP(x0, x1)
-            if d < self.dHat:
-                g0, g1 = cu.g_PP(x0, x1)
-
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                energy = 0.5 * ld * (d - self.dHat)
-
-        elif dtype == 1:
-            d = cu.d_PP(x0, x2)  #g
-            if d < self.dHat:
-                g0, g2 = cu.g_PP(x0, x2)
-
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                energy = 0.5 * ld * (d - self.dHat)
-
-        elif dtype == 2:
-            d = cu.d_PP(x0, x3) #c
-            if d < self.dHat:
-                g0, g3 = cu.g_PP(x0, x3)
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                energy = 0.5 * ld * (d - self.dHat)
-
-        elif dtype == 3:
-            d = cu.d_PE(x0, x1, x2) # r-g
-            if d < self.dHat:
-                g0, g1, g2 = cu.g_PE(x0, x1, x2)
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                energy = 0.5 * ld * (d - self.dHat)
-
-        elif dtype == 4:
-            d = cu.d_PE(x0, x2, x3) #g-c
-            if d < self.dHat:
-                g0, g2, g3 = cu.g_PE(x0, x1, x2)
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                energy = 0.5 * ld * (d - self.dHat)
-
-        elif dtype == 5:
-            d = cu.d_PE(x0, x3, x1) #c-r
-            if d < self.dHat:
-                g0, g3, g1 = cu.g_PE(x0, x3, x1)
-
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                energy = 0.5 * ld * (d - self.dHat)
-
-        elif dtype == 6:            # inside triangle
-            d = cu.d_PT(x0, x1, x2, x3)
-            if d < self.dHat:
-                g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                energy = 0.5 * ld * (d - self.dHat)
-
-        return energy
-    @ti.func
-    def computeConstraintSet_TP(self, tid: ti.int32, pid: ti.int32):
-
-        v0 = pid
-        v1 = self.face_indices[3 * tid + 0]
-        v2 = self.face_indices[3 * tid + 1]
-        v3 = self.face_indices[3 * tid + 2]
-
-        # print(f'{v0}, {v1}, {v2}, {v3}')
-
-        x0 = self.verts_static.x[v0]
-        x1 = self.verts.x_k[v1]   #r
-        x2 = self.verts.x_k[v2]   #g
-        x3 = self.verts.x_k[v3]   #c
-
-        dtype = cu.d_type_PT(x0, x1, x2, x3)
-        if dtype == 0:           #r
-            d = cu.d_PP(x0, x1)
-            if d < self.dHat:
-                g0, g1 = cu.g_PP(x0, x1)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g1.dot(g1) / self.verts.h[v1]
-                # ld = (d - self.dHat) / sch
-
-                self.verts.g[v1] += ld * g1
-                self.verts.h[v1] += ld
-
-                # self.mmcvid.append(ti.math.ivec4([-v1-1, v0, -1, -1]))
-
-        elif dtype == 1:
-            d = cu.d_PP(x0, x2)  #g
-            if d < self.dHat:
-                g0, g2 = cu.g_PP(x0, x2)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g2.dot(g2) / self.verts.h[v2]
-                # ld = (d - self.dHat) / sch
-
-                self.verts.g[v2] += ld * g2
-                self.verts.h[v2] += ld
-
-        elif dtype == 2:
-            d = cu.d_PP(x0, x3) #c
-            if d < self.dHat:
-                g0, g3 = cu.g_PP(x0, x3)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g3.dot(g3) / self.verts.h[v3]
-                # ld = (d - self.dHat) / sch
-
-                self.verts.g[v3] += ld * g3
-                self.verts.h[v3] += ld
-
-        # self.mmcvid.append(ti.math.ivec4([-v3-1, v0, -1, -1]))
-
-        elif dtype == 3:
-            d = cu.d_PE(x0, x1, x2) # r-g
-            if d < self.dHat:
-                g0, g1, g2 = cu.g_PE(x0, x1, x2)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g1.dot(g1) / self.verts.h[v1] + g2.dot(g2) / self.verts.h[v2]
-                # ld = (d - self.dHat) / sch
-
-                self.verts.g[v1] += ld * g1
-                self.verts.g[v2] += ld * g2
-                self.verts.h[v1] += ld
-                self.verts.h[v2] += ld
-                # self.mmcvid.append(ti.math.ivec4([-v1-1, -v2-1, v0, -1]))
-
-        elif dtype == 4:
-            d = cu.d_PE(x0, x2, x3) #g-c
-            if d < self.dHat:
-                g0, g2, g3 = cu.g_PE(x0, x2, x3)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g2.dot(g2) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
-                # ld = (d - self.dHat) / sch
-
-                self.verts.g[v2] += ld * g2
-                self.verts.g[v3] += ld * g3
-
-                self.verts.h[v2] += ld
-                self.verts.h[v3] += ld
-                # self.mmcvid.append(ti.math.ivec4([-v2-1, -v3-1, v0, -1]))
-
-        elif dtype == 5:
-            d = cu.d_PE(x0, x3, x1) #c-r
-            if d < self.dHat:
-                g0, g3, g1 = cu.g_PE(x0, x3, x1)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g1.dot(g1) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
-                # ld = (d - self.dHat) / sch
-
-                self.verts.g[v1] += ld * g1
-                self.verts.g[v3] += ld * g3
-
-                self.verts.h[v1] += ld
-                self.verts.h[v3] += ld
-                # self.mmcvid.append(ti.math.ivec4([-v3-1, -v1-1, v0, -1]))
-
-        elif dtype == 6:            # inside triangle
-            d = cu.d_PT(x0, x1, x2, x3)
-            if d < self.dHat:
-                g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g1.dot(g1) / self.verts.h[v1] + g2.dot(g2) / self.verts.h[v2] + g3.dot(g3) / self.verts.h[v3]
-                # ld = (d - self.dHat) / sch
-
-                self.verts.g[v1] += ld * g1
-                self.verts.g[v2] += ld * g2
-                self.verts.g[v3] += ld * g3
-
-                self.verts.h[v1] += ld
-                self.verts.h[v2] += ld
-                self.verts.h[v3] += ld
-                # self.mmcvid.append(ti.math.ivec4([-v1-1, -v2-1, -v3-1, v0]))
+        if d < 2.0 * self.radius:  # in contact
+            normal = dx / d
+            p = self.verts_static.x[j] + 2.0 * self.radius * normal
+            self.verts.p[i] += p
+            self.verts.nc[i] += 1
 
     @ti.func
-    def computeConstraintSet_EE(self, eid0: ti.int32, eid1: ti.int32):
-
-        v0 = self.edges.vid[eid0][0]
-        v1 = self.edges.vid[eid0][1]
-        v2 = self.edges_static.vid[eid1][0]
-        v3 = self.edges_static.vid[eid1][1]
-
-        x0 = self.verts.x_k[v0]
-        x1 = self.verts.x_k[v1]
-        x2 = self.verts_static.x[v2]
-        x3 = self.verts_static.x[v3]
-
-        d_type = cu.d_type_EE(x0, x1, x2, x3)
-        x01 = x1-x0
-        x32 = x2-x3
-        # print(d_type)
-        is_para = False
-        if x01.cross(x32).norm() < 1e-3:
-            is_para = True
-
-        if is_para:
-            print("para")                                                 
-        # print(f'{d_type}, {is_para}')
-
-        if d_type == 0:
-            d = cu.d_PP(x0, x2)
-            if(d < self.dHat):
-                # print(d_type)
-                g0, g2 = cu.g_PP(x0, x2)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-
-        elif d_type == 1:
-            d = cu.d_PP(x0, x3)
-            if (d < self.dHat):
-                # print(d_type)
-                g0, g3 = cu.g_PP(x0, x3)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-
-        elif d_type == 2:
-            d = cu.d_PE(x0, x2, x3)
-            if (d < self.dHat):
-                # print(d_type)
-                g0, g1, g2 = cu.g_PE(x0, x2, x3)
-                sch = g0.dot(g0) / self.verts.h[v0] + g1.dot(g1) / self.verts.h[v1]
-                step_size = (d - self.dHat) / sch
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v0] += ld * g0
-                self.verts.g[v1] += ld * g0
-                self.verts.h[v0] += ld
-                self.verts.h[v1] += ld
-
-        elif d_type == 3:
-            d = cu.d_PP(x1, x2)
-            if (d < self.dHat):
-                # print(d_type)
-                g1, g2 = cu.g_PP(x1, x2)
-                sch = g1.dot(g1) / self.verts.h[v1]
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v1] += ld * g1
-                self.verts.h[v1] += ld
-
-        elif d_type == 4:
-            d = cu.d_PP(x1, x3)
-            if (d < self.dHat):
-                # print(d_type)
-                g1, g3 = cu.g_PP(x1, x3)
-                sch = g1.dot(g1) / self.verts.h[v1]
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v1] += ld * g1
-                self.verts.h[v1] += ld
-
-        elif d_type == 5:
-            d = cu.d_PE(x1, x2, x3)
-            if (d < self.dHat):
-                # print(d_type)
-                g1, g2, g3 = cu.g_PE(x1, x2, x3)
-                sch = g1.dot(g1) / self.verts.h[v1]
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v1] += ld * g1
-                self.verts.h[v1] += ld
-
-        elif d_type == 6:
-            d = cu.d_PE(x2, x0, x1)
-            if (d < self.dHat):
-                # print(d_type)
-                g2, g0, g1 = cu.g_PE(x2, x0, x1)
-                sch = g0.dot(g0) / self.verts.h[v0] + g1.dot(g1) / self.verts.h[v1]
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v0] += ld * g0
-                self.verts.g[v1] += ld * g0
-                self.verts.h[v0] += ld
-                self.verts.h[v1] += ld
-
-        elif d_type == 7:
-            d = cu.d_PE(x3, x0, x1)
-            if (d < self.dHat):
-                # print(d_type)
-                g3, g0, g1 = cu.g_PE(x3, x0, x1)
-                sch = g0.dot(g0) / self.verts.h[v0] + g1.dot(g1) / self.verts.h[v1]
-                ld = (d - self.dHat) / sch
-                # p0 = x0 - step_size * g0
-
-                self.verts.g[v0] += ld * g0
-                self.verts.g[v1] += ld * g0
-                self.verts.h[v0] += ld
-                self.verts.h[v1] += ld
-
-        elif d_type == 8:
-            d = cu.d_EE(x0, x1, x2, x3)
-            # print(d)
-            if (d < self.dHat):
-                # print("test")
-                # if is_para:
-                #     eps_x = cu.compute_eps_x(x0, x1, x2, x3)
-                #     e = cu.compute_e(x0, x1, x2, x3, eps_x)
-                #     g0, g1, g2, g3 = cu.compute_e_g(x0, x1, x2, x3, eps_x)
-                #     sch = g0.dot(g0) / self.verts.h[v0] + g1.dot(g1) / self.verts.h[v1]
-                #
-                #     # ld = 0
-                #     # if abs(sch) > 1e-6:
-                #     ld = (d - self.dHat) / sch
-                #
-                #     self.verts.g[v0] += ld * g0
-                #     self.verts.g[v1] += ld * g1
-                #
-                #     self.verts.h[v0] += ld
-                #     self.verts.h[v1] += ld
-                # else:
-
-                g0, g1, g2, g3 = cu.g_EE(x0, x1, x2, x3)
-                sch = g0.dot(g0) / self.verts.h[v0] + g1.dot(g1) / self.verts.h[v1]
-
-                # ld = 0
-                # if abs(sch) > 1e-6:
-                ld = (d - self.dHat) / sch
-
-                self.verts.g[v0] += ld * g0
-                self.verts.g[v1] += ld * g1
-
-                self.verts.h[v0] += ld
-                self.verts.h[v1] += ld
-
-    @ti.kernel
-    def ccd_alpha(self) -> ti.f32:
-        alpha = 1.0
-        for cid in self.candidatesPT:
-            pid, fid, d_type = self.candidatesPT[cid]
-            x0 = self.verts.x_k[pid]
-            dx0 = self.verts.dx[fid]
-
-            v1 = self.face_indices_static[3 * fid + 0]
-            v2 = self.face_indices_static[3 * fid + 1]
-            v3 = self.face_indices_static[3 * fid + 2]
-
-            x1 = self.verts_static.x[v1]
-            x2 = self.verts_static.x[v2]
-            x3 = self.verts_static.x[v3]
-
-            dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
-
-            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, self.dHat, 1.0)
-            # print(alpha_ccd)
-            if alpha > alpha_ccd:
-                alpha = alpha_ccd
-
-        return alpha
-
-    def line_search(self):
-
-        alpha = self.ccd_alpha()
-        # print(alpha)
-        e_cur = self.compute_spring_energy(self.verts.x_k) + self.compute_collision_energy(self.verts.x_k)
-        # print(e_cur)
-        for i in range(5):
-            self.add(self.x_t, self.verts.x_k, alpha, self.verts.dx)
-            e = self.compute_spring_energy(self.x_t) + self.compute_collision_energy(self.x_t)
-            # print(e)
-            if(e_cur < e):
-                alpha /= 2.0
-            else:
-                # print(i)
-                break
-        return alpha
-
-    # @ti.kernel
-    # def compute_collision_energy(self, x: ti.template()) -> ti.f32:
-    #
-    #     collision_e_total = 0.0
-    #     for cid in self.candidatesPT:
-    #         pid, fid, d_type = self.candidatesPT[cid]
-    #         collision_e_total += self.compute_constraint_energy_PT(x, pid, fid)
-    #     return collision_e_total
-    @ti.kernel
-    def compute_spring_energy(self, x: ti.template()) -> ti.f32:
-
-        spring_e_total = 0.0
-        for e in self.edges:
-            v0, v1 = e.verts[0].id, e.verts[1].id
-            xij = x[v0] - x[v1]
-            l = xij.norm()
-            coeff = 0.5 * self.dtSq * self.k
-            spring_e_total += coeff * (l - e.l0) ** 2
-
-        return spring_e_total
-
-    @ti.kernel
-    def modify_velocity(self):
-
-        alpha = 1.0
-        for cid in self.candidatesPT:
-            pid, fid, d_type = self.candidatesPT[cid]
-            x0 = self.verts.x[pid]
-            dx0 = self.verts.y[pid] - x0
-
-            v1 = self.face_indices_static[3 * fid + 0]
-            v2 = self.face_indices_static[3 * fid + 1]
-            v3 = self.face_indices_static[3 * fid + 2]
-
-            x1 = self.verts_static.x[v1]
-            x2 = self.verts_static.x[v2]
-            x3 = self.verts_static.x[v3]
-
-            dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
-
-            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, self.dHat, 1.0)
-            # print(alpha_ccd)
-            # if alpha > alpha_ccd:
-            #     alpha = alpha_ccd
-
-            if alpha_ccd < 1.0:
-                dtype = cu.d_type_PT(x0, x1, x2, x3)
-                if dtype == 0:  # r
-                    d = cu.d_PP(x0, x1)
-                    # if d < self.dHat:
-                    g0, g1 = cu.g_PP(x0, x1)
-
-                    ld = barrier.compute_g_b(d, self.dHat)
-                    sch = g0.dot(g0) / self.verts.h[pid]
-                    ld = (d) / sch
-
-                    self.verts.g[pid] += ld * g0
-                    self.verts.h[pid] += ld
-
-
-
-                elif dtype == 1:
-                    d = cu.d_PP(x0, x2)  # g
-                    # if d < self.dHat:
-                    g0, g2 = cu.g_PP(x0, x2)
-
-                    ld = barrier.compute_g_b(d, self.dHat)
-                    sch = g0.dot(g0) / self.verts.h[pid]
-                    ld = (d) / sch
-
-                    self.verts.g[pid] += ld * g0
-                    self.verts.h[pid] += ld
-
-                elif dtype == 2:
-                    d = cu.d_PP(x0, x3)  # c
-                    # if d < self.dHat:
-                    g0, g3 = cu.g_PP(x0, x3)
-
-                    ld = barrier.compute_g_b(d, self.dHat)
-                    sch = g0.dot(g0) / self.verts.h[pid]
-                    ld = (d) / sch
-
-                    self.verts.g[pid] += ld * g0
-                    self.verts.h[pid] += ld
-
-
-                elif dtype == 3:
-                    d = cu.d_PE(x0, x1, x2)  # r-g
-                    # if d < self.dHat:
-                    g0, g1, g2 = cu.g_PE(x0, x1, x2)
-                    ld = barrier.compute_g_b(d, self.dHat)
-                    sch = g0.dot(g0) / self.verts.h[pid]
-                    ld = (d) / sch
-
-                    self.verts.g[pid] += ld * g0
-                    self.verts.h[pid] += ld
-
-
-                elif dtype == 4:
-                    d = cu.d_PE(x0, x2, x3)  # g-c
-                    # if d < self.dHat:
-                    g0, g2, g3 = cu.g_PE(x0, x1, x2)
-                    ld = barrier.compute_g_b(d, self.dHat)
-                    sch = g0.dot(g0) / self.verts.h[pid]
-                    ld = (d) / sch
-
-                    self.verts.g[pid] += ld * g0
-                    self.verts.h[pid] += ld
-
-
-                elif dtype == 5:
-                    d = cu.d_PE(x0, x3, x1)  # c-r
-                    # if d < self.dHat:
-                    g0, g3, g1 = cu.g_PE(x0, x3, x1)
-
-                    ld = barrier.compute_g_b(d, self.dHat)
-                    sch = g0.dot(g0) / self.verts.h[pid]
-                    ld = (d) / sch
-
-                    self.verts.g[pid] += ld * g0
-                    self.verts.h[pid] += ld
-
-                elif dtype == 6:  # inside triangle
-                    d = cu.d_PT(x0, x1, x2, x3)
-                    # if d < self.dHat:
-                    g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
-                    ld = barrier.compute_g_b(d, self.dHat)
-                    sch = g0.dot(g0) / self.verts.h[pid]
-                    ld = (d) / sch
-                    self.verts.g[pid] += ld * g0
-                    self.verts.h[pid] += ld
-
-    @ti.kernel
-    def handle_collisions(self):
-
-        self.verts.nc.fill(0)
-        self.verts.p.fill(0.0)
-        for cid in self.candidatesPT:
-            pid = self.candidatesPT[cid].pid
-            fid = self.candidatesPT[cid].tid
-
-            v0 = pid
-            x0 = self.verts.x_k[pid]
-            dx0 = self.verts.dx[fid]
-
-            v1 = self.face_indices_static[3 * fid + 0]
-            v2 = self.face_indices_static[3 * fid + 1]
-            v3 = self.face_indices_static[3 * fid + 2]
-
-            x1 = self.verts_static.x[v1]
-            x2 = self.verts_static.x[v2]
-            x3 = self.verts_static.x[v3]
-
-            dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
-
-            alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.1, self.dHat, 1.0)
-
-            if alpha_ccd < 0.0:
-                # x0 += dx0
-                dtype = cu.d_type_PT(x0, x1, x2, x3)
-                if dtype == 0:  # r
-                    self.verts.p[v0] += x1
-                    self.verts.nc[v0] += 1
-
-                elif dtype == 1:
-                    self.verts.p[v0] += x2
-                    self.verts.nc[v0] += 1
-
-                elif dtype == 2:
-
-                    self.verts.p[v0] += x3
-                    self.verts.nc[v0] += 1
-
-                elif dtype == 3:
-
-                    x12 = x2 - x1
-                    x10 = x0 - x1
-
-                    xp1 = x12.dot(x10.normalized(1e-6))
-                    p = x1 + xp1
-
-                    self.verts.p[v0] += p
-                    self.verts.nc[v0] += 1
-
-                elif dtype == 4:
-
-                    x23 = x3 - x2
-                    x20 = x0 - x2
-
-                    xp2 = x23.dot(x20.normalized(1e-6))
-                    p = x1 + xp2
-
-                    self.verts.p[v0] += p
-                    self.verts.h[v0] += 1
-
-                elif dtype == 5:
-                    x31 = x1 - x3
-                    x30 = x0 - x3
-
-                    xp3 = x31.dot(x30.normalized(1e-6))
-                    p = x1 + xp3
-
-                    self.verts.p[v0] += p
-                    self.verts.nc[v0] += 1
-
-                elif dtype == 6:  # inside triangle
-
-                    x12 = x2 - x1
-                    x13 = x3 - x1
-                    x03 = x0 - x1
-
-                    nor = x12.cross(x13)
-                    nor = nor.normalized(1e-6)
-
-                    p = x0 + nor.dot(x03) * nor
-
-
-                    self.verts.p[v0] += p
-                    self.verts.nc[v0] += 1
-
-
-                for v in self.verts:
-                    if v.nc > 1:
-                        v.x_k = v.p / v.nc
+    def resolve_self(self, i, j):
+        dx = self.verts.x_k[i] - self.verts.x_k[j]
+        d = dx.norm()
+
+        if d < 2.0 * self.radius:  # in contact
+            normal = dx / d
+            center = 0.5 * (self.verts.x_k[i] + self.verts.x_k[j])
+            p1 = center + self.radius * normal
+            p2 = center - self.radius * normal
+            self.verts.p[i] += p1
+            self.verts.p[j] += p2
+            self.verts.nc[i] += 1
+            self.verts.nc[j] += 1
 
     @ti.kernel
     def apply_precondition(self, z: ti.template(), r: ti.template()):
@@ -1075,10 +319,10 @@ class Solver:
             self.Ap[u] += d
             self.Ap[v] -= d
 
-        for cid in self.candidatesPT:
-            pid = self.candidatesPT[cid].pid
-            ld = self.candidatesPT[cid].ld
-            self.Ap[pid] += ld * self.p[pid]
+        # for cid in self.candidatesPT:
+        #     pid = self.candidatesPT[cid].pid
+        #     ld = self.candidatesPT[cid].ld
+        #     self.Ap[pid] += ld * self.p[pid]
 
 
         pAp = 0.0
@@ -1132,30 +376,82 @@ class Solver:
         # print(f'cg iter: {i}')
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
+    @ti.kernel
+    def construct_grid(self):
+
+        start_idx = ti.math.vec3(-3.0, -3.0, -3.0)
+        for v in self.verts:
+            grid_idx = ti.floor((v.x - start_idx) * (self.grid_n / 6.0), int)
+            self.grain_count[grid_idx] += 1
+
+        self.column_sum.fill(0)
+        # kernel comunicate with global variable ???? this is a bit amazing
+        for i, j, k in ti.ndrange(self.grid_n, self.grid_n, self.grid_n):
+            ti.atomic_add(self.column_sum[i, j], self.grain_count[i, j, k])
+
+        # this is because memory mapping can be out of order
+        _prefix_sum_cur = 0
+
+        for i, j in ti.ndrange(self.grid_n, self.grid_n):
+            self.prefix_sum[i, j] = ti.atomic_add(_prefix_sum_cur, self.column_sum[i, j])
+
+        """
+        # case 1 wrong
+        for i, j, k in ti.ndrange(grid_n, grid_n, grid_n):
+            #print(i, j ,k)        
+            ti.atomic_add(prefix_sum[i,j], grain_count[i, j, k])    
+            linear_idx = i * grid_n * grid_n + j * grid_n + k
+            list_head[linear_idx] = prefix_sum[i,j]- grain_count[i, j, k]
+            list_cur[linear_idx] = list_head[linear_idx]
+            list_tail[linear_idx] = prefix_sum[i,j]
+
+        """
+
+        # """
+        # case 2 test okay
+        for i, j, k in ti.ndrange(self.grid_n, self.grid_n, self.grid_n):
+            # we cannot visit prefix_sum[i,j] in this loop
+            pre = ti.atomic_add(self.prefix_sum[i, j], self.grain_count[i, j, k])
+            linear_idx = i * self.grid_n * self.grid_n + j * self.grid_n + k
+            self.list_head[linear_idx] = pre
+            self.list_cur[linear_idx] = self.list_head[linear_idx]
+            # only pre pointer is useable
+            self.list_tail[linear_idx] = pre + self.grain_count[i, j, k]
+            # """
+        # e
+        for v in self.verts_static:
+            grid_idx = ti.floor((v.x - start_idx) * (self.grid_n / 2.0), int)
+            linear_idx = grid_idx[0] * self.grid_n * self.grid_n + grid_idx[1] * self.grid_n + grid_idx[2]
+            grain_location = ti.atomic_add(self.list_cur[linear_idx], 1)
+            self.particle_id[grain_location] = v.id
 
     def update(self, dt, num_sub_steps):
 
         self.dt = dt / num_sub_steps
         self.dtSq = self.dt ** 2
+
+        self.construct_grid()
         for sub_step in range(num_sub_steps):
             self.verts.f_ext.fill([0.0, self.gravity, 0.0])
             self.computeVtemp()
 
-            self.compute_aabb()
+            # self.compute_aabb()
             # self.compute_candidates_PT()
 
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
 
-            for i in range(1):
+            for i in range(2):
                 self.verts.g.fill(0.)
                 self.verts.h.copy_from(self.verts.m)
                 self.evaluate_gradient_and_hessian()
                 self.newton_pcg()
                 alpha = 1.0
-                # self.handle_collisions()
+                self.verts.p.fill(0.0)
+                self.verts.nc.fill(0.0)
                 self.step_forward(alpha)
 
+            ti.deactivate_all_snodes()
             self.computeNextState()
 
 
