@@ -45,7 +45,7 @@ class Solver:
         self.num_faces_static = len(self.static_mesh.mesh.faces)
 
         self.rd_PT = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-        self.PT_type = ti.types.struct(pid=ti.uint16, tid=ti.uint16)
+        self.PT_type = ti.types.struct(pid=ti.uint16, tid=ti.uint16, ld=ti.f32)
         self.candidatesPT = self.PT_type.field()
         self.rd_PT.place(self.candidatesPT)
 
@@ -219,7 +219,7 @@ class Solver:
 
     @ti.kernel
     def evaluate_gradient_and_hessian(self):
-        self.candidatesPC.deactivate()
+        # self.candidatesPC.deactivate()
         coef = self.dtSq * self.k
         for e in self.edges:
             xij = e.verts[0].x_k - e.verts[1].x_k
@@ -240,17 +240,22 @@ class Solver:
             hij = U @ sig @ V.transpose()
             e.hij = hij
 
-        normal = ti.math.vec3([0, 1, 0.1])
-        normal = normal.normalized(eps=1e-6)
-        k = self.dtSq * 1e4
-        for v in self.verts:
-            center = ti.math.vec3([0.5, 0.8, 0.5])
-            dist = (v.x - center).dot(normal)
-            if dist < 0.0:
-                p = v.x - dist * normal
-                v.g -= k * (v.x - p)
-                v.h += k
-                self.candidatesPC.append(self.PC_type(pid=v.id, h=k))
+        for cid in self.candidatesPT:
+            pid = self.candidatesPT[cid].pid
+            tid = self.candidatesPT[cid].tid
+            ld = self.compute_gradient_and_hessian_PT(pid, tid)
+            self.candidatesPT[cid].ld = ld
+        # normal = ti.math.vec3([0, 1, 0.1])
+        # normal = normal.normalized(eps=1e-6)
+        # k = self.dtSq * 1e4
+        # for v in self.verts:
+        #     center = ti.math.vec3([0.5, 0.8, 0.5])
+        #     dist = (v.x - center).dot(normal)
+        #     if dist < 0.0:
+        #         p = v.x - dist * normal
+        #         v.g -= k * (v.x - p)
+        #         v.h += k
+        #         self.candidatesPC.append(self.PC_type(pid=v.id, h=k))
 
 
 
@@ -325,102 +330,109 @@ class Solver:
         x2 = self.verts_static.x[v2]   #g
         x3 = self.verts_static.x[v3]   #c
 
+
+        f_normal = (x2 - x1).cross(x3 - x1)
+        f_normal = f_normal.normalized(1e-4)
+
         ld = 0.0
         dtype = cu.d_type_PT(x0, x1, x2, x3)
-        if dtype == 0:           #r
-            d = cu.d_PP(x0, x1)
-            if d < self.dHat:
-                g0, g1 = cu.g_PP(x0, x1)
+        # if dtype == 0:           #r
+        #     d = cu.d_PP(x0, x1)
+        #     if d < self.dHat:
+        #         g0, g1 = cu.g_PP(x0, x1)
+        #
+        #         ld = barrier.compute_g_b(d, self.dHat)
+        #         sch = g0.dot(g0) / self.verts.h[v0]
+        #         ld = (d - self.dHat) / sch
+        #         self.verts.g[v0] += ld * g0
+        #         self.verts.h[v0] += ld
+        #     else:
+        #         dtype = -1
+        #
+        #
+        #
+        # elif dtype == 1:
+        #     d = cu.d_PP(x0, x2)  #g
+        #     if d < self.dHat:
+        #         g0, g2 = cu.g_PP(x0, x2)
+        #
+        #         ld = barrier.compute_g_b(d, self.dHat)
+        #         sch = g0.dot(g0) / self.verts.h[v0]
+        #         ld = (d - self.dHat) / sch
+        #         self.verts.g[v0] += ld * g0
+        #         self.verts.h[v0] += ld
+        #     else:
+        #         dtype = -1
+        #
+        # elif dtype == 2:
+        #     d = cu.d_PP(x0, x3) #c
+        #     if d < self.dHat:
+        #         g0, g3 = cu.g_PP(x0, x3)
+        #
+        #         ld = barrier.compute_g_b(d, self.dHat)
+        #         sch = g0.dot(g0) / self.verts.h[v0]
+        #         ld = (d - self.dHat) / sch
+        #         self.verts.g[v0] += ld * g0
+        #         self.verts.h[v0] += ld
+        #     else:
+        #         dtype = -1
+        #
+        #
+        # elif dtype == 3:
+        #     d = cu.d_PE(x0, x1, x2) # r-g
+        #     if d < self.dHat:
+        #         g0, g1, g2 = cu.g_PE(x0, x1, x2)
+        #         ld = barrier.compute_g_b(d, self.dHat)
+        #         sch = g0.dot(g0) / self.verts.h[v0]
+        #         ld = (d - self.dHat) / sch
+        #         self.verts.g[v0] += ld * g0
+        #         self.verts.h[v0] += ld
+        #     else:
+        #         dtype = -1
+        #
+        # elif dtype == 4:
+        #     d = cu.d_PE(x0, x2, x3) #g-c
+        #     if d < self.dHat:
+        #         g0, g2, g3 = cu.g_PE(x0, x1, x2)
+        #         ld = barrier.compute_g_b(d, self.dHat)
+        #         sch = g0.dot(g0) / self.verts.h[v0]
+        #         ld = (d - self.dHat) / sch
+        #         self.verts.g[v0] += ld * g0
+        #         self.verts.h[v0] += ld
+        #     else:
+        #         dtype = -1
+        #
+        #
+        # elif dtype == 5:
+        #     d = cu.d_PE(x0, x3, x1) #c-r
+        #     if d < self.dHat:
+        #         g0, g3, g1 = cu.g_PE(x0, x3, x1)
+        #
+        #         ld = barrier.compute_g_b(d, self.dHat)
+        #         sch = g0.dot(g0) / self.verts.h[v0]
+        #         ld = (d - self.dHat) / sch
+        #         self.verts.g[v0] += ld * g0
+        #         self.verts.h[v0] += ld
+        #     else:
+        #         dtype = -1
 
-                ld = barrier.compute_g_b(d, self.dHat)
+
+        if dtype == 6:            # inside triangle
+            d = f_normal.dot(x0 - x1)
+            if d < 0:
+                f_normal = -f_normal
+            d = ti.abs(d)
+            # d = cu.d_PT(x0, x1, x2, x3)  # c-r
+            if d < self.dHat:
+                print("test")
+                ld = self.dtSq * 1e6
+                # g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
+                p = x0 + (self.dHat - d) * f_normal
                 # sch = g0.dot(g0) / self.verts.h[v0]
                 # ld = (d - self.dHat) / sch
-                self.verts.g[v0] += ld * g0
+                self.verts.g[v0] -= ld * (p - x0)
                 self.verts.h[v0] += ld
-            else:
-                dtype = -1
-
-
-
-        elif dtype == 1:
-            d = cu.d_PP(x0, x2)  #g
-            if d < self.dHat:
-                g0, g2 = cu.g_PP(x0, x2)
-
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-            else:
-                dtype = -1
-
-        elif dtype == 2:
-            d = cu.d_PP(x0, x3) #c
-            if d < self.dHat:
-                g0, g3 = cu.g_PP(x0, x3)
-
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-            else:
-                dtype = -1
-
-
-        elif dtype == 3:
-            d = cu.d_PE(x0, x1, x2) # r-g
-            if d < self.dHat:
-                g0, g1, g2 = cu.g_PE(x0, x1, x2)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g0.dot(g0) / self.verts.h[v0]
-                # ld = (d - self.dHat) / sch
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-            else:
-                dtype = -1
-
-        elif dtype == 4:
-            d = cu.d_PE(x0, x2, x3) #g-c
-            if d < self.dHat:
-                g0, g2, g3 = cu.g_PE(x0, x1, x2)
-                ld = barrier.compute_g_b(d, self.dHat)
-                # sch = g0.dot(g0) / self.verts.h[v0]
-                # ld = (d - self.dHat) / sch
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-            else:
-                dtype = -1
-
-
-        elif dtype == 5:
-            d = cu.d_PE(x0, x3, x1) #c-r
-            if d < self.dHat:
-                g0, g3, g1 = cu.g_PE(x0, x3, x1)
-
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-            else:
-                dtype = -1
-
-
-        elif dtype == 6:            # inside triangle
-            d = cu.d_PT(x0, x1, x2, x3)
-            if d < self.dHat:
-                g0, g1, g2, g3 = cu.g_PT(x0, x1, x2, x3)
-                ld = barrier.compute_g_b(d, self.dHat)
-                sch = g0.dot(g0) / self.verts.h[v0]
-                ld = (d - self.dHat) / sch
-                self.verts.g[v0] += ld * g0
-                self.verts.h[v0] += ld
-            else:
-                dtype = -1
-
-        return dtype, ld
+        return ld
 
     @ti.func
     def compute_constraint_energy_PT(self, x: ti.template(), pid: ti.int32, tid: ti.int32) -> ti.f32:
@@ -1069,10 +1081,10 @@ class Solver:
             self.Ap[u] += d
             self.Ap[v] -= d
 
-        for cid in self.candidatesPC:
-            pid = self.candidatesPC[cid].pid
-            h = self.candidatesPC[cid].h
-            self.Ap[pid] += h * self.p[pid]
+        for cid in self.candidatesPT:
+            pid = self.candidatesPT[cid].pid
+            ld = self.candidatesPT[cid].ld
+            self.Ap[pid] += ld * self.p[pid]
 
 
         pAp = 0.0
@@ -1111,8 +1123,8 @@ class Solver:
 
         r_2 = self.dot(self.z, self.r)
 
-        n_iter = 10000  # CG iterations
-        epsilon = 1e-12
+        n_iter = 100  # CG iterations
+        epsilon = 1e-6
 
         r_2_new = r_2
         i = 0
@@ -1123,31 +1135,34 @@ class Solver:
             if r_2_new <= epsilon:
                 break
 
-        print(f'cg iter: {i}')
+        # print(f'cg iter: {i}')
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
 
-    def update(self):
+    def update(self, dt, num_sub_steps):
 
-        self.verts.f_ext.fill([0.0, self.gravity, 0.0])
-        self.computeVtemp()
+        self.dt = dt / num_sub_steps
+        self.dtSq = self.dt ** 2
+        for sub_step in range(num_sub_steps):
+            self.verts.f_ext.fill([0.0, self.gravity, 0.0])
+            self.computeVtemp()
 
-        # self.compute_aabb()
-        # self.compute_candidates_PT()
+            self.compute_aabb()
+            self.compute_candidates_PT()
 
-        self.computeY()
-        self.verts.x_k.copy_from(self.verts.y)
+            self.computeY()
+            self.verts.x_k.copy_from(self.verts.y)
 
-        for i in range(1):
-            self.verts.g.fill(0.)
-            self.verts.h.copy_from(self.verts.m)
-            self.evaluate_gradient_and_hessian()
-            self.newton_pcg()
-            alpha = 1.0
-            # self.handle_collisions()
-            self.step_forward(alpha)
+            for i in range(1):
+                self.verts.g.fill(0.)
+                self.verts.h.copy_from(self.verts.m)
+                self.evaluate_gradient_and_hessian()
+                self.newton_pcg()
+                alpha = 1.0
+                # self.handle_collisions()
+                self.step_forward(alpha)
 
-        self.computeNextState()
+            self.computeNextState()
 
 
 
