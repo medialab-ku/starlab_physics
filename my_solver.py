@@ -111,7 +111,7 @@ class Solver:
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            if v.id == 61 or v.id == 78:
+            if v.id == 0 or v.id == 2:
                 v.v = ti.math.vec3(0.0, 0.0, 0.0)
             else:
                 v.v += (v.f_ext / v.m) * self.dt
@@ -205,29 +205,12 @@ class Solver:
             hij = U @ sig @ V.transpose()
             e.hij = hij
 
-        # for cid in self.candidatesPT:
-        #     pid = self.candidatesPT[cid].pid
-        #     tid = self.candidatesPT[cid].tid
-        #     ld = self.compute_gradient_and_hessian_PT(pid, tid)
-        #     self.candidatesPT[cid].ld = ld
-        # normal = ti.math.vec3([0, 1, 0.1])
-        # normal = normal.normalized(eps=1e-6)
-        # k = self.dtSq * 1e4
-        # for v in self.verts:
-        #     center = ti.math.vec3([0.5, 0.8, 0.5])
-        #     dist = (v.x - center).dot(normal)
-        #     if dist < 0.0:
-        #         p = v.x - dist * normal
-        #         v.g -= k * (v.x - p)
-        #         v.h += k
-        #         self.candidatesPC.append(self.PC_type(pid=v.id, h=k))
-
 
 
     @ti.kernel
     def step_forward(self):
         for v in self.verts:
-            if v.id == 61 or v.id == 78:
+            if v.id == 0 or v.id == 2:
                 v.x_k = v.x_k
             else:
                 v.x_k += v.dx
@@ -325,10 +308,6 @@ class Solver:
             self.Ap[u] += d
             self.Ap[v] -= d
 
-        # for cid in self.candidatesPT:
-        #     pid = self.candidatesPT[cid].pid
-        #     ld = self.candidatesPT[cid].ld
-        #     self.Ap[pid] += ld * self.p[pid]
 
 
         pAp = ti.float32(0.0)
@@ -362,7 +341,7 @@ class Solver:
 
 
 
-    def newton_pcg(self, tol):
+    def newton_pcg(self, tol, max_iter):
 
         self.verts.dx.fill(0.0)
         self.r.copy_from(self.verts.g)
@@ -372,11 +351,10 @@ class Solver:
 
         r_2 = self.dot(self.z, self.r)
 
-        n_iter = 100  # CG iterations
         r_2_new = r_2
 
         ti.profiler.clear_kernel_profiler_info()
-        for iter in range(n_iter):
+        for iter in range(max_iter):
             r_2_new = self.cg_iterate(r_2_new)
 
             if r_2_new <= tol:
@@ -459,7 +437,7 @@ class Solver:
                 self.verts.g.fill(0.)
                 self.verts.h.copy_from(self.verts.m)
                 self.evaluate_gradient_and_hessian()
-                self.newton_pcg(tol=1e-12)
+                self.newton_pcg(tol=1e-12, max_iter=100)
                 # alpha = 1.0
                 self.step_forward()
 

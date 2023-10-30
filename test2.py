@@ -27,7 +27,7 @@ center[0] = ti.math.vec3(0.5, 0.5, 0.5)
 debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
 #
-mesh = Mesh("obj_models/square_huge.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 static_mesh = Mesh("obj_models/sphere1K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 @ti.kernel
