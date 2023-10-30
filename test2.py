@@ -1,8 +1,9 @@
 import taichi as ti
+import numpy as np
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(arch=ti.cuda, device_memory_GB=8)
+ti.init(kernel_profiler=True, arch=ti.cuda, device_memory_GB=8)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
@@ -118,8 +119,17 @@ center[0] = ti.math.vec3(0.5, 0.5, 0.5)
 debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
 #
-mesh = Mesh("obj_models/square_huge.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-static_mesh = Mesh("obj_models/sphere1K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+
+total_verts_np = mesh.mesh.verts.x.to_numpy()
+total_verts_np = np.append(total_verts_np, static_mesh.mesh.verts.x.to_numpy(), axis=0)
+object_range = np.max(total_verts_np, axis=0) - np.min(total_verts_np, axis=0)
+
+total_min = ti.field(dtype=ti.f32, shape=(3,))
+total_min.from_numpy(np.min(total_verts_np, axis=0) - object_range * 0.8)
+total_max = ti.field(dtype=ti.f32, shape=(3,))
+total_max.from_numpy(np.max(total_verts_np, axis=0) + object_range * 0.8)
 
 @ti.kernel
 def init_color():
@@ -130,7 +140,7 @@ def init_color():
 
 init_color()
 
-sim = Solver(mesh, bottom=0.0, static_mesh=static_mesh, dt=dt, max_iter=1)
+sim = Solver(mesh, static_mesh=static_mesh, bottom=0.0, min_range=total_min, max_range=total_max, dt=dt, max_iter=1)
 
 window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
@@ -156,7 +166,7 @@ while window.running:
             run_sim = False
 
     if run_sim:
-        sim.update(dt=dt, num_sub_steps=5)
+        sim.update(dt=dt, num_sub_steps=10)
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     camera.lookat(0.5, 0.5, 0.5)
     scene.set_camera(camera)
@@ -166,10 +176,10 @@ while window.running:
     # scene.particles(centers=center, radius=0.3, color=(1, 0, 0))
     scene.particles(sim.verts.x, radius=sim.radius, color=(1, 0.5, 0))
     # scene.particles(sim.intersect, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0))
+    scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0))
     # scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
     # scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
-    scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
+    # scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(x1, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(sim.p, width=0.5, indices=debug_edge_indices, color=(1., 0., 0.))
     # scene.lines(static_mesh.mesh.verts.x, width=0.5, indices=static_mesh.edge_indices, color=(0., 0., 0.))
