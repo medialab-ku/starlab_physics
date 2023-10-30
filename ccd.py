@@ -153,8 +153,8 @@ def edge_edge_ccd( ea0  : ti.math.vec3,
             # print(f'{tocLowerBound}')
             ea0 += tocLowerBound * dea0
             ea1 += tocLowerBound * dea1
-            eb0 += tocLowerBound * dea0
-            eb1 += tocLowerBound * dea1
+            eb0 += tocLowerBound * deb0
+            eb1 += tocLowerBound * deb1
 
             dist2_cur = Edge_Edge_Distance_Unclassified(ea0, ea1, eb0, eb1)
             dFunc = dist2_cur - thickness * thickness
