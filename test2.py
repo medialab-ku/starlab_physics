@@ -3,7 +3,7 @@ import numpy as np
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(kernel_profiler=True, arch=ti.cuda, device_memory_GB=8)
+ti.init(kernel_profiler=True, arch=ti.cuda, device_memory_GB=3)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
