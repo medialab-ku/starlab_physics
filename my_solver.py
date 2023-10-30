@@ -49,32 +49,31 @@ class Solver:
         self.contact_stiffness = 1e3
         self.damping_factor = 1e-4
         self.grid_n = 256
-        # self.grid_particles_list = ti.field(ti.i32)
-        # self.grid_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
-        # self.partical_array = self.grid_block.dynamic(ti.l, self.num_verts_static)
-        # self.partical_array.place(self.grid_particles_list)
-        # self.grid_particles_count = ti.field(ti.i32)
-        # ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n)).place(self.grid_particles_count)
 
-        dynamic_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
-        dynamic_idx = dynamic_block.dynamic(ti.l, self.num_verts, chunk_size=32)
-        self.grid_dynamic_verts = ti.field(int)
-        dynamic_idx.place(self.grid_dynamic_verts)
 
-        static_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
-        static_idx = static_block.dynamic(ti.l, self.num_verts_static, chunk_size=32)
-        self.grid_static_verts = ti.field(int)
-        static_idx.place(self.grid_static_verts)
+        self.dynamic_head = ti.field(dtype=ti.i32, shape=self.grid_n * self.grid_n * self.grid_n)
+        self.dynamic_cur = ti.field(dtype=ti.i32, shape=self.grid_n * self.grid_n * self.grid_n)
+        self.dynamic_tail = ti.field(dtype=ti.i32, shape=self.grid_n * self.grid_n * self.grid_n)
+        self.dynamic_count = ti.field(dtype=ti.i32,
+                                      shape=(self.grid_n, self.grid_n, self.grid_n),
+                                      name="dynamic_count")
+        self.dynamic_column_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="dynamic_column_sum")
+        self.dynamic_prefix_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="dynamic_prefix_sum")
+        self.dynamic_particle_id = ti.field(dtype=ti.i32, shape=self.num_verts, name="dynamic_particle_id")
+
+        self.static_head = ti.field(dtype=ti.i32, shape=self.grid_n * self.grid_n * self.grid_n)
+        self.static_cur = ti.field(dtype=ti.i32, shape=self.grid_n * self.grid_n * self.grid_n)
+        self.static_tail = ti.field(dtype=ti.i32, shape=self.grid_n * self.grid_n * self.grid_n)
+        self.static_count = ti.field(dtype=ti.i32,
+                                     shape=(self.grid_n, self.grid_n, self.grid_n),
+                                     name="static_count")
+        self.static_column_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="static_column_sum")
+        self.static_prefix_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="static_prefix_sum")
+        self.static_particle_id = ti.field(dtype=ti.i32, shape=self.num_verts_static, name="static_particle_id")
 
         self.static_collision_pair = ti.field(dtype=ti.i32, shape=(self.num_verts, self.num_verts_static))
         self.self_collision_pair = ti.field(dtype=ti.i32, shape=(self.num_verts, self.num_verts))
 
-        # self.grain_count = ti.field(dtype=ti.i32,
-        #                        shape=(self.grid_n, self.grid_n, self.grid_n),
-        #                        name="grain_count")
-        # self.column_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="column_sum")
-        # self.prefix_sum = ti.field(dtype=ti.i32, shape=(self.grid_n, self.grid_n), name="prefix_sum")
-        # self.particle_id = ti.field(dtype=ti.i32, shape=self.num_verts, name="particle_id")
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
 
         # for PCG
@@ -244,99 +243,127 @@ class Solver:
 
     @ti.kernel
     def set_grid_particles(self):
-        # dynamic particles indexing
-        self.grid_dynamic_verts.fill(0)
-        for v in self.verts:
-            vIdx = self.compute_grid_index(v.x_k)
-            x_begin = ti.max(vIdx[0] - 1, 0)
-            x_end = ti.min(vIdx[0] + 2, self.grid_n)
+        ##### dynamic particles indexing #####
+        self.dynamic_count.fill(0)
 
-            y_begin = ti.max(vIdx[1] - 1, 0)
-            y_end = ti.min(vIdx[1] + 2, self.grid_n)
+        for i in range(self.num_verts):
+            dynamic_vert_idx = self.compute_grid_index(self.verts.x_k[i])
+            self.dynamic_count[dynamic_vert_idx] += 1
 
-            z_begin = ti.max(vIdx[2] - 1, 0)
-            z_end = ti.min(vIdx[2] + 2, self.grid_n)
+        self.dynamic_column_sum.fill(0)
+        # kernel comunicate with global variable ???? this is a bit amazing
+        for i, j, k in ti.ndrange(self.grid_n, self.grid_n, self.grid_n):
+            ti.atomic_add(self.dynamic_column_sum[i, j], self.dynamic_count[i, j, k])
 
-            for i, j, k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
-                ti.append(self.grid_dynamic_verts.parent(), ti.Vector([i, j, k]), v.id)
+        # this is because memory mapping can be out of order
+        _dynamic_prefix_sum_cur = 0
 
-        # static particles indexing
-        self.grid_static_verts.fill(0)
-        for v_s in self.verts_static:
-            vsIdx = self.compute_grid_index(v_s.x)
-            x_begin = ti.max(vsIdx[0] - 1, 0)
-            x_end = ti.min(vsIdx[0] + 2, self.grid_n)
+        for i, j in ti.ndrange(self.grid_n, self.grid_n):
+            self.dynamic_prefix_sum[i, j] = ti.atomic_add(_dynamic_prefix_sum_cur, self.dynamic_column_sum[i, j])
 
-            y_begin = ti.max(vsIdx[1] - 1, 0)
-            y_end = ti.min(vsIdx[1] + 2, self.grid_n)
+        for i, j, k in ti.ndrange(self.grid_n, self.grid_n, self.grid_n):
+            # we cannot visit prefix_sum[i,j] in this loop
+            pre = ti.atomic_add(self.dynamic_prefix_sum[i, j], self.dynamic_count[i, j, k])
+            linear_idx = i * self.grid_n * self.grid_n + j * self.grid_n + k
+            self.dynamic_head[linear_idx] = pre
+            self.dynamic_cur[linear_idx] = self.dynamic_head[linear_idx]
+            # only pre pointer is useable
+            self.dynamic_tail[linear_idx] = pre + self.dynamic_count[i, j, k]
 
-            z_begin = ti.max(vsIdx[2] - 1, 0)
-            z_end = ti.min(vsIdx[2] + 2, self.grid_n)
+        for i in range(self.num_verts):
+            dynamic_vert_idx = self.compute_grid_index(self.verts.x_k[i])
+            linear_idx = dynamic_vert_idx[0] * self.grid_n * self.grid_n + dynamic_vert_idx[1] * self.grid_n + dynamic_vert_idx[2]
+            location = ti.atomic_add(self.dynamic_cur[linear_idx], 1)
+            self.dynamic_particle_id[location] = i
 
-            for i, j, k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
-                ti.append(self.grid_static_verts.parent(), ti.Vector([i, j, k]), v_s.id)
+
+        ##### static particles indexing #####
+        self.static_count.fill(0)
+
+        for i in range(self.num_verts_static):
+            static_vert_idx = self.compute_grid_index(self.verts_static.x[i])
+            self.static_count[static_vert_idx] += 1
+
+        self.static_column_sum.fill(0)
+        # kernel comunicate with global variable ???? this is a bit amazing
+        for i, j, k in ti.ndrange(self.grid_n, self.grid_n, self.grid_n):
+            ti.atomic_add(self.static_column_sum[i, j], self.static_count[i, j, k])
+
+        # this is because memory mapping can be out of order
+        _static_prefix_sum_cur = 0
+
+        for i, j in ti.ndrange(self.grid_n, self.grid_n):
+            self.static_prefix_sum[i, j] = ti.atomic_add(_static_prefix_sum_cur, self.static_column_sum[i, j])
+
+        for i, j, k in ti.ndrange(self.grid_n, self.grid_n, self.grid_n):
+            # we cannot visit prefix_sum[i,j] in this loop
+            pre = ti.atomic_add(self.static_prefix_sum[i, j], self.static_count[i, j, k])
+            linear_idx = i * self.grid_n * self.grid_n + j * self.grid_n + k
+            self.static_head[linear_idx] = pre
+            self.static_cur[linear_idx] = self.static_head[linear_idx]
+            # only pre pointer is useable
+            self.static_tail[linear_idx] = pre + self.static_count[i, j, k]
+
+        for i in range(self.num_verts_static):
+            static_vert_idx = self.compute_grid_index(self.verts_static.x[i])
+            linear_idx = static_vert_idx[0] * self.grid_n * self.grid_n + static_vert_idx[1] * self.grid_n + static_vert_idx[2]
+            location = ti.atomic_add(self.static_cur[linear_idx], 1)
+            self.static_particle_id[location] = i
 
 
     @ti.kernel
     def handle_contacts(self):
         static_collision_count = 0
         self_collision_count = 0
-        # for v in self.verts:
-        #     for sv in range(self.num_verts_static):
-        #         static_collision_count += 1
-        #         loop_count += 1
-        #         self.resolve(v.id, sv)
-        #
-        # for v in self.verts:
-        #     for sv in range(v.id + 1, self.num_verts):
-        #         self_collision_count += 1
-        #         loop_count += 1
-        #         self.resolve_self(v.id, sv)
-
-        self.static_collision_pair.fill(0)
-        self.self_collision_pair.fill(0)
         loop_count = 0
         for v in self.verts:
-            vIdx = self.compute_grid_index(v.x_k)
-            if vIdx[0] < 0 or vIdx[1] < 0 or vIdx[2] < 0:
-                continue
+            for sv in range(self.num_verts_static):
+                static_collision_count += 1
+                loop_count += 1
+                self.resolve(v.id, sv)
 
-            x_begin = ti.max(vIdx[0] - 1, 0)
-            x_end = ti.min(vIdx[0] + 2, self.grid_n)
+        for v in self.verts:
+            for sv in range(v.id + 1, self.num_verts):
+                self_collision_count += 1
+                loop_count += 1
+                self.resolve_self(v.id, sv)
 
-            y_begin = ti.max(vIdx[1] - 1, 0)
-            y_end = ti.min(vIdx[1] + 2, self.grid_n)
-
-            z_begin = ti.max(vIdx[2] - 1, 0)
-            z_end = ti.min(vIdx[2] + 2, self.grid_n)
-
-            for i, j, k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
-                # collision with static mesh
-                is_static_mesh = True
-                if self.grid_static_verts[i, j, k].length() != 0:
-                    for svIdx in range(self.grid_static_verts[i, j, k].length()):
-                        sv = self.grid_static_verts[i, j, k, svIdx]
-                        loop_count += 1
-                        if self.static_collision_pair[v.id, sv] == 0:
-                            static_collision_count += 1
-                            self.resolve(v.id, sv)
-                            self.static_collision_pair[v.id, sv] += 1
-                else:
-                    is_static_mesh = False
-                    loop_count += 1
-
-                # self collision
-                if self.grid_dynamic_verts[i, j, k].length() != 0:
-                    for dvIdx in range(self.grid_dynamic_verts[i, j, k].length()):
-                        dv = self.grid_dynamic_verts[i, j, k, dvIdx]
-                        loop_count += 1
-                        if self.self_collision_pair[v.id, dv] == 0 and v.id != dv:
-                            self_collision_count += 1
-                            self.resolve_self(v.id, dv)
-                            self.self_collision_pair[v.id, dv] += 1
-                else:
-                    if is_static_mesh:
-                        loop_count += 1
+        # self.static_collision_pair.fill(0)
+        # self.self_collision_pair.fill(0)
+        # loop_count = 0
+        # for v in self.verts:
+        #     vIdx = self.compute_grid_index(v.x_k)
+        #     if vIdx[0] < 0 or vIdx[1] < 0 or vIdx[2] < 0:
+        #         continue
+        #
+        #     x_begin = ti.max(vIdx[0] - 1, 0)
+        #     x_end = ti.min(vIdx[0] + 2, self.grid_n)
+        #
+        #     y_begin = ti.max(vIdx[1] - 1, 0)
+        #     y_end = ti.min(vIdx[1] + 2, self.grid_n)
+        #
+        #     z_begin = ti.max(vIdx[2] - 1, 0)
+        #     z_end = ti.min(vIdx[2] + 2, self.grid_n)
+        #
+        #     for neigh_i, neigh_j, neigh_k in ti.ndrange((x_begin, x_end), (y_begin, y_end), (z_begin, z_end)):
+        #         # on split plane
+        #         if neigh_k == vIdx[2] and (neigh_i + neigh_j) > (vIdx[0] + vIdx[1]) and neigh_i <= vIdx[0]:
+        #             continue
+        #
+        #         neigh_linear_idx = neigh_i * self.grid_n * self.grid_n + neigh_j * self.grid_n + neigh_k
+        #         for p_idx in range(self.static_head[neigh_linear_idx],
+        #                               self.static_tail[neigh_linear_idx]):
+        #               sv = self.static_particle_id[p_idx]
+        #               static_collision_count += 1
+        #               self.resolve(v.id, sv)
+        #
+        #         for p_idx in range(self.dynamic_head[neigh_linear_idx],
+        #                            self.dynamic_tail[neigh_linear_idx]):
+        #                 dv = self.dynamic_particle_id[p_idx]
+        #                 if v.id >= dv:
+        #                     continue
+        #                 self_collision_count += 1
+        #                 self.resolve_self(v.id, dv)
 
 
         # for i, j, k in ti.ndrange(self.grid_n, self.grid_n, self.grid_n):
@@ -465,10 +492,11 @@ class Solver:
 
     @ti.func
     def compute_grid_index(self, pos: ti.math.vec3)->ti.math.ivec3:
-        idx = ti.floor((pos - self.grid_min) * self.grid_n / (self.grid_max - self.grid_min), int)
-        # if idx[0] < 0 or idx[1] < 0 or idx[2] < 0:
-            # print(f"Wrong indexing!!! Position out of range. pos: {pos}, idx: {idx}")
-        return idx
+        idx3d = ti.floor((pos - self.grid_min) * self.grid_n / (self.grid_max - self.grid_min), int)
+        # idx = idx3d[0] * self.grid_n * self.grid_n + idx3d[1] * self.grid_n + idx3d[2]
+        # if idx3d[0] < 0 or idx3d[1] < 0 or idx3d[2] < 0:
+            # print(f"Wrong indexing!!! Position out of range. pos: {pos}, idx: {idx3d}")
+        return idx3d
 
 
     # @ti.kernel
@@ -581,21 +609,21 @@ class Solver:
             # for i in range(3):
             self.verts.p.fill(0.0)
             self.verts.nc.fill(0.0)
-            self.set_grid_particles()
+            # self.set_grid_particles()
             self.handle_contacts()
             query_result1 = ti.profiler.query_kernel_profiler_info(self.set_grid_particles.__name__)
             query_result2 = ti.profiler.query_kernel_profiler_info(self.handle_contacts.__name__)
-            print("kernel exec. #: ", query_result1.counter, query_result2.counter)
-            print(f"Min set_grid_particles: {query_result1.min}, handle_contacts: {query_result2.min}")
-            print(f"Max set_grid_particles: {query_result1.max}, handle_contacts: {query_result2.max}")
-            print("total[ms]      :", float(query_result1.counter * query_result1.avg), float(query_result2.counter * query_result2.avg))
-            print("avg[ms]        :", float(query_result1.avg), float(query_result2.avg))
+            # print("kernel exec. #: ", query_result1.counter, query_result2.counter)
+            # print(f"Min set_grid_particles: {query_result1.min}, handle_contacts: {query_result2.min}")
+            # print(f"Max set_grid_particles: {query_result1.max}, handle_contacts: {query_result2.max}")
+            # print("total[ms]      :", float(query_result1.counter * query_result1.avg), float(query_result2.counter * query_result2.avg))
+            # print("avg[ms]        :", float(query_result1.avg), float(query_result2.avg))
 
-            # query_result = ti.profiler.query_kernel_profiler_info(self.handle_contacts.__name__)
-            # print("kernel exec. #: ", query_result.counter)
-            # print(f"Min: {query_result.min}, Max: {query_result.max}")
-            # print("total[ms]      :", float(query_result.counter * query_result.avg))
-            # print("avg[ms]        :", float(query_result.avg))
+            query_result = ti.profiler.query_kernel_profiler_info(self.handle_contacts.__name__)
+            print("kernel exec. #: ", query_result.counter)
+            print(f"Min: {query_result.min}, Max: {query_result.max}")
+            print("total[ms]      :", float(query_result.counter * query_result.avg))
+            print("avg[ms]        :", float(query_result.avg))
 
             ti.deactivate_all_snodes()
             self.computeNextState()
