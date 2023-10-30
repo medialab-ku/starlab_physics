@@ -374,15 +374,20 @@ class Solver:
 
         n_iter = 100  # CG iterations
         r_2_new = r_2
-        i = 0
+
+        ti.profiler.clear_kernel_profiler_info()
         for iter in range(n_iter):
-            i += 1
             r_2_new = self.cg_iterate(r_2_new)
 
             if r_2_new <= tol:
                 break
+        query_result = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        print("kernel exec. #: ", query_result.counter)
+        # print("kernel elapsed time(min_in_ms) =", query_result.min)
+        # print("kernel elapsed time(max_in_ms) =", query_result.max)
+        print("total[ms]     : ", float(query_result.counter * query_result.avg))
+        print("avg[ms]       : ", float(query_result.avg))
 
-        print(f'cg iter: {i}')
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
     @ti.kernel
@@ -450,18 +455,18 @@ class Solver:
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
 
-            for i in range(2):
+            for i in range(1):
                 self.verts.g.fill(0.)
                 self.verts.h.copy_from(self.verts.m)
                 self.evaluate_gradient_and_hessian()
-                self.newton_pcg(tol=1e-6)
+                self.newton_pcg(tol=1e-12)
                 # alpha = 1.0
                 self.step_forward()
 
             # for i in range(3):
-            self.verts.p.fill(0.0)
-            self.verts.nc.fill(0.0)
-            self.handle_contacts()
+            # self.verts.p.fill(0.0)
+            # self.verts.nc.fill(0.0)
+            # self.handle_contacts()
 
             ti.deactivate_all_snodes()
             self.computeNextState()
