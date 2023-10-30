@@ -156,7 +156,7 @@ while window.running:
             run_sim = False
 
     if run_sim:
-        sim.update(dt=dt, num_sub_steps=20)
+        sim.update(dt=dt, num_sub_steps=5)
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     camera.lookat(0.5, 0.5, 0.5)
     scene.set_camera(camera)
@@ -166,13 +166,13 @@ while window.running:
     # scene.particles(centers=center, radius=0.3, color=(1, 0, 0))
     scene.particles(sim.verts.x, radius=sim.radius, color=(1, 0.5, 0))
     # scene.particles(sim.intersect, radius=0.01, color=(0, 1, 0), per_vertex_color=per_vertex_color)
-    scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0))
+    # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0))
     # scene.mesh(sim.verts.x, mesh.face_indices, color=(1., 0.5, 0.0))
     # scene.mesh(static_mesh.mesh.verts.x, static_mesh.face_indices, color=(0.5, 0.5, 0.5))
     scene.lines(sim.verts.x, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(x1, width=0.5, indices=mesh.edge_indices, color=(0., 0., 0.))
     # scene.lines(sim.p, width=0.5, indices=debug_edge_indices, color=(1., 0., 0.))
-    scene.lines(static_mesh.mesh.verts.x, width=0.5, indices=static_mesh.edge_indices, color=(0., 0., 0.))
+    # scene.lines(static_mesh.mesh.verts.x, width=0.5, indices=static_mesh.edge_indices, color=(0., 0., 0.))
     canvas.scene(scene)
     window.show()
     # window.save_image(f'results/test/{step:06d}.jpg')

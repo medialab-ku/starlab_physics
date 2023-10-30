@@ -48,7 +48,7 @@ class Solver:
 
         self.radius = 0.01
         self.contact_stiffness = 1e3
-        self.damping_factor = 1e-5
+        self.damping_factor = 1e-4
         self.grid_n = 32
         # self.grid_particles_list = ti.field(ti.i32)
         # self.grid_block = ti.root.dense(ti.ijk, (self.grid_n, self.grid_n, self.grid_n))
@@ -166,7 +166,7 @@ class Solver:
         #         v.y = center + rad * nor
 
     @ti.kernel
-    def computeNextState(self):
+    def  computeNextState(self):
 
         for v in self.verts:
             v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
@@ -189,7 +189,7 @@ class Solver:
         for e in self.edges:
             xij = e.verts[0].x_k - e.verts[1].x_k
             lij = xij.norm()
-            grad = coef * (xij - e.l0 * xij.normalized(1e-6))
+            grad = coef * (xij - (e.l0/lij) * xij)
             e.verts[0].g -= grad
             e.verts[1].g += grad
             e.verts[0].h += coef
@@ -225,14 +225,16 @@ class Solver:
 
 
     @ti.kernel
-    def step_forward(self, step_size: ti.f32):
+    def step_forward(self):
         for v in self.verts:
             if v.id == 61 or v.id == 78:
                 v.x_k = v.x_k
             else:
-                v.x_k += step_size * v.dx
+                v.x_k += v.dx
 
-        start_idx = ti.math.vec3(-3, -3, -3)
+    @ti.kernel
+    def handle_contacts(self):
+        # start_idx = ti.math.vec3(-3, -3, -3)
         for v in self.verts:
             for s in range(self.num_verts_static):
                 self.resolve(v.id, s)
@@ -268,11 +270,9 @@ class Solver:
             #             continue
             #         self.resolve(v.id, j)
 
-
         for v in self.verts:
             if v.nc > 0:
                 v.x_k = v.p / v.nc
-
     @ti.func
     def resolve(self, i, j):
         dx = self.verts.x_k[i] - self.verts_static.x[j]
@@ -281,6 +281,11 @@ class Solver:
         if d < 2.0 * self.radius:  # in contact
             normal = dx / d
             p = self.verts_static.x[j] + 2.0 * self.radius * normal
+            v = (p - self.verts.x[i]) / self.dt
+            if v.dot(normal) < 0.:
+                # print("test")
+                v -= v.dot(normal) * normal
+                p = self.verts.x[i] + v * self.dt
             self.verts.p[i] += p
             self.verts.nc[i] += 1
 
@@ -308,6 +313,7 @@ class Solver:
     @ti.kernel
     def cg_iterate(self, r_2: ti.f32) -> ti.f32:
         # Ap = A * x
+        ti.mesh_local(self.Ap, self.p)
         for v in self.verts:
             self.Ap[v.id] = self.p[v.id] * v.m
 
@@ -325,33 +331,38 @@ class Solver:
         #     self.Ap[pid] += ld * self.p[pid]
 
 
-        pAp = 0.0
-        ti.loop_config(block_dim=32)
-        for v in self.verts:
-            pAp += self.p[v.id].dot(self.Ap[v.id])
+        pAp = ti.float32(0.0)
+        ti.loop_config(block_dim=64)
+        for i in range(self.num_verts):
+            pAp += self.p[i].dot(self.Ap[i])
 
         alpha = r_2 / pAp
+
+        ti.mesh_local(self.Ap, self.r)
         for v in self.verts:
             v.dx += alpha * self.p[v.id]
             self.r[v.id] -= alpha * self.Ap[v.id]
 
+        ti.mesh_local(self.z, self.r)
         for v in self.verts:
             self.z[v.id] = self.r[v.id] / v.h
 
-        r_2_new = 0.0
-        ti.loop_config(block_dim=32)
+        r_2_new = ti.float32(0.0)
+        ti.loop_config(block_dim=64)
         for v in self.verts:
             r_2_new += self.z[v.id].dot(self.r[v.id])
 
         beta = r_2_new / r_2
-        for v in self.verts:
-            self.p[v.id] = self.z[v.id] + beta * self.p[v.id]
+
+        ti.loop_config(block_dim=64)
+        for i in range(self.num_verts):
+            self.p[i] = self.z[i] + beta * self.p[i]
 
         return r_2_new
 
 
 
-    def newton_pcg(self):
+    def newton_pcg(self, tol):
 
         self.verts.dx.fill(0.0)
         self.r.copy_from(self.verts.g)
@@ -362,18 +373,16 @@ class Solver:
         r_2 = self.dot(self.z, self.r)
 
         n_iter = 100  # CG iterations
-        epsilon = 1e-6
-
         r_2_new = r_2
         i = 0
         for iter in range(n_iter):
             i += 1
             r_2_new = self.cg_iterate(r_2_new)
 
-            if r_2_new <= epsilon:
+            if r_2_new <= tol:
                 break
 
-        # print(f'cg iter: {i}')
+        print(f'cg iter: {i}')
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
     @ti.kernel
@@ -430,7 +439,7 @@ class Solver:
         self.dt = dt / num_sub_steps
         self.dtSq = self.dt ** 2
 
-        self.construct_grid()
+        # self.construct_grid()
         for sub_step in range(num_sub_steps):
             self.verts.f_ext.fill([0.0, self.gravity, 0.0])
             self.computeVtemp()
@@ -445,11 +454,14 @@ class Solver:
                 self.verts.g.fill(0.)
                 self.verts.h.copy_from(self.verts.m)
                 self.evaluate_gradient_and_hessian()
-                self.newton_pcg()
-                alpha = 1.0
-                self.verts.p.fill(0.0)
-                self.verts.nc.fill(0.0)
-                self.step_forward(alpha)
+                self.newton_pcg(tol=1e-6)
+                # alpha = 1.0
+                self.step_forward()
+
+            # for i in range(3):
+            self.verts.p.fill(0.0)
+            self.verts.nc.fill(0.0)
+            self.handle_contacts()
 
             ti.deactivate_all_snodes()
             self.computeNextState()
