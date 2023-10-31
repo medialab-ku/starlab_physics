@@ -108,22 +108,3 @@ class Mesh:
 
         for v in self.mesh.verts:
             v.x += self.trans
-        #
-        # for v in self.mesh.verts:
-        #     if v.x.x > 1.0:
-        #         v.x.x = 1.0
-        #
-        #     if v.x.x < 0.0:
-        #         v.x.x = 0.0
-        #
-        #     if v.x.y > 1.0:
-        #         v.x.y = 1.0
-        #
-        #     if v.x.y < 0.0:
-        #         v.x.y = 0.0
-        #
-        #     if v.x.z > 1.0:
-        #         v.x.z = 1.0
-        #
-        #     if v.x.z < 0.0:
-        #         v.x.z = 0.0
