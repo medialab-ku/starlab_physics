@@ -431,8 +431,8 @@ class Solver:
     @ti.kernel
     def set_init_guess_pcg(self) -> ti.f32:
 
-        for v in self.verts:
-            v.dx = v.g / v.h
+        # for v in self.verts:
+        #     v.dx = v.g / v.h
 
         ti.mesh_local(self.Ap)
         for v in self.verts:
@@ -573,7 +573,6 @@ class Solver:
     def newton_pcg(self, tol, max_iter):
 
         self.verts.dx.fill(0.0)
-        # self.Ap.fill(0.0)
         r_2 = self.set_init_guess_pcg()
         r_2_new = r_2
 
