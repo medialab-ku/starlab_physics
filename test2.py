@@ -166,7 +166,7 @@ while window.running:
             run_sim = False
 
     if run_sim:
-        sim.update(dt=dt, num_sub_steps=10)
+        sim.update(dt=dt, num_sub_steps=40)
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     camera.lookat(0.5, 0.5, 0.5)
     scene.set_camera(camera)

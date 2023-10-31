@@ -10,7 +10,7 @@ class Mesh:
                  rot=ti.math.vec3(0, 0, 0),
                  scale=1.0):
 
-        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "VV"])
+        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "VV", "VE"])
         self.mesh.verts.place({'m': ti.f32,
                                'x0': ti.math.vec3,
                                'x': ti.math.vec3,
