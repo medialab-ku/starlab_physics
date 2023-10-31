@@ -10,7 +10,7 @@ class Mesh:
                  rot=ti.math.vec3(0, 0, 0),
                  scale=1.0):
 
-        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV"])
+        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "VV"])
         self.mesh.verts.place({'m': ti.f32,
                                'x0': ti.math.vec3,
                                'x': ti.math.vec3,
@@ -19,15 +19,12 @@ class Mesh:
                                'y': ti.math.vec3,
                                'ld': ti.f32,
                                'x_k': ti.math.vec3,
-                               'x_temp': ti.math.vec3,
                                'p': ti.math.vec3,
                                'nc': ti.uint32,
+                               'deg': ti.uint32,
                                'dx': ti.math.vec3,
-                               'alpha': ti.f32,
                                'g': ti.math.vec3,
-                               'h': ti.f32,
-                               'aabb_min': ti.math.vec3,
-                               'aabb_max': ti.math.vec3})
+                               'h': ti.f32})
 
 
 
@@ -39,12 +36,11 @@ class Mesh:
         self.mesh.edges.place({'l0': ti.f32,
                                'ld': ti.f32,
                                'vid': ti.math.ivec2,
-                               'hij': ti.math.mat3,
-                               'aabb_min': ti.math.vec3,
-                               'aabb_max': ti.math.vec3}) # bounding sphere radius
+                               'hij': ti.math.mat3, # bounding sphere radius
+                               'hinv': ti.math.mat2}) # bounding sphere radius
 
-        self.mesh.faces.place({'aabb_min': ti.math.vec3,
-                               'aabb_max': ti.math.vec3})  # bounding sphere radius
+        # self.mesh.faces.place({'aabb_min': ti.math.vec3,
+        #                        'aabb_max': ti.math.vec3})  # bounding sphere radius
 
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.faces) * 3)
