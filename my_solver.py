@@ -1,4 +1,5 @@
 import taichi as ti
+import numpy as np
 import meshtaichi_patcher as Patcher
 
 import ccd as ccd
@@ -21,6 +22,16 @@ class Solver:
         self.static_mesh = static_mesh
         self.grid_min = ti.math.vec3(min_range[0], min_range[1], min_range[2])
         self.grid_max = ti.math.vec3(max_range[0], max_range[1], max_range[2])
+        self.domain_size = self.grid_max - self.grid_min
+
+
+        self.radius = 0.008
+        self.grid_size = self.radius
+        self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
+        print("grid size: ", self.grid_num)
+        self.padding = self.grid_size
+
+
         self.k = k
         self.dt = dt
         self.dtSq = dt ** 2
@@ -53,7 +64,6 @@ class Solver:
 
         self.dHat = 1e-3
 
-        self.radius = 0.008
         self.contact_stiffness = 1e3
         self.damping_factor = 1e-4
         self.grid_n = 256
@@ -90,6 +100,76 @@ class Solver:
         self.p = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.Ap = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
+
+        self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
+        self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
+        self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
+
+        self.grid_ids = ti.field(int, shape=self.num_verts)
+        self.grid_ids_buffer = ti.field(int, shape=self.num_verts)
+        self.grid_ids_new = ti.field(int, shape=self.num_verts)
+
+        self.object_id_buffer = ti.field(dtype=int, shape=self.num_verts)
+        self.object_id = ti.field(dtype=int, shape=self.num_verts)
+
+    @ti.kernel
+    def counting_sort(self):
+        # FIXME: make it the actual particle num
+        for i in range(self.num_verts):
+            I = self.num_verts - 1 - i
+            base_offset = 0
+            if self.grid_ids[I] - 1 >= 0:
+                base_offset = self.grid_particles_num[self.grid_ids[I] - 1]
+            self.grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[I]], 1) - 1 + base_offset
+
+        for I in ti.grouped(self.grid_ids):
+            new_index = self.grid_ids_new[I]
+            self.grid_ids_buffer[new_index] = self.grid_ids[I]
+            self.object_id_buffer[new_index] = self.object_id[I]
+
+        for I in range(self.num_verts):
+            self.grid_ids[I] = self.grid_ids_buffer[I]
+            self.object_id[I] = self.object_id_buffer[I]
+
+
+
+    @ti.func
+    def flatten_grid_index(self, grid_index):
+        return grid_index[0] * self.grid_num[1] * self.grid_num[2] + grid_index[1] * self.grid_num[2] + grid_index[2]
+
+    @ti.func
+    def get_flatten_grid_index(self, pos):
+        return self.flatten_grid_index(self.pos_to_index(pos))
+
+    @ti.kernel
+    def update_grid_id(self):
+        for I in ti.grouped(self.grid_particles_num):
+            self.grid_particles_num[I] = 0
+        for v in self.verts:
+            grid_index = self.get_flatten_grid_index(v.x)
+            self.grid_ids[v.id] = grid_index
+            ti.atomic_add(self.grid_particles_num[grid_index], 1)
+        for I in ti.grouped(self.grid_particles_num):
+            self.grid_particles_num_temp[I] = self.grid_particles_num[I]
+
+    def initialize_particle_system(self):
+        self.update_grid_id()
+        self.prefix_sum_executor.run(self.grid_particles_num)
+        self.counting_sort()
+
+    @ti.func
+    def pos_to_index(self, pos):
+        return (pos / self.grid_size).cast(int)
+
+    @ti.func
+    def for_all_neighbors(self, p_i, task: ti.template(), ret: ti.template()):
+        center_cell = self.pos_to_index(self.verts.x_k[p_i])
+        for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+            grid_index = self.flatten_grid_index(center_cell + offset)
+            for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+                if p_i[0] != p_j and (self.verts.x_k[p_i] - self.verts.x_k[p_j]).norm() < self.radius:
+                    task(p_i, p_j, ret)
+
 
 
     @ti.kernel
@@ -634,13 +714,15 @@ class Solver:
         self.dtSq = self.dt ** 2
 
         ti.profiler.clear_kernel_profiler_info()
+
         for sub_step in range(num_sub_steps):
             self.verts.f_ext.fill([0.0, self.gravity, 0.0])
             self.computeVtemp()
 
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
-            # self.set_grid_particles()
+            self.set_grid_particles()
+            self.initialize_particle_system()
             tol = 1e-3
 
             for i in range(1):
@@ -691,16 +773,30 @@ class Solver:
             # self.handle_contacts()
             # self.computeNextState()
 
-        cg_iterate_profile = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        print("total cg_iterate call per frame: ", cg_iterate_profile.counter)
-        print("total[ms]     : ", float(cg_iterate_profile.counter * cg_iterate_profile.avg))
-        print("avg[ms]       : ", float(cg_iterate_profile.avg))
+        # cg_iterate_profile = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        # print("total cg_iterate call per frame: ", cg_iterate_profile.counter)
+        # print("total[ms]     : ", float(cg_iterate_profile.counter * cg_iterate_profile.avg))
+        # print("avg[ms]       : ", float(cg_iterate_profile.avg))
+        #
+        # evaluate_gradient_and_hessian_profile = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        # print("gradient/hessian call per frame: ", evaluate_gradient_and_hessian_profile.counter)
+        # print("total[ms]     : ", float(evaluate_gradient_and_hessian_profile.counter * evaluate_gradient_and_hessian_profile.avg))
+        # print("avg[ms]       : ", float(evaluate_gradient_and_hessian_profile.avg))
 
-        evaluate_gradient_and_hessian_profile = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        print("gradient/hessian call per frame: ", evaluate_gradient_and_hessian_profile.counter)
-        print("total[ms]     : ", float(evaluate_gradient_and_hessian_profile.counter * evaluate_gradient_and_hessian_profile.avg))
-        print("avg[ms]       : ", float(evaluate_gradient_and_hessian_profile.avg))
 
+        neighbour_search_profile_1 = ti.profiler.query_kernel_profiler_info(self.update_grid_id.__name__)
+        neighbour_search_profile_2 = ti.profiler.query_kernel_profiler_info(self.prefix_sum_executor.run.__name__)
+        neighbour_search_profile_3 = ti.profiler.query_kernel_profiler_info(self.counting_sort.__name__)
+        neighbour_search_profile_4 = ti.profiler.query_kernel_profiler_info(self.set_grid_particles.__name__)
+        # print("neighbour search call per frame: ", neighbour_search_profile.counter)
+        total_1 = neighbour_search_profile_1.counter * neighbour_search_profile_1.avg
+        total_2 = neighbour_search_profile_2.counter * neighbour_search_profile_2.avg
+        total_3 = neighbour_search_profile_3.counter * neighbour_search_profile_3.avg
+        total_4 = neighbour_search_profile_4.counter * neighbour_search_profile_4.avg
 
+        total_1
+
+        print("total[ms]: ", float(total_1 + total_2 + total_3), float(total_4))
+        # print("avg[ms]       : ", float(neighbour_search_profile.avg))
 
 
