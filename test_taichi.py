@@ -158,3 +158,53 @@ def test_ccd():
 
 # add_data()
 test_ccd()
+
+num_mat = 10
+a_field = ti.Matrix.field(m=4, n=4, shape=(num_mat), dtype=ti.f32)
+l_field = ti.Matrix.field(m=4, n=4, shape=(num_mat), dtype=ti.f32)
+@ti.kernel
+def test_llt():
+
+
+    dimSize= 10
+    A = ti.Matrix([[1., 0., 0., 0.],
+                   [0., 1., 0., 0.],
+                   [0., 0., 1., 0.],
+                   [0., 0., 0., 1.]])
+
+    L = ti.Matrix([[0., 0., 0., 0.],
+                   [0., 0., 0., 0.],
+                   [0., 0., 0., 0.],
+                   [0., 0., 0., 0.]])
+
+    for i in a_field:
+        a_field[i] = A
+
+    for i in a_field:
+        l_field[i] = L
+
+
+    # print(a_field[0][0, 0])
+
+    dimSize = 4
+    # for bat in range(num_mat):
+    #     a = a_field[bat]
+    #     l = l_field[bat]
+    #     for i in range(dimSize):
+    #         sum_i = 0
+    #         for j in range(i):
+    #
+    #             for k in range(j):
+    #                 sum_i += l_field[bat][i, k] @ l_field[bat][j, k]
+    #
+    #             if i == j:
+    #                 l_field[bat][i, j] = ti.sqrt(a[i, i] - sum_i)
+    #             else:
+    #                 l_field[bat][i, j] = (1.0 / l_field[bat][j, j] * (a_field[bat][i, j] - sum_i))
+
+    for i in range(10):
+        a = 0
+        for j in range(10):
+            a += j
+
+test_llt()
