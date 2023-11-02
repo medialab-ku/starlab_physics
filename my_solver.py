@@ -107,19 +107,20 @@ class Solver:
         self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
 
-        self.grid_ids = ti.field(int, shape=self.num_verts)
-        self.grid_ids_buffer = ti.field(int, shape=self.num_verts)
-        self.grid_ids_new = ti.field(int, shape=self.num_verts)
-        self.cur2org = ti.field(int, shape=self.num_verts)
+        self.max_num_verts = self.num_verts
+        self.grid_ids = ti.field(int, shape=self.max_num_verts)
+        self.grid_ids_buffer = ti.field(int, shape=self.max_num_verts)
+        self.grid_ids_new = ti.field(int, shape=self.max_num_verts)
+        self.cur2org = ti.field(int, shape=self.max_num_verts)
 
-        self.object_id_buffer = ti.field(dtype=int, shape=self.num_verts)
-        self.object_id = ti.field(dtype=int, shape=self.num_verts)
+        # self.object_id_buffer = ti.field(dtype=int, shape=self.num_verts)
+        # self.object_id = ti.field(dtype=int, shape=self.num_verts)
 
     @ti.kernel
     def counting_sort(self):
         # FIXME: make it the actual particle num
-        for i in range(self.num_verts):
-            I = self.num_verts - 1 - i
+        for i in range(self.max_num_verts):
+            I = self.max_num_verts - 1 - i
             base_offset = 0
             if self.grid_ids[I] - 1 >= 0:
                 base_offset = self.grid_particles_num[self.grid_ids[I] - 1]
