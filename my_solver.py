@@ -324,12 +324,12 @@ class Solver:
             hij = U @ sig @ V.transpose()
             e.hij = hij
 
-        for e in self.edges:
-            h = ti.math.mat2([[e.verts[0].h, 0],
-                              [0, e.verts[1].h]]) + \
-                coef * ti.math.mat2([[0, -1],
-                                     [-1, 0]])
-            e.hinv = h.inverse()
+        # for e in self.edges:
+        #     h = ti.math.mat2([[e.verts[0].h, 0],
+        #                       [0, e.verts[1].h]]) + \
+        #         coef * ti.math.mat2([[0, -1],
+        #                              [-1, 0]])
+        #     e.hinv = h.inverse()
 
     @ti.kernel
     def step_forward(self):
@@ -612,27 +612,27 @@ class Solver:
             self.r[v.id] -= alpha * self.Ap[v.id]
 
         # ti.mesh_local(self.z, self.r)
-        for e in self.edges:
-            i, j = e.verts[0].id, e.verts[1].id
-            ri, rj = self.r[i], self.r[j]
-            rx = ti.math.vec2(ri.x, rj.x)
-            ry = ti.math.vec2(ri.y, rj.y)
-            rz = ti.math.vec2(ri.z, rj.z)
-
-            zx = e.hinv @ rx
-            zy = e.hinv @ ry
-            zz = e.hinv @ rz
-
-            zi = ti.math.vec3(zx[0], zy[0], zz[0])
-            zj = ti.math.vec3(zx[1], zy[1], zz[1])
-
-            self.z[i] += zi
-            self.z[j] += zj
-
-
-        ti.mesh_local(self.z)
-        for v in self.verts:
-            self.z[v.id] = self.z[v.id] / v.deg
+        # for e in self.edges:
+        #     i, j = e.verts[0].id, e.verts[1].id
+        #     ri, rj = self.r[i], self.r[j]
+        #     rx = ti.math.vec2(ri.x, rj.x)
+        #     ry = ti.math.vec2(ri.y, rj.y)
+        #     rz = ti.math.vec2(ri.z, rj.z)
+        #
+        #     zx = e.hinv @ rx
+        #     zy = e.hinv @ ry
+        #     zz = e.hinv @ rz
+        #
+        #     zi = ti.math.vec3(zx[0], zy[0], zz[0])
+        #     zj = ti.math.vec3(zx[1], zy[1], zz[1])
+        #
+        #     self.z[i] += zi
+        #     self.z[j] += zj
+        #
+        #
+        # ti.mesh_local(self.z)
+        # for v in self.verts:
+        #     self.z[v.id] = self.z[v.id] / v.deg
 
         ti.mesh_local(self.z, self.r)
         for v in self.verts:
@@ -668,11 +668,13 @@ class Solver:
             if r_2_new <= tol:
                 break
 
+        # query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        # print("kernel exec. #: ", query_result1.counter)
 
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
     @ti.func
-    def compute_grid_index(self, pos: ti.math.vec3)->ti.math.ivec3:
+    def compute_grid_index(self, pos: ti.math.vec3) -> ti.math.ivec3:
         idx3d = ti.floor((pos - self.grid_min) * self.grid_n / (self.grid_max - self.grid_min), int)
         # idx = idx3d[0] * self.grid_n * self.grid_n + idx3d[1] * self.grid_n + idx3d[2]
         # if idx3d[0] < 0 or idx3d[1] < 0 or idx3d[2] < 0:
@@ -734,7 +736,7 @@ class Solver:
         self.dt = dt / num_sub_steps
         self.dtSq = self.dt ** 2
 
-        # ti.profiler.clear_kernel_profiler_info()
+        ti.profiler.clear_kernel_profiler_info()
 
         self.initialize_particle_system()
         for sub_step in range(num_sub_steps):
@@ -744,9 +746,9 @@ class Solver:
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
             # self.set_grid_particles()
-            tol = 1e-3
+            tol = 1e-6
 
-            for i in range(1):
+            for i in range(self.max_iter):
                 # i += 1
                 self.verts.g.fill(0.)
                 self.verts.h.copy_from(self.verts.m)
@@ -754,12 +756,12 @@ class Solver:
 
                 self.newton_pcg(tol=1e-6, max_iter=100)
 
-                # dx_NormSq = self.dot(self.verts.dx, self.verts.dx)
+                dx_NormSq = self.dot(self.verts.dx, self.verts.dx)
 
                 # alpha = 1.0
                 self.step_forward()
-                # if dx_NormSq < tol:
-                #     break
+                if dx_NormSq < tol:
+                    break
 
 
             # print(f'opt iter: {i}')
@@ -767,58 +769,8 @@ class Solver:
             # for i in range(3):
             self.verts.p.fill(0.0)
             self.verts.nc.fill(0.0)
-            self.handle_contacts()
-            # self.set_grid_particles()
-            # # self.set_grid_particles()
             # self.handle_contacts()
-            # query_result1 = ti.profiler.query_kernel_profiler_info(self.set_grid_particles.__name__)
-            # query_result2 = ti.profiler.query_kernel_profiler_info(self.handle_contacts.__name__)
-            # # print("kernel exec. #: ", query_result1.counter, query_result2.counter)
-            # # print(f"Min set_grid_particles: {query_result1.min}, handle_contacts: {query_result2.min}")
-            # # print(f"Max set_grid_particles: {query_result1.max}, handle_contacts: {query_result2.max}")
-            # # print("total[ms]      :", float(query_result1.counter * query_result1.avg), float(query_result2.counter * query_result2.avg))
-            # # print("avg[ms]        :", float(query_result1.avg), float(query_result2.avg))
-            #
-            # query_result = ti.profiler.query_kernel_profiler_info(self.handle_contacts.__name__)
-            # print("kernel exec. #: ", query_result.counter)
-            # print(f"Min: {query_result.min}, Max: {query_result.max}")
-            # print("total[ms]      :", float(query_result.counter * query_result.avg))
-            # print("avg[ms]        :", float(query_result.avg))
-            #
-            # ti.deactivate_all_snodes()
             self.computeNextState()
 
-            # self.verts.x_k.copy_from(self.verts.x)
-            # self.verts.p.fill(0.0)
-            # self.verts.nc.fill(0.0)
-            # self.set_grid_particles()
-            # self.handle_contacts()
-            # self.computeNextState()
-
-        # cg_iterate_profile = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        # print("total cg_iterate call per frame: ", cg_iterate_profile.counter)
-        # print("total[ms]     : ", float(cg_iterate_profile.counter * cg_iterate_profile.avg))
-        # print("avg[ms]       : ", float(cg_iterate_profile.avg))
-        #
-        # evaluate_gradient_and_hessian_profile = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        # print("gradient/hessian call per frame: ", evaluate_gradient_and_hessian_profile.counter)
-        # print("total[ms]     : ", float(evaluate_gradient_and_hessian_profile.counter * evaluate_gradient_and_hessian_profile.avg))
-        # print("avg[ms]       : ", float(evaluate_gradient_and_hessian_profile.avg))
-
-
-        # neighbour_search_profile_1 = ti.profiler.query_kernel_profiler_info(self.update_grid_id.__name__)
-        # neighbour_search_profile_2 = ti.profiler.query_kernel_profiler_info(self.prefix_sum_executor.run.__name__)
-        # neighbour_search_profile_3 = ti.profiler.query_kernel_profiler_info(self.counting_sort.__name__)
-        # neighbour_search_profile_4 = ti.profiler.query_kernel_profiler_info(self.set_grid_particles.__name__)
-        # # print("neighbour search call per frame: ", neighbour_search_profile.counter)
-        # total_1 = neighbour_search_profile_1.counter * neighbour_search_profile_1.avg
-        # total_2 = neighbour_search_profile_2.counter * neighbour_search_profile_2.avg
-        # total_3 = neighbour_search_profile_3.counter * neighbour_search_profile_3.avg
-        # total_4 = neighbour_search_profile_4.counter * neighbour_search_profile_4.avg
-
-        # total_1
-        #
-        # print("total[ms]: ", float(total_1 + total_2 + total_3), float(total_4))
-        # print("avg[ms]       : ", float(neighbour_search_profile.avg))
-
-
+        query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        print("kernel exec. #: ", query_result1.counter)
