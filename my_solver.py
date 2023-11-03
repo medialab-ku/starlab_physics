@@ -20,14 +20,14 @@ class Solver:
                  max_iter=1000):
         self.my_mesh = my_mesh
         self.static_mesh = static_mesh
-        self.grid_origin = ti.math.vec3([-4, -4, -4])
-        self.grid_size = ti.math.vec3([8, 8, 8])
+        self.grid_origin = ti.math.vec3([-5, -5, -5])
+        self.grid_size = ti.math.vec3([10, 10, 10])
         self.grid_min = ti.math.vec3(min_range[0], min_range[1], min_range[2])
         self.grid_max = ti.math.vec3(max_range[0], max_range[1], max_range[2])
         self.domain_size = self.grid_size - self.grid_origin
 
 
-        self.radius = 0.005
+        self.radius = 0.007
         self.grid_size = 8 * self.radius
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid size: ", self.grid_num)
@@ -66,7 +66,7 @@ class Solver:
 
         self.dHat = 1e-3
 
-        self.contact_stiffness = 1e3
+        self.contact_stiffness = 1e7
         self.damping_factor = 6e-4
         self.batch_size = 10
         self.num_bats = self.num_verts // self.batch_size
@@ -80,8 +80,8 @@ class Solver:
         self.Ap = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
         self.z = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
 
-        self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
-        self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
+        self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
+        self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
 
         self.max_num_verts = self.num_verts + self.num_verts_static
@@ -318,9 +318,9 @@ class Solver:
                 v -= v.dot(normal) * normal
                 p = self.verts.x[i] + v * self.dt
 
-            self.verts.g[i] += self.dtSq * 1e7 * (p - self.verts.x_k[i])
-            self.verts.h[i] += self.dtSq * 1e7
-            self.verts.hc[i] += self.dtSq * 1e7
+            self.verts.g[i] += self.dtSq * self.contact_stiffness * (p - self.verts.x_k[i])
+            self.verts.h[i] += self.dtSq * self.contact_stiffness
+            self.verts.hc[i] += self.dtSq * self.contact_stiffness
 
             # if v.dot(normal) < 0.:
             #     # print("test")
@@ -350,12 +350,12 @@ class Solver:
                 p1 = self.verts.x[i] + v1 * self.dt
                 p2 = self.verts.x[j] + v2 * self.dt
 
-            self.verts.g[i] += self.dtSq * 1e7 * (p1 - self.verts.x_k[i])
-            self.verts.g[j] += self.dtSq * 1e7 * (p2 - self.verts.x_k[j])
-            self.verts.h[i] += self.dtSq * 1e7
-            self.verts.h[j] += self.dtSq * 1e7
-            self.verts.hc[i] += self.dtSq * 1e7
-            self.verts.hc[j] += self.dtSq * 1e7
+            self.verts.g[i] += self.dtSq * self.contact_stiffness * (p1 - self.verts.x_k[i])
+            self.verts.g[j] += self.dtSq * self.contact_stiffness * (p2 - self.verts.x_k[j])
+            self.verts.h[i] += self.dtSq * self.contact_stiffness
+            self.verts.h[j] += self.dtSq * self.contact_stiffness
+            self.verts.hc[i] += self.dtSq * self.contact_stiffness
+            self.verts.hc[j] += self.dtSq * self.contact_stiffness
 
     @ti.kernel
     def set_init_guess_pcg(self) -> ti.f32:
@@ -525,7 +525,7 @@ class Solver:
                 break
 
         query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        print("kernel exec. #: ", query_result1.counter)
+        print("kernel exec. #: ", query_result1.avg)
 
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
