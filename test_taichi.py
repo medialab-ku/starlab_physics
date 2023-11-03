@@ -1,6 +1,6 @@
 import taichi as ti
 import ccd as ccd
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cuda, kernel_profiler=True)
 a = ti.math.vec3([1, 1, 1])
 b = ti.math.vec3([1, 1, 1])
 
@@ -80,13 +80,20 @@ d = ti.math.vec3([1.5, 1.5, 1.5])
 
 e = ti.math.mat3([a, b, c])
 
-n = 9  # Size of the matrices
-m = 1  # Number of matrices to factorize
+dof = 16000
+n = 6  # Size of the matrices
+m = dof // n  # Number of matrices to factorize
 
 A = ti.field(ti.f32, shape=(m, n * n))
 L = ti.field(ti.f32, shape=(m, n * n))
+x = ti.Vector.field(n=3, shape=(m, n), dtype=ti.f32)
+y = ti.Vector.field(n=3, shape=(m, n), dtype=ti.f32)
+b = ti.Vector.field(n=3, shape=(m, n), dtype=ti.f32)
 
 L.fill(0.0)
+x.fill(0.0)
+b.fill(1.0)
+
 @ti.kernel
 def init():
     for i in range(m):
@@ -110,7 +117,34 @@ def cholesky():
 
                 L[bat, i * n + j] = (1.0 / L[bat, j * n + j] * (A[bat, i * n + j] - sum))
 
-init()
-cholesky()
+@ti.kernel
+def solve_backward():
+    for bat in range(m):
+        for i in range(n):
+            x[bat, i] = b[bat, i]
+            for j in range(n):
+                x[bat, i] -= L[bat, j * n + i] * x[bat, j]
+            x[bat, i] /= L[bat, i * n + i]
 
-print(L)
+@ti.kernel
+def solve_forward():
+    for bat in range(m):
+        for inv_i in range(n):
+            i = n - inv_i - 1
+            x[bat, i] = b[bat, i]
+            for j in range(i + 1, n):
+                x[bat, i] -= L[bat, j * n + i] * x[bat, j]
+            x[bat, i] /= L[bat, i * n + i]
+init()
+
+ti.profiler.clear_kernel_profiler_info()
+cholesky()
+solve_backward()
+solve_forward()
+query_result1 = ti.profiler.query_kernel_profiler_info(cholesky.__name__)
+query_result2 = ti.profiler.query_kernel_profiler_info(solve_backward.__name__)
+query_result3 = ti.profiler.query_kernel_profiler_info(solve_forward.__name__)
+print("cholesky elapsed time: ", query_result1.avg)
+print("back elapsed time: ", query_result2.avg)
+print("forward elapsed time: ", query_result3.avg)
+print("total elapsed time: ", query_result1.avg + query_result2.avg + query_result3.avg)
