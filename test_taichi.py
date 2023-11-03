@@ -80,100 +80,37 @@ d = ti.math.vec3([1.5, 1.5, 1.5])
 
 e = ti.math.mat3([a, b, c])
 
-print(e)
+n = 9  # Size of the matrices
+m = 1  # Number of matrices to factorize
 
-@ti.func
-def ret():
-    a = ti.math.vec3([0.0, 0.0, 0.0])
-    b = ti.math.vec3([1.0, 1.0, 1.0])
-    return a, b
+A = ti.field(ti.f32, shape=(m, n * n))
+L = ti.field(ti.f32, shape=(m, n * n))
+
+L.fill(0.0)
+@ti.kernel
+def init():
+    for i in range(m):
+        # A[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+        for j in range(n):
+            A[i, j + n * j] = (i + 1)
 
 @ti.kernel
-def test_max():
+def cholesky():
+    for bat in range(m):
+        for j in range(n):
+            sum = 0.0
+            for k in range(j):
+                sum += L[bat, j * n + k] * L[bat, j * n + k]
 
-    a = ti.math.vec3(1,2,3)
-    max = ti.max(a)
-    print(max)
+            L[bat, j * n + j] = ti.sqrt(A[bat, j * n + j] - sum)
+            for i in range(j + 1, n):
+                sum = 0.0
+                for k in range(j):
+                    sum += L[bat, i * n + k] * L[bat, j * n + k]
 
-@ti.kernel
-def aabb_intersect(a_min: ti.math.vec3, a_max: ti.math.vec3, b_min: ti.math.vec3, b_max: ti.math.vec3) -> ti.i32:
+                L[bat, i * n + j] = (1.0 / L[bat, j * n + j] * (A[bat, i * n + j] - sum))
 
-        return  a_min[0] <= b_max[0] and \
-                a_max[0] >= b_min[0] and \
-                a_min[1] <= b_max[1] and \
-                a_max[1] >= b_min[1] and \
-                a_min[2] <= b_max[2] and \
-                a_max[2] >= b_min[2]
+init()
+cholesky()
 
-
-S = ti.root.dynamic(ti.i, 1024, chunk_size=32)
-x = ti.field(ti.math.uvec4)
-S.place(x)
-
-@ti.func
-def test(i: ti.int32)-> ti.int32:
-    return i
-@ti.kernel
-def add_data():
-
-
-    min = 4.0
-    for i in range(10):
-        a = test(i)
-        if min > a:
-            min = a
-
-    print(min)
-    # for i in range(10):
-    #     x.append(ti.math.uvec4([4 * i + 0, 4 * i + 1, 4 * i + 2, 4 * i + 3]))
-    # #
-    #
-    # for xi in x:
-    #     print(x[xi][0])
-    #
-    # print(x.length())
-    # print(x[0])
-    # x.deactivate()
-    # print(x.length())
-
-@ti.kernel
-def test_ccd():
-    x0 = ti.math.vec3([0.5, 0.5, 0.5])
-    dx0 = ti.math.vec3([0.0, -1.0, 0.0])
-
-
-    x1 = ti.math.vec3([1.0, 0.0, 0.])
-    x2 = ti.math.vec3([0., 0.0, 1.])
-    x3 = ti.math.vec3([0., 0.0, 0.])
-
-    dx_zero = ti.math.vec3([0.0, 0.0, 0.0])
-
-    alpha_ccd = ccd.point_triangle_ccd(x0, x1, x2, x3, dx0, dx_zero, dx_zero, dx_zero, 0.0, 0.01, 1.0)
-
-    x = x0 + alpha_ccd * dx0
-
-    print(x.y)
-    print(alpha_ccd)
-# print(aabb_intersect(a, b, c, d))
-
-# add_data()
-test_ccd()
-
-num_mat = 10
-a_field = ti.Matrix.field(m=4, n=4, shape=(num_mat), dtype=ti.f32)
-l_field = ti.Matrix.field(m=4, n=4, shape=(num_mat), dtype=ti.f32)
-
-batch_size = 10
-num_bats = 10
-tmat_size = (batch_size * (batch_size + 1) / 2)
-
-mat = ti.Matrix(m=3, n=3, shape=(tmat_size * num_bats), dtype=ti.f32)
-x = ti.Vector.field(n=3, shape=(batch_size * num_bats), dtype=ti.f32)
-
-@ti.kernel
-def test_llt():
-
-   print()
-
-
-test_llt()
+print(L)
