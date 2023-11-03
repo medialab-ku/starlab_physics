@@ -68,7 +68,9 @@ class Solver:
 
         self.contact_stiffness = 1e3
         self.damping_factor = 6e-4
-
+        self.batch_size = 10
+        self.num_bats = self.num_verts // self.batch_size
+        print(f'batches #: {self.num_bats}')
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
 
         # for PCG
@@ -395,6 +397,17 @@ class Solver:
 
         return r_2
 
+    @ti.func
+    def precond_value_z(self, z: ti.template(), r: ti.template()):
+
+        # 7 ~ 8 iter
+        for i in z:
+            z[i] = r[i] / self.verts.h[i]
+
+        # 20 iter
+        # for i in z:
+        #     z[i] = r[i]
+
 
     @ti.kernel
     def apply_precondition(self, z: ti.template(), r: ti.template()):
@@ -476,9 +489,10 @@ class Solver:
         # for v in self.verts:
         #     self.z[v.id] = self.z[v.id] / v.deg
 
-        ti.mesh_local(self.z, self.r)
-        for v in self.verts:
-            self.z[v.id] = self.r[v.id] / v.h
+        self.precond_value_z(self.z, self.r)
+        # ti.mesh_local(self.z, self.r)
+        # for v in self.verts:
+        #     self.z[v.id] = self.r[v.id] / v.h
 
         r_2_new = ti.float32(0.0)
         ti.loop_config(block_dim=64)
@@ -501,7 +515,7 @@ class Solver:
         r_2 = self.set_init_guess_pcg()
         r_2_new = r_2
 
-        # ti.profiler.clear_kernel_profiler_info()
+        ti.profiler.clear_kernel_profiler_info()
         for iter in range(max_iter):
 
             self.z.fill(0.0)
@@ -510,8 +524,8 @@ class Solver:
             if r_2_new <= tol:
                 break
 
-        # query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        # print("kernel exec. #: ", query_result1.counter)
+        query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        print("kernel exec. #: ", query_result1.counter)
 
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
@@ -521,7 +535,7 @@ class Solver:
         self.dt = dt / num_sub_steps
         self.dtSq = self.dt ** 2
 
-        ti.profiler.clear_kernel_profiler_info()
+        # ti.profiler.clear_kernel_profiler_info()
 
         self.initialize_particle_system()
         for sub_step in range(num_sub_steps):
@@ -557,5 +571,5 @@ class Solver:
             # self.handle_contacts()
             self.computeNextState()
 
-        query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        print("kernel exec. #: ", query_result1.counter)
+        # query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        # print("kernel exec. #: ", query_result1.counter)
