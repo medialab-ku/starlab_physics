@@ -24,7 +24,8 @@ class Mesh:
                                'deg': ti.uint32,
                                'dx': ti.math.vec3,
                                'g': ti.math.vec3,
-                               'h': ti.f32})
+                               'h': ti.f32,
+                               'hc': ti.f32})
 
 
 
