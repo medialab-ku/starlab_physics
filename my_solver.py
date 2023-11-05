@@ -89,8 +89,32 @@ class Solver:
         self.grid_ids_buffer = ti.field(int, shape=self.max_num_verts)
         self.grid_ids_new = ti.field(int, shape=self.max_num_verts)
         self.cur2org = ti.field(int, shape=self.max_num_verts)
+
+        self.num_max_neighbors = 32
+        self.support_radius = 0.08
+        self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
+        self.num_neighbor = ti.field(int, shape=(self.num_verts))
+        self.weights = ti.field(ti.math.vec2, shape=(self.num_verts, self.num_verts))
+
         self.reset()
 
+    @ti.func
+    def cubic_kernel(self, r_norm):
+        res = ti.cast(0.0, ti.f32)
+        h = self.support_radius
+        # value of cubic spline smoothing kernel
+        k = 1.0
+        k = 8 / ti.math.pi
+        k /= h ** 3
+        q = r_norm / h
+        if q <= 1.0:
+            if q <= 0.5:
+                q2 = q * q
+                q3 = q2 * q
+                res = k * (6.0 * q3 - 6.0 * q2 + 1)
+            else:
+                res = k * 2 * ti.pow(1 - q, 3.0)
+        return res
     @ti.kernel
     def counting_sort(self):
         # FIXME: make it the actual particle num
@@ -159,6 +183,21 @@ class Solver:
 
     @ti.kernel
     def reset_kernel(self):
+        for vi in range(0, self.num_verts):
+            i = 0
+            for vj in range(0, self.num_verts):
+                if vi != vj and i < self.num_max_neighbors:
+                    lij0 = (self.verts.x0[vi] - self.verts.x0[vj]).norm()
+                    if lij0 < self.support_radius:
+                        self.neighbor_ids[vi, i] = vj
+                        self.weights[vi, vj][0] = lij0
+                        self.weights[vi, vj][1] = self.cubic_kernel(lij0)
+                        i+=1
+
+            self.num_neighbor[vi] = i
+
+
+
         for e in self.edges:
             e.verts[0].deg += 1
             e.verts[1].deg += 1
@@ -179,6 +218,7 @@ class Solver:
         self.verts.deg.fill(0)
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.reset_kernel()
+        # print(self.num_neighbor)
 
     @ti.kernel
     def computeVtemp(self):
@@ -253,14 +293,28 @@ class Solver:
         self.verts.g[2] -= grad
         self.verts.h[2] += coef
 
-        for e in self.edges:
-            xij = e.verts[0].x_k - e.verts[1].x_k
-            lij = xij.norm()
-            grad = coef * (xij - (e.l0/lij) * xij)
-            e.verts[0].g -= grad
-            e.verts[1].g += grad
-            e.verts[0].h += coef
-            e.verts[1].h += coef
+        # for e in self.edges:
+        #     xij = e.verts[0].x_k - e.verts[1].x_k
+        #     lij = xij.norm()
+        #     grad = coef * (xij - (e.l0/lij) * xij)
+        #     e.verts[0].g -= grad
+        #     e.verts[1].g += grad
+        #     e.verts[0].h += coef
+        #     e.verts[1].h += coef
+
+        for v in self.verts:
+            for ni in range(self.num_neighbor[v.id]):
+                j = self.neighbor_ids[v.id, ni]
+                xij = self.verts.x_k[v.id] - self.verts.x_k[j]
+                lij = xij.norm()
+                l0 = self.weights[v.id, j][0]
+                w = self.weights[v.id, j][1]
+                grad = w * coef * (xij - (l0 / lij) * xij)
+                self.verts.g[v.id] -= grad
+                self.verts.g[j] += grad
+                self.verts.h[v.id] += w * coef
+                self.verts.h[j] += w * coef
+
 
             # hij = coef * (self.id3 - e.l0 / lij * (self.id3 - (self.abT(xij, xij)) / (lij ** 2)))
             # hij = coef * (self.id3)
@@ -611,7 +665,7 @@ class Solver:
                 # gNormSq = self.dot(self.verts.g, self.verts.g)
                 # if gNormSq < tol:
                 #     breakdaa
-                self.evaluate_search_dir(policy=2)
+                self.evaluate_search_dir(policy=1)
 
                 self.step_forward()
                 # alpha = 1.0
