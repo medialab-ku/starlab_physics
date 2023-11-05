@@ -20,15 +20,15 @@ class Solver:
                  max_iter=1000):
         self.my_mesh = my_mesh
         self.static_mesh = static_mesh
-        self.grid_origin = ti.math.vec3([-5, -5, -5])
-        self.grid_size = ti.math.vec3([10, 10, 10])
+        self.grid_origin = ti.math.vec3([-3, -3, -3])
+        self.grid_size = ti.math.vec3([6, 6, 6])
         self.grid_min = ti.math.vec3(min_range[0], min_range[1], min_range[2])
         self.grid_max = ti.math.vec3(max_range[0], max_range[1], max_range[2])
         self.domain_size = self.grid_size - self.grid_origin
 
 
-        self.radius = 0.007
-        self.grid_size = 8 * self.radius
+        self.radius = 0.006
+        self.grid_size = 10 * self.radius
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid size: ", self.grid_num)
         self.padding = self.grid_size
@@ -143,18 +143,18 @@ class Solver:
         return ( (pos-self.grid_origin) / self.grid_size ).cast(int)
 
     @ti.func
-    def for_all_neighbors(self, p_i):
+    def for_all_neighbors(self, p_i, task1: ti.template(), task2: ti.template()):
         center_cell = self.pos_to_index(self.verts.x_k[p_i])
-        for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-            grid_index = self.flatten_grid_index(center_cell + offset)
-            for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-                p_j_cur = self.cur2org[p_j]
+        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+        grid_index = self.flatten_grid_index(center_cell)
+        for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+            p_j_cur = self.cur2org[p_j]
 
-                if p_j_cur < self.num_verts:
-                    if p_i != p_j_cur:
-                        self.resolve_self(p_i, p_j_cur)
-                if p_j_cur >= self.num_verts:
-                    self.resolve(p_i, p_j_cur - self.num_verts)
+            if p_j_cur < self.num_verts:
+                if p_i != p_j_cur:
+                    task1(p_i, p_j_cur)
+            if p_j_cur >= self.num_verts:
+                task2(p_i, p_j_cur - self.num_verts)
 
 
     @ti.kernel
@@ -242,7 +242,7 @@ class Solver:
     @ti.kernel
     def evaluate_gradient_and_hessian(self):
         # self.candidatesPC.deactivate()
-        coef = self.dtSq * 1e7
+        coef = self.dtSq * self.k
         xij = self.verts.x_k[0] - self.verts.x0[0]
         grad = coef * xij
         self.verts.g[0] -= grad
@@ -262,20 +262,20 @@ class Solver:
             e.verts[0].h += coef
             e.verts[1].h += coef
 
-            hij = coef * (self.id3 - e.l0 / lij * (self.id3 - (self.abT(xij, xij)) / (lij ** 2)))
+            # hij = coef * (self.id3 - e.l0 / lij * (self.id3 - (self.abT(xij, xij)) / (lij ** 2)))
             # hij = coef * (self.id3)
             # # hij = coef * (self.id3)
-            U, sig, V = ti.svd(hij)
-
-            for i in range(3):
-                if sig[i, i] < 1e-6:
-                    sig[i, i] = 1e-6
-
-            hij = U @ sig @ V.transpose()
-            e.hij = hij
-
+            # U, sig, V = ti.svd(hij)
+            #
+            # for i in range(3):
+            #     if sig[i, i] < 1e-6:
+            #         sig[i, i] = 1e-6
+            #
+            # hij = U @ sig @ V.transpose()
+            # e.hij = hij
+        #
         for v in self.verts:
-            self.for_all_neighbors(v.id)
+            self.for_all_neighbors(v.id, self.resolve_self, self.resolve)
 
         # for e in self.edges:
         #     h = ti.math.mat2([[e.verts[0].h, 0],
@@ -286,6 +286,7 @@ class Solver:
 
     @ti.kernel
     def step_forward(self):
+
         for v in self.verts:
             if v.id == 0 or v.id == 2:
                 v.x_k = v.x_k
@@ -317,10 +318,11 @@ class Solver:
                 # print("test")
                 v -= v.dot(normal) * normal
                 p = self.verts.x[i] + v * self.dt
-
-            self.verts.g[i] += self.dtSq * self.contact_stiffness * (p - self.verts.x_k[i])
+            dc = p - self.verts.x_k[i]
+            # ld = 2 * self.verts.h[i] + self.contact_stiffness
+            self.verts.g[i] += self.dtSq * self.contact_stiffness * dc
             self.verts.h[i] += self.dtSq * self.contact_stiffness
-            self.verts.hc[i] += self.dtSq * self.contact_stiffness
+            # self.verts.hc[i] += self.dtSq * self.contact_stiffness
 
             # if v.dot(normal) < 0.:
             #     # print("test")
@@ -525,9 +527,63 @@ class Solver:
                 break
 
         query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        print("kernel exec. #: ", query_result1.avg)
+        print("kernel exec. #: ", query_result1.counter)
 
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
+
+
+    @ti.kernel
+    def diag_hessian(self):
+        for v in self.verts:
+            v.dx = (v.g / v.h)
+
+    @ti.kernel
+    def edge_wise_jacobi(self):
+        coef = self.dtSq * self.k
+        for e in self.edges:
+            hii, hjj = e.verts[0].h, e.verts[1].h
+            # hiic, hjjc = e.verts[0].hc, e.verts[1].hc
+            # hii += hiic
+            # hjj += hjjc
+            gi, gj = e.verts[0].g, e.verts[1].g
+            det = hii * hjj - (coef ** 2)
+            hinv = ti.math.mat2([[hjj, coef], [coef, hii]]) / det
+            gx = ti.math.vec2(gi.x, gj.x)
+            gy = ti.math.vec2(gi.y, gj.y)
+            gz = ti.math.vec2(gi.z, gj.z)
+
+            dx = hinv @ gx
+            dy = hinv @ gy
+            dz = hinv @ gz
+
+            dxi = ti.math.vec3(dx[0], dy[0], dz[0])
+            dxj = ti.math.vec3(dx[1], dy[1], dz[1])
+
+            e.verts[0].dx += dxi
+            e.verts[1].dx += dxj
+
+        for v in self.verts:
+            v.dx /= v.deg
+    def evaluate_search_dir(self, policy):
+
+        if policy == 0:
+            self.newton_pcg(tol=1e-4, max_iter=100)
+        elif policy == 1:
+            self.diag_hessian()
+        elif policy == 2:
+            self.edge_wise_jacobi()
+
+
+    # def line_search(self):
+    #
+    #     alpha = 1.0
+    #     e_cur = self.evaluate_current_energy()
+    #     for i in range(10):
+    #
+    # @ti.kernel
+    # def evaluate_current_energy(self) -> ti.f32:
+    #
+    #     for e in self.edges:
 
 
     def update(self, dt, num_sub_steps):
@@ -540,11 +596,10 @@ class Solver:
         self.initialize_particle_system()
         for sub_step in range(num_sub_steps):
             self.computeVtemp()
-
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
             # self.set_grid_particles()
-            tol = 1e-6
+            tol = 1e-2
 
             for i in range(self.max_iter):
                 # i += 1
@@ -553,14 +608,13 @@ class Solver:
                 self.verts.hc.fill(0.)
                 self.evaluate_gradient_and_hessian()
 
-                self.newton_pcg(tol=1e-4, max_iter=100)
+                # gNormSq = self.dot(self.verts.g, self.verts.g)
+                # if gNormSq < tol:
+                #     breakdaa
+                self.evaluate_search_dir(policy=2)
 
-                dx_NormSq = self.dot(self.verts.dx, self.verts.dx)
-
-                # alpha = 1.0
                 self.step_forward()
-                if dx_NormSq < tol:
-                    break
+                # alpha = 1.0
 
 
             # print(f'opt iter: {i}')
