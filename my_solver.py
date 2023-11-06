@@ -223,10 +223,10 @@ class Solver:
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            if v.id == 0 or v.id == 2:
-                v.v = ti.math.vec3(0.0, 0.0, 0.0)
-            else:
-                v.v += (v.f_ext / v.m) * self.dt
+            # if v.id == 0 or v.id == 2:
+            #     v.v = ti.math.vec3(0.0, 0.0, 0.0)
+            # else:
+            v.v += (v.f_ext / v.m) * self.dt
 
     @ti.kernel
     def add(self, ans: ti.template(), a: ti.template(), k: ti.f32, b: ti.template()):
@@ -283,15 +283,15 @@ class Solver:
     def evaluate_gradient_and_hessian(self):
         # self.candidatesPC.deactivate()
         coef = self.dtSq * self.k
-        xij = self.verts.x_k[0] - self.verts.x0[0]
-        grad = coef * xij
-        self.verts.g[0] -= grad
-        self.verts.h[0] += coef
-
-        xij = self.verts.x_k[2] - self.verts.x0[2]
-        grad = coef * xij
-        self.verts.g[2] -= grad
-        self.verts.h[2] += coef
+        # xij = self.verts.x_k[0] - self.verts.x0[0]
+        # grad = coef * xij
+        # self.verts.g[0] -= grad
+        # self.verts.h[0] += coef
+        #
+        # xij = self.verts.x_k[2] - self.verts.x0[2]
+        # grad = coef * xij
+        # self.verts.g[2] -= grad
+        # self.verts.h[2] += coef
 
         # for e in self.edges:
         #     xij = e.verts[0].x_k - e.verts[1].x_k
@@ -328,8 +328,8 @@ class Solver:
             # hij = U @ sig @ V.transpose()
             # e.hij = hij
         #
-        for v in self.verts:
-            self.for_all_neighbors(v.id, self.resolve_self, self.resolve)
+        # for v in self.verts:
+        #     self.for_all_neighbors(v.id, self.resolve_self, self.resolve)
 
         # for e in self.edges:
         #     h = ti.math.mat2([[e.verts[0].h, 0],
@@ -342,16 +342,16 @@ class Solver:
     def step_forward(self):
 
         for v in self.verts:
-            if v.id == 0 or v.id == 2:
-                v.x_k = v.x_k
-            else:
-                v.x_k += v.dx
+            # if v.id == 0 or v.id == 2:
+            #     v.x_k = v.x_k
+            # else:
+            v.x_k += v.dx
 
     @ti.kernel
     def handle_contacts(self):
 
         for v in self.verts:
-            self.for_all_neighbors(v.id)
+            self.for_all_neighbors(v.id, self.resolve_self, self.resolve)
 
 
         for v in self.verts:
@@ -372,18 +372,18 @@ class Solver:
                 # print("test")
                 v -= v.dot(normal) * normal
                 p = self.verts.x[i] + v * self.dt
-            dc = p - self.verts.x_k[i]
-            # ld = 2 * self.verts.h[i] + self.contact_stiffness
-            self.verts.g[i] += self.dtSq * self.contact_stiffness * dc
-            self.verts.h[i] += self.dtSq * self.contact_stiffness
+            # dc = p - self.verts.x_k[i]
+            # # ld = 2 * self.verts.h[i] + self.contact_stiffness
+            # self.verts.g[i] += self.dtSq * self.contact_stiffness * dc
+            # self.verts.h[i] += self.dtSq * self.contact_stiffness
             # self.verts.hc[i] += self.dtSq * self.contact_stiffness
 
             # if v.dot(normal) < 0.:
             #     # print("test")
             #     v -= v.dot(normal) * normal
             #     p = self.verts.x[i] + v * self.dt
-            # self.verts.p[i] += p
-            # self.verts.nc[i] += 1
+            self.verts.p[i] += p
+            self.verts.nc[i] += 1
 
     @ti.func
     def resolve_self(self, i, j):
@@ -673,10 +673,10 @@ class Solver:
 
             # print(f'opt iter: {i}')
             # ti.profiler.clear_kernel_profiler_info()
-            # for i in range(3):
-            # self.verts.p.fill(0.0)
-            # self.verts.nc.fill(0.0)
-            # self.handle_contacts()
+            for i in range(1):
+                self.verts.p.fill(0.0)
+                self.verts.nc.fill(0.0)
+                self.handle_contacts()
             self.computeNextState()
 
         # query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
