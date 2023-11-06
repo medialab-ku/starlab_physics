@@ -21,7 +21,7 @@ center[0] = ti.math.vec3(0.5, 0.5, 0.5)
 debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
 #
-mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/poncho_8K.obj", scale=0.33, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/poncho_3K.obj", scale=0.6, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 static_mesh = Mesh("seq_models/Kyra_DVStandingClubbing_modified/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
@@ -67,7 +67,7 @@ while window.running:
             run_sim = False
 
     if run_sim:
-        sim.update(dt=dt, num_sub_steps=10)
+        sim.update(dt=dt, num_sub_steps=20)
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     camera.lookat(0.5, 0.5, 0.5)
     scene.set_camera(camera)
