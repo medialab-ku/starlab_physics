@@ -587,12 +587,17 @@ class Solver:
     #     for e in self.edges:
 
     @ti.kernel
-    def update_static_mesh(self, frame: ti.i32, scale: ti.f32, trans: ti.math.vec3, rot: ti.math.vec3):
+    def update_static_mesh(self, frame: ti.i32, frame_rate:ti.i32, scale: ti.f32, trans: ti.math.vec3, rot: ti.math.vec3):
         rot_rad = ti.math.radians(rot)
         r3d = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2])
 
         for v in range(self.num_verts_static):
-            pos = self.frames[frame, v]
+            # linear interpolation between frames
+            # frame_rate = 10
+            keyframe = frame//frame_rate
+            alpha = (frame/frame_rate) - keyframe
+            pos = self.frames[keyframe, v] * (1.0 - alpha) + self.frames[keyframe + 1, v] * alpha
+
             pos *= scale
 
             v_4d = ti.Vector([pos[0], pos[1], pos[2], 1])

@@ -90,6 +90,7 @@ camera.up(0, 1, 0)
 
 run_sim = False
 frame = 0
+frame_rate = 6
 while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
@@ -99,8 +100,8 @@ while window.running:
             sim.reset()
             run_sim = False
 
-    if run_sim and frame < total_frame_num:
-        sim.update_static_mesh(frame=frame, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+    if run_sim and frame < total_frame_num * frame_rate:
+        sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
         sim.update(dt=dt, num_sub_steps=20)
         print('frame:', frame)
         frame += 1
