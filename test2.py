@@ -1,5 +1,7 @@
 import taichi as ti
 import numpy as np
+import os
+from tqdm import tqdm
 
 import my_mesh
 from my_mesh import Mesh
@@ -20,11 +22,39 @@ center = ti.Vector.field(n=3, dtype=ti.float32, shape=1)
 center[0] = ti.math.vec3(0.5, 0.5, 0.5)
 debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
+static_mesh_path = "seq_models/Kyra_DVStandClubbing/"
+static_mesh_file = "Kyra_DVStandClubbing_" + str(0).zfill(4) + ".obj"
+total_frame_num = len(os.listdir(static_mesh_path))
+
 #
 mesh = Mesh("obj_models/poncho_8K.obj", scale=0.33, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/poncho_3K.obj", scale=0.6, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-static_mesh = Mesh("seq_models/Kyra_DVStandingClubbing_modified/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+static_meshes_pos_np = np.zeros((total_frame_num, static_mesh.mesh.verts.x.shape[0], 3))
+static_meshes_pos_np[0] = static_mesh.mesh.verts.x.to_numpy()
+
+def read_verts_only(path):
+    with open(path, 'r') as f:
+        lines = f.readlines()
+        verts = []
+        for line in lines:
+            if line.startswith('v '):
+                line = line.strip().split()
+                vert = [float(line[1]), float(line[2]), float(line[3])]
+                verts.append(vert)
+
+    verts_np = np.array(verts)
+    return verts_np
+
+progress = tqdm(np.arange(total_frame_num))
+for f in progress:
+    static_mesh_file = "Kyra_DVStandClubbing_" + str(f).zfill(4) + ".obj"
+    new_verts_static = read_verts_only(static_mesh_path + static_mesh_file)
+    static_meshes_pos_np[f] = new_verts_static
+    progress.update(1)
+    progress.set_description("Loading static meshes")
+print('Loading done:', static_meshes_pos_np.shape)
 
 total_verts_np = mesh.mesh.verts.x.to_numpy()
 total_verts_np = np.append(total_verts_np, static_mesh.mesh.verts.x.to_numpy(), axis=0)
@@ -35,6 +65,9 @@ total_min.from_numpy(np.min(total_verts_np, axis=0) - object_range * 0.8)
 total_max = ti.field(dtype=ti.f32, shape=(3,))
 total_max.from_numpy(np.max(total_verts_np, axis=0) + object_range * 0.8)
 
+static_meshes_pos_ti = ti.field(ti.math.vec3, shape=(total_frame_num, static_mesh.mesh.verts.x.shape[0]))
+static_meshes_pos_ti.from_numpy(static_meshes_pos_np)
+
 @ti.kernel
 def init_color():
     per_vertex_color[0] = ti.math.vec3(1, 0, 0)
@@ -44,7 +77,7 @@ def init_color():
 
 init_color()
 
-sim = Solver(mesh, static_mesh=static_mesh, bottom=0.0, min_range=total_min, max_range=total_max, dt=dt, max_iter=1)
+sim = Solver(mesh, static_mesh=static_mesh, static_meshes=static_meshes_pos_ti, bottom=0.0, min_range=total_min, max_range=total_max, dt=dt, max_iter=1)
 
 window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
@@ -56,7 +89,7 @@ camera.fov(30)
 camera.up(0, 1, 0)
 
 run_sim = False
-
+frame = 0
 while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
@@ -66,8 +99,11 @@ while window.running:
             sim.reset()
             run_sim = False
 
-    if run_sim:
+    if run_sim and frame < total_frame_num:
+        sim.update_static_mesh(frame=frame, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
         sim.update(dt=dt, num_sub_steps=20)
+        print('frame:', frame)
+        frame += 1
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     camera.lookat(0.5, 0.5, 0.5)
     scene.set_camera(camera)

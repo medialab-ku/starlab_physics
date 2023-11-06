@@ -1,3 +1,4 @@
+import numpy as np
 import taichi as ti
 import meshtaichi_patcher as patcher
 
