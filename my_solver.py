@@ -219,6 +219,8 @@ class Solver:
         self.verts.deg.fill(0)
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
         self.reset_kernel()
+
+        self.verts_static.v.fill(0.0)
         # print(self.num_neighbor)
 
     @ti.kernel
@@ -660,6 +662,7 @@ class Solver:
 
             rotated_pos += trans
 
+            self.static_mesh.mesh.verts.v[v] = (rotated_pos - self.static_mesh.mesh.verts.x[v]) / self.dt
             self.static_mesh.mesh.verts.x[v] = rotated_pos
             self.verts_static.x[v] = rotated_pos
 
