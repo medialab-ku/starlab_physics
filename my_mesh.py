@@ -38,6 +38,7 @@ class Mesh:
         self.mesh.edges.place({'l0': ti.f32,
                                'ld': ti.f32,
                                'vid': ti.math.ivec2,
+                               'x': ti.math.vec3,
                                'hij': ti.math.mat3, # bounding sphere radius
                                'hinv': ti.math.mat2}) # bounding sphere radius
 

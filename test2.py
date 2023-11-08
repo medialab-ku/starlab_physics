@@ -28,9 +28,10 @@ total_frame_num = 1
 
 #
 mesh = Mesh("obj_models/poncho_8K.obj", scale=0.33, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/poncho_3K.obj", scale=0.6, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 
 use_single_static_mesh = True
 
@@ -98,7 +99,7 @@ camera.up(0, 1, 0)
 
 run_sim = False
 frame = 0
-frame_rate = 1
+frame_rate = 10
 while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
@@ -115,7 +116,7 @@ while window.running:
         if not use_single_static_mesh and frame < frame_rate * total_frame_num:
             sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
         sim.update(dt=dt, num_sub_steps=20)
-        print('frame:', frame)
+        # print('frame:', frame)
         frame += 1
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     camera.lookat(0.5, 0.5, 0.5)
@@ -126,6 +127,7 @@ while window.running:
     scene.particles(sim.verts.x, radius=sim.radius, color=(1, 0.5, 0))
     # scene.lines()
     scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0))
+    scene.particles(static_mesh.mesh.edges.x, radius=sim.radius, color=(1, 0, 0))
     canvas.scene(scene)
     window.show()
     # window.save_image(f'results/test/{step:06d}.jpg')
