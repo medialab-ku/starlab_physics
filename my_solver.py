@@ -12,6 +12,7 @@ class Solver:
     def __init__(self,
                  my_mesh,
                  static_mesh,
+                 static_meshes,
                  bottom,
                  min_range,
                  max_range,
@@ -90,6 +91,9 @@ class Solver:
         self.grid_ids_new = ti.field(int, shape=self.max_num_verts)
         self.cur2org = ti.field(int, shape=self.max_num_verts)
 
+        self.frame = 0
+        self.frames = static_meshes
+
         self.num_max_neighbors = 32
         self.support_radius = 0.08
         self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
@@ -128,8 +132,6 @@ class Solver:
         for i in self.grid_ids:
             new_index = self.grid_ids_new[i]
             self.cur2org[new_index] = i
-
-
 
     @ti.func
     def flatten_grid_index(self, grid_index):
@@ -212,7 +214,6 @@ class Solver:
 
 
     def reset(self):
-
         self.verts.x.copy_from(self.verts.x0)
         self.verts.v.fill(0.0)
         self.verts.deg.fill(0)
@@ -639,6 +640,29 @@ class Solver:
     #
     #     for e in self.edges:
 
+    @ti.kernel
+    def update_static_mesh(self, frame: ti.i32, frame_rate:ti.i32, scale: ti.f32, trans: ti.math.vec3, rot: ti.math.vec3):
+        rot_rad = ti.math.radians(rot)
+        r3d = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2])
+
+        for v in range(self.num_verts_static):
+            # linear interpolation between frames
+            # frame_rate = 10
+            keyframe = frame//frame_rate
+            alpha = (frame/frame_rate) - keyframe
+            pos = self.frames[keyframe, v] * (1.0 - alpha) + self.frames[keyframe + 1, v] * alpha
+
+            pos *= scale
+
+            v_4d = ti.Vector([pos[0], pos[1], pos[2], 1])
+            rv = r3d @ v_4d
+            rotated_pos = ti.Vector([rv[0], rv[1], rv[2]])
+
+            rotated_pos += trans
+
+            self.static_mesh.mesh.verts.x[v] = rotated_pos
+            self.verts_static.x[v] = rotated_pos
+
 
     def update(self, dt, num_sub_steps):
 
@@ -678,6 +702,8 @@ class Solver:
                 self.verts.nc.fill(0.0)
                 self.handle_contacts()
             self.computeNextState()
+
+        self.frame += 1
 
         # query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
         # print("kernel exec. #: ", query_result1.counter)
