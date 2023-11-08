@@ -32,7 +32,7 @@ mesh = Mesh("obj_models/poncho_8K.obj", scale=0.33, trans=ti.math.vec3(0.5, 0.8,
 # static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 
-use_single_static_mesh = False
+use_single_static_mesh = True
 
 if not use_single_static_mesh:
     total_frame_num = len(os.listdir(static_mesh_path))
@@ -114,7 +114,6 @@ while window.running:
     if run_sim:
         if not use_single_static_mesh and frame < frame_rate * total_frame_num:
             sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-            print(sim.verts_static.mesh.verts.v[100].to_numpy())
         sim.update(dt=dt, num_sub_steps=20)
         print('frame:', frame)
         frame += 1
