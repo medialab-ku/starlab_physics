@@ -24,37 +24,45 @@ debug_edge_indices[0] = 0
 debug_edge_indices[1] = 1
 static_mesh_path = "seq_models/Kyra_DVStandClubbing/"
 static_mesh_file = "Kyra_DVStandClubbing_" + str(0).zfill(4) + ".obj"
-total_frame_num = len(os.listdir(static_mesh_path))
+total_frame_num = 1
 
 #
 mesh = Mesh("obj_models/poncho_8K.obj", scale=0.33, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/poncho_3K.obj", scale=0.6, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-static_meshes_pos_np = np.zeros((total_frame_num, static_mesh.mesh.verts.x.shape[0], 3))
-static_meshes_pos_np[0] = static_mesh.mesh.verts.x.to_numpy()
 
-def read_verts_only(path):
-    with open(path, 'r') as f:
-        lines = f.readlines()
-        verts = []
-        for line in lines:
-            if line.startswith('v '):
-                line = line.strip().split()
-                vert = [float(line[1]), float(line[2]), float(line[3])]
-                verts.append(vert)
+use_single_static_mesh = True
 
-    verts_np = np.array(verts)
-    return verts_np
+if not use_single_static_mesh:
+    total_frame_num = len(os.listdir(static_mesh_path))
+    static_meshes_pos_np = np.zeros((total_frame_num, static_mesh.mesh.verts.x.shape[0], 3))
+    static_meshes_pos_np[0] = static_mesh.mesh.verts.x.to_numpy()
 
-progress = tqdm(np.arange(total_frame_num))
-for f in progress:
-    static_mesh_file = "Kyra_DVStandClubbing_" + str(f).zfill(4) + ".obj"
-    new_verts_static = read_verts_only(static_mesh_path + static_mesh_file)
-    static_meshes_pos_np[f] = new_verts_static
-    progress.update(1)
-    progress.set_description("Loading static meshes")
-print('Loading done:', static_meshes_pos_np.shape)
+    def read_verts_only(path):
+        with open(path, 'r') as f:
+            lines = f.readlines()
+            verts = []
+            for line in lines:
+                if line.startswith('v '):
+                    line = line.strip().split()
+                    vert = [float(line[1]), float(line[2]), float(line[3])]
+                    verts.append(vert)
+
+        verts_np = np.array(verts)
+        return verts_np
+
+    progress = tqdm(np.arange(total_frame_num))
+    for f in progress:
+        static_mesh_file = "Kyra_DVStandClubbing_" + str(f).zfill(4) + ".obj"
+        new_verts_static = read_verts_only(static_mesh_path + static_mesh_file)
+        static_meshes_pos_np[f] = new_verts_static
+        progress.update(1)
+        progress.set_description("Loading static meshes")
+    print('Loading done:', static_meshes_pos_np.shape)
+else:
+    static_meshes_pos_np = np.zeros((1, static_mesh.mesh.verts.x.shape[0], 3))
+    static_meshes_pos_np[0] = static_mesh.mesh.verts.x.to_numpy()
 
 total_verts_np = mesh.mesh.verts.x.to_numpy()
 total_verts_np = np.append(total_verts_np, static_mesh.mesh.verts.x.to_numpy(), axis=0)
@@ -90,18 +98,22 @@ camera.up(0, 1, 0)
 
 run_sim = False
 frame = 0
-frame_rate = 6
+frame_rate = 1
 while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
             run_sim = not run_sim
 
         if window.event.key == 'r':
+            if not use_single_static_mesh:
+                sim.update_static_mesh(frame=0, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
             sim.reset()
+            frame = 0
             run_sim = False
 
-    if run_sim and frame < total_frame_num * frame_rate:
-        sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+    if run_sim:
+        if not use_single_static_mesh and frame < total_frame_num:
+            sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
         sim.update(dt=dt, num_sub_steps=20)
         print('frame:', frame)
         frame += 1
