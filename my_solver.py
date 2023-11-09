@@ -16,7 +16,7 @@ class Solver:
                  bottom,
                  min_range,
                  max_range,
-                 k=1e5,
+                 k=1e4,
                  dt=1e-3,
                  max_iter=1000):
         self.my_mesh = my_mesh
@@ -28,8 +28,8 @@ class Solver:
         self.domain_size = self.grid_size - self.grid_origin
 
 
-        self.radius = 0.006
-        self.grid_size = 10 * self.radius
+        self.radius = 0.008
+        self.grid_size = 5 * self.radius
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid size: ", self.grid_num)
         self.padding = self.grid_size
@@ -67,8 +67,8 @@ class Solver:
 
         self.dHat = 1e-3
 
-        self.contact_stiffness = 1e6
-        self.damping_factor = 1e-2
+        self.contact_stiffness = 1e3
+        self.damping_factor = 1.e-3
         self.batch_size = 10
         self.num_bats = self.num_verts // self.batch_size
         print(f'batches #: {self.num_bats}')
@@ -95,12 +95,13 @@ class Solver:
         self.frames = static_meshes
 
         self.num_max_neighbors = 32
-        self.support_radius = 0.08
+        self.support_radius = 0.05
         self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
         self.num_neighbor = ti.field(int, shape=(self.num_verts))
         self.weights = ti.field(ti.math.vec2, shape=(self.num_verts, self.num_verts))
         self.adj = ti.field(int, shape=(self.num_verts, self.num_verts))
-
+        self.c = ti.field(ti.f32, shape=1)
+        self.w = 1.0
         self.reset()
 
     @ti.func
@@ -246,13 +247,29 @@ class Solver:
         # print(self.num_neighbor)
 
     @ti.kernel
+    def pre_stabilization(self):
+        for v in self.verts:
+            self.for_all_neighbors(v.id, self.resolve_self_pre, self.resolve_pre, self.resolve_edge_pre)
+
+        for v in self.verts:
+            if v.nc > 0:
+                v.x += (v.dx / v.nc)
+                v.x_k += (v.dx / v.nc)
+
+    @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            # if v.id == 0 or v.id == 2:
-            #     v.v = ti.math.vec3(0.0, 0.0, 0.0)
-            # else:
             v.v += (v.f_ext / v.m) * self.dt
 
+
+        # v.nc += 1
+
+        # for v in self.verts:
+        #      self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_v, self.resolve_v_edge)
+        # # #
+        # for v in self.verts:
+        #     if v.nc > 0:
+        #         v.v += (v.dx / v.nc)
     @ti.kernel
     def add(self, ans: ti.template(), a: ti.template(), k: ti.f32, b: ti.template()):
         for i in ans:
@@ -304,6 +321,13 @@ class Solver:
             v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
             v.x = v.x_k
 
+        for v in self.verts:
+             self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_v, self.resolve_v_edge)
+        # # #
+        for v in self.verts:
+            if v.nc > 0:
+                v.v += (v.dx / v.nc)
+
     @ti.kernel
     def evaluate_gradient_and_hessian(self):
         # self.candidatesPC.deactivate()
@@ -318,59 +342,30 @@ class Solver:
         # self.verts.g[2] -= grad
         # self.verts.h[2] += coef
 
-        # for e in self.edges:
-        #     xij = e.verts[0].x_k - e.verts[1].x_k
-        #     lij = xij.norm()
-        #     grad = coef * (xij - (e.l0/lij) * xij)
-        #     e.verts[0].g -= grad
-        #     e.verts[1].g += grad
-        #     e.verts[0].h += coef
-        #     e.verts[1].h += coef
+        for e in self.edges:
+            xij = e.verts[0].x_k - e.verts[1].x_k
+            center = 0.5 * (e.verts[0].x_k + e.verts[1].x_k)
+            lij = xij.norm()
+            # grad = coef * (xij - (e.l0/lij) * xij)
+            normal = xij / lij
+            p1 = center + 0.5 * e.l0 * normal
+            p2 = center - 0.5 * e.l0 * normal
+
+
+            e.verts[0].dx += (p1 - e.verts[0].x_k)
+            e.verts[1].dx += (p2 - e.verts[1].x_k)
+            e.verts[0].nc += 1
+            e.verts[1].nc += 1
 
         for v in self.verts:
-            for ni in range(self.num_neighbor[v.id]):
-                j = self.neighbor_ids[v.id, ni]
-                xij = self.verts.x_k[v.id] - self.verts.x_k[j]
-                lij = xij.norm()
-                l0 = self.weights[v.id, j][0]
-                w = self.weights[v.id, j][1]
-                grad = w * coef * (xij - (l0 / lij) * xij)
-                self.verts.g[v.id] -= grad
-                self.verts.g[j] += grad
-                self.verts.h[v.id] += w * coef
-                self.verts.h[j] += w * coef
+            self.for_all_neighbors(v.id, self.resolve_self, self.resolve, self.resolve_edge)
 
-
-            # hij = coef * (self.id3 - e.l0 / lij * (self.id3 - (self.abT(xij, xij)) / (lij ** 2)))
-            # hij = coef * (self.id3)
-            # # hij = coef * (self.id3)
-            # U, sig, V = ti.svd(hij)
-            #
-            # for i in range(3):
-            #     if sig[i, i] < 1e-6:
-            #         sig[i, i] = 1e-6
-            #
-            # hij = U @ sig @ V.transpose()
-            # e.hij = hij
-        #
-        # for v in self.verts:
-        #     self.for_all_neighbors(v.id, self.resolve_self, self.resolve)
-
-        # for e in self.edges:
-        #     h = ti.math.mat2([[e.verts[0].h, 0],
-        #                       [0, e.verts[1].h]]) + \
-        #         coef * ti.math.mat2([[0, -1],
-        #                              [-1, 0]])
-        #     e.hinv = h.inverse()
 
     @ti.kernel
     def step_forward(self):
-
+        w = 1.0
         for v in self.verts:
-            # if v.id == 0 or v.id == 2:
-            #     v.x_k = v.x_k
-            # else:
-            v.x_k += v.dx
+            v.x_k += w * (v.dx / v.nc)
 
     @ti.kernel
     def handle_contacts(self):
@@ -379,45 +374,48 @@ class Solver:
             self.for_all_neighbors(v.id, self.resolve_self, self.resolve, self.resolve_edge)
 
 
-        # for v in self.verts:
-        #     if v.nc > 0:
-        #         v.x_k = v.p / v.nc
-
         for v in self.verts:
-            v.x_k += (v.g / v.h)
+            if v.nc > 0:
+                v.x_k = v.dx / v.nc
+
+        # for v in self.verts:
+        #     v.x_k += (v.gc / v.hc)
 
 
     @ti.func
     def resolve(self, i, j):
         dx = self.verts.x_k[i] - self.verts_static.x[j]
         d = dx.norm()
-
+        coef = self.dtSq * self.contact_stiffness
         if d < 2.0 * self.radius:  # in contact
             normal = dx / d
             p = self.verts_static.x[j] + 2.0 * self.radius * normal
             v = (p - self.verts.x[i]) / self.dt
-            if v.dot(normal) < 0.:
-                # print("test")
-                v -= v.dot(normal) * normal
-                p = self.verts.x[i] + v * self.dt
-            dc = p - self.verts.x_k[i]
-            # # ld = 2 * self.verts.h[i] + self.contact_stiffness
-            self.verts.g[i] += self.dtSq * self.contact_stiffness * dc
-            self.verts.h[i] += self.dtSq * self.contact_stiffness
+
+            # if v.dot(normal) < 0.:
+            #     # print("test")
+            #     v -= v.dot(normal) * normal
+            #     p = self.verts.x[i] + v * self.dt
+            # dc = p - self.verts.x_k[i]
+            # self.c[0] += (coef / 2.0) * (d - 2.0 * self.radius) ** 2
+            # # # ld = 2 * self.verts.h[i] + self.contact_stiffness
+            # self.verts.gc[i] += coef * dc
+            # self.verts.hc[i] += coef
             # self.verts.hc[i] += self.dtSq * self.contact_stiffness
 
             # if v.dot(normal) < 0.:
             #     # print("test")
             #     v -= v.dot(normal) * normal
             #     p = self.verts.x[i] + v * self.dt
-            self.verts.p[i] += p
+            w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
+            self.verts.dx[i] += self.w * (p - self.verts.x_k[i])
             self.verts.nc[i] += 1
 
     @ti.func
     def resolve_edge(self, i, j):
         dx = self.verts.x_k[i] - self.edges_static.x[j]
         d = dx.norm()
-
+        coef = self.dtSq * self.contact_stiffness
         if d < 2.0 * self.radius:  # in contact
             normal = dx / d
             p = self.edges_static.x[j] + 2.0 * self.radius * normal
@@ -428,16 +426,20 @@ class Solver:
                 p = self.verts.x[i] + v * self.dt
             dc = p - self.verts.x_k[i]
             # ld = 2 * self.verts.h[i] + self.contact_stiffness
-            self.verts.g[i] += self.dtSq * self.contact_stiffness * dc
-            self.verts.h[i] += self.dtSq * self.contact_stiffness
+            # self.c[0] += (coef / 2.0) * (d - 2.0 * self.radius) ** 2
+            # self.verts.gc[i] += self.dtSq * self.contact_stiffness * dc
+            # self.verts.hc[i] += self.dtSq * self.contact_stiffness
             # self.verts.hc[i] += self.dtSq * self.contact_stiffness
 
             # if v.dot(normal) < 0.:
             #     # print("test")
             #     v -= v.dot(normal) * normal
             #     p = self.verts.x[i] + v * self.dt
-            self.verts.p[i] += p
+            w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
+            self.verts.dx[i] += self.w * (p - self.verts.x_k[i])
             self.verts.nc[i] += 1
+            # self.verts.p[i] += p
+            # self.verts.nc[i] += 1
 
 
     @ti.func
@@ -447,26 +449,122 @@ class Solver:
         coef = self.adj[i, j] * self.dtSq * self.contact_stiffness
         if d < 2.0 * self.radius:  # in contact
             normal = dx / d
+
+            # g = coef * (d - 2.0 * self.radius) * normal
+            # self.c[0] += (coef/2.0) * (d - 2.0 * self.radius) ** 2
             center = 0.5 * (self.verts.x_k[i] + self.verts.x_k[j])
             p1 = center + self.radius * normal
             p2 = center - self.radius * normal
+            #
+            # v1 = (p1 - self.verts.x[i]) / self.dt
+            # v2 = (p2 - self.verts.x[j]) / self.dt
+            # v21 = v1 - v2
+            # dvn = normal.dot(v21)
+            # if dvn < 0.0:
+            #     v1 -= 0.5 * dvn * normal
+            #     v2 += 0.5 * dvn * normal
+            #     p1 = self.verts.x[i] + v1 * self.dt
+            #     p2 = self.verts.x[j] + v2 * self.dt
 
-            v1 = (p1 - self.verts.x[i]) / self.dt
-            v2 = (p2 - self.verts.x[j]) / self.dt
-            v21 = v1 - v2
-            dvn = normal.dot(v21)
-            if dvn < 0.0:
-                v1 -= 0.5 * dvn * normal
-                v2 += 0.5 * dvn * normal
-                p1 = self.verts.x[i] + v1 * self.dt
-                p2 = self.verts.x[j] + v2 * self.dt
-
-            self.verts.g[i] += coef * (p1 - self.verts.x_k[i])
-            self.verts.g[j] += coef * (p2 - self.verts.x_k[j])
-            self.verts.h[i] += coef
-            self.verts.h[j] += coef
+            # self.verts.gc[i] -= g
+            # self.verts.gc[j] += g
+            # self.verts.hc[i] += coef
+            # self.verts.hc[j] += coef
             # self.verts.hc[i] += self.dtSq * self.contact_stiffness
             # self.verts.hc[j] += self.dtSq * self.contact_stiffness
+
+            self.verts.dx[i] += self.w * self.adj[i, j] * (p1 - self.verts.x_k[i])
+            self.verts.dx[j] += self.w * self.adj[i, j] * (p2 - self.verts.x_k[j])
+            self.verts.nc[i] += self.adj[i, j]
+            self.verts.nc[j] += self.adj[i, j]
+
+    @ti.func
+    def resolve_v_self(self, i, j):
+        dx = self.verts.x_k[i] - self.verts.x_k[j]
+        dv = self.verts.v[i] - self.verts.v[j]
+        d = dx.norm()
+        n = dx / d
+        c = dv.dot(n)
+        if d < 2.0 * self.radius and c < 0.0:  # in contact
+            self.verts.dx[i] -= c * n
+            self.verts.dx[j] += c * n
+            self.verts.nc[i] += 1
+            self.verts.nc[j] += 1
+
+    @ti.func
+    def resolve_v(self, i, j):
+        dx = self.verts.x_k[i] - self.verts_static.x[j]
+        dv = self.verts.v[i] - self.verts_static.v[j]
+        d = dx.norm()
+        n = dx / d
+        c = dv.dot(n)
+
+        if d <= 2.0 * self.radius and c < 0.0:  # in contact
+            self.verts.dx[i] -= c * n
+
+            dvt = dv - c * n
+            if dvt.norm() < 0.8 * abs(c):
+                self.verts.dx[i] -= dvt
+            else:
+                self.verts.dx[i] -= 0.4 * dvt
+
+            self.verts.nc[i] += 1
+
+    @ti.func
+    def resolve_v_edge(self, i, j):
+        dx = self.verts.x_k[i] - self.edges_static.x[j]
+        dv = self.verts.v[i] - self.edges_static.v[j]
+        d = dx.norm()
+        n = dx / d
+        c = dv.dot(n)
+
+        if d < 2.0 * self.radius and c < 0.0:  # in contact
+            self.verts.dx[i] -= c * n
+            dvt = dv - c * n
+            if dvt.norm() < 0.8 * abs(c):
+                self.verts.dx[i] -= dvt
+            else:
+                self.verts.dx[i] -= 0.4 * dvt
+            self.verts.nc[i] += 1
+
+    @ti.func
+    def resolve_pre(self, i, j):
+        dx = self.verts.x[i] - self.verts_static.x[j]
+        d = dx.norm()
+        if d < 2.0 * self.radius:  # in contact
+            normal = dx / d
+            p = self.verts_static.x[j] + 2.0 * self.radius * normal
+
+            w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
+            self.verts.dx[i] += self.w * (p - self.verts.x[i])
+            self.verts.nc[i] += 1
+
+    @ti.func
+    def resolve_edge_pre(self, i, j):
+        dx = self.verts.x[i] - self.edges_static.x[j]
+        d = dx.norm()
+        if d < 2.0 * self.radius:  # in contact
+            normal = dx / d
+            p = self.edges_static.x[j] + 2.0 * self.radius * normal
+
+            w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
+            self.verts.dx[i] += self.w * (p - self.verts.x[i])
+            self.verts.nc[i] += 1
+
+    @ti.func
+    def resolve_self_pre(self, i, j):
+        dx = self.verts.x[i] - self.verts.x[j]
+        d = dx.norm()
+        if d < 2.0 * self.radius:  # in contact
+            normal = dx / d
+            center = 0.5 * (self.verts.x[i] + self.verts.x[j])
+            p1 = center + self.radius * normal
+            p2 = center - self.radius * normal
+            # self.verts.dx[i] += self.adj[i, j] * (p1 - self.verts.x[i])
+            # self.verts.dx[j] += self.adj[i, j] * (p2 - self.verts.x[j])
+            # self.verts.nc[i] += self.adj[i, j]
+            # self.verts.nc[j] += self.adj[i, j]
+
 
     @ti.kernel
     def set_init_guess_pcg(self) -> ti.f32:
@@ -644,7 +742,7 @@ class Solver:
     @ti.kernel
     def diag_hessian(self):
         for v in self.verts:
-            v.dx = (v.g / v.h)
+            v.dx = (v.g + v.gc) / (v.h + v.hc)
 
     @ti.kernel
     def edge_wise_jacobi(self):
@@ -723,6 +821,7 @@ class Solver:
 
         for e in self.edges_static:
             e.x = 0.5 * (e.verts[0].x + e.verts[1].x)
+            e.v = 0.5 * (e.verts[0].v + e.verts[1].v)
 
     def update(self, dt, num_sub_steps):
 
@@ -736,33 +835,23 @@ class Solver:
             self.computeVtemp()
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
-            # self.set_grid_particles()
+
+            # for i in range(2):
+            #     self.verts.dx.fill(0.0)
+            #     self.verts.nc.fill(0)
+            #     self.pre_stabilization()
+
             tol = 1e-2
 
             for i in range(self.max_iter):
-                # i += 1
-                self.verts.g.fill(0.)
-                self.verts.h.copy_from(self.verts.m)
-                self.verts.hc.fill(0.)
+                self.verts.dx.fill(0.0)
+                self.verts.nc.fill(0)
                 self.evaluate_gradient_and_hessian()
-
-                # gNormSq = self.dot(self.verts.g, self.verts.g)
-                # if gNormSq < tol:
-                #     breakdaa
-                self.evaluate_search_dir(policy=1)
-
                 self.step_forward()
+
                 # alpha = 1.0
-
-
-            # print(f'opt iter: {i}')
-            # ti.profiler.clear_kernel_profiler_info()
-            for i in range(1):
-                self.verts.p.fill(0.0)
-                self.verts.nc.fill(0.0)
-                self.verts.h.fill(1.0)
-                self.verts.g.fill(0.0)
-                self.handle_contacts()
+            self.verts.dx.fill(0.0)
+            self.verts.nc.fill(0)
             self.computeNextState()
 
         self.frame += 1
