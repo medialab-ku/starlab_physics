@@ -13,9 +13,6 @@ class Solver:
                  my_mesh,
                  static_mesh,
                  static_meshes,
-                 bottom,
-                 min_range,
-                 max_range,
                  k=1e6,
                  dt=1e-3,
                  max_iter=1000):
@@ -23,12 +20,12 @@ class Solver:
         self.static_mesh = static_mesh
         self.grid_origin = ti.math.vec3([-3, -3, -3])
         self.grid_size = ti.math.vec3([6, 6, 6])
-        self.grid_min = ti.math.vec3(min_range[0], min_range[1], min_range[2])
-        self.grid_max = ti.math.vec3(max_range[0], max_range[1], max_range[2])
+        # self.grid_min = ti.math.vec3(min_range[0], min_range[1], min_range[2])
+        # self.grid_max = ti.math.vec3(max_range[0], max_range[1], max_range[2])
         self.domain_size = self.grid_size - self.grid_origin
 
 
-        self.radius = 0.006
+        self.radius = 0.1
         self.grid_size = 10 * self.radius
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid size: ", self.grid_num)
@@ -40,7 +37,7 @@ class Solver:
         self.dtSq = dt ** 2
         self.max_iter = max_iter
         self.gravity = -9.81
-        self.bottom = bottom
+        # self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
                                  [0, 0, 1]])
