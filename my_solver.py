@@ -417,7 +417,63 @@ class Solver:
 
         dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
 
-        if dtype == 6:
+        if dtype == 0:
+            dx = x0 - self.verts_static.x[v1]
+            d = dx.norm()
+            n = dx/d
+            if d < self.radius:
+                p = x0 + (self.radius - d) * n
+
+                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+                self.verts.nc[vi] += 1
+
+        elif dtype == 1:
+            dx = x0 - self.verts_static.x[v2]
+            d = dx.norm()
+            n = dx / d
+            if d < self.radius:
+                p = x0 + (self.radius - d) * n
+
+                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+                self.verts.nc[vi] += 1
+
+        elif dtype == 2:
+            dx = x0 - self.verts_static.x[v3]
+            d = dx.norm()
+            n = dx / d
+            if d < self.radius:
+                p = x0 + (self.radius - d) * n
+                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+
+        elif dtype == 3:
+            x12 = x2 - x1
+            dx = x0 - self.verts_static.x[v3]
+            d = dx.norm()
+            n = dx / d
+            if d < self.radius:
+                p = x0 + (self.radius - d) * n
+                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+
+        elif dtype == 4:
+            x23 = x3 - x2
+            dx = x0 - self.verts_static.x[v3]
+            d = dx.norm()
+            n = dx / d
+            if d < self.radius:
+                p = x0 + (self.radius - d) * n
+                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+
+        elif dtype == 5:
+            x31 = x1 - x3
+            dx = x0 - self.verts_static.x[v3]
+            d = dx.norm()
+            n = dx / d
+            if d < self.radius:
+                p = x0 + (self.radius - d) * n
+                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+
+
+        elif dtype == 6:
 
             x12 = x2-x1
             x13 = x3-x1
@@ -436,6 +492,8 @@ class Solver:
 
                 self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
                 self.verts.nc[vi] += 1
+
+
         # d = dx.norm()
         # coef = self.dtSq * self.contact_stiffness
         # if d < 2.0 * self.radius:  # in contact
