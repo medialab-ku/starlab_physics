@@ -13,7 +13,7 @@ vec = ti.math.vec3
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.005  # Larger dt might lead to unstable results.
+dt = 0.003  # Larger dt might lead to unstable results.
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
@@ -34,7 +34,7 @@ mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.8, 
 # static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 
-use_single_static_mesh = False
+use_single_static_mesh = True
 
 if not use_single_static_mesh:
     total_frame_num = len(os.listdir(static_mesh_path))
@@ -116,7 +116,7 @@ while window.running:
     if run_sim:
         if not use_single_static_mesh and frame < frame_rate * total_frame_num:
             sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=1.0, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-        sim.update(dt=dt, num_sub_steps=20)
+        sim.update(dt=dt, num_sub_steps=6)
         # print('frame:', frame)
         frame += 1
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
