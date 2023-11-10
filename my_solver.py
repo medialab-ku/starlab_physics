@@ -3,6 +3,7 @@ import numpy as np
 import meshtaichi_patcher as Patcher
 
 import ccd as ccd
+import ipc_utils
 import ipc_utils as cu
 import barrier_functions as barrier
 
@@ -37,7 +38,6 @@ class Solver:
         self.dtSq = dt ** 2
         self.max_iter = max_iter
         self.gravity = -7.81
-        self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
                                  [0, 0, 1]])
@@ -83,6 +83,7 @@ class Solver:
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
 
         self.max_num_verts = self.num_verts + self.num_verts_static + self.num_edges_static
+        self.max_num_verts = self.num_verts + self.num_faces_static
         self.grid_ids = ti.field(int, shape=self.max_num_verts)
         self.grid_ids_buffer = ti.field(int, shape=self.max_num_verts)
         self.grid_ids_new = ti.field(int, shape=self.max_num_verts)
@@ -150,15 +151,21 @@ class Solver:
             self.grid_ids[v.id] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
 
-        for v in self.verts_static:
-            grid_index = self.get_flatten_grid_index(v.x)
-            self.grid_ids[v.id + self.num_verts] = grid_index
+        for f in self.faces_static:
+            center = (f.verts[0].x + f.verts[1].x + f.verts[2].x) / 3.0
+            grid_index = self.get_flatten_grid_index(center)
+            self.grid_ids[f.id + self.num_verts] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
 
-        for e in self.edges_static:
-            grid_index = self.get_flatten_grid_index(e.x)
-            self.grid_ids[e.id + self.num_verts + self.num_edges_static] = grid_index
-            ti.atomic_add(self.grid_particles_num[grid_index], 1)
+        # for v in self.verts_static:
+        #     grid_index = self.get_flatten_grid_index(v.x)
+        #     self.grid_ids[v.id + self.num_verts] = grid_index
+        #     ti.atomic_add(self.grid_particles_num[grid_index], 1)
+        #
+        # for e in self.edges_static:
+        #     grid_index = self.get_flatten_grid_index(e.x)
+        #     self.grid_ids[e.id + self.num_verts + self.num_edges_static] = grid_index
+        #     ti.atomic_add(self.grid_particles_num[grid_index], 1)
 
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num_temp[I] = self.grid_particles_num[I]
@@ -173,7 +180,7 @@ class Solver:
         return ( (pos-self.grid_origin) / self.grid_size ).cast(int)
 
     @ti.func
-    def for_all_neighbors(self, p_i, task1: ti.template(), task2: ti.template(), task3: ti.template()):
+    def for_all_neighbors(self, p_i, task1: ti.template(), task2: ti.template()):
         center_cell = self.pos_to_index(self.verts.x_k[p_i])
         # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
         grid_index = self.flatten_grid_index(center_cell)
@@ -183,10 +190,9 @@ class Solver:
             if p_j_cur < self.num_verts:
                 if p_i != p_j_cur:
                     task1(p_i, p_j_cur)
-            elif p_j_cur >= self.num_verts and p_j_cur < self.num_verts + self.num_edges_static:
-                task2(p_i, p_j_cur - self.num_verts)
             else:
-                task3(p_i, p_j_cur - self.num_verts - self.num_edges_static)
+                task2(p_i, p_j_cur - self.num_verts)
+
 
 
     @ti.kernel
@@ -261,6 +267,9 @@ class Solver:
         for v in self.verts:
             v.v += (v.f_ext / v.m) * self.dt
 
+        for v in self.verts_static:
+            v.x += v.v * self.dt
+
 
         # v.nc += 1
 
@@ -320,13 +329,13 @@ class Solver:
         for v in self.verts:
             v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
             v.x = v.x_k
-
-        for v in self.verts:
-             self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_v, self.resolve_v_edge)
-        # # #
-        for v in self.verts:
-            if v.nc > 0:
-                v.v += (v.dx / v.nc)
+        #
+        # for v in self.verts:
+        #      self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_v, self.resolve_v_edge)
+        # # # #
+        # for v in self.verts:
+        #     if v.nc > 0:
+        #         v.v += (v.dx / v.nc)
 
     @ti.kernel
     def evaluate_gradient_and_hessian(self):
@@ -358,7 +367,7 @@ class Solver:
             e.verts[1].nc += 1
 
         for v in self.verts:
-            self.for_all_neighbors(v.id, self.resolve_self, self.resolve, self.resolve_edge)
+            self.for_all_neighbors(v.id, self.resolve_self, self.resolve_vt)
 
 
     @ti.kernel
@@ -394,6 +403,48 @@ class Solver:
             w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
             self.verts.dx[i] += self.w * (p - self.verts.x_k[i])
             self.verts.nc[i] += 1
+
+    @ti.func
+    def resolve_vt(self, vi, ti):
+        x0 = self.verts.x_k[vi]
+        v1 = self.face_indices_static[3 * ti + 0]
+        v2 = self.face_indices_static[3 * ti + 1]
+        v3 = self.face_indices_static[3 * ti + 2]
+
+        x1 = self.verts_static.x[v1]
+        x2 = self.verts_static.x[v2]
+        x3 = self.verts_static.x[v3]
+
+        dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
+
+        if dtype == 6:
+
+            x12 = x2-x1
+            x13 = x3-x1
+            x10 = x0-x1
+
+            n = x12.cross(x13)
+            n = n.normalized(1e-4)
+
+            if n.dot(x10) < 0.0:
+                n *= n
+
+            d = n.dot(x10)
+
+            if d < self.radius:
+                p = x0 + (self.radius - d) * n
+
+                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+                self.verts.nc[vi] += 1
+        # d = dx.norm()
+        # coef = self.dtSq * self.contact_stiffness
+        # if d < 2.0 * self.radius:  # in contact
+        #     normal = dx / d
+        #     p = self.verts_static.x[j] + 2.0 * self.radius * normal
+        #
+        #     w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
+        #     self.verts.dx[i] += self.w * (p - self.verts.x_k[i])
+        #     self.verts.nc[i] += 1
 
     @ti.func
     def resolve_edge(self, i, j):
