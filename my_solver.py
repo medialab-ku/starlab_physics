@@ -39,7 +39,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -9.81
+        self.gravity = -7.81
         self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
@@ -101,7 +101,7 @@ class Solver:
         self.weights = ti.field(ti.math.vec2, shape=(self.num_verts, self.num_verts))
         self.adj = ti.field(int, shape=(self.num_verts, self.num_verts))
         self.c = ti.field(ti.f32, shape=1)
-        self.w = 1.0
+        self.w = 0.1
         self.reset()
 
     @ti.func
@@ -390,23 +390,7 @@ class Solver:
         if d < 2.0 * self.radius:  # in contact
             normal = dx / d
             p = self.verts_static.x[j] + 2.0 * self.radius * normal
-            v = (p - self.verts.x[i]) / self.dt
 
-            # if v.dot(normal) < 0.:
-            #     # print("test")
-            #     v -= v.dot(normal) * normal
-            #     p = self.verts.x[i] + v * self.dt
-            # dc = p - self.verts.x_k[i]
-            # self.c[0] += (coef / 2.0) * (d - 2.0 * self.radius) ** 2
-            # # # ld = 2 * self.verts.h[i] + self.contact_stiffness
-            # self.verts.gc[i] += coef * dc
-            # self.verts.hc[i] += coef
-            # self.verts.hc[i] += self.dtSq * self.contact_stiffness
-
-            # if v.dot(normal) < 0.:
-            #     # print("test")
-            #     v -= v.dot(normal) * normal
-            #     p = self.verts.x[i] + v * self.dt
             w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
             self.verts.dx[i] += self.w * (p - self.verts.x_k[i])
             self.verts.nc[i] += 1
@@ -420,21 +404,7 @@ class Solver:
             normal = dx / d
             p = self.edges_static.x[j] + 2.0 * self.radius * normal
             v = (p - self.verts.x[i]) / self.dt
-            if v.dot(normal) < 0.:
-                # print("test")
-                v -= v.dot(normal) * normal
-                p = self.verts.x[i] + v * self.dt
-            dc = p - self.verts.x_k[i]
-            # ld = 2 * self.verts.h[i] + self.contact_stiffness
-            # self.c[0] += (coef / 2.0) * (d - 2.0 * self.radius) ** 2
-            # self.verts.gc[i] += self.dtSq * self.contact_stiffness * dc
-            # self.verts.hc[i] += self.dtSq * self.contact_stiffness
-            # self.verts.hc[i] += self.dtSq * self.contact_stiffness
 
-            # if v.dot(normal) < 0.:
-            #     # print("test")
-            #     v -= v.dot(normal) * normal
-            #     p = self.verts.x[i] + v * self.dt
             w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
             self.verts.dx[i] += self.w * (p - self.verts.x_k[i])
             self.verts.nc[i] += 1
@@ -455,23 +425,6 @@ class Solver:
             center = 0.5 * (self.verts.x_k[i] + self.verts.x_k[j])
             p1 = center + self.radius * normal
             p2 = center - self.radius * normal
-            #
-            # v1 = (p1 - self.verts.x[i]) / self.dt
-            # v2 = (p2 - self.verts.x[j]) / self.dt
-            # v21 = v1 - v2
-            # dvn = normal.dot(v21)
-            # if dvn < 0.0:
-            #     v1 -= 0.5 * dvn * normal
-            #     v2 += 0.5 * dvn * normal
-            #     p1 = self.verts.x[i] + v1 * self.dt
-            #     p2 = self.verts.x[j] + v2 * self.dt
-
-            # self.verts.gc[i] -= g
-            # self.verts.gc[j] += g
-            # self.verts.hc[i] += coef
-            # self.verts.hc[j] += coef
-            # self.verts.hc[i] += self.dtSq * self.contact_stiffness
-            # self.verts.hc[j] += self.dtSq * self.contact_stiffness
 
             self.verts.dx[i] += self.w * self.adj[i, j] * (p1 - self.verts.x_k[i])
             self.verts.dx[j] += self.w * self.adj[i, j] * (p2 - self.verts.x_k[j])
@@ -506,7 +459,7 @@ class Solver:
             if dvt.norm() < 0.8 * abs(c):
                 self.verts.dx[i] -= dvt
             else:
-                self.verts.dx[i] -= 0.4 * dvt
+                self.verts.dx[i] -= 0.8 * dvt
 
             self.verts.nc[i] += 1
 
@@ -524,7 +477,7 @@ class Solver:
             if dvt.norm() < 0.8 * abs(c):
                 self.verts.dx[i] -= dvt
             else:
-                self.verts.dx[i] -= 0.4 * dvt
+                self.verts.dx[i] -= 0.8 * dvt
             self.verts.nc[i] += 1
 
     @ti.func
