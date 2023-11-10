@@ -26,11 +26,11 @@ static_mesh_path = "seq_models/Kyra_DVStandClubbing/"
 static_mesh_file = "Kyra_DVStandClubbing_" + str(0).zfill(4) + ".obj"
 total_frame_num = 1
 
-
-mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+#
+mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh = Mesh("obj_models/square_16K.obj", scale=0.2, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh = Mesh("obj_models/square_16K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 
@@ -100,7 +100,7 @@ camera.up(0, 1, 0)
 
 run_sim = True
 frame = 0
-frame_rate = 40
+frame_rate = 10
 while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
@@ -116,7 +116,7 @@ while window.running:
     if run_sim:
         if not use_single_static_mesh and frame < frame_rate * total_frame_num:
             sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=1.0, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-        sim.update(dt=dt, num_sub_steps=6)
+        sim.update(dt=dt, num_sub_steps=20)
         # print('frame:', frame)
         frame += 1
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
