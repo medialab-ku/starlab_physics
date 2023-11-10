@@ -25,6 +25,7 @@ class Mesh:
                                'deg': ti.uint32,
                                'dx': ti.math.vec3,
                                'g': ti.math.vec3,
+                               'gc': ti.math.vec3,
                                'h': ti.f32,
                                'hc': ti.f32})
 
@@ -38,6 +39,8 @@ class Mesh:
         self.mesh.edges.place({'l0': ti.f32,
                                'ld': ti.f32,
                                'vid': ti.math.ivec2,
+                               'x': ti.math.vec3,
+                               'v': ti.math.vec3,
                                'hij': ti.math.mat3, # bounding sphere radius
                                'hinv': ti.math.mat2}) # bounding sphere radius
 
