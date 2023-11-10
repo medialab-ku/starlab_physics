@@ -447,27 +447,43 @@ class Solver:
 
         elif dtype == 3:
             x12 = x2 - x1
-            dx = x0 - self.verts_static.x[v3]
-            d = dx.norm()
-            n = dx / d
+            x10 = x0 - x1
+            dir = x12.normalized(1e-4)
+
+            x0onx12 = x1 + dir.dot(x10) * dir
+            x0p = x0 - x0onx12
+
+            d = x0p.norm()
+            n = x0p / d
             if d < self.radius:
                 p = x0 + (self.radius - d) * n
                 self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
 
         elif dtype == 4:
             x23 = x3 - x2
-            dx = x0 - self.verts_static.x[v3]
-            d = dx.norm()
-            n = dx / d
+            x20 = x0 - x2
+            dir = x23.normalized(1e-4)
+
+            x0onx23 = x2 + dir.dot(x20) * dir
+            x0p = x0 - x0onx23
+
+            d = x0p.norm()
+            n = x0p / d
+
             if d < self.radius:
                 p = x0 + (self.radius - d) * n
                 self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
 
         elif dtype == 5:
-            x31 = x1 - x3
-            dx = x0 - self.verts_static.x[v3]
-            d = dx.norm()
-            n = dx / d
+            x31 = x3 - x1
+            x30 = x0 - x3
+            dir = x31.normalized(1e-4)
+
+            x0onx23 = x2 + dir.dot(x30) * dir
+            x0p = x0 - x0onx23
+
+            d = x0p.norm()
+            n = x0p / d
             if d < self.radius:
                 p = x0 + (self.radius - d) * n
                 self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
