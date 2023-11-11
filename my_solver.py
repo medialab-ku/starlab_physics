@@ -65,7 +65,7 @@ class Solver:
         self.dHat = 1e-3
 
         self.contact_stiffness = 1e3
-        self.damping_factor = 1.e-3
+        self.damping_factor = 1.e-4
         self.batch_size = 10
         self.num_bats = self.num_verts // self.batch_size
         print(f'batches #: {self.num_bats}')
@@ -100,6 +100,7 @@ class Solver:
         self.adj = ti.field(int, shape=(self.num_verts, self.num_verts))
         self.c = ti.field(ti.f32, shape=1)
         self.w = 0.1
+        self.w2 = 0.2
         self.reset()
 
     @ti.func
@@ -255,20 +256,19 @@ class Solver:
     @ti.kernel
     def pre_stabilization(self):
         for v in self.verts:
-            self.for_all_neighbors(v.id, self.resolve_self_pre, self.resolve_pre, self.resolve_edge_pre)
+            self.for_all_neighbors(v.id, self.resolve_self_pre, self.resolve_vt_vel)
 
         for v in self.verts:
             if v.nc > 0:
-                v.x += (v.dx / v.nc)
-                v.x_k += (v.dx / v.nc)
+                v.v += (v.dx / v.nc)
 
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
             v.v += (v.f_ext / v.m) * self.dt
 
-        for v in self.verts_static:
-            v.x += v.v * self.dt
+        # for v in self.verts_static:
+        #     v.x += v.v * self.dt
 
 
         # v.nc += 1
@@ -324,33 +324,16 @@ class Solver:
         #         v.y = center + rad * nor
 
     @ti.kernel
-    def  computeNextState(self):
+    def compute_velocity(self):
 
         for v in self.verts:
-            v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
-            v.x = v.x_k
-        #
-        # for v in self.verts:
-        #      self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_v, self.resolve_v_edge)
-        # # # #
-        # for v in self.verts:
-        #     if v.nc > 0:
-        #         v.v += (v.dx / v.nc)
+            v.v = (v.x_k - v.x) / self.dt
+            # v.x = v.x_k
+
+
 
     @ti.kernel
-    def evaluate_gradient_and_hessian(self):
-        # self.candidatesPC.deactivate()
-        coef = self.dtSq * self.k
-        # xij = self.verts.x_k[0] - self.verts.x0[0]
-        # grad = coef * xij
-        # self.verts.g[0] -= grad
-        # self.verts.h[0] += coef
-        #
-        # xij = self.verts.x_k[2] - self.verts.x0[2]
-        # grad = coef * xij
-        # self.verts.g[2] -= grad
-        # self.verts.h[2] += coef
-
+    def solve_constraints(self):
         for e in self.edges:
             xij = e.verts[0].x_k - e.verts[1].x_k
             center = 0.5 * (e.verts[0].x_k + e.verts[1].x_k)
@@ -416,34 +399,25 @@ class Solver:
         x3 = self.verts_static.x[v3]
 
         dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
-
+        d = self.radius
+        n = x0 - x0
         if dtype == 0:
             dx = x0 - self.verts_static.x[v1]
             d = dx.norm()
             n = dx/d
-            if d < self.radius:
-                p = x0 + (self.radius - d) * n
 
-                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
-                self.verts.nc[vi] += 1
 
         elif dtype == 1:
             dx = x0 - self.verts_static.x[v2]
             d = dx.norm()
             n = dx / d
-            if d < self.radius:
-                p = x0 + (self.radius - d) * n
 
-                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
-                self.verts.nc[vi] += 1
 
         elif dtype == 2:
             dx = x0 - self.verts_static.x[v3]
             d = dx.norm()
             n = dx / d
-            if d < self.radius:
-                p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+
 
         elif dtype == 3:
             x12 = x2 - x1
@@ -455,9 +429,7 @@ class Solver:
 
             d = x0p.norm()
             n = x0p / d
-            if d < self.radius:
-                p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+
 
         elif dtype == 4:
             x23 = x3 - x2
@@ -470,9 +442,6 @@ class Solver:
             d = x0p.norm()
             n = x0p / d
 
-            if d < self.radius:
-                p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
 
         elif dtype == 5:
             x31 = x3 - x1
@@ -484,9 +453,7 @@ class Solver:
 
             d = x0p.norm()
             n = x0p / d
-            if d < self.radius:
-                p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+
 
 
         elif dtype == 6:
@@ -503,22 +470,11 @@ class Solver:
 
             d = n.dot(x10)
 
-            if d < self.radius:
-                p = x0 + (self.radius - d) * n
+        if d < self.radius:
+            p = x0 + (self.radius - d) * n
 
-                self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
-                self.verts.nc[vi] += 1
-
-
-        # d = dx.norm()
-        # coef = self.dtSq * self.contact_stiffness
-        # if d < 2.0 * self.radius:  # in contact
-        #     normal = dx / d
-        #     p = self.verts_static.x[j] + 2.0 * self.radius * normal
-        #
-        #     w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
-        #     self.verts.dx[i] += self.w * (p - self.verts.x_k[i])
-        #     self.verts.nc[i] += 1
+            self.verts.dx[vi] += self.w * (p - self.verts.x_k[vi])
+            self.verts.nc[vi] += 1
 
     @ti.func
     def resolve_edge(self, i, j):
@@ -563,11 +519,11 @@ class Solver:
         d = dx.norm()
         n = dx / d
         c = dv.dot(n)
-        if d < 2.0 * self.radius and c < 0.0:  # in contact
-            self.verts.dx[i] -= c * n
-            self.verts.dx[j] += c * n
-            self.verts.nc[i] += 1
-            self.verts.nc[j] += 1
+        # if d < 2.0 * self.radius and c < 0.0:  # in contact
+        #     self.verts.dx[i] -= c * n
+        #     self.verts.dx[j] += c * n
+        #     self.verts.nc[i] += 1
+        #     self.verts.nc[j] += 1
 
     @ti.func
     def resolve_v(self, i, j):
@@ -606,16 +562,196 @@ class Solver:
             self.verts.nc[i] += 1
 
     @ti.func
-    def resolve_pre(self, i, j):
-        dx = self.verts.x[i] - self.verts_static.x[j]
-        d = dx.norm()
-        if d < 2.0 * self.radius:  # in contact
-            normal = dx / d
-            p = self.verts_static.x[j] + 2.0 * self.radius * normal
+    def resolve_vt_pre(self, vi, ti):
+        x0 = self.verts.x_k[vi]
+        v1 = self.face_indices_static[3 * ti + 0]
+        v2 = self.face_indices_static[3 * ti + 1]
+        v3 = self.face_indices_static[3 * ti + 2]
 
-            w = ti.math.exp((d / (2 * self.radius))) / ti.math.exp(1.0)
-            self.verts.dx[i] += self.w * (p - self.verts.x[i])
-            self.verts.nc[i] += 1
+        x1 = self.verts_static.x[v1]
+        x2 = self.verts_static.x[v2]
+        x3 = self.verts_static.x[v3]
+
+        dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
+        n = x0 - x0
+        d = self.radius
+        if dtype == 0:
+            dx = x0 - self.verts_static.x[v1]
+            d = dx.norm()
+            n = dx / d
+
+
+        elif dtype == 1:
+            dx = x0 - self.verts_static.x[v2]
+            d = dx.norm()
+            n = dx / d
+
+
+        elif dtype == 2:
+            dx = x0 - self.verts_static.x[v3]
+            d = dx.norm()
+            n = dx / d
+
+
+        elif dtype == 3:
+            x12 = x2 - x1
+            x10 = x0 - x1
+            dir = x12.normalized(1e-4)
+
+            x0onx12 = x1 + dir.dot(x10) * dir
+            x0p = x0 - x0onx12
+
+            d = x0p.norm()
+            n = x0p / d
+
+        elif dtype == 4:
+            x23 = x3 - x2
+            x20 = x0 - x2
+            dir = x23.normalized(1e-4)
+
+            x0onx23 = x2 + dir.dot(x20) * dir
+            x0p = x0 - x0onx23
+
+            d = x0p.norm()
+            n = x0p / d
+
+
+
+        elif dtype == 5:
+            x31 = x3 - x1
+            x30 = x0 - x3
+            dir = x31.normalized(1e-4)
+
+            x0onx23 = x2 + dir.dot(x30) * dir
+            x0p = x0 - x0onx23
+
+            d = x0p.norm()
+            n = x0p / d
+
+
+        elif dtype == 6:
+
+            x12 = x2 - x1
+            x13 = x3 - x1
+            x10 = x0 - x1
+
+            n = x12.cross(x13)
+            n = n.normalized(1e-4)
+
+            if n.dot(x10) < 0.0:
+                n *= n
+
+            d = n.dot(x10)
+
+        dv = n.dot(self.verts.v[vi])
+        if d < self.radius and dv < 0.0:
+            # p = x0 + (self.radius - d) * n
+            self.verts.dx[vi] += self.w * n.dot(dv) * n
+            self.verts.nc[vi] += 1
+
+    @ti.func
+    def resolve_vt_vel(self, vi, ti):
+        x0 = self.verts.x_k[vi]
+        v1 = self.face_indices_static[3 * ti + 0]
+        v2 = self.face_indices_static[3 * ti + 1]
+        v3 = self.face_indices_static[3 * ti + 2]
+
+        x1 = self.verts_static.x[v1]
+        x2 = self.verts_static.x[v2]
+        x3 = self.verts_static.x[v3]
+
+        dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
+        n = x0 - x0
+        vt = x0 - x0
+        d = self.radius
+        if dtype == 0:
+            dx = x0 - self.verts_static.x[v1]
+            vt = self.verts_static.v[v1]
+            d = dx.norm()
+            n = dx / d
+
+
+        elif dtype == 1:
+            dx = x0 - self.verts_static.x[v2]
+            vt = self.verts_static.v[v2]
+            d = dx.norm()
+            n = dx / d
+
+
+        elif dtype == 2:
+            dx = x0 - self.verts_static.x[v3]
+            vt = self.verts_static.v[v3]
+            d = dx.norm()
+            n = dx / d
+
+
+        elif dtype == 3:
+            x12 = x2 - x1
+            x10 = x0 - x1
+            dir = x12.normalized(1e-4)
+
+            x0onx12 = x1 + dir.dot(x10) * dir
+            x0p = x0 - x0onx12
+
+            d = x0p.norm()
+            n = x0p / d
+
+        elif dtype == 4:
+            x23 = x3 - x2
+            x20 = x0 - x2
+            dir = x23.normalized(1e-4)
+
+            x0onx23 = x2 + dir.dot(x20) * dir
+            x0p = x0 - x0onx23
+
+            d = x0p.norm()
+            n = x0p / d
+
+
+
+        elif dtype == 5:
+            x31 = x3 - x1
+            x30 = x0 - x3
+            dir = x31.normalized(1e-4)
+
+            x0onx23 = x2 + dir.dot(x30) * dir
+            x0p = x0 - x0onx23
+
+            d = x0p.norm()
+            n = x0p / d
+
+
+        elif dtype == 6:
+
+            x12 = x2 - x1
+            x13 = x3 - x1
+            x10 = x0 - x1
+
+            n = x12.cross(x13)
+            n = n.normalized(1e-4)
+
+            if n.dot(x10) < 0.0:
+                n *= n
+
+            d = n.dot(x10)
+
+        dv = n.dot(self.verts.v[vi])
+        if d < self.radius and dv < 0.0:
+            # p = x0 + (self.radius - d) * n
+            self.verts.dx[vi] -= dv * n
+            v_tan = self.verts.v[vi] - dv * n
+            if v_tan.norm() < 0.8 * abs(dv):
+                self.verts.dx[vi] -= v_tan
+
+            else:
+                self.verts.dx[vi] -= 0.8 * v_tan
+
+            self.verts.nc[vi] += 1
+
+        if d < self.radius and dv > 0.0:
+            self.verts.dx[vi] -= dv * n
+
+            self.verts.nc[vi] += 1
 
     @ti.func
     def resolve_edge_pre(self, i, j):
@@ -753,33 +889,7 @@ class Solver:
             v.dx += alpha * self.p[v.id]
             self.r[v.id] -= alpha * self.Ap[v.id]
 
-        # ti.mesh_local(self.z, self.r)
-        # for e in self.edges:
-        #     i, j = e.verts[0].id, e.verts[1].id
-        #     ri, rj = self.r[i], self.r[j]
-        #     rx = ti.math.vec2(ri.x, rj.x)
-        #     ry = ti.math.vec2(ri.y, rj.y)
-        #     rz = ti.math.vec2(ri.z, rj.z)
-        #
-        #     zx = e.hinv @ rx
-        #     zy = e.hinv @ ry
-        #     zz = e.hinv @ rz
-        #
-        #     zi = ti.math.vec3(zx[0], zy[0], zz[0])
-        #     zj = ti.math.vec3(zx[1], zy[1], zz[1])
-        #
-        #     self.z[i] += zi
-        #     self.z[j] += zj
-        #
-        #
-        # ti.mesh_local(self.z)
-        # for v in self.verts:
-        #     self.z[v.id] = self.z[v.id] / v.deg
-
         self.precond_value_z(self.z, self.r)
-        # ti.mesh_local(self.z, self.r)
-        # for v in self.verts:
-        #     self.z[v.id] = self.r[v.id] / v.h
 
         r_2_new = ti.float32(0.0)
         ti.loop_config(block_dim=64)
@@ -802,7 +912,7 @@ class Solver:
         r_2 = self.set_init_guess_pcg()
         r_2_new = r_2
 
-        ti.profiler.clear_kernel_profiler_info()
+        # ti.profiler.clear_kernel_profiler_info()
         for iter in range(max_iter):
 
             self.z.fill(0.0)
@@ -811,8 +921,8 @@ class Solver:
             if r_2_new <= tol:
                 break
 
-        query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
-        print("kernel exec. #: ", query_result1.counter)
+        # query_result1 = ti.profiler.query_kernel_profiler_info(self.cg_iterate.__name__)
+        # print("kernel exec. #: ", query_result1.counter)
 
         # self.add(self.verts.x_k, self.verts.x_k, -1.0, self.verts.dx)
 
@@ -902,36 +1012,65 @@ class Solver:
             e.x = 0.5 * (e.verts[0].x + e.verts[1].x)
             e.v = 0.5 * (e.verts[0].v + e.verts[1].v)
 
+
+    @ti.kernel
+    def compute_friction_and_damping(self):
+
+        for e in self.edges:
+            xij = e.verts[0].x_k - e.verts[1].x_k
+            avg_vel = 0.5 * (e.verts[0].v + e.verts[1].v)
+            n = xij.normalized(1e-4)
+            rel_vel = n.dot(e.verts[0].v - e.verts[1].v) * n
+            e.verts[0].dx += self.w2 * (rel_vel)
+            e.verts[1].dx -= self.w2 * (rel_vel)
+            e.verts[0].nc += 1
+            e.verts[1].nc += 1
+
+        for v in self.verts:
+            self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_vt_vel)
+
+
+        for v in self.verts:
+            if v.nc > 0:
+                v.v += (v.dx / v.nc)
+
+
+    @ti.kernel
+    def compute_next_positions(self):
+
+        for v in self.verts:
+            v.x += v.v * self.dt
+
     def update(self, dt, num_sub_steps):
 
         self.dt = dt / num_sub_steps
         self.dtSq = self.dt ** 2
 
         # ti.profiler.clear_kernel_profiler_info()
-        self.update_edge_particle_pos()
+        # self.update_edge_particle_pos()
         self.initialize_particle_system()
         for sub_step in range(num_sub_steps):
             self.computeVtemp()
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
 
-            # for i in range(2):
-            #     self.verts.dx.fill(0.0)
-            #     self.verts.nc.fill(0)
-            #     self.pre_stabilization()
 
-            tol = 1e-2
-
-            for i in range(self.max_iter):
+            for i in range(1):
                 self.verts.dx.fill(0.0)
                 self.verts.nc.fill(0)
-                self.evaluate_gradient_and_hessian()
+                self.solve_constraints()
+                # self.newton_pcg(tol=1e-4, max_iter=2)
                 self.step_forward()
 
                 # alpha = 1.0
+            self.compute_velocity()
+
             self.verts.dx.fill(0.0)
             self.verts.nc.fill(0)
-            self.computeNextState()
+            self.compute_friction_and_damping()
+            self.compute_next_positions()
+
+
 
         self.frame += 1
 
