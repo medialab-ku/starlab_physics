@@ -39,7 +39,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -7.81
+        self.gravity = -9.81
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
                                  [0, 0, 1]])
@@ -64,12 +64,11 @@ class Solver:
         self.face_indices_static = self.static_mesh.face_indices
         self.num_faces_static = len(self.static_mesh.mesh.faces)
 
-        self.dHat = 1e-4
-
+        self.dHat = 2e-4
         self.contact_stiffness = 1e3
-        self.damping_factor = 1.e-4
+        self.damping_factor = 1e-4
         self.batch_size = 10
-        self.frictonal_coeff = 0.1
+        self.frictonal_coeff = 0.4
         self.num_bats = self.num_verts // self.batch_size
         print(f'batches #: {self.num_bats}')
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
@@ -96,7 +95,7 @@ class Solver:
         self.frames = static_meshes
 
         self.num_max_neighbors = 32
-        self.support_radius = 0.05
+        self.support_radius = 0.03
         self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
         self.num_neighbor = ti.field(int, shape=(self.num_verts))
         self.weights = ti.field(ti.math.vec2, shape=(self.num_verts, self.num_verts))
@@ -356,28 +355,51 @@ class Solver:
 
     @ti.kernel
     def solve_constraints(self):
-        for e in self.edges:
-            xij = e.verts[0].x_k - e.verts[1].x_k
-            center = 0.5 * (e.verts[0].x_k + e.verts[1].x_k)
-            lij = xij.norm()
-            # grad = coef * (xij - (e.l0/lij) * xij)
-            normal = xij / lij
-            p1 = center + 0.5 * e.l0 * normal
-            p2 = center - 0.5 * e.l0 * normal
-
-
-            e.verts[0].dx += (p1 - e.verts[0].x_k)
-            e.verts[1].dx += (p2 - e.verts[1].x_k)
-            e.verts[0].nc += 1
-            e.verts[1].nc += 1
+        # for e in self.edges:
+        #     xij = e.verts[0].x_k - e.verts[1].x_k
+        #     center = 0.5 * (e.verts[0].x_k + e.verts[1].x_k)
+        #     lij = xij.norm()
+        #     # grad = coef * (xij - (e.l0/lij) * xij)
+        #     normal = xij / lij
+        #     p1 = center + 0.5 * e.l0 * normal
+        #     p2 = center - 0.5 * e.l0 * normal
+        #
+        #
+        #     e.verts[0].dx += (p1 - e.verts[0].x_k)
+        #     e.verts[1].dx += (p2 - e.verts[1].x_k)
+        #     e.verts[0].nc += 1
+        #     e.verts[1].nc += 1
 
         for v in self.verts:
-            for tid in range(self.num_faces_static):
-                self.resolve_vt(v.id, tid)
+            for i in range(self.num_neighbor[v.id]):
+                j = self.neighbor_ids[v.id, i]
+                l0 = self.weights[v.id, j][0]
+                xij = v.x_k - self.verts.x_k[j]
+                center = 0.5 * (v.x_k + self.verts.x_k[j])
+                lij = xij.norm()
+                # grad = coef * (xij - (e.l0/lij) * xij)
+                normal = xij / lij
+                p1 = center + 0.5 * l0 * normal
+                p2 = center - 0.5 * l0 * normal
+                v.dx += (p1 - v.x_k)
+                self.verts.dx[j] += (p2 - self.verts.x_k[j])
+                v.nc += 1
+                self.verts.nc[j] += 1
 
-        for f in self.faces:
-            for vid in range(self.num_verts_static):
-                self.resolve_tv(f.id, vid)
+        for v in self.verts:
+            center_cell = self.pos_to_index(self.verts.x_k[v.id])
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                grid_index = self.flatten_grid_index(center_cell + offset)
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    p_j_cur = self.cur2org[p_j]
+                    self.resolve_vt(v.id, p_j_cur - self.num_verts)
+
+            # for tid in range(self.num_faces_static):
+            #     self.resolve_vt(v.id, tid)
+
+        # for f in self.faces:
+        #     for vid in range(self.num_verts_static):
+        #         self.resolve_tv(f.id, vid)
 
         # for e in self.edges:
         #     for eid in range(self.num_edges_static):
@@ -783,40 +805,48 @@ class Solver:
         n = x0 - x0
         g0 = ti.math.vec3(0.)
         dvn = 0.0
+        vt = ti.math.vec3(0.)
         if dtype == 0:
             d = ipc_utils.d_PP(x0, x1)
             g0, g1 = ipc_utils.g_PP(x0, x1)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1])
+            vt = self.verts_static.v[v1]
 
         elif dtype == 1:
             d = ipc_utils.d_PP(x0, x2)
             g0, g2 = ipc_utils.g_PP(x0, x2)
             dvn = g0.dot(self.verts.v[vi]) + g2.dot(self.verts_static.v[v2])
+            vt = self.verts_static.v[v2]
 
         elif dtype == 2:
             d = ipc_utils.d_PP(x0, x3)
             g0, g3 = ipc_utils.g_PP(x0, x3)
             dvn = g0.dot(self.verts.v[vi]) + g3.dot(self.verts_static.v[v3])
+            vt = self.verts_static.v[v1]
 
         elif dtype == 3:
             d = ipc_utils.d_PE(x0, x1, x2)
             g0, g1, g2 = ipc_utils.g_PE(x0, x1, x2)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g2.dot(self.verts_static.v[v2])
+            vt = 0.5 * (self.verts_static.v[v1] + self.verts_static.v[v2])
 
         elif dtype == 4:
             d = ipc_utils.d_PE(x0, x2, x3)
             g0, g2, g3 = ipc_utils.g_PE(x0, x2, x3)
             dvn = g0.dot(self.verts.v[vi]) + g2.dot(self.verts_static.v[v2]) + g3.dot(self.verts_static.v[v3])
+            vt = 0.5 * (self.verts_static.v[v3] + self.verts_static.v[v2])
 
         elif dtype == 5:
             d = ipc_utils.d_PE(x0, x1, x3)
             g0, g1, g3 = ipc_utils.g_PE(x0, x1, x3)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g3.dot(self.verts_static.v[v3])
+            vt = 0.5 * (self.verts_static.v[v1] + self.verts_static.v[v3])
 
         elif dtype == 6:
             d = ipc_utils.d_PT(x0, x1, x2, x3)
             g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g2.dot(self.verts_static.v[v2]) + g3.dot(self.verts_static.v[v3])
+            vt = (self.verts_static.v[v1] + self.verts_static.v[v2] + self.verts_static.v[v3]) / 3.0
 
         if dvn <= 0.0:
             ld = 0.0
@@ -825,12 +855,13 @@ class Solver:
                 ld = dvn / schur
             # p = x0 + (self.radius - d) * n
             self.verts.dx[vi] -= ld * g0
+            v_tan = self.verts.v[vi] - ld * g0
+
             # dv_tan = dv - dvn * n
-            # if dv_tan.norm() < self.frictonal_coeff * abs(dvn):
-            #     self.verts.dx[vi] -= dv_tan
-            #
-            # else:
-            #     self.verts.dx[vi] -= self.frictonal_coeff * dv_tan
+            if (v_tan - vt).norm() < self.frictonal_coeff * abs(dvn):
+                self.verts.dx[vi] -= (v_tan - vt)
+            else:
+                self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
 
             self.verts.nc[vi] += 1
 
@@ -921,10 +952,8 @@ class Solver:
             g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
             dvn = g1.dot(self.verts.v[v1]) + g2.dot(self.verts.v[v2]) + g3.dot(self.verts.v[v3]) + g0.dot(self.verts_static.v[vi])
             if d <= self.dHat and dvn < 0.0:
-
                 schur = g1.dot(g1) + g2.dot(g2) + g3.dot(g3) + 1e-6
                 ld = dvn / schur
-
                 self.verts.dx[v1] -= ld * g1
                 self.verts.dx[v2] -= ld * g2
                 self.verts.dx[v3] -= ld * g3
@@ -1261,7 +1290,7 @@ class Solver:
     @ti.kernel
     def update_static_mesh_test(self):
         center = ti.math.vec3(0., 0, 0.)
-        spin_rate = ti.math.vec3(0, 0, 0) * self.dt
+        spin_rate = ti.math.vec3(0, 0, 40) * self.dt
         trans = ti.math.vec3(0, 0, 0) * self.dt
         for v in self.verts_static:
             x_prev = v.x
@@ -1283,9 +1312,9 @@ class Solver:
 
         # ti.profiler.clear_kernel_profiler_info()
         # self.update_edge_particle_pos()
-        # self.initialize_particle_system()
+        self.initialize_particle_system()
         for sub_step in range(num_sub_steps):
-            self.update_static_mesh_test()
+            # self.update_static_mesh_test()
             self.computeVtemp()
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)

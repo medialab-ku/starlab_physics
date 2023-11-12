@@ -7,7 +7,7 @@ import my_mesh
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(kernel_profiler=True, arch=ti.cuda, device_memory_GB=6)
+ti.init( arch=ti.cuda, device_memory_GB=6)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
@@ -27,15 +27,15 @@ static_mesh_file = "Kyra_DVStandClubbing_" + str(0).zfill(4) + ".obj"
 total_frame_num = 1
 
 #
-mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/poncho_8K.obj", scale=0.2, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_big.obj", scale=0.05, trans=ti.math.vec3(0.5, 0.9, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_16K.obj", scale=0.04, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/cube.obj", scale=0.8, trans=ti.math.vec3(0.5, 0.0, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/sphere1K.obj", scale=1.0, trans=ti.math.vec3(0.5, -0.2, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
-# static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-static_mesh = Mesh("obj_models/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/square_big.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 # dynamic vert vs. static face
@@ -46,7 +46,7 @@ static_mesh = Mesh("obj_models/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=
 # mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
-use_single_static_mesh = True
+use_single_static_mesh = False
 
 if not use_single_static_mesh:
     total_frame_num = len(os.listdir(static_mesh_path))
@@ -112,7 +112,7 @@ camera.up(0, 1, 0)
 
 run_sim = True
 frame = 0
-frame_rate = 10
+frame_rate = 20
 while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
