@@ -7,13 +7,13 @@ import my_mesh
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init(kernel_profiler=True, arch=ti.cuda, device_memory_GB=6)
+ti.init( arch=ti.cuda, device_memory_GB=6)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.003  # Larger dt might lead to unstable results.
+dt = 0.001 # Larger dt might lead to unstable results.
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
@@ -26,15 +26,27 @@ static_mesh_path = "seq_models/Kyra_DVStandClubbing/"
 static_mesh_file = "Kyra_DVStandClubbing_" + str(0).zfill(4) + ".obj"
 total_frame_num = 1
 
-
-mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+#
+mesh = Mesh("obj_models/poncho_8K.obj", scale=0.2, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+# mesh = Mesh("obj_models/square_big.obj", scale=0.05, trans=ti.math.vec3(0.5, 0.9, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh = Mesh("obj_models/square_16K.obj", scale=0.2, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# static_mesh = Mesh("obj_models/sphere5K.obj", scale=0.5, trans=ti.math.vec3(0.5, 0.5, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh = Mesh("obj_models/square_16K.obj", scale=0.04, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/cube.obj", scale=0.8, trans=ti.math.vec3(0.5, 0.0, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/sphere1K.obj", scale=1.0, trans=ti.math.vec3(0.5, -0.2, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
 static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/square_big.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
-use_single_static_mesh = True
+# dynamic vert vs. static face
+# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 180.0, 0.0))
+# static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 180.0, 0.0))
+
+# # dynamic face vs. static vert
+# mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+
+use_single_static_mesh = False
 
 if not use_single_static_mesh:
     total_frame_num = len(os.listdir(static_mesh_path))
@@ -100,7 +112,7 @@ camera.up(0, 1, 0)
 
 run_sim = True
 frame = 0
-frame_rate = 40
+frame_rate = 20
 while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == ' ':
@@ -108,15 +120,15 @@ while window.running:
 
         if window.event.key == 'r':
             if not use_single_static_mesh:
-                sim.update_static_mesh(frame=0, frame_rate=frame_rate, scale=1.0, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+                sim.update_static_mesh(frame=0, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
             sim.reset()
             frame = 0
             run_sim = False
 
     if run_sim:
         if not use_single_static_mesh and frame < frame_rate * total_frame_num:
-            sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=1.0, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-        sim.update(dt=dt, num_sub_steps=6)
+            sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+        sim.update(dt=dt, num_sub_steps=1)
         # print('frame:', frame)
         frame += 1
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
@@ -129,7 +141,9 @@ while window.running:
     # scene.lines()
 
     scene.mesh(static_mesh.mesh.verts.x, indices=static_mesh.face_indices)
+    scene.lines(static_mesh.mesh.verts.x, indices=static_mesh.edge_indices, width=0.5,  color=(0, 0, 0))
     scene.mesh(sim.verts.x, indices=mesh.face_indices, color=(1, 0.5, 0))
+    scene.lines(sim.verts.x, indices=mesh.edge_indices, width=0.5,  color=(0, 0, 0))
     # scene.particles(static_mesh.mesh.verts.x, radius=sim.radius, color=(0, 1, 0))
     # scene.particles(static_mesh.mesh.edges.x, radius=sim.radius, color=(1, 0, 0))
     canvas.scene(scene)
