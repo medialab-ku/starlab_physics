@@ -92,8 +92,10 @@ def point_triangle_ccd(p  : ti.math.vec3,
         gap = eta * (dist2_cur - thickness * thickness) / (dist_cur + thickness)
 
         t = 0
-        while True:
 
+        i = 0
+        while True:
+            i += 1
             tocLowerBound = (1 - eta) * (dist2_cur - thickness * thickness) / ((dist_cur + thickness) * maxDispMag)
             # print(f'{tocLowerBound}')
             p  += tocLowerBound * dp
@@ -110,6 +112,7 @@ def point_triangle_ccd(p  : ti.math.vec3,
             # print(t)
             if (t > toc):
                 t = toc
+                print(i)
                 break
 
 
