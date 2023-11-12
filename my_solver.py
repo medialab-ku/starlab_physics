@@ -378,6 +378,10 @@ class Solver:
         for f in self.faces:
             for vid in range(self.num_verts_static):
                 self.resolve_tv(f.id, vid)
+
+        # for e in self.edges:
+        #     for eid in range(self.num_edges_static):
+
             # self.for_all_neighbors(v.id, self.resolve_self, self.resolve_vt)
 
 
@@ -488,90 +492,97 @@ class Solver:
         x3 = self.verts.x_k[v3]
 
         dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
-        d = self.radius
-        n = x0 - x0
+
         if dtype == 0:
-            dx = x1 - x0
-            d = dx.norm()
-            n = dx / d
+            d = ipc_utils.d_PP(x0, x1)
+            g0, g1 = ipc_utils.g_PP(x0, x1)
             if d < self.dHat:
                 if self.tv_active_set_num[fi] < self.num_max_neighbors:
                     self.tv_active_set[fi, self.tv_active_set_num[fi]] = vi
                     ti.atomic_add(self.tv_active_set_num[fi], 1)
-                    p = x0 + (self.dHat - d) * n
-                    self.verts.dx[v1] += self.w * (p - x1)
+                    schur = g1.dot(g1) + 1e-6
+                    ld = (self.dHat - d) / schur
+                    self.verts.dx[v2] += ld * g1
                     self.verts.nc[v1] += 1
 
-
         elif dtype == 1:
-            dx = x2 - x0
-            d = dx.norm()
-            n = dx / d
+            d = ipc_utils.d_PP(x0, x2)
+            g0, g2 = ipc_utils.g_PP(x0, x2)
             if d < self.dHat:
                 if self.tv_active_set_num[fi] < self.num_max_neighbors:
                     self.tv_active_set[fi, self.tv_active_set_num[fi]] = vi
                     ti.atomic_add(self.tv_active_set_num[fi], 1)
-                    p = x0 + (self.dHat - d) * n
-                    self.verts.dx[v2] += self.w * (p - x2)
+                    schur = g2.dot(g2) + 1e-6
+                    ld = (self.dHat - d) / schur
+                    self.verts.dx[v2] += ld * g2
+
                     self.verts.nc[v2] += 1
 
 
+
         elif dtype == 2:
-            dx = x3 - x0
-            d = dx.norm()
-            n = dx / d
+            d = ipc_utils.d_PP(x0, x3)
+            g0, g3 = ipc_utils.g_PP(x0, x3)
             if d < self.dHat:
                 if self.tv_active_set_num[fi] < self.num_max_neighbors:
                     self.tv_active_set[fi, self.tv_active_set_num[fi]] = vi
                     ti.atomic_add(self.tv_active_set_num[fi], 1)
-                    p = x0 + (self.dHat - d) * n
-                    self.verts.dx[v3] += self.w * (p - x3)
+                    schur = g3.dot(g3) + 1e-6
+                    ld = (self.dHat - d) / schur
+                    self.verts.dx[v3] += ld * g3
+
                     self.verts.nc[v3] += 1
 
 
         elif dtype == 3:
-            x12 = x2 - x1
-            x10 = x0 - x1
-            dir = x12.normalized(1e-4)
-
-            x0onx12 = x1 + dir.dot(x10) * dir
-            x0p = x0 - x0onx12
-
-            d = x0p.norm()
-            n = x0p / d
-
+            d = ipc_utils.d_PE(x0, x1, x2)
+            g0, g1, g2 = ipc_utils.g_PE(x0, x1, x2)
+            if d < self.dHat:
+                if self.tv_active_set_num[fi] < self.num_max_neighbors:
+                    self.tv_active_set[fi, self.tv_active_set_num[fi]] = vi
+                    ti.atomic_add(self.tv_active_set_num[fi], 1)
+                    schur = g1.dot(g1) + g2.dot(g2) + 1e-6
+                    ld = (self.dHat - d) / schur
+                    self.verts.dx[v1] += ld * g1
+                    self.verts.dx[v2] += ld * g2
+                    self.verts.nc[v1] += 1
+                    self.verts.nc[v2] += 1
 
         elif dtype == 4:
-            x23 = x3 - x2
-            x20 = x0 - x2
-            dir = x23.normalized(1e-4)
-
-            x0onx23 = x2 + dir.dot(x20) * dir
-            x0p = x0 - x0onx23
-
-            d = x0p.norm()
-            n = x0p / d
+            d = ipc_utils.d_PE(x0, x2, x3)
+            g0, g2, g3 = ipc_utils.g_PE(x0, x2, x3)
+            if d < self.dHat:
+                if self.tv_active_set_num[fi] < self.num_max_neighbors:
+                    self.tv_active_set[fi, self.tv_active_set_num[fi]] = vi
+                    ti.atomic_add(self.tv_active_set_num[fi], 1)
+                    schur = g2.dot(g2) + g3.dot(g3) + 1e-6
+                    ld = (self.dHat - d) / schur
+                    self.verts.dx[v2] += ld * g2
+                    self.verts.dx[v3] += ld * g3
+                    self.verts.nc[v2] += 1
+                    self.verts.nc[v3] += 1
 
 
         elif dtype == 5:
-            x31 = x3 - x1
-            x30 = x0 - x3
-            dir = x31.normalized(1e-4)
-
-            x0onx23 = x2 + dir.dot(x30) * dir
-            x0p = x0 - x0onx23
-
-            d = x0p.norm()
-            n = x0p / d
+            d = ipc_utils.d_PE(x0, x1, x3)
+            g0, g1, g3 = ipc_utils.g_PE(x0, x1, x3)
+            if d < self.dHat:
+                if self.tv_active_set_num[fi] < self.num_max_neighbors:
+                    self.tv_active_set[fi, self.tv_active_set_num[fi]] = vi
+                    ti.atomic_add(self.tv_active_set_num[fi], 1)
+                    schur = g1.dot(g1) + g3.dot(g3) + 1e-6
+                    ld = (self.dHat - d) / schur
+                    self.verts.dx[v1] += ld * g1
+                    self.verts.dx[v3] += ld * g3
+                    self.verts.nc[v1] += 1
+                    self.verts.nc[v3] += 1
 
         elif dtype == 6:
-
             d = ipc_utils.d_PT(x0, x1, x2, x3)
             if d < self.dHat:
                 if self.tv_active_set_num[fi] < self.num_max_neighbors:
                     self.tv_active_set[fi, self.tv_active_set_num[fi]] = vi
                     ti.atomic_add(self.tv_active_set_num[fi], 1)
-
                     g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
                     schur = g1.dot(g1) + g2.dot(g2) + g3.dot(g3) + 1e-6
                     ld = (self.dHat - d) / schur
@@ -775,37 +786,37 @@ class Solver:
         if dtype == 0:
             d = ipc_utils.d_PP(x0, x1)
             g0, g1 = ipc_utils.g_PP(x0, x1)
-            dvn = g0.dot(self.verts.v[vi])
+            dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1])
 
         elif dtype == 1:
             d = ipc_utils.d_PP(x0, x2)
             g0, g2 = ipc_utils.g_PP(x0, x2)
-            dvn = g0.dot(self.verts.v[vi])
+            dvn = g0.dot(self.verts.v[vi]) + g2.dot(self.verts_static.v[v2])
 
         elif dtype == 2:
             d = ipc_utils.d_PP(x0, x3)
             g0, g3 = ipc_utils.g_PP(x0, x3)
-            dvn = g0.dot(self.verts.v[vi])
+            dvn = g0.dot(self.verts.v[vi]) + g3.dot(self.verts_static.v[v3])
 
         elif dtype == 3:
             d = ipc_utils.d_PE(x0, x1, x2)
             g0, g1, g2 = ipc_utils.g_PE(x0, x1, x2)
-            dvn = g0.dot(self.verts.v[vi])
+            dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g2.dot(self.verts_static.v[v2])
 
         elif dtype == 4:
             d = ipc_utils.d_PE(x0, x2, x3)
             g0, g2, g3 = ipc_utils.g_PE(x0, x2, x3)
-            dvn = g0.dot(self.verts.v[vi])
+            dvn = g0.dot(self.verts.v[vi]) + g2.dot(self.verts_static.v[v2]) + g3.dot(self.verts_static.v[v3])
 
         elif dtype == 5:
             d = ipc_utils.d_PE(x0, x1, x3)
             g0, g1, g3 = ipc_utils.g_PE(x0, x1, x3)
-            dvn = g0.dot(self.verts.v[vi])
+            dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g3.dot(self.verts_static.v[v3])
 
         elif dtype == 6:
             d = ipc_utils.d_PT(x0, x1, x2, x3)
             g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
-            dvn = g0.dot(self.verts.v[vi])
+            dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g2.dot(self.verts_static.v[v2]) + g3.dot(self.verts_static.v[v3])
 
         if dvn <= 0.0:
             ld = 0.0
@@ -835,77 +846,85 @@ class Solver:
         x3 = self.verts.x_k[v3]
 
         dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
-        n = x0 - x0
-        vt = x0 - x0
-        d = self.radius
-        if dtype == 0:
-            dx = x0 - self.verts_static.x[v1]
-            vt = self.verts_static.v[v1]
-            d = dx.norm()
-            n = dx / d
 
+        if dtype == 0:
+            d = ipc_utils.d_PP(x0, x1)
+            g0, g1 = ipc_utils.g_PP(x0, x1)
+            dvn = g1.dot(self.verts.v[v1]) + g0.dot(self.verts_static.v[vi])
+            if d < self.dHat and dvn < 0.0:
+                schur = g1.dot(g1) + 1e-6
+                ld = dvn / schur
+                self.verts.dx[v1] -= ld * g1
+                self.verts.nc[v1] += 1
 
         elif dtype == 1:
-            dx = x0 - self.verts_static.x[v2]
-            vt = self.verts_static.v[v2]
-            d = dx.norm()
-            n = dx / d
+            d = ipc_utils.d_PP(x0, x2)
+            g0, g2 = ipc_utils.g_PP(x0, x2)
+            dvn = g2.dot(self.verts.v[v2]) + g0.dot(self.verts_static.v[vi])
+            if d < self.dHat and dvn < 0.0:
+                schur = g2.dot(g2) + 1e-6
+                ld = dvn / schur
+                self.verts.dx[v2] -= ld * g2
+                self.verts.nc[v2] += 1
 
 
         elif dtype == 2:
-            dx = x0 - self.verts_static.x[v3]
-            vt = self.verts_static.v[v3]
-            d = dx.norm()
-            n = dx / d
+            d = ipc_utils.d_PP(x0, x3)
+            g0, g3 = ipc_utils.g_PP(x0, x3)
+            dvn = g3.dot(self.verts.v[v3]) + g0.dot(self.verts_static.v[vi])
+            if d < self.dHat and dvn < 0.0:
+                schur = g3.dot(g3) + 1e-6
+                ld = dvn / schur
+                self.verts.dx[v3] -= ld * g3
+                self.verts.nc[v3] += 1
 
 
         elif dtype == 3:
-            x12 = x2 - x1
-            x10 = x0 - x1
-            dir = x12.normalized(1e-4)
-            vt = 0.5 * (self.verts_static.v[v1] + self.verts_static.v[v2])
-            x0onx12 = x1 + dir.dot(x10) * dir
-            x0p = x0 - x0onx12
-
-            d = x0p.norm()
-            n = x0p / d
+            d = ipc_utils.d_PE(x0, x1, x2)
+            g0, g1, g2 = ipc_utils.g_PE(x0, x1, x2)
+            dvn = g2.dot(self.verts.v[v2]) + g1.dot(self.verts.v[v1]) + g0.dot(self.verts_static.v[vi])
+            if d < self.dHat and dvn < 0.0:
+                schur = g1.dot(g1) + g2.dot(g2) + 1e-6
+                ld = dvn / schur
+                self.verts.dx[v1] -= ld * g1
+                self.verts.dx[v2] -= ld * g2
+                self.verts.nc[v1] += 1
+                self.verts.nc[v2] += 1
 
         elif dtype == 4:
-            x23 = x3 - x2
-            x20 = x0 - x2
-            dir = x23.normalized(1e-4)
-            vt = 0.5 * (self.verts_static.v[v2] + self.verts_static.v[v3])
-            x0onx23 = x2 + dir.dot(x20) * dir
-            x0p = x0 - x0onx23
+            d = ipc_utils.d_PE(x0, x2, x3)
+            g0, g2, g3 = ipc_utils.g_PE(x0, x2, x3)
+            dvn = g2.dot(self.verts.v[v2]) + g3.dot(self.verts.v[v3]) + g0.dot(self.verts_static.v[vi])
+            if d < self.dHat and dvn < 0.0:
+                schur = g2.dot(g2) + g3.dot(g3) + 1e-6
+                ld = dvn / schur
+                self.verts.dx[v2] -= ld * g2
+                self.verts.dx[v3] -= ld * g3
+                self.verts.nc[v2] += 1
+                self.verts.nc[v3] += 1
 
-            d = x0p.norm()
-            n = x0p / d
 
         elif dtype == 5:
-
-            vt = 0.5 * (self.verts_static.v[v1] + self.verts_static.v[v3])
-            x31 = x3 - x1
-            x30 = x0 - x3
-            dir = x31.normalized(1e-4)
-
-            x0onx23 = x2 + dir.dot(x30) * dir
-            x0p = x0 - x0onx23
-
-            d = x0p.norm()
-            n = x0p / d
-
+            d = ipc_utils.d_PE(x0, x1, x3)
+            g0, g1, g3 = ipc_utils.g_PE(x0, x1, x3)
+            dvn = g1.dot(self.verts.v[v1]) + g3.dot(self.verts.v[v3]) + g0.dot(self.verts_static.v[vi])
+            if d < self.dHat and dvn < 0.0:
+                schur = g1.dot(g1) + g3.dot(g3) + 1e-6
+                ld = dvn / schur
+                self.verts.dx[v1] -= ld * g1
+                self.verts.dx[v3] -= ld * g3
+                self.verts.nc[v1] += 1
+                self.verts.nc[v3] += 1
 
         elif dtype == 6:
             d = ipc_utils.d_PT(x0, x1, x2, x3)
             g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
-
-            dvn = g1.dot(self.verts.v[v1]) + g2.dot(self.verts.v[v2]) + g3.dot(self.verts.v[v3])
+            dvn = g1.dot(self.verts.v[v1]) + g2.dot(self.verts.v[v2]) + g3.dot(self.verts.v[v3]) + g0.dot(self.verts_static.v[vi])
             if d <= self.dHat and dvn < 0.0:
 
                 schur = g1.dot(g1) + g2.dot(g2) + g3.dot(g3) + 1e-6
                 ld = dvn / schur
 
-                # p = x0 + (self.radius - d) * n
                 self.verts.dx[v1] -= ld * g1
                 self.verts.dx[v2] -= ld * g2
                 self.verts.dx[v3] -= ld * g3

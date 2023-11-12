@@ -29,14 +29,14 @@ total_frame_num = 1
 #
 # mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-mesh = Mesh("obj_models/square_big.obj", scale=0.04, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/square_big.obj", scale=0.02, trans=ti.math.vec3(0.5, 0.9, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_16K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/cube.obj", scale=0.8, trans=ti.math.vec3(0.5, 0.0, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
-# static_mesh = Mesh("obj_models/sphere1K.obj", scale=0.8, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
+static_mesh = Mesh("obj_models/sphere1K.obj", scale=0.8, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
 # static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-static_mesh = Mesh("obj_models/square_big.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/square_big.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 # dynamic vert vs. static face
 # mesh = Mesh("obj_models/tetrahedron.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 180.0, 0.0))
