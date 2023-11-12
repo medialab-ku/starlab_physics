@@ -40,7 +40,6 @@ class Solver:
         self.dtSq = dt ** 2
         self.max_iter = max_iter
         self.gravity = -7.81
-        self.bottom = bottom
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
                                  [0, 0, 1]])
@@ -259,7 +258,10 @@ class Solver:
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            v.v += (v.f_ext / v.m) * self.dt
+            if v.id == 0 or v.id == 2:
+                v.v = ti.math.vec3(0.0)
+            else:
+                v.v += (v.f_ext / v.m) * self.dt
 
 
         # v.nc += 1
@@ -321,12 +323,12 @@ class Solver:
             v.v = (1.0 - self.damping_factor) * (v.x_k - v.x) / self.dt
             v.x = v.x_k
 
-        for v in self.verts:
-             self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_v, self.resolve_v_edge)
-        # # #
-        for v in self.verts:
-            if v.nc > 0:
-                v.v += (v.dx / v.nc)
+        # for v in self.verts:
+        #      self.for_all_neighbors(v.id, self.resolve_v_self, self.resolve_v, self.resolve_v_edge)
+        # # # #
+        # for v in self.verts:
+        #     if v.nc > 0:
+        #         v.v += (v.dx / v.nc)
 
     @ti.kernel
     def evaluate_gradient_and_hessian(self):
@@ -357,15 +359,18 @@ class Solver:
             e.verts[0].nc += 1
             e.verts[1].nc += 1
 
-        for v in self.verts:
-            self.for_all_neighbors(v.id, self.resolve_self, self.resolve, self.resolve_edge)
+        # for v in self.verts:
+        #     self.for_all_neighbors(v.id, self.resolve_self, self.resolve, self.resolve_edge)
 
 
     @ti.kernel
     def step_forward(self):
         w = 1.0
         for v in self.verts:
-            v.x_k += w * (v.dx / v.nc)
+            if v.id == 0 or v.id == 2:
+                v.x_k = v.x
+            else:
+                v.x_k += w * (v.dx / v.nc)
 
     @ti.kernel
     def handle_contacts(self):
@@ -803,8 +808,8 @@ class Solver:
                 self.step_forward()
 
                 # alpha = 1.0
-            self.verts.dx.fill(0.0)
-            self.verts.nc.fill(0)
+            # self.verts.dx.fill(0.0)
+            # self.verts.nc.fill(0)
             self.computeNextState()
 
         self.frame += 1
