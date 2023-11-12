@@ -39,7 +39,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -9.81
+        self.gravity = -7.81
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
                                  [0, 0, 1]])
@@ -69,7 +69,7 @@ class Solver:
         self.contact_stiffness = 1e3
         self.damping_factor = 1.e-4
         self.batch_size = 10
-        self.frictonal_coeff = 0.00
+        self.frictonal_coeff = 0.1
         self.num_bats = self.num_verts // self.batch_size
         print(f'batches #: {self.num_bats}')
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
@@ -94,24 +94,24 @@ class Solver:
 
         self.frame = 0
         self.frames = static_meshes
-        self.support_radius = 0.05
+
         self.num_max_neighbors = 32
+        self.support_radius = 0.05
+        self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
+        self.num_neighbor = ti.field(int, shape=(self.num_verts))
         self.weights = ti.field(ti.math.vec2, shape=(self.num_verts, self.num_verts))
+        self.adj = ti.field(int, shape=(self.num_verts, self.num_verts))
         self.c = ti.field(ti.f32, shape=1)
         self.w = 1.0
         self.w2 = 0.2
 
         self.vt_active_set = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
+        # self.vt_alpha = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
         self.vt_active_set_num = ti.field(int, shape=(self.num_verts))
-        self.tv_active_set = ti.field(int, shape=(self.num_faces, self.num_max_neighbors))
-        self.tv_active_set_num = ti.field(int, shape=(self.num_faces))
 
-        self.adj = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
-        self.num_adj = ti.field(int, shape=(self.num_verts))
-        self.geo_dist = ti.field(int, shape=(self.num_verts, self.num_verts))
-        self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
-        self.l0 = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
-        self.num_neighbor = ti.field(int, shape=(self.num_verts))
+        self.tv_active_set = ti.field(int, shape=(self.num_faces, self.num_max_neighbors))
+        # self.vt_alpha = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
+        self.tv_active_set_num = ti.field(int, shape=(self.num_faces))
 
         self.reset()
 
@@ -221,31 +221,39 @@ class Solver:
 
         for e in self.edges:
             i, j = e.verts[0].id, e.verts[1].id
-            self.adj[i, self.num_adj[i]] = j
-            self.adj[j, self.num_adj[j]] = i
-            ti.atomic_add(self.num_adj[i], 1)
-            ti.atomic_add(self.num_adj[j], 1)
-            self.geo_dist[j, i] = 1
-            self.geo_dist[i, i] = 1
+            self.adj[i, j] = 0
+            self.adj[j, i] = 0
 
-        for v in self.verts:
-            self.geo_dist[v.id, v.id] = 1
+        for vi in range(0, self.num_verts):
+            i = 0
+            for vj in range(0, self.num_verts):
+                if vi != vj and i < self.num_max_neighbors:
+                    lij0 = (self.verts.x0[vi] - self.verts.x0[vj]).norm()
+                    if lij0 < self.support_radius:
+                        self.neighbor_ids[vi, i] = vj
+                        self.weights[vi, vj][0] = lij0
+                        self.weights[vi, vj][1] = self.cubic_kernel(lij0)
+                        i+=1
 
-        for v in self.verts:
-            for j in range(self.num_adj[v.id]):
-                n = self.adj[v.id, j]
-                for k in range(self.num_adj[n]):
-                    nj = self.adj[n, k]
-                    if self.geo_dist[v.id, nj] != 1 and self.num_neighbor[v.id] < self.num_max_neighbors:
-                        self.neighbor_ids[v.id, self.num_neighbor[v.id]] = nj
-                        ti.atomic_add(self.num_neighbor[v.id], 1)
+            self.num_neighbor[vi] = i
 
-        for v in self.verts:
-            xi = v.x0
-            for i in range(self.num_neighbor[v.id]):
-                j = self.neighbor_ids[v.id, i]
-                xj = self.verts.x0[j]
-                self.l0[v.id, i] = (xi - xj).norm()
+        # center = ti.math.vec3(0.5, -0.8, 0.5)
+        # for v in self.verts:
+        #     dxz = v.x[2] - center[2]
+        #     v.x[2] = center[2] + 1.03 * dxz
+
+
+        for e in self.edges:
+            e.verts[0].deg += 1
+            e.verts[1].deg += 1
+            # h = ti.math.mat2([[e.verts[0].h, 0], [0, e.verts[1].h]])
+            # e.hinv = h.inverse()
+
+        # for v in self.verts:
+        #     # a = v.edges[0].id
+        #     print(f'{v.id}: ')
+        #     for ni in range(v.deg):
+        #         print(v.edges[ni].id)
 
 
     def reset(self):
@@ -254,12 +262,7 @@ class Solver:
         self.verts.v.fill(0.0)
         self.verts.deg.fill(0)
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
-        self.geo_dist.fill(-1)
-        self.num_adj.fill(0)
-        self.adj.fill(0)
-        self.neighbor_ids.fill(0)
-        self.l0.fill(0.0)
-        self.num_neighbor.fill(0)
+        self.adj.fill(1)
         self.reset_kernel()
 
         self.verts_static.v.fill(0.0)
@@ -277,10 +280,7 @@ class Solver:
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            if v.id == 0 or v.id == 2:
-                v.v = ti.math.vec3(0.)
-            else:
-                v.v += (v.f_ext / v.m) * self.dt
+            v.v += (v.f_ext / v.m) * self.dt
 
         # for v in self.verts_static:
         #     v.x += v.v * self.dt
@@ -365,35 +365,19 @@ class Solver:
             p1 = center + 0.5 * e.l0 * normal
             p2 = center - 0.5 * e.l0 * normal
 
+
             e.verts[0].dx += (p1 - e.verts[0].x_k)
             e.verts[1].dx += (p2 - e.verts[1].x_k)
             e.verts[0].nc += 1
             e.verts[1].nc += 1
 
-        # for v in self.verts:
-        #     for i in range(self.num_neighbor[v.id]):
-        #         j = self.neighbor_ids[v.id, i]
-        #         xij = v.x_k - self.verts.x_k[j]
-        #         center = 0.5 * (v.x_k + self.verts.x_k[j])
-        #         lij = xij.norm()
-        #         l0 = self.l0[v.id, i]
-        #         normal = xij / lij
-        #         p1 = center + 0.5 * l0 * normal
-        #         p2 = center - 0.5 * l0 * normal
-        #
-        #         v.dx += (p1 - v.x_k)
-        #         self.verts.dx[j] += (p2 - self.verts.x_k[j])
-        #         v.nc += 1
-        #         self.verts.nc[j] += 1
+        for v in self.verts:
+            for tid in range(self.num_faces_static):
+                self.resolve_vt(v.id, tid)
 
-        #
-        # for v in self.verts:
-        #     for tid in range(self.num_faces_static):
-        #         self.resolve_vt(v.id, tid)
-        #
-        # for f in self.faces:
-        #     for vid in range(self.num_verts_static):
-        #         self.resolve_tv(f.id, vid)
+        for f in self.faces:
+            for vid in range(self.num_verts_static):
+                self.resolve_tv(f.id, vid)
 
         # for e in self.edges:
         #     for eid in range(self.num_edges_static):
@@ -797,168 +781,58 @@ class Solver:
         dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
         d = self.dHat
         n = x0 - x0
-        vt = ti.math.vec3(0.0)
         g0 = ti.math.vec3(0.)
         dvn = 0.0
         if dtype == 0:
             d = ipc_utils.d_PP(x0, x1)
             g0, g1 = ipc_utils.g_PP(x0, x1)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1])
-            vt = self.verts_static.v[v1]
-            if dvn <= 0.0:
-                ld = 0.0
-                schur = g0.dot(g0)
-                if schur > 1e-6:
-                    ld = dvn / schur
-                # p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] -= ld * g0
-                v_tan = self.verts.v[vi] - ld * g0
-                v_tan_norm = (v_tan - self.verts_static.v[v1]).norm()
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[vi] -= (v_tan - vt)
-
-                else:
-                    self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
-
-                self.verts.nc[vi] += 1
 
         elif dtype == 1:
             d = ipc_utils.d_PP(x0, x2)
             g0, g2 = ipc_utils.g_PP(x0, x2)
             dvn = g0.dot(self.verts.v[vi]) + g2.dot(self.verts_static.v[v2])
-            vt = self.verts_static.v[v2]
-            if dvn <= 0.0:
-                ld = 0.0
-                schur = g0.dot(g0)
-                if schur > 1e-6:
-                    ld = dvn / schur
-                # p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] -= ld * g0
-                v_tan = self.verts.v[vi] - ld * g0
-                v_tan_norm = (v_tan - self.verts_static.v[v2]).norm()
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[vi] -= (v_tan - vt)
-
-                else:
-                    self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
-
-                self.verts.nc[vi] += 1
 
         elif dtype == 2:
             d = ipc_utils.d_PP(x0, x3)
             g0, g3 = ipc_utils.g_PP(x0, x3)
             dvn = g0.dot(self.verts.v[vi]) + g3.dot(self.verts_static.v[v3])
-            vt = self.verts_static.v[v3]
-            if dvn <= 0.0:
-                ld = 0.0
-                schur = g0.dot(g0)
-                if schur > 1e-6:
-                    ld = dvn / schur
-                # p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] -= ld * g0
-                v_tan = self.verts.v[vi] - ld * g0
-                v_tan_norm = (v_tan - self.verts_static.v[v3]).norm()
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[vi] -= (v_tan - vt)
-
-                else:
-                    self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
-
-                self.verts.nc[vi] += 1
-
 
         elif dtype == 3:
             d = ipc_utils.d_PE(x0, x1, x2)
             g0, g1, g2 = ipc_utils.g_PE(x0, x1, x2)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g2.dot(self.verts_static.v[v2])
-            vt = 0.5 * (self.verts_static.v[v1] + self.verts_static.v[v2])
-            if dvn <= 0.0:
-                ld = 0.0
-                schur = g0.dot(g0)
-                if schur > 1e-6:
-                    ld = dvn / schur
-                # p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] -= ld * g0
-                v_tan = self.verts.v[vi] - ld * g0
-                v_tan_norm = (  (v_tan - self.verts_static.v[v1]).norm()
-                              + (v_tan - self.verts_static.v[v2]).norm())
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[vi] -= (v_tan - vt)
-
-                else:
-                    self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
-
-                self.verts.nc[vi] += 1
 
         elif dtype == 4:
             d = ipc_utils.d_PE(x0, x2, x3)
             g0, g2, g3 = ipc_utils.g_PE(x0, x2, x3)
             dvn = g0.dot(self.verts.v[vi]) + g2.dot(self.verts_static.v[v2]) + g3.dot(self.verts_static.v[v3])
-            vt = 0.5 * (self.verts_static.v[v3] + self.verts_static.v[v2])
-            if dvn <= 0.0:
-                ld = 0.0
-                schur = g0.dot(g0)
-                if schur > 1e-6:
-                    ld = dvn / schur
-                # p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] -= ld * g0
-                v_tan = self.verts.v[vi] - ld * g0
-                v_tan_norm = (  (v_tan - self.verts_static.v[v2]).norm()
-                              + (v_tan - self.verts_static.v[v3]).norm())
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[vi] -= (v_tan - vt)
-
-                else:
-                    self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
-
-                self.verts.nc[vi] += 1
 
         elif dtype == 5:
             d = ipc_utils.d_PE(x0, x1, x3)
             g0, g1, g3 = ipc_utils.g_PE(x0, x1, x3)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g3.dot(self.verts_static.v[v3])
-            vt = 0.5 * (self.verts_static.v[v1] + self.verts_static.v[v3])
-            if dvn <= 0.0:
-                ld = 0.0
-                schur = g0.dot(g0)
-                if schur > 1e-6:
-                    ld = dvn / schur
-                # p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] -= ld * g0
-                v_tan = self.verts.v[vi] - ld * g0
-                v_tan_norm = (  (v_tan - self.verts_static.v[v1]).norm()
-                              + (v_tan - self.verts_static.v[v3]).norm())
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[vi] -= (v_tan - vt)
-
-                else:
-                    self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
-
-                self.verts.nc[vi] += 1
 
         elif dtype == 6:
             d = ipc_utils.d_PT(x0, x1, x2, x3)
             g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
             dvn = g0.dot(self.verts.v[vi]) + g1.dot(self.verts_static.v[v1]) + g2.dot(self.verts_static.v[v2]) + g3.dot(self.verts_static.v[v3])
-            vt = (self.verts_static.v[v1] + self.verts_static.v[v2] + self.verts_static.v[v3]) / 3.0
-            if dvn <= 0.0:
-                ld = 0.0
-                schur = g0.dot(g0)
-                if schur > 1e-6:
-                    ld = dvn / schur
-                # p = x0 + (self.radius - d) * n
-                self.verts.dx[vi] -= ld * g0
-                v_tan = self.verts.v[vi] - ld * g0
-                v_tan_norm = (  (v_tan - self.verts_static.v[v1]).norm()
-                              + (v_tan - self.verts_static.v[v2]).norm()
-                              + (v_tan - self.verts_static.v[v3]).norm())
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[vi] -= (v_tan - vt)
 
-                else:
-                    self.verts.dx[vi] -= self.frictonal_coeff * (v_tan - vt)
+        if dvn <= 0.0:
+            ld = 0.0
+            schur = g0.dot(g0)
+            if schur > 1e-6:
+                ld = dvn / schur
+            # p = x0 + (self.radius - d) * n
+            self.verts.dx[vi] -= ld * g0
+            # dv_tan = dv - dvn * n
+            # if dv_tan.norm() < self.frictonal_coeff * abs(dvn):
+            #     self.verts.dx[vi] -= dv_tan
+            #
+            # else:
+            #     self.verts.dx[vi] -= self.frictonal_coeff * dv_tan
 
-                self.verts.nc[vi] += 1
+            self.verts.nc[vi] += 1
 
     @ti.func
     def resolve_tv_vel(self, fi, vi):
@@ -981,16 +855,6 @@ class Solver:
                 schur = g1.dot(g1) + 1e-6
                 ld = dvn / schur
                 self.verts.dx[v1] -= ld * g1
-                vt1 = self.verts.v[v1] - ld * g1
-
-                xt = self.verts_static.v[vi]
-                v_tan_norm = (xt - vt1).norm()
-
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[v1] -= (vt1 - xt)
-
-                else:
-                    self.verts.dx[v1] -= self.frictonal_coeff * (vt1 - xt)
                 self.verts.nc[v1] += 1
 
         elif dtype == 1:
@@ -1001,18 +865,6 @@ class Solver:
                 schur = g2.dot(g2) + 1e-6
                 ld = dvn / schur
                 self.verts.dx[v2] -= ld * g2
-                vt2 = self.verts.v[v2] - ld * g2
-
-
-                xt = self.verts_static.v[vi]
-                v_tan_norm = (xt - vt2).norm()
-
-
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[v2] -= (vt2 - xt)
-
-                else:
-                    self.verts.dx[v2] -= self.frictonal_coeff * (vt2 - xt)
                 self.verts.nc[v2] += 1
 
 
@@ -1024,16 +876,6 @@ class Solver:
                 schur = g3.dot(g3) + 1e-6
                 ld = dvn / schur
                 self.verts.dx[v3] -= ld * g3
-                vt3 = self.verts.v[v3] - ld * g3
-
-                xt = self.verts_static.v[vi]
-                v_tan_norm = (xt - vt3).norm()
-
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[v3] -= (vt3 - xt)
-
-                else:
-                    self.verts.dx[v3] -= self.frictonal_coeff * (vt3 - xt)
                 self.verts.nc[v3] += 1
 
 
@@ -1046,22 +888,6 @@ class Solver:
                 ld = dvn / schur
                 self.verts.dx[v1] -= ld * g1
                 self.verts.dx[v2] -= ld * g2
-
-                vt1 = self.verts.v[v1] - ld * g1
-                vt2 = self.verts.v[v2] - ld * g2
-
-                xt = self.verts_static.v[vi]
-                v_tan_norm = (  (xt - vt1).norm()
-                              + (xt - vt2).norm())
-
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[v1] -= (vt1 - xt)
-                    self.verts.dx[v2] -= (vt2 - xt)
-
-                else:
-                    self.verts.dx[v1] -= self.frictonal_coeff * (vt1 - xt)
-                    self.verts.dx[v2] -= self.frictonal_coeff * (vt2 - xt)
-
                 self.verts.nc[v1] += 1
                 self.verts.nc[v2] += 1
 
@@ -1074,22 +900,6 @@ class Solver:
                 ld = dvn / schur
                 self.verts.dx[v2] -= ld * g2
                 self.verts.dx[v3] -= ld * g3
-
-                vt2 = self.verts.v[v2] - ld * g2
-                vt3 = self.verts.v[v3] - ld * g3
-
-                xt = self.verts_static.v[vi]
-                v_tan_norm = (
-                              + (xt - vt2).norm()
-                              + (xt - vt3).norm())
-
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[v2] -= (vt2 - xt)
-                    self.verts.dx[v3] -= (vt3 - xt)
-
-                else:
-                    self.verts.dx[v2] -= self.frictonal_coeff * (vt2 - xt)
-                    self.verts.dx[v3] -= self.frictonal_coeff * (vt3 - xt)
                 self.verts.nc[v2] += 1
                 self.verts.nc[v3] += 1
 
@@ -1103,25 +913,6 @@ class Solver:
                 ld = dvn / schur
                 self.verts.dx[v1] -= ld * g1
                 self.verts.dx[v3] -= ld * g3
-
-                self.verts.dx[v1] -= ld * g1
-                self.verts.dx[v3] -= ld * g3
-
-                vt1 = self.verts.v[v1] - ld * g1
-                vt3 = self.verts.v[v3] - ld * g3
-                v_tan_norm = ((self.verts_static.v[vi] - vt1).norm()
-                              + (self.verts_static.v[vi] - vt3).norm())
-
-                xt = self.verts_static.v[vi]
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[v1] -= (vt1 - xt)
-                    self.verts.dx[v3] -= (vt3 - xt)
-
-                else:
-                    self.verts.dx[v1] -= self.frictonal_coeff * (vt1 - xt)
-                    self.verts.dx[v3] -= self.frictonal_coeff * (vt3 - xt)
-
-
                 self.verts.nc[v1] += 1
                 self.verts.nc[v3] += 1
 
@@ -1137,25 +928,12 @@ class Solver:
                 self.verts.dx[v1] -= ld * g1
                 self.verts.dx[v2] -= ld * g2
                 self.verts.dx[v3] -= ld * g3
-
-                vt1 = self.verts.v[v1] - ld * g1
-                vt2 = self.verts.v[v2] - ld * g2
-                vt3 = self.verts.v[v3] - ld * g3
-
-                xt = self.verts_static.v[vi]
-                v_tan_norm = (  (xt - vt1).norm()
-                              + (xt - vt2).norm()
-                              + (xt - vt3).norm())
-
-                if v_tan_norm < self.frictonal_coeff * abs(dvn):
-                    self.verts.dx[v1] -= (vt1 - xt)
-                    self.verts.dx[v2] -= (vt2 - xt)
-                    self.verts.dx[v3] -= (vt3 - xt)
-
-                else:
-                    self.verts.dx[v1] -= self.frictonal_coeff * (vt1 - xt)
-                    self.verts.dx[v2] -= self.frictonal_coeff * (vt2 - xt)
-                    self.verts.dx[v3] -= self.frictonal_coeff * (vt3 - xt)
+                # dv_tan = dv - dvn * n
+                # if dv_tan.norm() < self.frictonal_coeff * abs(dvn):
+                #     self.verts.dx[vi] -= dv_tan
+                #
+                # else:
+                #     self.verts.dx[vi] -= self.frictonal_coeff * dv_tan
 
                 self.verts.nc[v1] += 1
                 self.verts.nc[v2] += 1
@@ -1478,15 +1256,12 @@ class Solver:
             #     a_i = self.vt_alpha[v.id, i]
             #     if a_i < alpha:
             #         alpha = a_i
-            if v.id == 0 or v.id == 2:
-                v.x = v.x
-            else:
-                v.x += alpha * v.v * self.dt
+            v.x += alpha * v.v * self.dt
 
     @ti.kernel
     def update_static_mesh_test(self):
-        center = ti.math.vec3(0.5, -0.2, 0.5)
-        spin_rate = ti.math.vec3(0, 0, 200) * self.dt
+        center = ti.math.vec3(0., 0, 0.)
+        spin_rate = ti.math.vec3(0, 0, 0) * self.dt
         trans = ti.math.vec3(0, 0, 0) * self.dt
         for v in self.verts_static:
             x_prev = v.x
@@ -1533,7 +1308,7 @@ class Solver:
 
             self.verts.dx.fill(0.0)
             self.verts.nc.fill(0)
-            # self.compute_friction_and_damping()
+            self.compute_friction_and_damping()
             self.compute_next_positions()
 
 
