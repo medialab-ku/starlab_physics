@@ -26,7 +26,7 @@ class Solver:
         self.domain_size = self.grid_size - self.grid_origin
 
 
-        self.radius = 0.008
+        self.radius = 0.01
         self.grid_size = 5 * self.radius
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid size: ", self.grid_num)
@@ -67,7 +67,7 @@ class Solver:
         self.contact_stiffness = 1e3
         self.damping_factor = 1.e-4
         self.batch_size = 10
-        self.frictonal_coeff = 0.01
+        self.frictonal_coeff = 0.1
         self.num_bats = self.num_verts // self.batch_size
         print(f'batches #: {self.num_bats}')
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
@@ -482,7 +482,7 @@ class Solver:
             n = n.normalized(1e-4)
 
             if n.dot(x10) < 0.0:
-                n *= n
+                n *= -1.0
 
             d = n.dot(x10)
 
@@ -1089,7 +1089,7 @@ class Solver:
     def update_static_mesh_test(self):
         center = ti.math.vec3(0.5, -0.8, 0.5)
         spin_rate = ti.math.vec3(0, 0, 70) * self.dt
-        trans = ti.math.vec3(0, 0, 0) * self.dt
+        trans = ti.math.vec3(0, 5, 0) * self.dt
         for v in self.verts_static:
             x_prev = v.x
             dx = v.x - center
