@@ -13,7 +13,7 @@ vec = ti.math.vec3
 SAVE_FRAMES = False
 
 window_size = 1024  # Number of pixels of the window
-dt = 0.01  # Larger dt might lead to unstable results.
+dt = 0.001 # Larger dt might lead to unstable results.
 
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=4)
 debug_edge_indices = ti.field(dtype=ti.i32, shape=2)
@@ -27,15 +27,15 @@ static_mesh_file = "Kyra_DVStandClubbing_" + str(0).zfill(4) + ".obj"
 total_frame_num = 1
 
 #
-# mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh = Mesh("obj_models/poncho_8K.obj", scale=0.3, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/clubbing_dress.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_big.obj", scale=0.05, trans=ti.math.vec3(0.5, 0.9, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh = Mesh("obj_models/square_16K.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh = Mesh("obj_models/square_16K.obj", scale=0.04, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh = Mesh("obj_models/square_16K.obj", scale=0.04, trans=ti.math.vec3(0.5, 0.8, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/cube.obj", scale=0.8, trans=ti.math.vec3(0.5, 0.0, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
-static_mesh = Mesh("obj_models/sphere1K.obj", scale=1.0, trans=ti.math.vec3(0.5, -0.2, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
+# static_mesh = Mesh("obj_models/sphere1K.obj", scale=1.0, trans=ti.math.vec3(0.5, -0.2, 0.5), rot=ti.math.vec3(45.0, 0.0, 0.0))
 # static_mesh = Mesh(static_mesh_path + static_mesh_file, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-# static_mesh = Mesh("obj_models/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
+static_mesh = Mesh("obj_models/Kyra_DVStandClubbing_0000.obj", scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
 # static_mesh = Mesh("obj_models/square_big.obj", scale=0.1, trans=ti.math.vec3(0.5, 0.4, 0.5), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 # dynamic vert vs. static face
@@ -128,7 +128,7 @@ while window.running:
     if run_sim:
         if not use_single_static_mesh and frame < frame_rate * total_frame_num:
             sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-        sim.update(dt=dt, num_sub_steps=10)
+        sim.update(dt=dt, num_sub_steps=1)
         # print('frame:', frame)
         frame += 1
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
