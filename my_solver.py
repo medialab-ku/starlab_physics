@@ -39,7 +39,7 @@ class Solver:
         self.dt = dt
         self.dtSq = dt ** 2
         self.max_iter = max_iter
-        self.gravity = -7.81
+        self.gravity = -9.81
         self.id3 = ti.math.mat3([[1, 0, 0],
                                  [0, 1, 0],
                                  [0, 0, 1]])
@@ -69,7 +69,7 @@ class Solver:
         self.contact_stiffness = 1e3
         self.damping_factor = 1.e-4
         self.batch_size = 10
-        self.frictonal_coeff = 0.5
+        self.frictonal_coeff = 0.00
         self.num_bats = self.num_verts // self.batch_size
         print(f'batches #: {self.num_bats}')
         print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
@@ -94,24 +94,24 @@ class Solver:
 
         self.frame = 0
         self.frames = static_meshes
-
-        self.num_max_neighbors = 32
         self.support_radius = 0.05
-        self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
-        self.num_neighbor = ti.field(int, shape=(self.num_verts))
+        self.num_max_neighbors = 32
         self.weights = ti.field(ti.math.vec2, shape=(self.num_verts, self.num_verts))
-        self.adj = ti.field(int, shape=(self.num_verts, self.num_verts))
         self.c = ti.field(ti.f32, shape=1)
         self.w = 1.0
         self.w2 = 0.2
 
         self.vt_active_set = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
-        # self.vt_alpha = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
         self.vt_active_set_num = ti.field(int, shape=(self.num_verts))
-
         self.tv_active_set = ti.field(int, shape=(self.num_faces, self.num_max_neighbors))
-        # self.vt_alpha = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
         self.tv_active_set_num = ti.field(int, shape=(self.num_faces))
+
+        self.adj = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
+        self.num_adj = ti.field(int, shape=(self.num_verts))
+        self.geo_dist = ti.field(int, shape=(self.num_verts, self.num_verts))
+        self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
+        self.l0 = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
+        self.num_neighbor = ti.field(int, shape=(self.num_verts))
 
         self.reset()
 
@@ -221,39 +221,31 @@ class Solver:
 
         for e in self.edges:
             i, j = e.verts[0].id, e.verts[1].id
-            self.adj[i, j] = 0
-            self.adj[j, i] = 0
+            self.adj[i, self.num_adj[i]] = j
+            self.adj[j, self.num_adj[j]] = i
+            ti.atomic_add(self.num_adj[i], 1)
+            ti.atomic_add(self.num_adj[j], 1)
+            self.geo_dist[j, i] = 1
+            self.geo_dist[i, i] = 1
 
-        for vi in range(0, self.num_verts):
-            i = 0
-            for vj in range(0, self.num_verts):
-                if vi != vj and i < self.num_max_neighbors:
-                    lij0 = (self.verts.x0[vi] - self.verts.x0[vj]).norm()
-                    if lij0 < self.support_radius:
-                        self.neighbor_ids[vi, i] = vj
-                        self.weights[vi, vj][0] = lij0
-                        self.weights[vi, vj][1] = self.cubic_kernel(lij0)
-                        i+=1
+        for v in self.verts:
+            self.geo_dist[v.id, v.id] = 1
 
-            self.num_neighbor[vi] = i
+        for v in self.verts:
+            for j in range(self.num_adj[v.id]):
+                n = self.adj[v.id, j]
+                for k in range(self.num_adj[n]):
+                    nj = self.adj[n, k]
+                    if self.geo_dist[v.id, nj] != 1 and self.num_neighbor[v.id] < self.num_max_neighbors:
+                        self.neighbor_ids[v.id, self.num_neighbor[v.id]] = nj
+                        ti.atomic_add(self.num_neighbor[v.id], 1)
 
-        # center = ti.math.vec3(0.5, -0.8, 0.5)
-        # for v in self.verts:
-        #     dxz = v.x[2] - center[2]
-        #     v.x[2] = center[2] + 1.03 * dxz
-
-
-        for e in self.edges:
-            e.verts[0].deg += 1
-            e.verts[1].deg += 1
-            # h = ti.math.mat2([[e.verts[0].h, 0], [0, e.verts[1].h]])
-            # e.hinv = h.inverse()
-
-        # for v in self.verts:
-        #     # a = v.edges[0].id
-        #     print(f'{v.id}: ')
-        #     for ni in range(v.deg):
-        #         print(v.edges[ni].id)
+        for v in self.verts:
+            xi = v.x0
+            for i in range(self.num_neighbor[v.id]):
+                j = self.neighbor_ids[v.id, i]
+                xj = self.verts.x0[j]
+                self.l0[v.id, i] = (xi - xj).norm()
 
 
     def reset(self):
@@ -262,7 +254,12 @@ class Solver:
         self.verts.v.fill(0.0)
         self.verts.deg.fill(0)
         self.verts.f_ext.fill([0.0, self.gravity, 0.0])
-        self.adj.fill(1)
+        self.geo_dist.fill(-1)
+        self.num_adj.fill(0)
+        self.adj.fill(0)
+        self.neighbor_ids.fill(0)
+        self.l0.fill(0.0)
+        self.num_neighbor.fill(0)
         self.reset_kernel()
 
         self.verts_static.v.fill(0.0)
@@ -280,7 +277,10 @@ class Solver:
     @ti.kernel
     def computeVtemp(self):
         for v in self.verts:
-            v.v += (v.f_ext / v.m) * self.dt
+            if v.id == 0 or v.id == 2:
+                v.v = ti.math.vec3(0.)
+            else:
+                v.v += (v.f_ext / v.m) * self.dt
 
         # for v in self.verts_static:
         #     v.x += v.v * self.dt
@@ -365,19 +365,35 @@ class Solver:
             p1 = center + 0.5 * e.l0 * normal
             p2 = center - 0.5 * e.l0 * normal
 
-
             e.verts[0].dx += (p1 - e.verts[0].x_k)
             e.verts[1].dx += (p2 - e.verts[1].x_k)
             e.verts[0].nc += 1
             e.verts[1].nc += 1
 
-        for v in self.verts:
-            for tid in range(self.num_faces_static):
-                self.resolve_vt(v.id, tid)
+        # for v in self.verts:
+        #     for i in range(self.num_neighbor[v.id]):
+        #         j = self.neighbor_ids[v.id, i]
+        #         xij = v.x_k - self.verts.x_k[j]
+        #         center = 0.5 * (v.x_k + self.verts.x_k[j])
+        #         lij = xij.norm()
+        #         l0 = self.l0[v.id, i]
+        #         normal = xij / lij
+        #         p1 = center + 0.5 * l0 * normal
+        #         p2 = center - 0.5 * l0 * normal
+        #
+        #         v.dx += (p1 - v.x_k)
+        #         self.verts.dx[j] += (p2 - self.verts.x_k[j])
+        #         v.nc += 1
+        #         self.verts.nc[j] += 1
 
-        for f in self.faces:
-            for vid in range(self.num_verts_static):
-                self.resolve_tv(f.id, vid)
+        #
+        # for v in self.verts:
+        #     for tid in range(self.num_faces_static):
+        #         self.resolve_vt(v.id, tid)
+        #
+        # for f in self.faces:
+        #     for vid in range(self.num_verts_static):
+        #         self.resolve_tv(f.id, vid)
 
         # for e in self.edges:
         #     for eid in range(self.num_edges_static):
@@ -1462,12 +1478,15 @@ class Solver:
             #     a_i = self.vt_alpha[v.id, i]
             #     if a_i < alpha:
             #         alpha = a_i
-            v.x += alpha * v.v * self.dt
+            if v.id == 0 or v.id == 2:
+                v.x = v.x
+            else:
+                v.x += alpha * v.v * self.dt
 
     @ti.kernel
     def update_static_mesh_test(self):
-        center = ti.math.vec3(0.5, 0.4, 0.5)
-        spin_rate = ti.math.vec3(0, 0, 90) * self.dt
+        center = ti.math.vec3(0.5, -0.2, 0.5)
+        spin_rate = ti.math.vec3(0, 0, 200) * self.dt
         trans = ti.math.vec3(0, 0, 0) * self.dt
         for v in self.verts_static:
             x_prev = v.x
@@ -1514,7 +1533,7 @@ class Solver:
 
             self.verts.dx.fill(0.0)
             self.verts.nc.fill(0)
-            self.compute_friction_and_damping()
+            # self.compute_friction_and_damping()
             self.compute_next_positions()
 
 
