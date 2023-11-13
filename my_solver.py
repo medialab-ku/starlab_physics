@@ -26,7 +26,7 @@ class Solver:
         self.domain_size = self.grid_size - self.grid_origin
 
 
-        self.radius = 0.01
+        self.radius = 0.005
         # self.r = 0.01
         self.grid_size = 5 * self.radius
         self.grid_size = 5 * self.radius
@@ -84,8 +84,7 @@ class Solver:
         self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
 
-        self.max_num_verts = self.num_verts + self.num_verts_static + self.num_edges_static
-        self.max_num_verts = self.num_verts + self.num_faces_static
+        self.max_num_verts = self.num_verts + self.num_faces_static + self.num_verts_static + self.num_faces
         self.grid_ids = ti.field(int, shape=self.max_num_verts)
         self.grid_ids_buffer = ti.field(int, shape=self.max_num_verts)
         self.grid_ids_new = ti.field(int, shape=self.max_num_verts)
@@ -171,10 +170,16 @@ class Solver:
             self.grid_ids[f.id + self.num_verts] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
 
-        # for v in self.verts_static:
-        #     grid_index = self.get_flatten_grid_index(v.x)
-        #     self.grid_ids[v.id + self.num_verts] = grid_index
-        #     ti.atomic_add(self.grid_particles_num[grid_index], 1)
+        for v in self.verts_static:
+            grid_index = self.get_flatten_grid_index(v.x)
+            self.grid_ids[v.id + self.num_verts + self.num_faces_static] = grid_index
+            ti.atomic_add(self.grid_particles_num[grid_index], 1)
+
+        for f in self.faces:
+            center = (f.verts[0].x + f.verts[1].x + f.verts[2].x) / 3.0
+            grid_index = self.get_flatten_grid_index(center)
+            self.grid_ids[f.id + self.num_verts + self.num_faces_static + self.num_verts_static] = grid_index
+            ti.atomic_add(self.grid_particles_num[grid_index], 1)
         #
         # for e in self.edges_static:
         #     grid_index = self.get_flatten_grid_index(e.x)
@@ -392,7 +397,18 @@ class Solver:
                 grid_index = self.flatten_grid_index(center_cell + offset)
                 for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
                     p_j_cur = self.cur2org[p_j]
-                    self.resolve_vt(v.id, p_j_cur - self.num_verts)
+
+                    if p_j_cur >= self.num_verts and p_j_cur < self.num_verts + self.num_faces_static:
+                        self.resolve_vt(v.id, p_j_cur - self.num_verts)
+
+        for v in self.verts_static:
+            center_cell = self.pos_to_index(self.verts_static.x[v.id])
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                grid_index = self.flatten_grid_index(center_cell + offset)
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    p_j_cur = self.cur2org[p_j]
+                    if p_j_cur >= + self.num_verts + self.num_faces_static + self.num_verts_static:
+                        self.resolve_tv(p_j_cur - self.num_verts - self.num_faces_static- self.num_verts_static, v.id)
 
             # for tid in range(self.num_faces_static):
             #     self.resolve_vt(v.id, tid)
@@ -1310,15 +1326,11 @@ class Solver:
         self.dt = dt / num_sub_steps
         self.dtSq = self.dt ** 2
 
-        # ti.profiler.clear_kernel_profiler_info()
-        # self.update_edge_particle_pos()
         self.initialize_particle_system()
         for sub_step in range(num_sub_steps):
-            # self.update_static_mesh_test()
             self.computeVtemp()
             self.computeY()
             self.verts.x_k.copy_from(self.verts.y)
-
 
             for i in range(1):
                 self.verts.dx.fill(0.0)
@@ -1331,10 +1343,7 @@ class Solver:
                 # self.newton_pcg(tol=1e-4, max_iter=2)
                 self.step_forward()
 
-                # alpha = 1.0
             self.compute_velocity()
-            # self.apply_ccd()
-
             self.verts.dx.fill(0.0)
             self.verts.nc.fill(0)
             self.compute_friction_and_damping()
