@@ -7,7 +7,7 @@ import my_mesh
 from my_mesh import Mesh
 from my_solver import Solver
 
-ti.init( arch=ti.cuda, device_memory_GB=6)
+ti.init(arch=ti.cuda, device_memory_GB=6)
 vec = ti.math.vec3
 
 SAVE_FRAMES = False
@@ -128,7 +128,7 @@ while window.running:
     if run_sim:
         if not use_single_static_mesh and frame < frame_rate * total_frame_num:
             sim.update_static_mesh(frame=frame, frame_rate=frame_rate, scale=0.8, trans=ti.math.vec3(0.5, -0.8, 0.5), rot=ti.math.vec3(90.0, 0.0, 0.0))
-        sim.update(dt=dt, num_sub_steps=1)
+        sim.update(dt=dt, num_sub_steps=10)
         # print('frame:', frame)
         frame += 1
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)

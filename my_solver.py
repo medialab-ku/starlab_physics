@@ -93,8 +93,8 @@ class Solver:
         self.frame = 0
         self.frames = static_meshes
 
-        self.num_max_neighbors = 32
-        self.support_radius = 0.03
+        self.num_max_neighbors = 16
+        self.support_radius = 0.02
         self.neighbor_ids = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
         self.num_neighbor = ti.field(int, shape=(self.num_verts))
         self.weights = ti.field(ti.math.vec2, shape=(self.num_verts, self.num_verts))
@@ -103,17 +103,25 @@ class Solver:
         self.w = 1.0
         self.w2 = 0.2
 
+        self.vt_dynamic_active_set = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
+        self.vt_dynamic_active_set_num = ti.field(int, shape=(self.num_verts))
+
         self.vt_active_set = ti.field(int, shape=(self.num_verts, self.num_max_neighbors))
-        # self.vt_alpha = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
         self.vt_active_set_num = ti.field(int, shape=(self.num_verts))
 
         self.tv_active_set = ti.field(int, shape=(self.num_faces, self.num_max_neighbors))
-        # self.vt_alpha = ti.field(ti.f32, shape=(self.num_verts, self.num_max_neighbors))
         self.tv_active_set_num = ti.field(int, shape=(self.num_faces))
 
         self.reset()
 
+    @ti.func
+    def is_in_face(self, fid, vid):
 
+        v1 = self.face_indices[3 * fid + 0]
+        v2 = self.face_indices[3 * fid + 1]
+        v3 = self.face_indices[3 * fid + 2]
+
+        return (v1 == vid) or (v2 == vid) or (v3 == vid)
 
     @ti.func
     def cubic_kernel(self, r_norm):
@@ -401,14 +409,19 @@ class Solver:
                     if p_j_cur >= self.num_verts and p_j_cur < self.num_verts + self.num_faces_static:
                         self.resolve_vt(v.id, p_j_cur - self.num_verts)
 
-        for v in self.verts_static:
-            center_cell = self.pos_to_index(self.verts_static.x[v.id])
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    p_j_cur = self.cur2org[p_j]
-                    if p_j_cur >= + self.num_verts + self.num_faces_static + self.num_verts_static:
-                        self.resolve_tv(p_j_cur - self.num_verts - self.num_faces_static- self.num_verts_static, v.id)
+                    elif p_j_cur >= self.num_verts + self.num_faces_static + self.num_verts_static:
+                        tid = p_j_cur - self.num_verts - self.num_faces_static - self.num_verts_static
+                        if self.is_in_face(tid, v.id) != True :
+                            self.resolve_vt_dynamic(v.id, tid)
+        #
+        # for v in self.verts_static:
+        #     center_cell = self.pos_to_index(self.verts_static.x[v.id])
+        #     for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+        #         grid_index = self.flatten_grid_index(center_cell + offset)
+        #         for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+        #             p_j_cur = self.cur2org[p_j]
+        #             if p_j_cur >= + self.num_verts + self.num_faces_static + self.num_verts_static:
+        #                 self.resolve_tv(p_j_cur - self.num_verts - self.num_faces_static- self.num_verts_static, v.id)
 
             # for tid in range(self.num_faces_static):
             #     self.resolve_vt(v.id, tid)
@@ -517,6 +530,134 @@ class Solver:
                 ti.atomic_add(self.vt_active_set_num[vi], 1)
                 self.verts.dx[vi] += self.w * ld * g0
                 self.verts.nc[vi] += 1
+
+    @ti.func
+    def resolve_vt_dynamic(self, vi, fi):
+        x0 = self.verts.x_k[vi]
+        v1 = self.face_indices[3 * fi + 0]
+        v2 = self.face_indices[3 * fi + 1]
+        v3 = self.face_indices[3 * fi + 2]
+
+        x1 = self.verts.x_k[v1]
+        x2 = self.verts.x_k[v2]
+        x3 = self.verts.x_k[v3]
+
+        dtype = ipc_utils.d_type_PT(x0, x1, x2, x3)
+        d = self.dHat
+        n = x0 - x0
+        g0 = ti.math.vec3(0.)
+        if dtype == 0:
+            d = ipc_utils.d_PP(x0, x1)
+            g0, g1 = ipc_utils.g_PP(x0, x1)
+            if d < self.dHat:
+                if self.vt_dynamic_active_set_num[vi] < self.num_max_neighbors:
+                    self.vt_dynamic_active_set[vi, self.vt_dynamic_active_set_num[vi]] = fi
+                    schur = g0.dot(g0) + g1.dot(g1) + 1e-4
+                    ld = (self.dHat - d) / schur
+                    ti.atomic_add(self.vt_dynamic_active_set_num[vi], 1)
+                    self.verts.dx[vi] += self.w * ld * g0
+                    self.verts.dx[v1] += self.w * ld * g1
+
+                    self.verts.nc[vi] += 1
+                    self.verts.nc[v1] += 1
+
+        elif dtype == 1:
+            d = ipc_utils.d_PP(x0, x2)
+            g0, g2 = ipc_utils.g_PP(x0, x2)
+            if d < self.dHat:
+                if self.vt_dynamic_active_set_num[vi] < self.num_max_neighbors:
+                    self.vt_dynamic_active_set[vi, self.vt_dynamic_active_set_num[vi]] = fi
+                    schur = g0.dot(g0) + g2.dot(g2) + 1e-4
+                    ld = (self.dHat - d) / schur
+                    ti.atomic_add(self.vt_dynamic_active_set_num[vi], 1)
+                    self.verts.dx[vi] += self.w * ld * g0
+                    self.verts.dx[v2] += self.w * ld * g2
+                    self.verts.nc[vi] += 1
+                    self.verts.nc[v2] += 1
+
+        elif dtype == 2:
+            d = ipc_utils.d_PP(x0, x3)
+            g0, g1 = ipc_utils.g_PP(x0, x3)
+            if d < self.dHat:
+                if self.vt_dynamic_active_set_num[vi] < self.num_max_neighbors:
+                    self.vt_dynamic_active_set[vi, self.vt_dynamic_active_set_num[vi]] = fi
+                    schur = g0.dot(g0) + g1.dot(g1) + 1e-4
+                    ld = (self.dHat - d) / schur
+                    ti.atomic_add(self.vt_dynamic_active_set_num[vi], 1)
+                    self.verts.dx[vi] += self.w * ld * g0
+                    self.verts.dx[v1] += self.w * ld * g1
+
+                    self.verts.nc[vi] += 1
+                    self.verts.nc[v1] += 1
+        elif dtype == 3:
+            d = ipc_utils.d_PE(x0, x1, x2)
+            g0, g1, g2 = ipc_utils.g_PE(x0, x1, x2)
+            if d < self.dHat:
+                if self.vt_dynamic_active_set_num[vi] < self.num_max_neighbors:
+                    self.vt_dynamic_active_set[vi, self.vt_dynamic_active_set_num[vi]] = fi
+                    schur = g0.dot(g0) + g1.dot(g1) + g2.dot(g2) + 1e-4
+                    ld = (self.dHat - d) / schur
+                    ti.atomic_add(self.vt_dynamic_active_set_num[vi], 1)
+                    self.verts.dx[vi] += self.w * ld * g0
+                    self.verts.dx[v1] += self.w * ld * g1
+                    self.verts.dx[v2] += self.w * ld * g2
+
+                    self.verts.nc[vi] += 1
+                    self.verts.nc[v1] += 1
+                    self.verts.nc[v2] += 1
+
+
+        elif dtype == 4:
+            d = ipc_utils.d_PE(x0, x2, x3)
+            g0, g2, g3 = ipc_utils.g_PE(x0, x2, x3)
+            if d < self.dHat:
+                if self.vt_dynamic_active_set_num[vi] < self.num_max_neighbors:
+                    self.vt_dynamic_active_set[vi, self.vt_dynamic_active_set_num[vi]] = fi
+                    schur = g0.dot(g0) + g2.dot(g2) + g3.dot(g3) + 1e-4
+                    ld = (self.dHat - d) / schur
+                    ti.atomic_add(self.vt_dynamic_active_set_num[vi], 1)
+                    self.verts.dx[vi] += self.w * ld * g0
+                    self.verts.dx[v2] += self.w * ld * g2
+                    self.verts.dx[v3] += self.w * ld * g3
+                    self.verts.nc[vi] += 1
+                    self.verts.nc[v2] += 1
+                    self.verts.nc[v3] += 1
+
+
+        elif dtype == 5:
+            d = ipc_utils.d_PE(x0, x1, x3)
+            g0, g1, g3 = ipc_utils.g_PE(x0, x1, x3)
+            if d < self.dHat:
+                if self.vt_dynamic_active_set_num[vi] < self.num_max_neighbors:
+                    self.vt_dynamic_active_set[vi, self.vt_dynamic_active_set_num[vi]] = fi
+                    schur = g0.dot(g0) + g1.dot(g1) + g3.dot(g3) + 1e-4
+                    ld = (self.dHat - d) / schur
+                    ti.atomic_add(self.vt_dynamic_active_set_num[vi], 1)
+                    self.verts.dx[vi] += self.w * ld * g0
+                    self.verts.dx[v1] += self.w * ld * g1
+                    self.verts.dx[v3] += self.w * ld * g3
+                    self.verts.nc[vi] += 1
+                    self.verts.nc[v1] += 1
+                    self.verts.nc[v3] += 1
+
+        elif dtype == 6:
+            d = ipc_utils.d_PT(x0, x1, x2, x3)
+            g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
+
+            if d < self.dHat:
+                if self.vt_dynamic_active_set_num[vi] < self.num_max_neighbors:
+                    self.vt_dynamic_active_set[vi, self.vt_dynamic_active_set_num[vi]] = fi
+                    schur = g0.dot(g0) + g1.dot(g1) + g2.dot(g2) + g3.dot(g3) + 1e-4
+                    ld = (self.dHat - d) / schur
+                    ti.atomic_add(self.vt_dynamic_active_set_num[vi], 1)
+                    self.verts.dx[vi] += self.w * ld * g0
+                    self.verts.dx[v1] += self.w * ld * g1
+                    self.verts.dx[v2] += self.w * ld * g2
+                    self.verts.dx[v3] += self.w * ld * g3
+                    self.verts.nc[vi] += 1
+                    self.verts.nc[v1] += 1
+                    self.verts.nc[v2] += 1
+                    self.verts.nc[v3] += 1
 
     @ti.func
     def resolve_tv(self, fi, vi):
