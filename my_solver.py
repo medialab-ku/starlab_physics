@@ -164,6 +164,9 @@ class Solver:
 
     @ti.kernel
     def update_grid_id(self):
+
+
+        #TODO: update the following two for-loops into a single one
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[I] = 0
 
@@ -178,16 +181,16 @@ class Solver:
             self.grid_ids[f.id + self.num_verts] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
 
-        for v in self.verts_static:
-            grid_index = self.get_flatten_grid_index(v.x)
-            self.grid_ids[v.id + self.num_verts + self.num_faces_static] = grid_index
-            ti.atomic_add(self.grid_particles_num[grid_index], 1)
-
-        for f in self.faces:
-            center = (f.verts[0].x + f.verts[1].x + f.verts[2].x) / 3.0
-            grid_index = self.get_flatten_grid_index(center)
-            self.grid_ids[f.id + self.num_verts + self.num_faces_static + self.num_verts_static] = grid_index
-            ti.atomic_add(self.grid_particles_num[grid_index], 1)
+        # for v in self.verts_static:
+        #     grid_index = self.get_flatten_grid_index(v.x)
+        #     self.grid_ids[v.id + self.num_verts + self.num_faces_static] = grid_index
+        #     ti.atomic_add(self.grid_particles_num[grid_index], 1)
+        #
+        # for f in self.faces:
+        #     center = (f.verts[0].x + f.verts[1].x + f.verts[2].x) / 3.0
+        #     grid_index = self.get_flatten_grid_index(center)
+        #     self.grid_ids[f.id + self.num_verts + self.num_faces_static + self.num_verts_static] = grid_index
+        #     ti.atomic_add(self.grid_particles_num[grid_index], 1)
         #
         # for e in self.edges_static:
         #     grid_index = self.get_flatten_grid_index(e.x)
@@ -368,37 +371,40 @@ class Solver:
 
     @ti.kernel
     def solve_constraints(self):
-        # for e in self.edges:
-        #     xij = e.verts[0].x_k - e.verts[1].x_k
-        #     center = 0.5 * (e.verts[0].x_k + e.verts[1].x_k)
-        #     lij = xij.norm()
-        #     # grad = coef * (xij - (e.l0/lij) * xij)
-        #     normal = xij / lij
-        #     p1 = center + 0.5 * e.l0 * normal
-        #     p2 = center - 0.5 * e.l0 * normal
-        #
-        #
-        #     e.verts[0].dx += (p1 - e.verts[0].x_k)
-        #     e.verts[1].dx += (p2 - e.verts[1].x_k)
-        #     e.verts[0].nc += 1
-        #     e.verts[1].nc += 1
+        for e in self.edges:
+            xij = e.verts[0].x_k - e.verts[1].x_k
+            center = 0.5 * (e.verts[0].x_k + e.verts[1].x_k)
+            lij = xij.norm()
+            # grad = coef * (xij - (e.l0/lij) * xij)
+            normal = xij / lij
+            p1 = center + 0.5 * e.l0 * normal
+            p2 = center - 0.5 * e.l0 * normal
 
-        for v in self.verts:
-            for i in range(self.num_neighbor[v.id]):
-                j = self.neighbor_ids[v.id, i]
-                l0 = self.weights[v.id, j][0]
-                xij = v.x_k - self.verts.x_k[j]
-                center = 0.5 * (v.x_k + self.verts.x_k[j])
-                lij = xij.norm()
-                # grad = coef * (xij - (e.l0/lij) * xij)
-                normal = xij / lij
-                p1 = center + 0.5 * l0 * normal
-                p2 = center - 0.5 * l0 * normal
-                v.dx += (p1 - v.x_k)
-                self.verts.dx[j] += (p2 - self.verts.x_k[j])
-                v.nc += 1
-                self.verts.nc[j] += 1
 
+            e.verts[0].dx += (p1 - e.verts[0].x_k)
+            e.verts[1].dx += (p2 - e.verts[1].x_k)
+            e.verts[0].nc += 1
+            e.verts[1].nc += 1
+
+        # TODO: update the following two for-loops into a single one
+        # TODO: loop 1
+        # for v in self.verts:
+        #     for i in range(self.num_neighbor[v.id]):
+        #         j = self.neighbor_ids[v.id, i]
+        #         l0 = self.weights[v.id, j][0]
+        #         xij = v.x_k - self.verts.x_k[j]
+        #         center = 0.5 * (v.x_k + self.verts.x_k[j])
+        #         lij = xij.norm()
+        #         # grad = coef * (xij - (e.l0/lij) * xij)
+        #         normal = xij / lij
+        #         p1 = center + 0.5 * l0 * normal
+        #         p2 = center - 0.5 * l0 * normal
+        #         v.dx += (p1 - v.x_k)
+        #         self.verts.dx[j] += (p2 - self.verts.x_k[j])
+        #         v.nc += 1
+        #         self.verts.nc[j] += 1
+
+        # TODO: loop 1
         for v in self.verts:
             center_cell = self.pos_to_index(self.verts.x_k[v.id])
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
