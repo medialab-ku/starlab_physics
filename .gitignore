@@ -290,4 +290,4 @@ pyrightconfig.json
 
 # Big Data
 *.csv
-seq_models/
+Digital-human-taichi/seq_models/
