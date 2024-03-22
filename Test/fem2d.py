@@ -15,7 +15,7 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-pbd_num_iters = 10
+pbd_num_iters = 1
 
 time_delta = 1.0 / 60.0
 dim = 2
@@ -31,7 +31,9 @@ rest_positions = ti.Vector.field(dim, float)
 old_positions = ti.Vector.field(dim, float)
 positions = ti.Vector.field(dim, float)
 positions_render = ti.Vector.field(dim, float)
+
 velocities = ti.Vector.field(dim, float)
+
 
 force_ext = ti.Vector.field(dim,float)
 mass_particles = ti.field(float)
@@ -45,6 +47,7 @@ ele_vol = ti.field(dtype=ti.f32)
 ele_delta_x = ti.Vector.field(dim * (dim + 1), float)
 
 ele_vert = ti.field(ti.uint32)
+ele_vert_inv = ti.field(ti.uint32)
 edge_vert = ti.field(ti.uint32)
 
 world_side_len = 1000
@@ -60,7 +63,7 @@ def init_ti_fields(num_vert,num_ele,num_edge) :
 
     ti.root.dense(ti.i,num_ele).place(Dm, Dm_inv, ele_vol, ele_delta_x)
 
-    ti.root.dense(ti.i, (dim+1) * num_ele).place(ele_vert)
+    ti.root.dense(ti.i, (dim+1) * num_ele).place(ele_vert,ele_vert_inv)
 
     ti.root.dense(ti.i, 2 * num_edge).place(edge_vert)
 
@@ -70,10 +73,10 @@ def gen_rect2D():
 
     ld = ti.Vector([100,300])  # left down
 
-    dispx = ti.Vector([100,0])  # side len x
-    dispy = ti.Vector([0,100])  # side len y
+    dispx = ti.Vector([250,0])  # side len x
+    dispy = ti.Vector([0,500])  # side len y
 
-    nx,ny=11, 11 # number of vertex
+    nx,ny=35 + 1, 70 + 1 # number of vertex
 
     num_vert = nx*ny
     num_ele = 2* (nx-1) * (ny-1)
@@ -152,9 +155,10 @@ def setup_rest_quantities():
         ele_count[node1] +=1
         ele_count[node2] +=1
 
-def init_pos() :
+def init_config() :
     for i in range(num_vert) :
-        positions[i] = ti.Vector([500.0,500.0])
+        # positions[i] = ti.Vector([500.0,500.0])
+        velocities[i] = ti.Vector([0.0,-30.0])
 
     for i in range(num_vert) :
         rest_positions[i] = positions[i]
@@ -162,21 +166,18 @@ def init_pos() :
 def init() :
     setup_mesh()
     setup_rest_quantities()
-    init_pos()
-
-
-
+    init_config()
 
 @ti.kernel
 def prologue():
-    for i in positions:
-        old_positions[i] = positions[i]
-        force_ext[i] = ti.Vector([0, -9.81]) * mass_particles[i]
+    for v in positions:
+        old_positions[v] = positions[v]
+        force_ext[v] = ti.Vector([0, -9.81]) * mass_particles[v]
 
     # apply gravity within boundary
-    for i in positions:
-        pos, vel = positions[i], velocities[i]
-        vel += force_ext[i] * time_delta / mass_particles[i]
+    for v in positions:
+        pos, vel = positions[v], velocities[v]
+        vel += force_ext[v] * time_delta / mass_particles[v]
         pos += vel * time_delta
 
         if(pos[1]<0.0) :
@@ -188,10 +189,11 @@ def prologue():
         if(pos[0]>world_side_len) :
             pos[0] = world_side_len
 
-        positions[i] = pos
-        velocities[i] = (pos-old_positions[i])/time_delta
+        # if v==0 or v==70:
+        #     pos = rest_positions[v] + ti.Vector([0.0,600.0])
 
-
+        positions[v] = pos
+        velocities[v] = (pos-old_positions[v])/time_delta
 
 @ti.func
 def get_F(e):
@@ -290,6 +292,8 @@ def apply_delta_x():
         if(pos[0]>world_side_len) :
             pos[0] = world_side_len
 
+        # if v==0 or v==70:
+        #     pos = rest_positions[v]+ ti.Vector([0.0,600.0])
 
         positions[v] = pos
         velocities[v] = (pos-old_positions[v])/time_delta
@@ -313,6 +317,13 @@ def set_render_pos():
         for _dim in ti.static(range(dim)):
             positions_render[v][_dim] = positions[v][_dim] / world_side_len
 
+    ele_vert_inv.fill(0)
+    for e in range(num_ele) :
+        if (get_F(e)).determinant() < 0.0 : # redundantly calc
+            ele_vert_inv[3 * e + 0] = ele_vert[3 * e + 0]
+            ele_vert_inv[3 * e + 1] = ele_vert[3 * e + 1]
+            ele_vert_inv[3 * e + 2] = ele_vert[3 * e + 2]
+
 
 if __name__ == "__main__":
 
@@ -326,11 +337,13 @@ if __name__ == "__main__":
     while window.running:
         #dynamics
         run_pbd()
-
         #render
         set_render_pos()
         # canvas.circles(centers=positions_render,radius = particle_rad_render)
+
         canvas.triangles(vertices=positions_render, indices=ele_vert, color=(0.2, 1.0, 0.4))
-        # canvas.lines(vertices=positions_render,indices=edge_node,color=(0,0,0),width=0.001)
+        canvas.triangles(vertices=positions_render, indices=ele_vert_inv, color=(1.0, 0.2, 0.4))
+
+        # canvas.lines(vertices=positions_render,indices=edge_vert,color=(0,0,0),width=0.0007)
 
         window.show()
