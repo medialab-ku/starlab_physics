@@ -15,9 +15,9 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-pbd_num_iters = 2
+pbd_num_iters = 1
 
-time_delta = 1.0 / 120.0
+time_delta = 1.0 / 60.0
 time_delta_gpu = ti.field(ti.f32,shape = ())
 time_delta_gpu[None] = time_delta
 
@@ -79,11 +79,11 @@ def init_ti_fields(num_vert,num_ele,num_edge) :
 
 def set_animation(nx,ny) :
 
-    for i in range(ny):
-        handle_animation_idx[i * nx] = 1
-
-    for i in range(ny):
-        handle_animation_idx[i * nx + nx - 1] = 2
+    # for i in range(ny):
+    #     handle_animation_idx[i * nx] = 1
+    #
+    # for i in range(ny):
+    #     handle_animation_idx[i * nx + nx - 1] = 2
 
     handle_animation[0] = ti.Vector([-110, 0, 100, 200, 500])
     handle_animation[1] = ti.Vector([110, 0, 100, 200, 500])
@@ -95,52 +95,35 @@ def gen_rect2D():
 
     ld = ti.Vector([600,400])  # left down
 
-    dispx = ti.Vector([100,0])  # side len x
-    dispy = ti.Vector([0,200])  # side len y
-    nx,ny= 30 + 1, 60 + 1 # number of vertex
+    dispx = ti.Vector([50,0])  # side len x
+    dispy = ti.Vector([0,50])  # side len y
 
 
-    num_vert = nx*ny
-    num_ele = 2* (nx-1) * (ny-1)
+    num_vert = 3
+    num_ele = 1
     num_edge = num_ele * 3
 
     init_ti_fields(num_vert,num_ele,num_edge)
 
-    set_animation(nx,ny)
+    # set_animation(nx,ny)
 
     # set vertex, element, edge
-    for iy in range(ny) :
-        for jx in range(nx) :
-            positions[iy * nx + jx] = ld + jx/(nx-1)*dispx + iy/(ny-1)*dispy
+    positions[0] = ld
+    positions[1] = ld + dispx
+    positions[2] = ld + dispy
 
-    for eiy in range(ny-1) :
-        for ejx in range(nx-1) :
-            vld = eiy * (nx) + ejx
-            vrd = eiy * (nx) + ejx + 1
-            vlu = (eiy+1) * (nx) + ejx
-            vru = (eiy+1) * (nx) + ejx + 1
+    ele_vert[0] = 0
+    ele_vert[1] = 1
+    ele_vert[2] = 2
 
-            ele_vert[3 * ( 2*(eiy * (nx-1) + ejx) ) + 0] = vld
-            ele_vert[3 * ( 2*(eiy * (nx-1) + ejx) ) + 1] = vru
-            ele_vert[3 * ( 2*(eiy * (nx-1) + ejx) ) + 2] = vlu
+    edge_vert[0] = 0
+    edge_vert[1] = 1
+    edge_vert[2] = 0
+    edge_vert[3] = 2
+    edge_vert[4] = 1
+    edge_vert[5] = 2
 
-            ele_vert[3 * ( 2*(eiy * (nx-1) + ejx) +1) + 0] = vld
-            ele_vert[3 * ( 2*(eiy * (nx-1) + ejx) +1) + 1] = vru
-            ele_vert[3 * ( 2*(eiy * (nx-1) + ejx) +1) + 2] = vrd
 
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx))] = vld
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx)) + 1] = vru
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx)) + 2] = vru
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx)) + 3] = vlu
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx)) + 4] = vlu
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx)) + 5] = vld
-
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx) + 1)] = vld
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx) + 1) + 1] = vru
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx) + 1) + 2] = vru
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx) + 1) + 3] = vrd
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx) + 1) + 4] = vrd
-            edge_vert[6 * (2 * (eiy * (nx - 1) + ejx) + 1) + 5] = vld
 
 def setup_mesh() :
     gen_rect2D()
@@ -180,9 +163,7 @@ def setup_rest_quantities():
         ele_count[node2] +=1
 
 def init_config() :
-    for i in range(num_vert) :
-        # positions[i] = ti.Vector([500.0,500.0])
-        velocities[i] = ti.Vector([0.0,-100.0])
+    velocities[0] = ti.Vector([0.0,0.0])
     for i in range(num_vert) :
         rest_positions[i] = positions[i]
 
@@ -220,7 +201,7 @@ def prologue():
         if v==0:
             frame_gpu[None] = frame_gpu[None] + 1
         old_positions[v] = positions[v]
-        force_ext[v] = ti.Vector([0, -9.81]) * mass_particles[v]
+        force_ext[v] = ti.Vector([0, 0]) * mass_particles[v]
 
     # apply gravity within boundary
     for v in positions:
@@ -398,7 +379,7 @@ def agg_delta_state() :
 @ti.kernel
 def apply_delta_pos():
     for v in positions :
-        pos = positions[v] + state_delta[v]
+        pos = positions[v] + 0.1*state_delta[v]
 
         if(pos[1]<0.0) :
             pos[1] = 0.0
@@ -431,11 +412,12 @@ def calc_proj_vel():
         J = F.determinant()
         dFdt = get_dFdt(e)
 
-        C = 2*dFdt.determinant()
+        C = dFdt.determinant()
 
         ele_delta_state[e] = ti.Vector([0.0,0.0,0.0,0.0,0.0,0.0])
 
-        if J<0.1 and C < 0.0:
+        print(J,C,"====")
+        if J<0.9 and C < 0.0:
             gradvC = calc_grad_volumeRate_constraint(e,dFdt,C)
             ele_delta_state[e] = calc_ele_delta_pos(e,C,gradvC)
 
@@ -443,6 +425,11 @@ def calc_proj_vel():
 def apply_delta_vel():
     for v in positions :
         velocities[v] += state_delta[v]
+
+@ti.kernel
+def tifunccaller() :
+    print(get_dFdt(0).determinant(),velocities[0],velocities[1],velocities[2])
+    print(get_dFdt(0).determinant(),velocities[1]-velocities[0],velocities[2]-velocities[0])
 
 def substep():
 
@@ -453,7 +440,11 @@ def substep():
 
     calc_proj_vel()
     agg_delta_state()
+
+    tifunccaller()
     apply_delta_vel()
+    tifunccaller()
+
 
 
 def run_pbd():
@@ -490,6 +481,8 @@ if __name__ == "__main__":
     canvas.set_background_color((1, 1, 1))
 
     while window.running:
+        if(frame == 100) :
+            velocities[0] = ti.Vector([800,800])
 
         print("frame cpu: ",frame)
         #dynamics
@@ -506,6 +499,6 @@ if __name__ == "__main__":
 
         window.show()
 
-        # window.save_image("./img/asdf" + str(frame) + ".jpg")
+        window.save_image("./img/asdf" + str(frame) + ".jpg")
 
         frame = frame+1
