@@ -14,7 +14,7 @@ ti.init(arch=ti.gpu)
 
 pixels = ti.field(ti.u8, shape=(512, 512, 3))
 
-screen_res = (800, 800)
+screen_res = (550, 550)
 screen_to_world_ratio = 10.0
 boundary = (
     screen_res[0] / screen_to_world_ratio,
@@ -48,7 +48,7 @@ h_ = 1.1
 mass = 1.0
 rho0 = 1.0
 lambda_epsilon = 100.0
-pbf_num_iters = 20
+pbf_num_iters = 2
 corr_deltaQ_coeff = 0.3
 corrK = 0.001
 # Need ti.pow()

@@ -15,7 +15,7 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-screen_res = (600, 600)
+screen_res = (550, 550)
 screen_to_world_ratio = 10.0
 boundary = (
     screen_res[0] / screen_to_world_ratio,
@@ -50,7 +50,7 @@ h_ = 1.1
 mass = 1.0
 rho0 = 1.0
 lambda_epsilon = 100.0
-pbf_num_iters = 20
+pbf_num_iters = 1
 corr_deltaQ_coeff = 0.3
 corrK = 0.001
 # Need ti.pow()

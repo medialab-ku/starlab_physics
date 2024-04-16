@@ -47,22 +47,22 @@ class Solver:
         self.id2 = ti.math.mat2([[1, 0],
                                  [0, 1]])
 
-        self.verts = self.my_mesh.mesh.verts
-        self.num_verts = len(self.my_mesh.mesh.verts)
-        self.edges = self.my_mesh.mesh.edges
+        self.verts = self.my_mesh.tet_mesh.verts
+        self.num_verts = len(self.my_mesh.tet_mesh.verts)
+        self.edges = self.my_mesh.tet_mesh.edges
         self.num_edges = len(self.edges)
-        self.faces = self.my_mesh.mesh.faces
+        self.faces = self.my_mesh.tet_mesh.faces
          
-        self.num_faces = len(self.my_mesh.mesh.faces)
+        self.num_faces = len(self.my_mesh.tet_mesh.faces)
         self.face_indices = self.my_mesh.face_indices
 
-        self.verts_static = self.static_mesh.mesh.verts
-        self.num_verts_static = len(self.static_mesh.mesh.verts)
-        self.edges_static = self.static_mesh.mesh.edges
+        self.verts_static = self.static_mesh.tet_mesh.verts
+        self.num_verts_static = len(self.static_mesh.tet_mesh.verts)
+        self.edges_static = self.static_mesh.tet_mesh.edges
         self.num_edges_static = len(self.edges_static)
-        self.faces_static = self.static_mesh.mesh.faces
+        self.faces_static = self.static_mesh.tet_mesh.faces
         self.face_indices_static = self.static_mesh.face_indices
-        self.num_faces_static = len(self.static_mesh.mesh.faces)
+        self.num_faces_static = len(self.static_mesh.tet_mesh.faces)
 
         self.dHat = 2e-4
         self.contact_stiffness = 1e3
@@ -71,7 +71,7 @@ class Solver:
         self.frictonal_coeff = 0.4
         self.num_bats = self.num_verts // self.batch_size
         print(f'batches #: {self.num_bats}')
-        print(f"verts #: {len(self.my_mesh.mesh.verts)}, edges #: {len(self.my_mesh.mesh.edges)} faces #: {len(self.my_mesh.mesh.faces)}")
+        print(f"verts #: {len(self.my_mesh.tet_mesh.verts)}, edges #: {len(self.my_mesh.tet_mesh.edges)} faces #: {len(self.my_mesh.tet_mesh.faces)}")
 
         # for PCG
         self.b = ti.Vector.field(3, dtype=ti.f32, shape=self.num_verts)
@@ -165,7 +165,6 @@ class Solver:
     @ti.kernel
     def update_grid_id(self):
 
-
         #TODO: update the following two for-loops into a single one
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[I] = 0
@@ -207,7 +206,7 @@ class Solver:
 
     @ti.func
     def pos_to_index(self, pos):
-        return ( (pos-self.grid_origin) / self.grid_size ).cast(int)
+        return ((pos-self.grid_origin) / self.grid_size).cast(int)
 
     @ti.func
     def for_all_neighbors(self, p_i, task1: ti.template(), task2: ti.template()):
@@ -309,36 +308,6 @@ class Solver:
         # for v in self.verts:
         #     if v.nc > 0:
         #         v.v += (v.dx / v.nc)
-    @ti.kernel
-    def add(self, ans: ti.template(), a: ti.template(), k: ti.f32, b: ti.template()):
-        for i in ans:
-            ans[i] = a[i] + k * b[i]
-
-    @ti.kernel
-    def dot(self, a: ti.template(), b: ti.template()) -> ti.f32:
-        ans = 0.0
-        ti.loop_config(block_dim=32)
-        for i in a: ans += a[i].dot(b[i])
-        return ans
-
-    @ti.func
-    def abT(self, a: ti.math.vec3, b: ti.math.vec3) -> ti.math.mat3:
-
-        abT = ti.math.mat3([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
-
-        abT[0, 0] = a[0] * b[0]
-        abT[0, 1] = a[0] * b[1]
-        abT[0, 2] = a[0] * b[2]
-
-        abT[1, 0] = a[1] * b[0]
-        abT[1, 1] = a[1] * b[1]
-        abT[1, 2] = a[1] * b[2]
-
-        abT[2, 0] = a[2] * b[0]
-        abT[2, 1] = a[2] * b[1]
-        abT[2, 2] = a[2] * b[2]
-
-        return abT
 
     @ti.kernel
     def computeY(self):
@@ -516,17 +485,13 @@ class Solver:
             d = ipc_utils.d_PE(x0, x2, x3)
             g0, g2, g3 = ipc_utils.g_PE(x0, x2, x3)
 
-
-
         elif dtype == 5:
             d = ipc_utils.d_PE(x0, x1, x3)
             g0, g1, g3 = ipc_utils.g_PE(x0, x1, x3)
 
-
         elif dtype == 6:
             d = ipc_utils.d_PT(x0, x1, x2, x3)
             g0, g1, g2, g3 = ipc_utils.g_PT(x0, x1, x2, x3)
-
 
         if d < self.dHat:
             if self.vt_active_set_num[vi] < self.num_max_neighbors:
@@ -1395,8 +1360,8 @@ class Solver:
 
             rotated_pos += trans
 
-            self.static_mesh.mesh.verts.v[v] = (rotated_pos - self.static_mesh.mesh.verts.x[v]) / self.dt
-            self.static_mesh.mesh.verts.x[v] = rotated_pos
+            self.static_mesh.tet_mesh.verts.v[v] = (rotated_pos - self.static_mesh.tet_mesh.verts.x[v]) / self.dt
+            self.static_mesh.tet_mesh.verts.x[v] = rotated_pos
             self.verts_static.x[v] = rotated_pos
 
 
