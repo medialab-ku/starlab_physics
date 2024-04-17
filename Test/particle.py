@@ -9,6 +9,7 @@ class Particle:
                  model_path,
                  trans=ti.math.vec3(0, 0, 0),
                  rot=ti.math.vec3(0, 0, 0),
+                 scale=1.0,
                  radius=0.01):
 
         p = meshio.read(model_path)
@@ -21,7 +22,7 @@ class Particle:
         self.x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
         self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
         self.x.from_numpy(points)
-        self.x0.copy_from(self.x)
+
         self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
         self.v.fill(0.0)
         self.nc = ti.field(dtype=ti.int32, shape=self.num_particles)
@@ -29,10 +30,12 @@ class Particle:
         self.m_inv.fill(1.0)
         self.trans = trans
         self.rot = rot
+        self.scale = scale
         self.radius = radius
 
         self.applyTransform()
 
+        self.x0.copy_from(self.x)
 
     def reset(self):
         self.x.copy_from(self.x0)

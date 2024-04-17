@@ -119,6 +119,7 @@ class Mesh:
         for v in self.mesh.verts:
             v.x *= self.scale
 
+
         for v in self.mesh.verts:
             v_4d = ti.Vector([v.x[0], v.x[1], v.x[2], 1])
             rot_rad = ti.math.radians(self.rot)

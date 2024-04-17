@@ -49,11 +49,13 @@ class Solver:
             self.max_num_faces_dynamic += len(self.meshes_dynamic[mid].faces)
 
 
+        self.offset_particle = self.max_num_faces_dynamic
+
         for pid in range(len(self.particles)):
             self.offset_verts_dynamic[pid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
             self.max_num_verts_dynamic += self.particles[pid].num_particles
 
-        print(self.offset_verts_dynamic)
+
 
         self.max_num_verts_static = 0
         self.max_num_edges_static = 0
@@ -1083,18 +1085,23 @@ class Solver:
             #         self.solve_collision_vv(vi, vj)
                     # if self.is_in_face(vi, fi) != True:
                     #     self.solve_collision_vt(vi, fi)
+            d = self.dHat
+
+            if vi_d >= self.offset_particle:
+                d = ti.pow(self.particle_radius + ti.sqrt(self.dHat), 2)
 
             for fi_s in range(self.max_num_faces_static):
-                self.solve_collision_vt_static_x(vi_d, fi_s, self.dHat)
+                self.solve_collision_vt_static_x(vi_d, fi_s, d)
 
             for fi_d in range(self.max_num_faces_dynamic):
                 if self.is_in_face(vi_d, fi_d) != True:
-                    self.solve_collision_vt_dynamic_x(vi_d, fi_d, self.dHat)
+                    self.solve_collision_vt_dynamic_x(vi_d, fi_d, d)
 
         for fi_d in range(self.max_num_faces_dynamic):
+            d = self.dHat
             for vi_s in range(self.max_num_verts_static):
                 # if self.is_in_face(vi_d, fi_s) != True:
-                self.solve_collision_tv_static_x(fi_d, vi_s, self.dHat)
+                self.solve_collision_tv_static_x(fi_d, vi_s, d)
 
     @ti.kernel
     def solve_collision_constraints_v(self):
@@ -1168,7 +1175,7 @@ class Solver:
         self.dx.fill(0.0)
         self.nc.fill(0)
         self.solve_spring_constraints_x()
-        # self.solve_collision_constraints_x()
+        self.solve_collision_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
@@ -1202,7 +1209,7 @@ class Solver:
         # self.broad_phase()
         for _ in range(n_substeps):
             self.compute_y()
-            # self.solve_constraints_x()
+            self.solve_constraints_x()
             self.confine_to_boundary()
             self.compute_velocity()
 

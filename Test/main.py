@@ -10,7 +10,7 @@ import XPBD as xpbd
 ti.init(arch=ti.cuda, device_memory_GB=12)
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
 mesh_dynamic_2 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_dynamic_3 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
@@ -21,13 +21,13 @@ meshes_dynamic.append(mesh_dynamic_1)
 # meshes.append(mesh_4)
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
+mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -1.0, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
 
 meshes_static.append(mesh_static_1)
 
 particles = []
-particle_1 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(0.0, 0.0, 0.0), radius=0.01)
-particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
+particle_1 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(0.0, 0.2, 0.0), radius=0.01)
+# particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
 
 
 print(len(particles))
@@ -35,7 +35,7 @@ print(len(particles))
 particles.append(particle_1)
 # particles.append(particle_2)
 
-sim = xpbd.Solver(meshes_dynamic, meshes_static, particles, g=ti.math.vec3(0.0, -1.0, 0.0), dt=0.01, grid_size=ti.math.vec3(2.0, 2.0, 2.0), particle_radius=0.01)
+sim = xpbd.Solver(meshes_dynamic, meshes_static, particles, g=ti.math.vec3(0.0, -1.0, 0.0), dt=0.01, grid_size=ti.math.vec3(3.0, 3.0, 3.0), particle_radius=0.01)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
@@ -94,5 +94,7 @@ while window.running:
     # scene.mesh(sim.x, indices=sim.face_indices, color=(0, 0, 0), show_wireframe=True)
 
     # scene.lines(sim.x, indices=sim.edge_indices, color=(0, 0, 0), width=1.0)
+
+    camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
