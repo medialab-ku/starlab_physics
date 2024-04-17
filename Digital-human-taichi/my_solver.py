@@ -54,14 +54,14 @@ class Solver:
         self.faces = self.my_mesh.tet_mesh.faces
          
         self.num_faces = len(self.my_mesh.tet_mesh.faces)
-        self.face_indices = self.my_mesh.face_indices
+        self.face_indices = self.my_mesh.face_indices_dynamic
 
         self.verts_static = self.static_mesh.tet_mesh.verts
         self.num_verts_static = len(self.static_mesh.tet_mesh.verts)
         self.edges_static = self.static_mesh.tet_mesh.edges
         self.num_edges_static = len(self.edges_static)
         self.faces_static = self.static_mesh.tet_mesh.faces
-        self.face_indices_static = self.static_mesh.face_indices
+        self.face_indices_static = self.static_mesh.face_indices_dynamic
         self.num_faces_static = len(self.static_mesh.tet_mesh.faces)
 
         self.dHat = 2e-4
