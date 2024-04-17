@@ -9,8 +9,6 @@ import XPBD as xpbd
 
 ti.init(arch=ti.cuda, device_memory_GB=12)
 
-
-
 meshes_dynamic = []
 mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
@@ -34,7 +32,7 @@ particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.
 
 print(len(particles))
 
-# particles.append(particle_1)r
+particles.append(particle_1)
 # particles.append(particle_2)
 
 sim = xpbd.Solver(meshes_dynamic, meshes_static, particles, g=ti.math.vec3(0.0, -1.0, 0.0), dt=0.01, grid_size=ti.math.vec3(2.0, 2.0, 2.0), particle_radius=0.01)
@@ -90,9 +88,9 @@ while window.running:
     for pid in range(len(particles)):
         scene.particles(sim.particles[pid].x, radius=sim.particles[pid].radius, color=(1, 0, 0))
 
-    scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
-
     # scene.particles(sim.x, radius=sim.cell_size, color=(0, 0, 0))
+    # scene.particles(sim.x_static, radius=sim.cell_size, color=(0, 0, 0))
+    scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     # scene.mesh(sim.x, indices=sim.face_indices, color=(0, 0, 0), show_wireframe=True)
 
     # scene.lines(sim.x, indices=sim.edge_indices, color=(0, 0, 0), width=1.0)
