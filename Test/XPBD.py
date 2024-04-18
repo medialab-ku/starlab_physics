@@ -7,12 +7,15 @@ class Solver:
     def __init__(self,
                  meshes_dynamic,
                  meshes_static,
+                 tet_meshes_dynamic,
                  particles,
                  grid_size,
                  particle_radius,
                  g,
                  dt):
+
         self.meshes_dynamic = meshes_dynamic
+        self.tet_meshes_dynamic = tet_meshes_dynamic
         self.meshes_static = meshes_static
         self.particles = particles
         self.g = g
@@ -35,48 +38,39 @@ class Solver:
         self.max_num_verts_dynamic = 0
         self.max_num_edges_dynamic = 0
         self.max_num_faces_dynamic = 0
+        self.max_num_tetra_dynamic = 0
 
-        self.offset_verts_dynamic = ti.field(int, shape=len(self.meshes_dynamic) + 1)
-        self.offset_edges_dynamic = ti.field(int, shape=len(self.meshes_dynamic) + 1)
-        self.offset_faces_dynamic = ti.field(int, shape=len(self.meshes_dynamic) + 1)
+        num_meshes_dynamic = len(self.meshes_dynamic)
+        num_tet_meshes_dynamic = len(self.tet_meshes_dynamic)
+        self.is_meshes_dynamic_empty = not bool(num_meshes_dynamic)
+        if self.is_meshes_dynamic_empty is True:
+            num_meshes_dynamic = 1
+            # self.max_num_verts_dynamic = 1
+            self.max_num_edges_dynamic = 1
+            self.max_num_faces_dynamic = 1
 
-        for mid in range(len(self.meshes_dynamic)):
-            self.offset_verts_dynamic[mid] = self.max_num_verts_dynamic
-            self.offset_edges_dynamic[mid] = self.max_num_edges_dynamic
-            self.offset_faces_dynamic[mid] = self.max_num_faces_dynamic
-            self.max_num_verts_dynamic += len(self.meshes_dynamic[mid].verts)
-            self.max_num_edges_dynamic += len(self.meshes_dynamic[mid].edges)
-            self.max_num_faces_dynamic += len(self.meshes_dynamic[mid].faces)
+        self.offset_verts_dynamic = ti.field(int, shape=num_meshes_dynamic + len(self.particles))
+        self.offset_edges_dynamic = ti.field(int, shape=num_meshes_dynamic)
+        self.offset_faces_dynamic = ti.field(int, shape=num_meshes_dynamic)
+        self.offset_tetras_dynamic = ti.field(int, shape=num_meshes_dynamic)
 
+        if self.is_meshes_dynamic_empty is False:
+            for mid in range(len(self.meshes_dynamic)):
+                self.offset_verts_dynamic[mid] = self.max_num_verts_dynamic
+                self.offset_edges_dynamic[mid] = self.max_num_edges_dynamic
+                self.offset_faces_dynamic[mid] = self.max_num_faces_dynamic
+                self.max_num_verts_dynamic += len(self.meshes_dynamic[mid].verts)
+                self.max_num_edges_dynamic += len(self.meshes_dynamic[mid].edges)
+                self.max_num_faces_dynamic += len(self.meshes_dynamic[mid].faces)
 
-        self.offset_particle = self.max_num_faces_dynamic
+        self.offset_particle = self.max_num_verts_dynamic
 
         for pid in range(len(self.particles)):
             self.offset_verts_dynamic[pid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
             self.max_num_verts_dynamic += self.particles[pid].num_particles
 
-
-
-        self.max_num_verts_static = 0
-        self.max_num_edges_static = 0
-        self.max_num_faces_static = 0
-
-        self.offset_verts_static = ti.field(int, shape=len(self.meshes_static))
-        self.offset_edges_static = ti.field(int, shape=len(self.meshes_static))
-        self.offset_faces_static = ti.field(int, shape=len(self.meshes_static))
-
-        for mid in range(len(self.meshes_static)):
-            self.offset_verts_static[mid] = self.max_num_verts_static
-            self.offset_edges_static[mid] = self.max_num_edges_static
-            self.offset_faces_static[mid] = self.max_num_faces_static
-            self.max_num_verts_static += len(self.meshes_static[mid].verts)
-            self.max_num_edges_static += len(self.meshes_static[mid].edges)
-            self.max_num_faces_static += len(self.meshes_static[mid].faces)
-
-
         self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.x_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
         self.dx = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.dv = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
@@ -89,11 +83,55 @@ class Solver:
         self.face_indices_dynamic = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_dynamic)
         self.edge_indices_dynamic = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_dynamic)
 
+        if self.is_meshes_dynamic_empty is True:
+            self.max_num_edges_dynamic = 0
+            self.max_num_faces_dynamic = 0
+
+
+        self.max_num_verts_static = 0
+        self.max_num_edges_static = 0
+        self.max_num_faces_static = 0
+
+        num_meshes_static = len(self.meshes_static)
+
+        self.is_meshes_static_empty = not bool(num_meshes_static)
+        if self.is_meshes_static_empty is True:
+            num_meshes_static = 1
+            self.max_num_verts_static = 1
+            self.max_num_edges_static = 1
+            self.max_num_faces_static = 1
+
+
+        self.offset_verts_static = ti.field(int, shape=num_meshes_static)
+        self.offset_edges_static = ti.field(int, shape=num_meshes_static)
+        self.offset_faces_static = ti.field(int, shape=num_meshes_static)
+
+        if self.is_meshes_static_empty is False:
+            for mid in range(num_meshes_static):
+                self.offset_verts_static[mid] = self.max_num_verts_static
+                self.offset_edges_static[mid] = self.max_num_edges_static
+                self.offset_faces_static[mid] = self.max_num_faces_static
+                self.max_num_verts_static += len(self.meshes_static[mid].verts)
+                self.max_num_edges_static += len(self.meshes_static[mid].edges)
+                self.max_num_faces_static += len(self.meshes_static[mid].faces)
+
+        else:
+            self.offset_verts_static[0] = 0
+            self.offset_edges_static[0] = 0
+            self.offset_faces_static[0] = 0
 
         self.face_indices_static = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_static)
         self.edge_indices_static = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_static)
+
         self.offset_verts_static[len(self.meshes_static)] = self.max_num_verts_static
         self.offset_faces_static[len(self.meshes_static)] = self.max_num_faces_static
+
+        self.x_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
+
+        if self.is_meshes_static_empty is True:
+            self.max_num_verts_static = 0
+            self.max_num_edges_static = 0
+            self.max_num_faces_static = 0
 
         self.init_mesh_aggregation()
         self.init_particle_aggregation()
@@ -143,6 +181,8 @@ class Solver:
             self.init_mesh_quantities_dynamic_device(self.offset_verts_dynamic[mid], self.meshes_dynamic[mid])
             self.init_edge_indices_dynamic_device(self.offset_verts_dynamic[mid], self.offset_edges_dynamic[mid], self.meshes_dynamic[mid])
             self.init_face_indices_dynamic_device(self.offset_verts_dynamic[mid], self.offset_faces_dynamic[mid], self.meshes_dynamic[mid])
+
+
 
         for mid in range(len(self.meshes_static)):
             self.init_quantities_static_device(self.offset_verts_static[mid], self.meshes_static[mid])
@@ -1098,10 +1138,9 @@ class Solver:
                     self.solve_collision_vt_dynamic_x(vi_d, fi_d, d)
 
         for fi_d in range(self.max_num_faces_dynamic):
-            d = self.dHat
             for vi_s in range(self.max_num_verts_static):
                 # if self.is_in_face(vi_d, fi_s) != True:
-                self.solve_collision_tv_static_x(fi_d, vi_s, d)
+                self.solve_collision_tv_static_x(fi_d, vi_s, self.dHat)
 
     @ti.kernel
     def solve_collision_constraints_v(self):
@@ -1115,12 +1154,17 @@ class Solver:
             #         self.solve_collision_vv(vi, vj)
             # if self.is_in_face(vi, fi) != True:
             #     self.solve_collision_vt(vi, fi)
+            d = self.dHat
+
+            if vi_d >= self.offset_particle:
+                d = ti.pow(self.particle_radius + ti.sqrt(self.dHat), 2)
+
             for fi_s in range(self.max_num_faces_static):
-                self.solve_collision_vt_static_v(vi_d, fi_s, self.dHat)
+                self.solve_collision_vt_static_v(vi_d, fi_s, d)
 
             for fi_d in range(self.max_num_faces_dynamic):
                 if self.is_in_face(vi_d, fi_d) != True:
-                    self.solve_collision_vt_dynamic_v(vi_d, fi_d, self.dHat)
+                    self.solve_collision_vt_dynamic_v(vi_d, fi_d, d)
 
         for fi_d in range(self.max_num_faces_dynamic):
             for vi_s in range(self.max_num_verts_static):

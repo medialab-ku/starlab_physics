@@ -45,8 +45,7 @@ class TetMesh:
         self.num_verts = len(self.tet_mesh.verts)
 
 
-        self.tet_mesh.edges.place({'Dm_inv': ti.math.mat3,
-                                   'V0': ti.f32}) # bounding sphere radius
+        self.tet_mesh.edges.place({'Dm_inv': ti.math.mat3, 'V0': ti.f32}) # bounding sphere radius
 
 
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.faces) * 3)
