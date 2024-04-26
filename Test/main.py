@@ -15,8 +15,8 @@ mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.v
 mesh_dynamic_2 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_dynamic_3 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
-meshes_dynamic.append(mesh_dynamic_1)
-meshes_dynamic.append(mesh_dynamic_2)
+# meshes_dynamic.append(mesh_dynamic_1)
+# meshes_dynamic.append(mesh_dynamic_2)
 # meshes.append(mesh_3)
 # meshes.append(mesh_4)
 
@@ -25,11 +25,11 @@ tet_meshes_dynamic = []
 tet_mesh_dynamic_1 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.2, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 tet_mesh_dynamic_2 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.2, trans=ti.math.vec3(2.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 tet_meshes_dynamic.append(tet_mesh_dynamic_1)
-tet_meshes_dynamic.append(tet_mesh_dynamic_2)
+# tet_meshes_dynamic.append(tet_mesh_dynamic_2)
 meshes_static = []
 mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -1.0, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
 
-meshes_static.append(mesh_static_1)
+# meshes_static.append(mesh_static_1)
 
 particles = []
 particle_1 = Particle('../models/VTK/dragon50K.vtk', trans=ti.math.vec3(0.0, 0.2, 0.0), radius=0.01)
@@ -38,8 +38,8 @@ particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.
 
 print(len(particles))
 
-particles.append(particle_1)
-particles.append(particle_2)
+# particles.append(particle_1)
+# particles.append(particle_2)
 
 sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -1.0, 0.0), dt=0.01, grid_size=ti.math.vec3(3.0, 3.0, 3.0), particle_radius=0.01)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -102,7 +102,7 @@ while window.running:
         # scene.mesh(sim.tet_meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=colors_dynamic[tid])
 
     # scene.particles(sim.x, radius=sim.cell_size, color=(0, 0, 0))
-    # scene.particles(sim.x_static, radius=sim.cell_size, color=(0, 0, 0))
+    # scene.particles(sim.x_static, radius=sim.cell_size, color=(0, 0, 0))r
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     # scene.mesh(sim.x, indices=sim.face_indices, color=(0, 0, 0), show_wireframe=True)
 

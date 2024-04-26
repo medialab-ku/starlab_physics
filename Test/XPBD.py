@@ -1363,18 +1363,30 @@ class Solver:
             Ds = ti.Matrix.cols(x0, x1, x2, x3)
 
             F = Ds @ self.Dm_inv[ti]
-
             U, sig, V = ti.svd(F)
 
             R = U @ V.transpose()
+            H = (F - R) @ self.Dm_inv[ti].transpose()
 
-            C = 0.0
+            C = 0.5 * (F - R).norm() * (F - R).norm()
+
+            nabla_C0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
+            nabla_C1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
+            nabla_C2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
+            nabla_C3 = -(nabla_C0 + nabla_C1 + nabla_C2)
+
+            schur = nabla_C0.dot(nabla_C0) + nabla_C1.dot(nabla_C1) +nabla_C2.dot(nabla_C2) +nabla_C3.dot(nabla_C3) + 1e-4
+            ld = C / schur
+            self.dx[v0] += ld * nabla_C0
+            self.dx[v1] += ld * nabla_C1
+            self.dx[v2] += ld * nabla_C2
+            self.dx[v3] += ld * nabla_C3
 
 
-            self.nc[v0] += 2
-            self.nc[v1] += 2
-            self.nc[v2] += 2
-            self.nc[v3] += 2
+            self.nc[v0] += 1
+            self.nc[v1] += 1
+            self.nc[v2] += 1
+            self.nc[v3] += 1
 
 
     @ti.kernel
@@ -1425,8 +1437,8 @@ class Solver:
         self.dx.fill(0.0)
         self.nc.fill(0)
         self.solve_spring_constraints_x()
-        self.solve_collision_constraints_x()
-        # self.solve_stretch_constarints_x()
+        # self.solve_collision_constraints_x()
+        self.solve_stretch_constarints_x()
         # self.solve_pressure_constraints_x()
         self.update_dx()
 
@@ -1461,7 +1473,7 @@ class Solver:
         for _ in range(n_substeps):
             # self.broad_phase()
             self.compute_y()
-            # self.solve_constraints_x()
+            self.solve_constraints_x()
             self.confine_to_boundary()
             self.compute_velocity()
 
