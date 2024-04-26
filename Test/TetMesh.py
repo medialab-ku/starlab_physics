@@ -50,20 +50,30 @@ class TetMesh:
 
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.edges) * 2)
+        self.tetra_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.cells) * 4)
         self.initFaceIndices()
-        self.initEdgeIndices()
+        self.initTetraIndices()
+        # self.initEdgeIndices()
+
+        print(len(self.tet_mesh.faces))
+        print(len(self.tet_mesh.cells))
 
         self.verts = self.tet_mesh.verts
+        self.cells = self.tet_mesh.cells
 
         self.trans = trans
         self.rot = rot
         self.scale = scale
 
         self.applyTransform()
-        self.computeInitialLength()
-        self.compute_Dm_inv()
+        # self.computeInitialLength()
+        # self.compute_Dm_inv()
         self.tet_mesh.verts.x0.copy_from(self.tet_mesh.verts.x)
 
+
+    def reset(self):
+        self.tet_mesh.verts.x.copy_from(self.tet_mesh.verts.x0)
+        self.tet_mesh.verts.v.fill(0.)
 
     @ti.kernel
     def compute_Dm_inv(self):
@@ -89,6 +99,14 @@ class TetMesh:
         for e in self.tet_mesh.edges:
             self.edge_indices[e.id * 2 + 0] = e.verts[0].id
             self.edge_indices[e.id * 2 + 1] = e.verts[1].id
+
+    @ti.kernel
+    def initTetraIndices(self):
+        for c in self.tet_mesh.cells:
+            self.tetra_indices[c.id * 4 + 0] = c.verts[0].id
+            self.tetra_indices[c.id * 4 + 1] = c.verts[1].id
+            self.tetra_indices[c.id * 4 + 2] = c.verts[2].id
+            self.tetra_indices[c.id * 4 + 3] = c.verts[3].id
 
     @ti.kernel
     def setCenterToOrigin(self):

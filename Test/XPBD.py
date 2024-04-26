@@ -42,31 +42,55 @@ class Solver:
 
         num_meshes_dynamic = len(self.meshes_dynamic)
         num_tet_meshes_dynamic = len(self.tet_meshes_dynamic)
-        self.is_meshes_dynamic_empty = not bool(num_meshes_dynamic)
-        if self.is_meshes_dynamic_empty is True:
+        num_vert_offsets = num_meshes_dynamic + len(self.particles) + num_tet_meshes_dynamic
+
+        is_verts_dynamic_empty = not bool(num_vert_offsets)
+        is_mesh_dynamic_empty = not bool(len(self.meshes_dynamic))
+        is_tet_mesh_dynamic_empty = not bool(len(self.tet_meshes_dynamic))
+
+        if is_verts_dynamic_empty is True:
+            num_vert_offsets = 1
+            self.max_num_verts_dynamic = 1
+
+
+        if is_mesh_dynamic_empty is True:
             num_meshes_dynamic = 1
-            # self.max_num_verts_dynamic = 1
             self.max_num_edges_dynamic = 1
             self.max_num_faces_dynamic = 1
 
-        self.offset_verts_dynamic = ti.field(int, shape=num_meshes_dynamic + len(self.particles))
+
+        if is_tet_mesh_dynamic_empty is True:
+            num_tet_meshes_dynamic = 1
+            self.max_num_tetra_dynamic = 1
+
+
+        self.offset_verts_dynamic = ti.field(int, shape=num_vert_offsets)
         self.offset_edges_dynamic = ti.field(int, shape=num_meshes_dynamic)
         self.offset_faces_dynamic = ti.field(int, shape=num_meshes_dynamic)
-        self.offset_tetras_dynamic = ti.field(int, shape=num_meshes_dynamic)
+        self.offset_tetras_dynamic = ti.field(int, shape=num_tet_meshes_dynamic)
 
-        if self.is_meshes_dynamic_empty is False:
-            for mid in range(len(self.meshes_dynamic)):
-                self.offset_verts_dynamic[mid] = self.max_num_verts_dynamic
-                self.offset_edges_dynamic[mid] = self.max_num_edges_dynamic
-                self.offset_faces_dynamic[mid] = self.max_num_faces_dynamic
-                self.max_num_verts_dynamic += len(self.meshes_dynamic[mid].verts)
-                self.max_num_edges_dynamic += len(self.meshes_dynamic[mid].edges)
-                self.max_num_faces_dynamic += len(self.meshes_dynamic[mid].faces)
+        for mid in range(len(self.meshes_dynamic)):
+            self.offset_verts_dynamic[mid] = self.max_num_verts_dynamic
+            self.offset_edges_dynamic[mid] = self.max_num_edges_dynamic
+            self.offset_faces_dynamic[mid] = self.max_num_faces_dynamic
+
+            self.max_num_verts_dynamic += len(self.meshes_dynamic[mid].verts)
+            self.max_num_edges_dynamic += len(self.meshes_dynamic[mid].edges)
+            self.max_num_faces_dynamic += len(self.meshes_dynamic[mid].faces)
+
+        self.offset_tet_mesh = self.max_num_verts_dynamic
+
+        for tid in range(len(self.tet_meshes_dynamic)):
+            self.offset_verts_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
+            self.offset_tetras_dynamic[tid] = self.max_num_verts_dynamic
+
+            self.max_num_verts_dynamic += len(self.tet_meshes_dynamic[tid].verts)
+            self.max_num_tetra_dynamic += len(self.tet_meshes_dynamic[tid].cells)
 
         self.offset_particle = self.max_num_verts_dynamic
 
         for pid in range(len(self.particles)):
-            self.offset_verts_dynamic[pid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
+            self.offset_verts_dynamic[pid + len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)] = self.max_num_verts_dynamic
             self.max_num_verts_dynamic += self.particles[pid].num_particles
 
         self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
@@ -76,16 +100,23 @@ class Solver:
         self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.nc = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
         self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
-
+        self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
 
         self.l0 = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
 
         self.face_indices_dynamic = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_dynamic)
         self.edge_indices_dynamic = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_dynamic)
+        self.tetra_indices_dynamic = ti.field(dtype=ti.i32, shape=4 * self.max_num_tetra_dynamic)
 
-        if self.is_meshes_dynamic_empty is True:
+        if is_verts_dynamic_empty is True:
+            self.max_num_verts_dynamic = 0
+
+        if is_mesh_dynamic_empty is True:
             self.max_num_edges_dynamic = 0
             self.max_num_faces_dynamic = 0
+
+        if is_tet_mesh_dynamic_empty is True:
+            self.max_num_tetra_dynamic = 0
 
 
         self.max_num_verts_static = 0
@@ -150,15 +181,24 @@ class Solver:
         for mid in range(len(self.meshes_dynamic)):
             self.copy_to_meshes_device(self.offset_verts_dynamic[mid], self.meshes_dynamic[mid])
 
+        for tid in range(len(self.tet_meshes_dynamic)):
+            self.copy_to_tet_meshes_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
+
     @ti.kernel
     def copy_to_meshes_device(self, offset: ti.int32, mesh: ti.template()):
         for v in mesh.verts:
             v.x = self.x[offset + v.id]
             v.v = self.v[offset + v.id]
 
+    @ti.kernel
+    def copy_to_tet_meshes_device(self, offset: ti.int32, mesh: ti.template()):
+        for v in mesh.verts:
+            v.x = self.x[offset + v.id]
+            v.v = self.v[offset + v.id]
+
     def copy_to_particles(self):
         for pid in range(len(self.particles)):
-            self.copy_to_particles_device(self.offset_verts_dynamic[pid + len(self.meshes_dynamic)], self.particles[pid])
+            self.copy_to_particles_device(self.offset_verts_dynamic[pid + len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)], self.particles[pid])
 
     @ti.kernel
     def copy_to_particles_device(self, offset: ti.int32, particle: ti.template()):
@@ -175,6 +215,20 @@ class Solver:
             x10 = x0 - x1
             self.l0[ei] = x10.norm()
 
+    @ti.kernel
+    def init_Dm_inv(self):
+        for ti in range(self.max_num_tetra_dynamic):
+            v0 = self.tetra_indices_dynamic[4 * ti + 0]
+            v1 = self.tetra_indices_dynamic[4 * ti + 1]
+            v2 = self.tetra_indices_dynamic[4 * ti + 2]
+            v3 = self.tetra_indices_dynamic[4 * ti + 3]
+
+            x0, x1, x2, x3 = self.x[v0], self.x[v1], self.x[v2], self.x[v3]
+
+            Dm = ti.Matrix.cols([x0 - x3, x1 - x3, x2 - x3])
+            self.Dm_inv[ti] = Dm.inverse()
+
+
 
     def init_mesh_aggregation(self):
         for mid in range(len(self.meshes_dynamic)):
@@ -182,7 +236,10 @@ class Solver:
             self.init_edge_indices_dynamic_device(self.offset_verts_dynamic[mid], self.offset_edges_dynamic[mid], self.meshes_dynamic[mid])
             self.init_face_indices_dynamic_device(self.offset_verts_dynamic[mid], self.offset_faces_dynamic[mid], self.meshes_dynamic[mid])
 
-
+        for tid in range(len(self.tet_meshes_dynamic)):
+            self.init_tet_mesh_quantities_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
+            # self.init_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
+            self.init_tet_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_tetras_dynamic[tid], self.tet_meshes_dynamic[tid])
 
         for mid in range(len(self.meshes_static)):
             self.init_quantities_static_device(self.offset_verts_static[mid], self.meshes_static[mid])
@@ -190,9 +247,18 @@ class Solver:
             self.init_face_indices_static_device(self.offset_verts_static[mid], self.offset_faces_static[mid], self.meshes_static[mid])
 
         self.init_rest_length()
+        self.init_Dm_inv()
+
 
     @ti.kernel
     def init_mesh_quantities_dynamic_device(self, offset: ti.int32, mesh: ti.template()):
+        for v in mesh.verts:
+            self.x[offset + v.id] = v.x
+            self.v[offset + v.id] = v.v
+            self.m_inv[offset + v.id] = v.m_inv
+
+    @ti.kernel
+    def init_tet_mesh_quantities_dynamic_device(self, offset: ti.int32, mesh: ti.template()):
         for v in mesh.verts:
             self.x[offset + v.id] = v.x
             self.v[offset + v.id] = v.v
@@ -217,6 +283,14 @@ class Solver:
             self.face_indices_dynamic[3 * (offset_faces + f.id) + 1] = f.verts[1].id + offset_verts
             self.face_indices_dynamic[3 * (offset_faces + f.id) + 2] = f.verts[2].id + offset_verts
 
+    @ti.kernel
+    def init_tet_indices_dynamic_device(self, offset_verts: ti.int32, offset_tets: ti.int32, mesh: ti.template()):
+        for c in mesh.cells:
+            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 0] = c.verts[0].id + offset_verts
+            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 1] = c.verts[1].id + offset_verts
+            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 2] = c.verts[2].id + offset_verts
+            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 4] = c.verts[2].id + offset_verts
+
 
     @ti.kernel
     def init_edge_indices_static_device(self, offset_verts: ti.int32, offset_edges: ti.int32, mesh: ti.template()):
@@ -234,7 +308,7 @@ class Solver:
 
     def init_particle_aggregation(self):
         for pid in range(len(self.particles)):
-            self.init_particle_quantities_dynamic_device(self.offset_verts_dynamic[pid + len(self.meshes_dynamic)], self.particles[pid])
+            self.init_particle_quantities_dynamic_device(self.offset_verts_dynamic[pid + len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)], self.particles[pid])
 
     @ti.kernel
     def init_particle_quantities_dynamic_device(self, offset: ti.int32, particle: ti.template()):
@@ -302,6 +376,9 @@ class Solver:
 
         for pid in range(len(self.particles)):
             self.particles[pid].reset()
+
+        for tid in range(len(self.tet_meshes_dynamic)):
+            self.tet_meshes_dynamic[tid].reset()
 
         self.init_mesh_aggregation()
         self.init_particle_aggregation()
@@ -1110,8 +1187,107 @@ class Solver:
             self.nc[v0] += 1
             self.nc[v1] += 1
 
+    @ti.func
+    def spiky_gradient(self, r, h):
+        result = ti.Vector([0.0, 0.0])
+
+        spiky_grad_factor = -45.0 / ti.math.pi
+        r_len = r.norm()
+        if 0 < r_len and r_len < h:
+            x = (h - r_len) / (h * h * h)
+            g_factor = spiky_grad_factor * x * x
+            result = r * g_factor / r_len
+        return result
+
+    @ti.func
+    def poly6_value(self, s, h):
+        result = 0.0
+        poly6_factor = 315.0 / 64.0 / ti.math.pi
+        if 0 < s and s < h:
+            x = (h * h - s * s) / (h * h * h)
+            result = poly6_factor * x * x * x
+        return result
+
+    @ti.kernel
+    def solve_pressure_constraints_x(self):
+
+        kernel_radius = 0.01
+        for vi in range(self.max_num_verts_dynamic):
+            C_i = self.poly6_value(0.0, kernel_radius) - 1.0
+            nabla_C_ii = self.spiky_gradient(ti.math.vec3(0.), kernel_radius)
+            schur = nabla_C_ii.dot(nabla_C_ii)
+            xi = self.y[vi]
+
+            center_cell = self.pos_to_index(self.y[vi])
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                grid_index = self.flatten_grid_index(center_cell + offset)
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    vj = self.cur2org[p_j]
+                    xj = self.y[vj]
+                    xji = xj - xi
+                    nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
+                    C_i += self.poly6_value(ti.math.length(xji), kernel_radius)
+                    schur += nabla_C_ji.dot(nabla_C_ji)
+
+            if C_i < 0.0:
+                C_i = 0.0
+
+            lambda_i = C_i / schur
+
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                grid_index = self.flatten_grid_index(center_cell + offset)
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    vj = self.cur2org[p_j]
+                    xji = xj - xi
+                    nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
+
+                    self.dx[vj] += lambda_i * nabla_C_ji
+                    self.nc[vj] += 1
+
+            self.dv[vi] += lambda_i * nabla_C_ii
+            self.nc[vi] += 1
+
+    @ti.kernel
+    def solve_pressure_constraints_v(self):
+
+        kernel_radius = 0.01
+        for vi in range(self.max_num_verts_dynamic):
+            nabla_C_ii = self.spiky_gradient(ti.math.vec3(0.), kernel_radius)
+            schur = nabla_C_ii.dot(nabla_C_ii)
+            xi = self.y[vi]
+            vel_i = self.v[vi]
+            C_i = nabla_C_ii.dot(vel_i)
+
+            center_cell = self.pos_to_index(self.y[vi])
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                grid_index = self.flatten_grid_index(center_cell + offset)
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    vj = self.cur2org[p_j]
+                    xj = self.y[vj]
+                    vel_j = self.v[vj]
+                    xji = xj - xi
+                    nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
+                    C_i += nabla_C_ji.dot(vel_j)
+                    schur += nabla_C_ji.dot(nabla_C_ji)
+
+            if C_i < 0.0:
+                C_i = 0.0
+
+            lambda_i = C_i / schur
+
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                grid_index = self.flatten_grid_index(center_cell + offset)
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    vj = self.cur2org[p_j]
+                    xji = xj - xi
+                    nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
 
 
+                    self.dv[vj] += lambda_i * nabla_C_ji
+                    self.nc[vj] += 1
+
+            self.dv[vi] += lambda_i * nabla_C_ii
+            self.nc[vi] += 1
     @ti.kernel
     def solve_collision_constraints_x(self):
 
@@ -1142,6 +1318,7 @@ class Solver:
                 # if self.is_in_face(vi_d, fi_s) != True:
                 self.solve_collision_tv_static_x(fi_d, vi_s, self.dHat)
 
+
     @ti.kernel
     def solve_collision_constraints_v(self):
         for vi_d in range(self.max_num_verts_dynamic):
@@ -1170,6 +1347,35 @@ class Solver:
             for vi_s in range(self.max_num_verts_static):
                 # if self.is_in_face(vi_d, fi_s) != True:
                 self.solve_collision_tv_static_x(fi_d, vi_s, self.dHat)
+
+
+    @ti.kernel
+    def solve_stretch_constarints_x(self):
+
+        for ti in range(self.max_num_tetra_dynamic):
+
+            v0 = self.tetra_indices_dynamic[4 * ti + 0]
+            v1 = self.tetra_indices_dynamic[4 * ti + 1]
+            v2 = self.tetra_indices_dynamic[4 * ti + 2]
+            v3 = self.tetra_indices_dynamic[4 * ti + 3]
+
+            x0 = self.y[v0], x1 = self.y[v1], x2 = self.y[v2], x3 = self.y[v3]
+            Ds = ti.Matrix.cols(x0, x1, x2, x3)
+
+            F = Ds @ self.Dm_inv[ti]
+
+            U, sig, V = ti.svd(F)
+
+            R = U @ V.transpose()
+
+            C = 0.0
+
+
+            self.nc[v0] += 2
+            self.nc[v1] += 2
+            self.nc[v2] += 2
+            self.nc[v3] += 2
+
 
     @ti.kernel
     def update_x(self):
@@ -1220,6 +1426,8 @@ class Solver:
         self.nc.fill(0)
         self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
+        # self.solve_stretch_constarints_x()
+        # self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
@@ -1250,29 +1458,21 @@ class Solver:
         dt = self.dt
         self.dt = dt / n_substeps
 
-        # self.broad_phase()
         for _ in range(n_substeps):
+            # self.broad_phase()
             self.compute_y()
-            self.solve_constraints_x()
+            # self.solve_constraints_x()
             self.confine_to_boundary()
             self.compute_velocity()
 
-            if self.enable_velocity_update:
-                self.solve_constraints_v()
+            # if self.enable_velocity_update:
+            #     self.solve_constraints_v()
 
             self.update_x()
 
         self.copy_to_meshes()
         self.copy_to_particles()
 
-            # for mid in range(len(self.meshes)):
-            #     self.compute_y(self.meshes[mid])
-            #     # self.solve_collision_constraints_x(mid, self.meshes[mid])
-            #     self.update_x_and_v(self.meshes[mid])
-            #
-            # for pid in range(len(self.particles)):
-            #     self.compute_y_particle(self.particles[pid])
-            #     self.update_x_and_v_particle(self.particles[pid])
 
         self.dt = dt
 
