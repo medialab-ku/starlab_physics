@@ -82,10 +82,15 @@ class Solver:
 
         for tid in range(len(self.tet_meshes_dynamic)):
             self.offset_verts_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
-            self.offset_tetras_dynamic[tid] = self.max_num_verts_dynamic
+            self.offset_tetras_dynamic[tid] = self.max_num_tetra_dynamic
 
             self.max_num_verts_dynamic += len(self.tet_meshes_dynamic[tid].verts)
             self.max_num_tetra_dynamic += len(self.tet_meshes_dynamic[tid].cells)
+
+        print(self.offset_verts_dynamic)
+        print(self.offset_tetras_dynamic)
+        print(self.max_num_verts_dynamic)
+        print(self.max_num_tetra_dynamic)
 
         self.offset_particle = self.max_num_verts_dynamic
 
@@ -164,6 +169,7 @@ class Solver:
             self.max_num_edges_static = 0
             self.max_num_faces_static = 0
 
+
         self.init_mesh_aggregation()
         self.init_particle_aggregation()
 
@@ -217,6 +223,7 @@ class Solver:
 
     @ti.kernel
     def init_Dm_inv(self):
+
         for ti in range(self.max_num_tetra_dynamic):
             v0 = self.tetra_indices_dynamic[4 * ti + 0]
             v1 = self.tetra_indices_dynamic[4 * ti + 1]
@@ -264,6 +271,7 @@ class Solver:
             self.v[offset + v.id] = v.v
             self.m_inv[offset + v.id] = v.m_inv
 
+
     @ti.kernel
     def init_quantities_static_device(self, offset: ti.int32, mesh: ti.template()):
         for v in mesh.verts:
@@ -289,7 +297,7 @@ class Solver:
             self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 0] = c.verts[0].id + offset_verts
             self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 1] = c.verts[1].id + offset_verts
             self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 2] = c.verts[2].id + offset_verts
-            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 4] = c.verts[2].id + offset_verts
+            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 3] = c.verts[3].id + offset_verts
 
 
     @ti.kernel
@@ -1352,21 +1360,21 @@ class Solver:
     @ti.kernel
     def solve_stretch_constarints_x(self):
 
-        for ti in range(self.max_num_tetra_dynamic):
+        for tid in range(self.max_num_tetra_dynamic):
 
-            v0 = self.tetra_indices_dynamic[4 * ti + 0]
-            v1 = self.tetra_indices_dynamic[4 * ti + 1]
-            v2 = self.tetra_indices_dynamic[4 * ti + 2]
-            v3 = self.tetra_indices_dynamic[4 * ti + 3]
+            v0 = self.tetra_indices_dynamic[4 * tid + 0]
+            v1 = self.tetra_indices_dynamic[4 * tid + 1]
+            v2 = self.tetra_indices_dynamic[4 * tid + 2]
+            v3 = self.tetra_indices_dynamic[4 * tid + 3]
 
-            x0 = self.y[v0], x1 = self.y[v1], x2 = self.y[v2], x3 = self.y[v3]
-            Ds = ti.Matrix.cols(x0, x1, x2, x3)
+            x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
+            Ds = ti.Matrix.cols([x0 - x3, x1 - x3, x2 - x3])
 
-            F = Ds @ self.Dm_inv[ti]
+            F = Ds @ self.Dm_inv[tid]
             U, sig, V = ti.svd(F)
-
             R = U @ V.transpose()
-            H = (F - R) @ self.Dm_inv[ti].transpose()
+
+            H = (F - R) @ self.Dm_inv[tid].transpose()
 
             C = 0.5 * (F - R).norm() * (F - R).norm()
 
@@ -1375,12 +1383,17 @@ class Solver:
             nabla_C2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
             nabla_C3 = -(nabla_C0 + nabla_C1 + nabla_C2)
 
-            schur = nabla_C0.dot(nabla_C0) + nabla_C1.dot(nabla_C1) +nabla_C2.dot(nabla_C2) +nabla_C3.dot(nabla_C3) + 1e-4
+            schur = (self.m_inv[v0] * nabla_C0.dot(nabla_C0) +
+                     self.m_inv[v1] * nabla_C1.dot(nabla_C1) +
+                     self.m_inv[v2] * nabla_C2.dot(nabla_C2) +
+                     self.m_inv[v3] * nabla_C3.dot(nabla_C3) + 1e-4)
+
             ld = C / schur
-            self.dx[v0] += ld * nabla_C0
-            self.dx[v1] += ld * nabla_C1
-            self.dx[v2] += ld * nabla_C2
-            self.dx[v3] += ld * nabla_C3
+
+            self.dx[v0] -= self.m_inv[v0] * nabla_C0 * ld
+            self.dx[v1] -= self.m_inv[v1] * nabla_C1 * ld
+            self.dx[v2] -= self.m_inv[v2] * nabla_C2 * ld
+            self.dx[v3] -= self.m_inv[v3] * nabla_C3 * ld
 
 
             self.nc[v0] += 1

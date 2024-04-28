@@ -55,7 +55,7 @@ class TetMesh:
         self.initTetraIndices()
         # self.initEdgeIndices()
 
-        print(len(self.tet_mesh.faces))
+        print(len(self.tet_mesh.verts))
         print(len(self.tet_mesh.cells))
 
         self.verts = self.tet_mesh.verts

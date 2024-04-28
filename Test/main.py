@@ -7,25 +7,25 @@ from particle import Particle
 from TetMesh import TetMesh
 import XPBD as xpbd
 
-ti.init(arch=ti.cuda, device_memory_GB=12)
+ti.init(arch=ti.cuda, device_memory_GB=3)
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 40.0, 0.0))
 # mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
-mesh_dynamic_2 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_2 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 40.0, 0.0))
 mesh_dynamic_3 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
-# meshes_dynamic.append(mesh_dynamic_1)
-# meshes_dynamic.append(mesh_dynamic_2)
+meshes_dynamic.append(mesh_dynamic_1)
+meshes_dynamic.append(mesh_dynamic_2)
 # meshes.append(mesh_3)
 # meshes.append(mesh_4)
 
 tet_meshes_dynamic = []
 
-tet_mesh_dynamic_1 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.2, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_mesh_dynamic_2 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.2, trans=ti.math.vec3(2.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_1 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.2, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_2 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.2, trans=ti.math.vec3(2.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 tet_meshes_dynamic.append(tet_mesh_dynamic_1)
-# tet_meshes_dynamic.append(tet_mesh_dynamic_2)
+tet_meshes_dynamic.append(tet_mesh_dynamic_2)
 meshes_static = []
 mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -1.0, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
 
