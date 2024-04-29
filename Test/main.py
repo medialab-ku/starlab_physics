@@ -36,12 +36,12 @@ meshes_static.append(mesh_static_2)
 
 particles = []
 particle_1 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 1.0, 0.8), scale=1.2, radius=0.01)
-# particle_2 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, -0.3, 0.0), scale=1.0, radius=0.01)
+particle_2 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 2.0, 0.8), scale=1.2, radius=0.01)
 # particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
 
 
 particles.append(particle_1)
-# particles.append(particle_2)
+particles.append(particle_2)
 
 sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -1.81, 0.0), dt=0.01, grid_size=ti.math.vec3(3, 3, 3), particle_radius=0.02)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
