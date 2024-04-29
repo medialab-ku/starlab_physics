@@ -14,7 +14,7 @@ ti.init(arch=ti.gpu)
 
 pixels = ti.field(ti.u8, shape=(512, 512, 3))
 
-screen_res = (550, 550)
+screen_res = (700, 700)
 screen_to_world_ratio = 10.0
 boundary = (
     screen_res[0] / screen_to_world_ratio,

@@ -30,15 +30,15 @@ mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.v
 # meshes_static.append(mesh_static_1)
 
 particles = []
-particle_1 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, 0.0, 0.0), scale=1.0, radius=0.01)
+particle_1 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, 0.0, 0.0), scale=1.5, radius=0.01)
 particle_2 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, -0.3, 0.0), scale=1.0, radius=0.01)
 # particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
 
 
 particles.append(particle_1)
-particles.append(particle_2)
+# particles.append(particle_2)
 
-sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.01, grid_size=ti.math.vec3(2.0, 2.0, 2.0), particle_radius=0.02)
+sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.01, grid_size=ti.math.vec3(5.0, 2.0, 2.0), particle_radius=0.02)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
@@ -105,7 +105,7 @@ while window.running:
         scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid])
 
     # scene.particles(sim.x, radius=sim.cell_size, color=(0, 0, 0))
-    # scene.particles(sim.x_static, radius=sim.cell_size, color=(0, 0, 0))r
+    # scene.particles(sim.x_static, radius=sim.cell_size, color=(0, 0, 0))
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     # scene.mesh(sim.x, indices=sim.face_indices, color=(0, 0, 0), show_wireframe=True)
 

@@ -27,6 +27,7 @@ class Solver:
         self.grid_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         self.grid_edge_indices = ti.field(dtype=ti.u32, shape=12 * 2)
 
+        self.padding = 0.9
         self.init_grid()
 
         self.cell_size = 3 * particle_radius
@@ -331,15 +332,15 @@ class Solver:
 
     def init_grid(self):
 
-        self.grid_vertices[0] = ti.math.vec3(self.grid_size[0], self.grid_size[1], self.grid_size[2])
-        self.grid_vertices[1] = ti.math.vec3(-self.grid_size[0], self.grid_size[1], self.grid_size[2])
-        self.grid_vertices[2] = ti.math.vec3(-self.grid_size[0], self.grid_size[1], -self.grid_size[2])
-        self.grid_vertices[3] = ti.math.vec3(self.grid_size[0], self.grid_size[1], -self.grid_size[2])
+        self.grid_vertices[0] = self.padding * ti.math.vec3(self.grid_size[0], self.grid_size[1], self.grid_size[2])
+        self.grid_vertices[1] = self.padding * ti.math.vec3(-self.grid_size[0], self.grid_size[1], self.grid_size[2])
+        self.grid_vertices[2] = self.padding * ti.math.vec3(-self.grid_size[0], self.grid_size[1], -self.grid_size[2])
+        self.grid_vertices[3] = self.padding * ti.math.vec3(self.grid_size[0], self.grid_size[1], -self.grid_size[2])
 
-        self.grid_vertices[4] = ti.math.vec3(self.grid_size[0], -self.grid_size[1], self.grid_size[2])
-        self.grid_vertices[5] = ti.math.vec3(-self.grid_size[0], -self.grid_size[1], self.grid_size[2])
-        self.grid_vertices[6] = ti.math.vec3(-self.grid_size[0], -self.grid_size[1], -self.grid_size[2])
-        self.grid_vertices[7] = ti.math.vec3(self.grid_size[0], -self.grid_size[1], -self.grid_size[2])
+        self.grid_vertices[4] = self.padding * ti.math.vec3(self.grid_size[0], -self.grid_size[1], self.grid_size[2])
+        self.grid_vertices[5] = self.padding * ti.math.vec3(-self.grid_size[0], -self.grid_size[1], self.grid_size[2])
+        self.grid_vertices[6] = self.padding * ti.math.vec3(-self.grid_size[0], -self.grid_size[1], -self.grid_size[2])
+        self.grid_vertices[7] = self.padding * ti.math.vec3(self.grid_size[0], -self.grid_size[1], -self.grid_size[2])
 
         self.grid_edge_indices[0] = 0
         self.grid_edge_indices[1] = 1
@@ -1226,7 +1227,7 @@ class Solver:
     @ti.kernel
     def solve_pressure_constraints_x(self):
 
-        kernel_radius = 2.0 * self.particle_radius
+        kernel_radius = 1.5 * self.particle_radius
 
         for vi in range(self.max_num_verts_dynamic):
             C_i = self.poly6_value(0.0, kernel_radius) - 1.0
@@ -1450,26 +1451,26 @@ class Solver:
     @ti.kernel
     def confine_to_boundary(self):
 
-        padding = 0.9
+
         for vi in range(self.max_num_verts_dynamic):
 
-            if self.y[vi][0] > padding * self.grid_size[0]:
-                self.y[vi][0] = padding * self.grid_size[0]
+            if self.y[vi][0] > self.padding * self.grid_size[0]:
+                self.y[vi][0] = self.padding * self.grid_size[0]
 
-            if self.y[vi][0] < -padding * self.grid_size[0]:
-                self.y[vi][0] = -padding * self.grid_size[0]
+            if self.y[vi][0] < -self.padding * self.grid_size[0]:
+                self.y[vi][0] = -self.padding * self.grid_size[0]
 
-            if self.y[vi][1] > padding * self.grid_size[1]:
-                self.y[vi][1] = padding * self.grid_size[1]
+            if self.y[vi][1] > self.padding * self.grid_size[1]:
+                self.y[vi][1] = self.padding * self.grid_size[1]
 
-            if self.y[vi][1] < -padding * self.grid_size[2]:
-                self.y[vi][1] = -padding * self.grid_size[2]
+            if self.y[vi][1] < -self.padding * self.grid_size[2]:
+                self.y[vi][1] = -self.padding * self.grid_size[2]
 
-            if self.y[vi][2] > padding * self.grid_size[2]:
-                self.y[vi][2] = padding * self.grid_size[2]
+            if self.y[vi][2] > self.padding * self.grid_size[2]:
+                self.y[vi][2] = self.padding * self.grid_size[2]
 
-            if self.y[vi][2] < -padding * self.grid_size[2]:
-                self.y[vi][2] = -padding * self.grid_size[2]
+            if self.y[vi][2] < -self.padding * self.grid_size[2]:
+                self.y[vi][2] = -self.padding * self.grid_size[2]
 
     @ti.kernel
     def confine_to_boundary_v(self):
