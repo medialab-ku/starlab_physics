@@ -147,25 +147,19 @@ class Solver:
         self.offset_edges_static = ti.field(int, shape=num_meshes_static)
         self.offset_faces_static = ti.field(int, shape=num_meshes_static)
 
-        if self.is_meshes_static_empty is False:
-            for mid in range(num_meshes_static):
-                self.offset_verts_static[mid] = self.max_num_verts_static
-                self.offset_edges_static[mid] = self.max_num_edges_static
-                self.offset_faces_static[mid] = self.max_num_faces_static
-                self.max_num_verts_static += len(self.meshes_static[mid].verts)
-                self.max_num_edges_static += len(self.meshes_static[mid].edges)
-                self.max_num_faces_static += len(self.meshes_static[mid].faces)
+        for mid in range(num_meshes_static):
+            self.offset_verts_static[mid] = self.max_num_verts_static
+            self.offset_edges_static[mid] = self.max_num_edges_static
+            self.offset_faces_static[mid] = self.max_num_faces_static
+            self.max_num_verts_static += len(self.meshes_static[mid].verts)
+            self.max_num_edges_static += len(self.meshes_static[mid].edges)
+            self.max_num_faces_static += len(self.meshes_static[mid].faces)
 
-        else:
-            self.offset_verts_static[0] = 0
-            self.offset_edges_static[0] = 0
-            self.offset_faces_static[0] = 0
 
         self.face_indices_static = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_static)
         self.edge_indices_static = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_static)
 
-        self.offset_verts_static[len(self.meshes_static)] = self.max_num_verts_static
-        self.offset_faces_static[len(self.meshes_static)] = self.max_num_faces_static
+        print(self.max_num_edges_static)
 
         self.x_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
 
@@ -1344,8 +1338,8 @@ class Solver:
                     #     self.solve_collision_vt(vi, fi)
             d = self.dHat
 
-            if vi_d >= self.offset_particle:
-                d = ti.pow(self.particle_radius + ti.sqrt(self.dHat), 2)
+            # if vi_d >= self.offset_particle:
+            #     d = ti.pow(self.particle_radius + ti.sqrt(self.dHat), 2)
 
             for fi_s in range(self.max_num_faces_static):
                 self.solve_collision_vt_static_x(vi_d, fi_s, d)
@@ -1463,8 +1457,8 @@ class Solver:
             if self.y[vi][1] > self.padding * self.grid_size[1]:
                 self.y[vi][1] = self.padding * self.grid_size[1]
 
-            if self.y[vi][1] < -self.padding * self.grid_size[2]:
-                self.y[vi][1] = -self.padding * self.grid_size[2]
+            if self.y[vi][1] < -self.padding * self.grid_size[1]:
+                self.y[vi][1] = -self.padding * self.grid_size[1]
 
             if self.y[vi][2] > self.padding * self.grid_size[2]:
                 self.y[vi][2] = self.padding * self.grid_size[2]
@@ -1508,7 +1502,7 @@ class Solver:
         self.dx.fill(0.0)
         self.nc.fill(0)
         self.solve_spring_constraints_x()
-        # self.solve_collision_constraints_x()
+        self.solve_collision_constraints_x()
         self.solve_stretch_constarints_x()
         self.solve_pressure_constraints_x()
         self.update_dx()
@@ -1516,8 +1510,8 @@ class Solver:
     def solve_constraints_v(self):
         self.dv.fill(0.0)
         self.nc.fill(0)
-        # self.solve_collision_constraints_v()
-        self.solve_pressure_constraints_v()
+        self.solve_collision_constraints_v()
+        # self.solve_pressure_constraints_v()
         self.update_dv()
 
     @ti.kernel
@@ -1542,9 +1536,10 @@ class Solver:
         dt = self.dt
         self.dt = dt / n_substeps
 
-        self.broad_phase()
         for _ in range(n_substeps):
             self.compute_y()
+            self.confine_to_boundary()
+            self.broad_phase()
             self.solve_constraints_x()
             self.confine_to_boundary()
             self.compute_velocity()
