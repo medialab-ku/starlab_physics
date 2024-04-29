@@ -17,6 +17,7 @@ class Particle:
         points = np.array(points, dtype=np.float32)
         self.num_particles = points.shape[0]
 
+        print(self.num_particles)
 
         self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
         self.x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
@@ -33,6 +34,7 @@ class Particle:
         self.scale = scale
         self.radius = radius
 
+        self.setCenterToOrigin()
         self.applyTransform()
 
         self.x0.copy_from(self.x)
@@ -48,14 +50,15 @@ class Particle:
         for i in range(self.num_particles):
             center += self.x[i]
 
-        center /= self.num_verts
+        center /= self.num_particles
         for i in range(self.num_particles):
-            self.x -= center
+            self.x[i] -= center
 
     @ti.kernel
     def applyTransform(self):
+        for i in range(self.num_particles):
+            self.x[i] *= self.scale
 
-        # self.setCenterToOrigin()
 
         for i in range(self.num_particles):
             v_4d = ti.Vector([self.x[i][0], self.x[i][1], self.x[i][2], 1])

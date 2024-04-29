@@ -29,7 +29,7 @@ class Solver:
 
         self.init_grid()
 
-        self.cell_size = 4 * particle_radius
+        self.cell_size = 3 * particle_radius
         self.grid_origin = -self.grid_size
         self.grid_num = np.ceil(2 * self.grid_size / self.cell_size).astype(int)
 
@@ -451,6 +451,9 @@ class Solver:
             grid_index = self.get_flatten_grid_index(self.y[vi])
             self.grid_ids[vi] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
+
+        for I in ti.grouped(self.grid_particles_num):
+            self.grid_particles_num_temp[I] = self.grid_particles_num[I]
 
 
     @ti.func
@@ -1197,7 +1200,7 @@ class Solver:
 
     @ti.func
     def spiky_gradient(self, r, h):
-        result = ti.Vector([0.0, 0.0])
+        result = ti.math.vec3(0.0)
 
         spiky_grad_factor = -45.0 / ti.math.pi
         r_len = r.norm()
@@ -1219,13 +1222,15 @@ class Solver:
     @ti.kernel
     def solve_pressure_constraints_x(self):
 
-        kernel_radius = 0.01
+        kernel_radius = 2.0 * self.particle_radius
+
         for vi in range(self.max_num_verts_dynamic):
             C_i = self.poly6_value(0.0, kernel_radius) - 1.0
-            nabla_C_ii = self.spiky_gradient(ti.math.vec3(0.), kernel_radius)
-            schur = nabla_C_ii.dot(nabla_C_ii)
+            nabla_C_ii = ti.math.vec3(0.0)
+            schur = 1e-4
             xi = self.y[vi]
 
+            # for vj in range(self.max_num_verts_dynamic):
             center_cell = self.pos_to_index(self.y[vi])
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
                 grid_index = self.flatten_grid_index(center_cell + offset)
@@ -1233,69 +1238,92 @@ class Solver:
                     vj = self.cur2org[p_j]
                     xj = self.y[vj]
                     xji = xj - xi
-                    nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
-                    C_i += self.poly6_value(ti.math.length(xji), kernel_radius)
-                    schur += nabla_C_ji.dot(nabla_C_ji)
 
-            if C_i < 0.0:
-                C_i = 0.0
+                    if xji.norm() < kernel_radius:
+                        nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
+                        C_i += self.poly6_value(xji.norm(), kernel_radius)
+                        nabla_C_ii -= nabla_C_ji
+                        schur += nabla_C_ji.dot(nabla_C_ji)
 
+                if C_i < 0.0:
+                    C_i = 0.0
+
+            schur += nabla_C_ii.dot(nabla_C_ii)
             lambda_i = C_i / schur
 
+            # for vj in range(self.max_num_verts_dynamic):
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
                 grid_index = self.flatten_grid_index(center_cell + offset)
                 for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
                     vj = self.cur2org[p_j]
+                    xj = self.y[vj]
                     xji = xj - xi
-                    nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
 
-                    self.dx[vj] += lambda_i * nabla_C_ji
-                    self.nc[vj] += 1
+                    if xji.norm() < kernel_radius:
+                        nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
+                        self.dx[vj] -= lambda_i * nabla_C_ji
+                        self.nc[vj] += 1
 
-            self.dv[vi] += lambda_i * nabla_C_ii
+            self.dx[vi] -= lambda_i * nabla_C_ii
             self.nc[vi] += 1
 
     @ti.kernel
     def solve_pressure_constraints_v(self):
 
-        kernel_radius = 0.01
-        for vi in range(self.max_num_verts_dynamic):
-            nabla_C_ii = self.spiky_gradient(ti.math.vec3(0.), kernel_radius)
-            schur = nabla_C_ii.dot(nabla_C_ii)
-            xi = self.y[vi]
-            vel_i = self.v[vi]
-            C_i = nabla_C_ii.dot(vel_i)
+        kernel_radius = 2.0 * self.particle_radius
 
-            center_cell = self.pos_to_index(self.y[vi])
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    vj = self.cur2org[p_j]
-                    xj = self.y[vj]
-                    vel_j = self.v[vj]
-                    xji = xj - xi
+        for vi in range(self.max_num_verts_dynamic):
+            C_i = self.poly6_value(0.0, kernel_radius) - 1.0
+            C_i_v = 0.0
+            nabla_C_ii = ti.math.vec3(0.0)
+            schur = 1e-4
+            xi = self.y[vi]
+            v_i = self.v[vi]
+
+            for vj in range(self.max_num_verts_dynamic):
+                # center_cell = self.pos_to_index(self.y[vi])
+                # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                #     grid_index = self.flatten_grid_index(center_cell + offset)
+                #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                #         vj = self.cur2org[p_j]
+                xj = self.y[vj]
+                v_j = self.v[vj]
+                xji = xj - xi
+
+                if xji.norm() < kernel_radius:
                     nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
-                    C_i += nabla_C_ji.dot(vel_j)
+                    C_i_v += nabla_C_ji.dot(v_j)
+                    C_i += self.poly6_value(xji.norm(), kernel_radius)
+                    nabla_C_ii -= nabla_C_ji
                     schur += nabla_C_ji.dot(nabla_C_ji)
 
-            if C_i < 0.0:
-                C_i = 0.0
 
-            lambda_i = C_i / schur
+            lambda_i = 0.
+            schur += nabla_C_ii.dot(nabla_C_ii)
+            C_i_v += nabla_C_ii.dot(v_i)
+            if C_i < 0.0 and C_i_v <0:
+                lambda_i = C_i_v / schur
 
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    vj = self.cur2org[p_j]
-                    xji = xj - xi
+
+
+
+            for vj in range(self.max_num_verts_dynamic):
+                # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                #     grid_index = self.flatten_grid_index(center_cell + offset)
+                #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                #         vj = self.cur2org[p_j]
+                xj = self.y[vj]
+                xji = xj - xi
+
+                if xji.norm() < kernel_radius:
                     nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
-
-
-                    self.dv[vj] += lambda_i * nabla_C_ji
+                    self.dv[vj] -= lambda_i * nabla_C_ji
                     self.nc[vj] += 1
 
-            self.dv[vi] += lambda_i * nabla_C_ii
+            self.dv[vi] -= lambda_i * nabla_C_ii
             self.nc[vi] += 1
+
+
     @ti.kernel
     def solve_collision_constraints_x(self):
 
@@ -1423,20 +1451,44 @@ class Solver:
             if self.y[vi][0] > self.grid_size[0]:
                 self.y[vi][0] = self.grid_size[0]
 
-            elif self.y[vi][0] < -self.grid_size[0]:
+            if self.y[vi][0] < -self.grid_size[0]:
                 self.y[vi][0] = -self.grid_size[0]
 
-            elif self.y[vi][1] > self.grid_size[1]:
+            if self.y[vi][1] > self.grid_size[1]:
                 self.y[vi][1] = self.grid_size[1]
 
-            elif self.y[vi][1] < -self.grid_size[2]:
+            if self.y[vi][1] < -self.grid_size[2]:
                 self.y[vi][1] = -self.grid_size[2]
 
-            elif self.y[vi][2] > self.grid_size[2]:
+            if self.y[vi][2] > self.grid_size[2]:
                 self.y[vi][2] = self.grid_size[2]
 
-            elif self.y[vi][2] < -self.grid_size[2]:
+            if self.y[vi][2] < -self.grid_size[2]:
                 self.y[vi][2] = -self.grid_size[2]
+
+    @ti.kernel
+    def confine_to_boundary_v(self):
+
+        for vi in range(self.max_num_verts_dynamic):
+
+            if self.y[vi][0] > self.grid_size[0] and self.v[vi][0] > 0:
+                self.v[vi][0] = 0
+
+            if self.y[vi][0] < -self.grid_size[0] and self.v[vi][0] < 0:
+                self.v[vi][0] = 0
+
+            if self.y[vi][1] > self.grid_size[1] and self.v[vi][1] > 0:
+                self.v[vi][1] = 0
+
+            if self.y[vi][1] < -self.grid_size[1] and self.v[vi][1] < 0:
+                self.v[vi][1] = 0
+
+            if self.y[vi][2] > self.grid_size[2] and self.v[vi][2] > 0:
+                self.v[vi][2] = 0
+
+            if self.y[vi][2] < -self.grid_size[2] and self.v[vi][2] < 0:
+                self.v[vi][2] = 0
+
 
     @ti.kernel
     def compute_velocity(self):
@@ -1452,13 +1504,14 @@ class Solver:
         self.solve_spring_constraints_x()
         # self.solve_collision_constraints_x()
         self.solve_stretch_constarints_x()
-        # self.solve_pressure_constraints_x()
+        self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
         self.dv.fill(0.0)
         self.nc.fill(0)
-        self.solve_collision_constraints_v()
+        # self.solve_collision_constraints_v()
+        self.solve_pressure_constraints_v()
         self.update_dv()
 
     @ti.kernel
@@ -1483,16 +1536,16 @@ class Solver:
         dt = self.dt
         self.dt = dt / n_substeps
 
+        self.broad_phase()
         for _ in range(n_substeps):
-            # self.broad_phase()
             self.compute_y()
             self.solve_constraints_x()
             self.confine_to_boundary()
             self.compute_velocity()
 
-            # if self.enable_velocity_update:
-            #     self.solve_constraints_v()
-
+            if self.enable_velocity_update:
+                self.solve_constraints_v()
+                self.confine_to_boundary_v()
             self.update_x()
 
         self.copy_to_meshes()
