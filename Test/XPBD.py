@@ -87,16 +87,20 @@ class Solver:
             self.max_num_verts_dynamic += len(self.tet_meshes_dynamic[tid].verts)
             self.max_num_tetra_dynamic += len(self.tet_meshes_dynamic[tid].cells)
 
-        print(self.offset_verts_dynamic)
-        print(self.offset_tetras_dynamic)
-        print(self.max_num_verts_dynamic)
-        print(self.max_num_tetra_dynamic)
 
         self.offset_particle = self.max_num_verts_dynamic
 
         for pid in range(len(self.particles)):
             self.offset_verts_dynamic[pid + len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)] = self.max_num_verts_dynamic
             self.max_num_verts_dynamic += self.particles[pid].num_particles
+
+
+        print(self.offset_verts_dynamic)
+        print(self.offset_tetras_dynamic)
+        print(self.max_num_verts_dynamic)
+        print(self.max_num_tetra_dynamic)
+
+
 
         self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
@@ -1446,25 +1450,26 @@ class Solver:
     @ti.kernel
     def confine_to_boundary(self):
 
+        padding = 0.9
         for vi in range(self.max_num_verts_dynamic):
 
-            if self.y[vi][0] > self.grid_size[0]:
-                self.y[vi][0] = self.grid_size[0]
+            if self.y[vi][0] > padding * self.grid_size[0]:
+                self.y[vi][0] = padding * self.grid_size[0]
 
-            if self.y[vi][0] < -self.grid_size[0]:
-                self.y[vi][0] = -self.grid_size[0]
+            if self.y[vi][0] < -padding * self.grid_size[0]:
+                self.y[vi][0] = -padding * self.grid_size[0]
 
-            if self.y[vi][1] > self.grid_size[1]:
-                self.y[vi][1] = self.grid_size[1]
+            if self.y[vi][1] > padding * self.grid_size[1]:
+                self.y[vi][1] = padding * self.grid_size[1]
 
-            if self.y[vi][1] < -self.grid_size[2]:
-                self.y[vi][1] = -self.grid_size[2]
+            if self.y[vi][1] < -padding * self.grid_size[2]:
+                self.y[vi][1] = -padding * self.grid_size[2]
 
-            if self.y[vi][2] > self.grid_size[2]:
-                self.y[vi][2] = self.grid_size[2]
+            if self.y[vi][2] > padding * self.grid_size[2]:
+                self.y[vi][2] = padding * self.grid_size[2]
 
-            if self.y[vi][2] < -self.grid_size[2]:
-                self.y[vi][2] = -self.grid_size[2]
+            if self.y[vi][2] < -padding * self.grid_size[2]:
+                self.y[vi][2] = -padding * self.grid_size[2]
 
     @ti.kernel
     def confine_to_boundary_v(self):
