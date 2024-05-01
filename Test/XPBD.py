@@ -432,8 +432,8 @@ class Solver:
     @ti.kernel
     def counting_sort_static(self):
         # FIXME: make it the actual particle num
-        for i in range(self.max_num_verts_static):
-            I = self.max_num_verts_static - 1 - i
+        for i in range(self.max_num_verts_static + self.max_num_faces_static):
+            I = self.max_num_verts_static + self.max_num_faces_static - 1 - i
             base_offset_static = 0
             if self.grid_ids_static[I] - 1 >= 0:
                 base_offset_static = self.grid_particles_num_static[self.grid_ids_static[I] - 1]
