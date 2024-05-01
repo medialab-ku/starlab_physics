@@ -10,12 +10,12 @@ ti.init(arch=ti.cuda, device_memory_GB=3)
 meshes_dynamic = []
 mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.07, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
-mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dynamic_3 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 45.0))
+mesh_dynamic_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
-# meshes_dynamic.append(mesh_dynamic_1)
 meshes_dynamic.append(mesh_dynamic_2)
-# meshes.append(mesh_3)
+meshes_dynamic.append(mesh_dynamic_3)
+# meshes_dynamic.append(mesh_dynamic_3)
 # meshes.append(mesh_4)
 
 tet_meshes_dynamic = []
@@ -47,7 +47,7 @@ particle_2 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 2.0, 
 # particles.append(particle_1)
 # particles.append(particle_2)
 
-sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -1.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3, 3, 3), particle_radius=0.02)
+sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -1.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3.5, 3.5, 3.5), particle_radius=0.02)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
