@@ -1270,7 +1270,7 @@ class Solver:
     def solve_collision_ee_static_x(self, eid_d, eid_s, dHat):
 
         v0 = self.edge_indices_dynamic[2 * eid_d + 0]
-        v1 = self.edge_indices_dynamic[2 * eid_d + 0]
+        v1 = self.edge_indices_dynamic[2 * eid_d + 1]
 
         v2 = self.edge_indices_static[2 * eid_s + 0]
         v3 = self.edge_indices_static[2 * eid_s + 1]
