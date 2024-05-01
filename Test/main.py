@@ -8,13 +8,13 @@ import XPBD as xpbd
 ti.init(arch=ti.cuda, device_memory_GB=3)
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(1.0, 1.5, -1.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.07, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
-mesh_dynamic_2 =  Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_dynamic_3 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
-meshes_dynamic.append(mesh_dynamic_1)
-# meshes_dynamic.append(mesh_dynamic_2)
+# meshes_dynamic.append(mesh_dynamic_1)
+meshes_dynamic.append(mesh_dynamic_2)
 # meshes.append(mesh_3)
 # meshes.append(mesh_4)
 
@@ -23,27 +23,29 @@ tet_meshes_dynamic = []
 tet_mesh_dynamic_1 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.1, trans=ti.math.vec3(0.8, 0.2, 0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
 tet_mesh_dynamic_2 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(-0.8, 0.2, -0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
 tet_mesh_dynamic_3 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_meshes_dynamic.append(tet_mesh_dynamic_1)
-tet_meshes_dynamic.append(tet_mesh_dynamic_2)
-tet_meshes_dynamic.append(tet_mesh_dynamic_3)
+# tet_mesh_dynamic_4 = TetMesh("../models/MESH/dragon.1.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# tet_meshes_dynamic.append(tet_mesh_dynamic_1)
+# tet_meshes_dynamic.append(tet_mesh_dynamic_2)
+# tet_meshes_dynamic.append(tet_mesh_dynamic_3)
+# tet_meshes_dynamic.append(tet_mesh_dynamic_4)
 
 meshes_static = []
 mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=2.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 mesh_static_2 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 
-# meshes_static.append(mesh_static_1)
-meshes_static.append(mesh_static_2)
+meshes_static.append(mesh_static_1)
+# meshes_static.append(mesh_static_2)
 
 particles = []
-particle_1 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 1.0, 0.8), scale=1.2, radius=0.01)
+particle_1 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, 1.0, 0.0), scale=1.2, radius=0.01)
 particle_2 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 2.0, 0.8), scale=1.2, radius=0.01)
 # particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
 
 
-particles.append(particle_1)
-particles.append(particle_2)
+# particles.append(particle_1)
+# particles.append(particle_2)
 
-sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -1.81, 0.0), dt=0.01, grid_size=ti.math.vec3(3, 3, 3), particle_radius=0.02)
+sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -1.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3, 3, 3), particle_radius=0.02)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
@@ -90,9 +92,13 @@ while window.running:
 
         if window.event.key == 'v':
             sim.enable_velocity_update = not sim.enable_velocity_update
+            if sim.enable_velocity_update is True:
+                print("enable velocity update")
+            else:
+                print("disable velocity update")
 
     if run_sim:
-        sim.forward(n_substeps=20)
+        sim.forward(n_substeps=5)
 
     for mid in range(len(meshes_dynamic)):
         # scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=(0, 0, 0), show_wireframe=True)
