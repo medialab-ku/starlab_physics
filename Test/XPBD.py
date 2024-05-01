@@ -186,10 +186,10 @@ class Solver:
         self.grid_particles_num_temp_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
         self.prefix_sum_executor_static = ti.algorithms.PrefixSumExecutor(self.grid_particles_num_static.shape[0])
 
-        self.grid_ids_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static)
-        self.grid_ids_buffer_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static)
-        self.grid_ids_new_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static)
-        self.cur2org_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static)
+        self.grid_ids_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
+        self.grid_ids_buffer_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
+        self.grid_ids_new_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
+        self.cur2org_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
 
         self.broad_phase_static()
 
@@ -432,8 +432,8 @@ class Solver:
     @ti.kernel
     def counting_sort_static(self):
         # FIXME: make it the actual particle num
-        for i in range(self.max_num_verts_static + self.max_num_faces_static):
-            I = self.max_num_verts_static + self.max_num_faces_static - 1 - i
+        for i in range(self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static):
+            I = self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static - 1 - i
             base_offset_static = 0
             if self.grid_ids_static[I] - 1 >= 0:
                 base_offset_static = self.grid_particles_num_static[self.grid_ids_static[I] - 1]
@@ -508,6 +508,16 @@ class Solver:
 
             grid_index = self.get_flatten_grid_index(center)
             self.grid_ids_static[fi + self.max_num_verts_static] = grid_index
+            ti.atomic_add(self.grid_particles_num_static[grid_index], 1)
+
+        for ei in range(self.max_num_edges_static):
+            v0, v1 = self.edge_indices_static[2 * ei + 0], self.edge_indices_static[2 * ei + 1]
+            x0, x1 = self.x_static[v0], self.x_static[v1]
+
+            center = 0.5 * (x0 + x1)
+
+            grid_index = self.get_flatten_grid_index(center)
+            self.grid_ids_static[ei + self.max_num_verts_static + self.max_num_edges_static] = grid_index
             ti.atomic_add(self.grid_particles_num_static[grid_index], 1)
 
         for I in ti.grouped(self.grid_particles_num_static):
@@ -1386,7 +1396,7 @@ class Solver:
     def solve_collision_constraints_x(self):
 
         d = self.dHat
-        for idx in range(self.max_num_verts_dynamic + self.max_num_faces_dynamic):
+        for idx in range(self.max_num_verts_dynamic + self.max_num_faces_dynamic + self.max_num_edges_dynamic):
 
             if idx < self.max_num_verts_dynamic:
                 vi_d = idx
@@ -1396,10 +1406,11 @@ class Solver:
                     grid_index = self.flatten_grid_index(center_cell + offset)
                     for p_j in range(self.grid_particles_num_static[ti.max(0, grid_index - 1)], self.grid_particles_num_static[grid_index]):
                         vj = self.cur2org_static[p_j]
-                        if vj >= self.max_num_verts_static:
-                            self.solve_collision_vt_static_x(vi_d, vj, d)
+                        if vj >= self.max_num_verts_static and vj <self.max_num_verts_static + self.max_num_faces_static:
+                            ti_s = vj - self.max_num_verts_static
+                            self.solve_collision_vt_static_x(vi_d, ti_s, d)
 
-            else:
+            elif idx < self.max_num_verts_dynamic + self.max_num_faces_dynamic:
                 fi_d = idx - self.max_num_verts_dynamic
                 v0 = self.face_indices_dynamic[3 * fi_d + 0]
                 v1 = self.face_indices_dynamic[3 * fi_d + 1]
