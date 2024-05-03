@@ -1,64 +1,9 @@
-import random
 import taichi as ti
-from mesh import Mesh
-from particle import Particle
-from TetMesh import TetMesh
 import XPBD as xpbd
-
 import selection_tool as st
+from Scenes import scene1 as scene1
 
-ti.init(arch=ti.cuda, device_memory_GB=3)
-
-meshes_dynamic = []
-# mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 45.0))
-# mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
-# mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 45.0))
-# mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 45.0))
-mesh_dynamic_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dynamic_4 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 15.0))
-mesh_dynamic_5 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.7, 0.0), rot=ti.math.vec3(0.0, 0.0, 30.0))
-# mesh_dynamic_4 = Mesh("../models/OBJ/triangle.obj", scale=1.0, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# mesh_dynamic_5 = Mesh("../models/OBJ/triangle.obj", scale=1.0, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-
-
-# meshes_dynamic.append(mesh_dynamic_1)
-meshes_dynamic.append(mesh_dynamic_3)
-# meshes_dynamic.append(mesh_dynamic_4)
-# meshes_dynamic.append(mesh_dynamic_5)
-# meshes.append(mesh_4)
-
-tet_meshes_dynamic = []
-
-# tet_mesh_dynamic_1 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.1, trans=ti.math.vec3(0.8, 0.2, 0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# tet_mesh_dynamic_2 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(-0.8, 0.2, -0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# tet_mesh_dynamic_3 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# tet_mesh_dynamic_4 = TetMesh("../models/MESH/dragon.1.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# tet_meshes_dynamic.append(tet_mesh_dynamic_1)
-# tet_meshes_dynamic.append(tet_mesh_dynamic_2)
-# tet_meshes_dynamic.append(tet_mesh_dynamic_3)
-# tet_meshes_dynamic.append(tet_mesh_dynamic_4)
-
-meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=2.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_static_2 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_static_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 15.0, 0.0), is_static=True)
-mesh_static_4 = Mesh("../models/OBJ/triangle.obj", scale=0.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-
-meshes_static.append(mesh_static_1)
-# meshes_static.append(mesh_static_3)
-# meshes_static.append(mesh_static_4)
-# meshes_static.append(mesh_static_2)
-
-particles = []
-particle_1 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, 1.0, 0.0), scale=1.2, radius=0.01)
-particle_2 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 2.0, 0.8), scale=1.2, radius=0.01)
-# particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
-
-
-# particles.append(particle_1)
-# particles.append(particle_2)
-
-sim = xpbd.Solver(meshes_dynamic, meshes_static, tet_meshes_dynamic, particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3.5, 3.5, 3.5), particle_radius=0.01, dHat=5e-3)
+sim = xpbd.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3.5, 3.5, 3.5), particle_radius=0.01, dHat=5e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
@@ -68,18 +13,6 @@ camera.position(2., 4.0, 7.0)
 camera.fov(40)
 camera.up(0, 1, 0)
 
-
-colors_tet_dynamic = []
-
-for tid in range(len(tet_meshes_dynamic)):
-    color = (random.randrange(0, 255) / 256, random.randrange(0, 255) / 256, random.randrange(0, 255) / 256)
-    colors_tet_dynamic.append(color)
-
-
-colors_tri_dynamic = []
-for mid in range(len(meshes_dynamic)):
-    color = (random.randrange(0, 255) / 256, random.randrange(0, 255) / 256, random.randrange(0, 255) / 256)
-    colors_tri_dynamic.append(color)
 
 colors_static = []
 colors_static.append((0, 0.5, 0))
@@ -130,25 +63,25 @@ while window.running:
         g_selector.mouse_click_pos[2],g_selector.mouse_click_pos[3] = window.get_cursor_pos()
         g_selector.update_ti_rect_selection()
 
-
+    g_selector.is_selected
 
 
     if run_sim:
         sim.forward(n_substeps=20)
 
-    for mid in range(len(meshes_dynamic)):
+    for mid in range(len(scene1.meshes_dynamic)):
         # scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=(0, 0, 0), show_wireframe=True)
-        scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=colors_tri_dynamic[mid])
+        scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=scene1.colors_tri_dynamic[mid])
         # scene.particles(sim.meshes[mid].mesh.verts.x, radius=sim.cell_size, color=colors[mid])
 
-    for tid in range(len(tet_meshes_dynamic)):
+    for tid in range(len(scene1.tet_meshes_dynamic)):
         # scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=(0, 0, 0), show_wireframe=True)
-        scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=colors_tet_dynamic[tid])
+        scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=scene1.colors_tet_dynamic[tid])
 
-    for pid in range(len(particles)):
+    for pid in range(len(scene1.particles)):
         scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
 
-    for mid in range(len(meshes_static)):
+    for mid in range(len(scene1.meshes_static)):
         # scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=(0, 0, 0), show_wireframe=True)
         scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid])
 

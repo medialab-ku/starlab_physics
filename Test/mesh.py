@@ -128,3 +128,4 @@ class Mesh:
 
         for v in self.mesh.verts:
             v.x += self.trans
+
