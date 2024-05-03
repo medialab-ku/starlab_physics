@@ -6,8 +6,9 @@ class SelectionTool :
 
     def __init__(self,max_num_verts_dynamic,simulation_x,window,camera):
         # self.selected_indices = ti.field(dtype = ti.uint32,shape = (max_num_verts_dynamic,))
-        self.selected_indices_cpu = np.array([])
         self.num_selected = 0
+
+        self.LMB_mouse_pressed = False
 
         self.is_selected = ti.field(dtype = ti.uint32,shape = (max_num_verts_dynamic,))
         self.window = window
@@ -50,7 +51,7 @@ class SelectionTool :
         self._check_inside_selection_box(xmin,xmax,ymin,ymax)
         ti.sync()
 
-        self.get_selection_array()
+        # self.get_selection_array()
 
         self.mouse_click_pos = [0, 0, 0, 0]
         self.reset_ti_rect_selection()
@@ -58,7 +59,7 @@ class SelectionTool :
     @ti.kernel
     def _check_inside_selection_box(self, xmin : float,xmax : float,ymin : float,ymax : float):
         for i in self.is_selected :
-            self.is_selected[i] = False
+            # self.is_selected[i] = False
 
             pos = self.simulation_x[i]
             pos_h = ti.Vector([pos[0],pos[1],pos[2],1])

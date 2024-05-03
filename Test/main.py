@@ -54,7 +54,6 @@ particle_1 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, 1.0, 
 particle_2 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 2.0, 0.8), scale=1.2, radius=0.01)
 # particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
 
-
 # particles.append(particle_1)
 # particles.append(particle_2)
 
@@ -88,7 +87,6 @@ colors_static.append((0, 0.5, 0))
 run_sim = True
 
 #selector
-mouse_pressed = False
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic,sim.x,window,camera)
 print("sim.max_num_verts_dynamic",sim.max_num_verts_dynamic)
 
@@ -117,16 +115,16 @@ while window.running:
                 print("disable velocity update")
 
         if window.is_pressed(ti.ui.LMB) :
-            mouse_pressed = True
+            g_selector.LMB_mouse_pressed = True
             g_selector.mouse_click_pos[0],g_selector.mouse_click_pos[1] = window.get_cursor_pos()
 
     if window.get_event(ti.ui.RELEASE) :
         if window.event.key == ti.ui.LMB :
-            mouse_pressed = False
+            g_selector.LMB_mouse_pressed = False
             g_selector.mouse_click_pos[2],g_selector.mouse_click_pos[3] = window.get_cursor_pos()
             g_selector.Select()
 
-    if mouse_pressed :
+    if g_selector.LMB_mouse_pressed :
         g_selector.mouse_click_pos[2],g_selector.mouse_click_pos[3] = window.get_cursor_pos()
         g_selector.update_ti_rect_selection()
 
