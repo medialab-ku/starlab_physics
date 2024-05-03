@@ -114,9 +114,12 @@ while window.running:
             else:
                 print("disable velocity update")
 
-        if window.is_pressed(ti.ui.LMB) :
+        if window.event.key == ti.ui.LMB:
             g_selector.LMB_mouse_pressed = True
-            g_selector.mouse_click_pos[0],g_selector.mouse_click_pos[1] = window.get_cursor_pos()
+            g_selector.mouse_click_pos[0], g_selector.mouse_click_pos[1] = window.get_cursor_pos()
+
+        if window.event.key == ti.ui.RMB:
+            g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
 
     if window.get_event(ti.ui.RELEASE) :
         if window.event.key == ti.ui.LMB :
@@ -127,8 +130,6 @@ while window.running:
     if g_selector.LMB_mouse_pressed :
         g_selector.mouse_click_pos[2],g_selector.mouse_click_pos[3] = window.get_cursor_pos()
         g_selector.update_ti_rect_selection()
-
-
 
 
     if run_sim:
@@ -163,7 +164,7 @@ while window.running:
     g_selector.renderTestPos()
     scene.particles(g_selector.renderTestPosition,radius=0.01, color=(1, 0, 1))
 
-    canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1))
+    canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     canvas.scene(scene)
