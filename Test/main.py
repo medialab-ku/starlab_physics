@@ -5,6 +5,8 @@ from particle import Particle
 from TetMesh import TetMesh
 import XPBD as xpbd
 
+import selection_tool as st
+
 ti.init(arch=ti.cuda, device_memory_GB=3)
 
 meshes_dynamic = []
@@ -85,6 +87,12 @@ colors_static.append((0, 0.5, 0))
 
 run_sim = True
 
+#selector
+mouse_pressed = False
+g_selector = st.SelectionTool(sim.max_num_verts_dynamic,sim.x,window,camera)
+print("sim.max_num_verts_dynamic",sim.max_num_verts_dynamic)
+
+
 while window.running:
 
     camera.lookat(0.0, 0.0, 0.0)
@@ -107,6 +115,23 @@ while window.running:
                 print("enable velocity update")
             else:
                 print("disable velocity update")
+
+        if window.is_pressed(ti.ui.LMB) :
+            mouse_pressed = True
+            g_selector.mouse_click_pos[0],g_selector.mouse_click_pos[1] = window.get_cursor_pos()
+
+    if window.get_event(ti.ui.RELEASE) :
+        if window.event.key == ti.ui.LMB :
+            mouse_pressed = False
+            g_selector.mouse_click_pos[2],g_selector.mouse_click_pos[3] = window.get_cursor_pos()
+            g_selector.Select()
+
+    if mouse_pressed :
+        g_selector.mouse_click_pos[2],g_selector.mouse_click_pos[3] = window.get_cursor_pos()
+        g_selector.update_ti_rect_selection()
+
+
+
 
     if run_sim:
         sim.forward(n_substeps=20)
@@ -136,6 +161,12 @@ while window.running:
     # scene.lines(sim.x_static, indices=sim.edge_indices_static, color=(0, 0, 0), width=1.0)
     scene.mesh(sim.x_static,  indices=sim.face_indices_static, color=(0, 0, 0), show_wireframe=True)
     scene.mesh(sim.x,  indices=sim.face_indices_dynamic, color=(0, 0, 0), show_wireframe=True)
+
+    g_selector.renderTestPos()
+    scene.particles(g_selector.renderTestPosition,radius=0.01, color=(1, 0, 1))
+
+    canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1))
+
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
