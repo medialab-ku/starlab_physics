@@ -20,7 +20,8 @@ class Solver:
         self.meshes_static = meshes_static
         self.particles = particles
         self.g = g
-        self.dt = dt
+        self.dt = ti.field(dtype=ti.f32, shape=1)
+        self.dt[0] = dt
         self.dHat = dHat
         self.grid_size = grid_size
         self.particle_radius = particle_radius
@@ -436,9 +437,8 @@ class Solver:
     @ti.kernel
     def compute_y(self):
 
-        # self.m_inv[0] = 0.0
         for i in range(self.max_num_verts_dynamic):
-                self.y[i] = self.x[i] + self.fixed[i] * self.dt * self.v[i] + self.g * self.dt * self.dt
+            self.y[i] = self.x[i] + self.fixed[i] * self.dt[0] * self.v[i] + self.g * self.dt[0] * self.dt[0]
 
 
     @ti.kernel
@@ -2279,13 +2279,7 @@ class Solver:
     def update_x(self):
 
         for i in range(self.max_num_verts_dynamic):
-                self.x[i] += self.v[i] * self.dt
-
-    @ti.kernel
-    def update_x_and_v_particle(self, particle: ti.template()):
-        for i in range(particle.num_particles):
-            particle.v[i] = (particle.y[i] - particle.x[i]) / self.dt
-            particle.x[i] = particle.y[i]
+                self.x[i] += self.v[i] * self.dt[0]
 
 
     @ti.kernel
@@ -2338,7 +2332,7 @@ class Solver:
     @ti.kernel
     def compute_velocity(self):
         for i in range(self.max_num_verts_dynamic):
-                self.v[i] = (self.y[i] - self.x[i]) / self.dt
+                self.v[i] = (self.y[i] - self.x[i]) / self.dt[0]
 
 
 
@@ -2398,8 +2392,8 @@ class Solver:
 
     def forward(self, n_substeps):
 
-        dt = self.dt
-        self.dt = dt / n_substeps
+        dt = self.dt[0]
+        self.dt[0] = dt / n_substeps
 
         self.broad_phase()
         for _ in range(n_substeps):
@@ -2418,5 +2412,5 @@ class Solver:
         self.copy_to_particles()
 
 
-        self.dt = dt
+        self.dt[0] = dt
 
