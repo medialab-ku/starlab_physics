@@ -506,7 +506,6 @@ class Solver:
 
         #TODO: update the following two for-loops into a single one
         for i in range(self.max_num_verts_dynamic + self.max_num_edges_dynamic):
-
             if i < self.max_num_verts_dynamic:
                 vi = i
                 grid_index = self.get_flatten_grid_index(self.x[vi])

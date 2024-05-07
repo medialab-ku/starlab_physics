@@ -60,30 +60,39 @@ spiky_grad_factor = -45.0 / math.pi
 
 b = ti.Vector.field(2, dtype=ti.f32, shape=1)
 b[0] = ti.math.vec2(0.5, 0.5)
-old_positions = ti.Vector.field(dim, float)
-positions = ti.Vector.field(dim, float)
+
+x_old = ti.Vector.field(dim, float, shape=num_particles)
+x = ti.Vector.field(dim, float, shape=num_particles)
 positions_render = ti.Vector.field(dim, float)
-velocities = ti.Vector.field(dim, float)
+v = ti.Vector.field(dim, float, shape=num_particles)
 grid_num_particles = ti.field(int)
 grid2particles = ti.field(int)
 particle_num_neighbors = ti.field(int)
 particle_neighbors = ti.field(int)
-lambdas = ti.field(float)
-position_deltas = ti.Vector.field(dim, float)
+ld = ti.field(float, shape=num_particles)
+dx = ti.Vector.field(dim, float, shape=num_particles)
 # velocities_deltas = ti.Vector.field(dim, float)
 # 0: x-pos, 1: timestep in sin()
 board_states = ti.Vector.field(2, float)
 
-ti.root.dense(ti.i, num_particles).place(old_positions, positions, velocities, positions_render)
+ti.root.dense(ti.i, num_particles).place(positions_render)
 grid_snode = ti.root.dense(ti.ij, grid_size)
 grid_snode.place(grid_num_particles)
 grid_snode.dense(ti.k, max_num_particles_per_cell).place(grid2particles)
 nb_node = ti.root.dense(ti.i, num_particles)
 nb_node.place(particle_num_neighbors)
 nb_node.dense(ti.j, max_num_neighbors).place(particle_neighbors)
-ti.root.dense(ti.i, num_particles).place(lambdas, position_deltas)
 # ti.root.dense(ti.i, num_particles).place(lambdas, velocities_deltas)
 ti.root.place(board_states)
+
+grid_particles_num = ti.field(int, shape=int(grid_size[0] * grid_size[1]))
+grid_particles_num_temp = ti.field(int, shape=int(grid_size[0] * grid_size[1]))
+prefix_sum_executor = ti.algorithms.PrefixSumExecutor(grid_particles_num.shape[0])
+
+grid_ids = ti.field(int, shape=num_particles)
+grid_ids_buffer = ti.field(int, shape=num_particles)
+grid_ids_new = ti.field(int, shape=num_particles)
+cur2org = ti.field(int, shape=num_particles)
 
 
 @ti.func
@@ -153,18 +162,54 @@ def move_board():
     board_states[None] = b
 
 
+@ti.func
+def flatten_grid_index(grid_index):
+    return grid_index[0] * grid_size[1] + grid_index[1]
+
+def broad_phase():
+    update_grid_id()
+    prefix_sum_executor.run(grid_particles_num)
+    counting_sort()
+
+
+@ti.kernel
+def update_grid_id():
+    for I in ti.grouped(grid_particles_num):
+        grid_particles_num[I] = 0
+
+    # TODO: update the following two for-loops into a single one
+    for i in range(num_particles):
+        grid_ids[i] = flatten_grid_index(get_cell(x[i]))
+        ti.atomic_add(grid_particles_num[grid_ids[i]], 1)
+
+    for I in ti.grouped(grid_particles_num):
+        grid_particles_num_temp[I] = grid_particles_num[I]
+
+@ti.kernel
+def counting_sort():
+    for i in range(num_particles):
+        I = num_particles - 1 - i
+        base_offset = 0
+        if grid_ids[I] - 1 >= 0:
+            base_offset = grid_particles_num[grid_ids[I] - 1]
+        grid_ids_new[I] = ti.atomic_sub(grid_particles_num_temp[grid_ids[I]], 1) - 1 + base_offset
+
+    for i in grid_ids:
+        new_index = grid_ids_new[i]
+        cur2org[new_index] = i
+
 @ti.kernel
 def prologue():
     # save old positions
-    for i in positions:
-        old_positions[i] = positions[i]
+    for i in x:
+        x_old[i] = x[i]
     # apply gravity within boundary
-    for i in positions:
+    for i in x:
         g = ti.Vector([0.0, -9.81])
-        pos, vel = positions[i], velocities[i]
-        vel += g * time_delta
-        pos += vel * time_delta
-        positions[i] = confine_position_to_boundary(pos)
+        xi, vi = x[i], v[i]
+        vi += g * time_delta
+        xi += vi * time_delta
+        x[i] = confine_position_to_boundary(xi)
 
     # clear neighbor lookup table
     for I in ti.grouped(grid_num_particles):
@@ -173,15 +218,15 @@ def prologue():
         particle_neighbors[I] = -1
 
     # update grid
-    for p_i in positions:
-        cell = get_cell(positions[p_i])
+    for p_i in x:
+        cell = get_cell(x[p_i])
         # ti.Vector doesn't seem to support unpacking yet
         # but we can directly use int Vectors as indices
         offs = ti.atomic_add(grid_num_particles[cell], 1)
         grid2particles[cell, offs] = p_i
     # find particle neighbors
-    for p_i in positions:
-        pos_i = positions[p_i]
+    for p_i in x:
+        pos_i = x[p_i]
         cell = get_cell(pos_i)
         nb_i = 0
         for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
@@ -189,28 +234,36 @@ def prologue():
             if is_in_grid(cell_to_check):
                 for j in range(grid_num_particles[cell_to_check]):
                     p_j = grid2particles[cell_to_check, j]
-                    if nb_i < max_num_neighbors and p_j != p_i and (pos_i - positions[p_j]).norm() < neighbor_radius:
+                    if nb_i < max_num_neighbors and p_j != p_i and (pos_i - x[p_j]).norm() < neighbor_radius:
                         particle_neighbors[p_i, nb_i] = p_j
                         nb_i += 1
         particle_num_neighbors[p_i] = nb_i
+
+
+
 
 
 @ti.kernel
 def substep():
     # compute lambdas
     # Eq (8) ~ (11)
-    for p_i in positions:
-        pos_i = positions[p_i]
+
+    dx.fill(0.0)
+    for p_i in x:
+        xi = x[p_i]
 
         grad_i = ti.Vector([0.0, 0.0])
         sum_gradient_sqr = 0.0
         density_constraint = 0.0
 
+
+
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
             if p_j < 0:
                 break
-            pos_ji = pos_i - positions[p_j]
+
+            pos_ji = xi - x[p_j]
             grad_j = spiky_gradient(pos_ji, h_)
             grad_i += grad_j
             sum_gradient_sqr += grad_j.dot(grad_j)
@@ -218,50 +271,53 @@ def substep():
             density_constraint += poly6_value(pos_ji.norm(), h_)
 
         # Eq(1)
-        density_constraint = (mass * density_constraint / rho0) - 1.0
+        density_constraint = density_constraint - 1.0
         if density_constraint < 0:
             density_constraint = 0.
 
         sum_gradient_sqr += grad_i.dot(grad_i)
-        lambdas[p_i] = (-density_constraint) / (sum_gradient_sqr + lambda_epsilon)
+        ld[p_i] = (-density_constraint) / (sum_gradient_sqr + lambda_epsilon)
+
+
+
+
     # compute position deltas
     # Eq(12), (14)
-    for p_i in positions:
-        pos_i = positions[p_i]
-        lambda_i = lambdas[p_i]
+    for p_i in x:
+        pos_i = x[p_i]
+        lambda_i = ld[p_i]
 
-        pos_delta_i = ti.Vector([0.0, 0.0])
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
             if p_j < 0:
                 break
-            lambda_j = lambdas[p_j]
-            pos_ji = pos_i - positions[p_j]
-            scorr_ij = compute_scorr(pos_ji)
-            pos_delta_i += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
 
-        pos_delta_i /= rho0
-        position_deltas[p_i] = pos_delta_i
+            lambda_j = ld[p_j]
+            pos_ji = pos_i - x[p_j]
+            scorr_ij = compute_scorr(pos_ji)
+            dx[p_i] += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
+
+        # dx[p_i] = dxi
     # apply position deltas
-    for i in positions:
-        positions[i] += position_deltas[i]
+    for i in x:
+        x[i] += dx[i]
 
 
 @ti.kernel
 def epilogue():
     # confine to boundary
-    for i in positions:
-        pos = positions[i]
-        positions[i] = confine_position_to_boundary(pos)
+    for i in x:
+        pos = x[i]
+        x[i] = confine_position_to_boundary(pos)
 
     # update velocities
-    for i in positions:
-        velocities[i] = (positions[i] - old_positions[i]) / time_delta
+    for i in x:
+        v[i] = (x[i] - x_old[i]) / time_delta
 
 
-    for i in positions:
-        positions_render[i].x = positions[i].x * (screen_to_world_ratio / screen_res[0])
-        positions_render[i].y = positions[i].y * (screen_to_world_ratio / screen_res[1])
+    for i in x:
+        positions_render[i].x = x[i].x * (screen_to_world_ratio / screen_res[0])
+        positions_render[i].y = x[i].y * (screen_to_world_ratio / screen_res[1])
     # no vorticity/xsph because we cannot do cross product in 2D...
 
     # for i in velocities:
@@ -282,6 +338,8 @@ def epilogue():
 
 def run_pbf():
     prologue()
+    broad_phase()
+
     for _ in range(pbf_num_iters):
         substep()
     epilogue()
@@ -289,7 +347,7 @@ def run_pbf():
 
 def render(gui):
     gui.clear(bg_color)
-    pos_np = positions.to_numpy()
+    pos_np = x.to_numpy()
     for j in range(dim):
         pos_np[:, j] *= screen_to_world_ratio / screen_res[j]
     # gui.circles(pos_np, radius=particle_radius, color=particle_color)
@@ -309,9 +367,9 @@ def init_particles():
     for i in range(num_particles):
         delta = h_ * 0.8
         offs = ti.Vector([(boundary[0] - delta * num_particles_x) * 0.5, boundary[1] * 0.02])
-        positions[i] = ti.Vector([i % num_particles_x, i // num_particles_x]) * delta + offs
+        x[i] = ti.Vector([i % num_particles_x, i // num_particles_x]) * delta + offs
         for c in ti.static(range(dim)):
-            velocities[i][c] = (ti.random() - 0.5) * 4
+            v[i][c] = (ti.random() - 0.5) * 4
     board_states[None] = ti.Vector([boundary[0] - epsilon, -0.0])
 
 
@@ -342,14 +400,13 @@ def main():
     # i = 0
 
     while window.running:
-        move_board()
+        # move_board()
         run_pbf()
-        arr = velocities.to_numpy()
+        arr = v.to_numpy()
         magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
         norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))
         heatmap_rgb = plt.cm.coolwarm(norm(magnitudes))[:, :3]  # Use plasma colormap for heatmap
         per_vertex_color.from_numpy(heatmap_rgb)
-        # canvas.circles()
         canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color)
         window.show()
 
