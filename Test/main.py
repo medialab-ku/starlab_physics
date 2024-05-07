@@ -6,6 +6,7 @@ import selection_tool as st
 
 sim = xpbd.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3.5, 3.5, 3.5), particle_radius=0.02, dHat=1e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
+gui = window.get_gui()
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()
@@ -23,6 +24,28 @@ run_sim = True
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic,sim.x,window,camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
+
+n_substep = 20
+dt_ui = sim.dt[0]
+
+def show_options():
+    global n_substep
+    global dt_ui
+    global sim
+
+    old_dt = dt_ui
+    with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.15) as w :
+        # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
+        dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
+
+        n_substep = w.slider_int("substeps", n_substep, 1, 40)
+
+    if not old_dt == dt_ui :
+        # sim.dt[0] = dt_ui if dt_ui > 0.00001 else 0.00001
+        sim.dt[0] = dt_ui
+
+
+
 
 
 while window.running:
@@ -69,7 +92,9 @@ while window.running:
         g_selector.update_ti_rect_selection()
 
     if run_sim:
-        sim.forward(n_substeps=20)
+        sim.forward(n_substeps=n_substep)
+
+    show_options()
 
     for mid in range(len(scene1.meshes_dynamic)):
         scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=scene1.colors_tri_dynamic[mid])
