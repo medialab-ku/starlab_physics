@@ -1,5 +1,5 @@
 import taichi as ti
-from Scenes import scene1 as scene1
+from Scenes import test_fem as scene1
 import XPBD as xpbd
 
 import selection_tool as st

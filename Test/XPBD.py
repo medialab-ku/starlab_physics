@@ -2231,7 +2231,7 @@ class Solver:
 
 
     @ti.kernel
-    def solve_stretch_constarints_x(self):
+    def solve_stretch_constraints_x(self):
 
         for tid in range(self.max_num_tetra_dynamic):
 
@@ -2263,23 +2263,44 @@ class Solver:
 
             ld = C / schur
 
-            self.dx[v0] -= self.m_inv[v0] * nabla_C0 * ld
-            self.dx[v1] -= self.m_inv[v1] * nabla_C1 * ld
-            self.dx[v2] -= self.m_inv[v2] * nabla_C2 * ld
-            self.dx[v3] -= self.m_inv[v3] * nabla_C3 * ld
+            self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C0 * ld
+            self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C1 * ld
+            self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C2 * ld
+            self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C3 * ld
+
+            H_vol = (F - R) @ self.Dm_inv[tid].transpose()
+
+            C_vol = 0
+
+            nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
+            nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
+            nabla_C_vol_2 = ti.Vector([H_vol[j, 2] for j in ti.static(range(3))])
+            nabla_C_vol_3 = -(nabla_C_vol_0 + nabla_C_vol_1 + nabla_C_vol_2)
+
+            schur_vol = (self.m_inv[v0] * nabla_C_vol_0.dot(nabla_C_vol_0) +
+                     self.m_inv[v1] * nabla_C_vol_1.dot(nabla_C_vol_1) +
+                     self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
+                     self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + 1e-4)
+
+            ld_vol = C_vol / schur_vol
+
+            self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
+            self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
+            self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
+            self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
 
 
-            self.nc[v0] += 1
-            self.nc[v1] += 1
-            self.nc[v2] += 1
-            self.nc[v3] += 1
+            self.nc[v0] += 2
+            self.nc[v1] += 2
+            self.nc[v2] += 2
+            self.nc[v3] += 2
 
 
     @ti.kernel
     def update_x(self):
 
         for i in range(self.max_num_verts_dynamic):
-                self.x[i] += self.v[i] * self.dt[0]
+            self.x[i] += self.fixed[i] * self.v[i] * self.dt[0]
 
 
     @ti.kernel
@@ -2356,8 +2377,8 @@ class Solver:
 
         self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
-        # self.solve_stretch_constarints_x()
-        self.solve_pressure_constraints_x()
+        self.solve_stretch_constraints_x()
+        # self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
