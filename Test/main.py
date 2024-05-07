@@ -3,6 +3,8 @@ from Scenes import scene1 as scene1
 import XPBD as xpbd
 
 import selection_tool as st
+import json
+
 
 sim = xpbd.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3.5, 3.5, 3.5), particle_radius=0.02, dHat=1e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -45,6 +47,31 @@ def show_options():
         sim.dt[0] = dt_ui
 
 
+def load_animation() :
+    with open('animation.json') as f:
+        animation_raw = json.load(f)
+    animation_raw = {int(k): v for k, v in animation_raw.items()}
+
+    # 4 = (g_selector.num_maxCounter)
+    animationDict = {(i+1):[] for i in range(4)}
+
+    # 4 = (g_selector.num_maxCounter)
+    for i in range(4) :
+        ic = i+1
+        icAnimation = animation_raw[ic]
+        listLen = len(icAnimation)
+        # print(listLen)
+        assert listLen % 7 == 0,str(ic)+"th Animation SETTING ERROR!! ======"
+
+        num_animation = listLen // 7
+
+        for a in range(num_animation) :
+            animationFrag = [animation_raw[ic][k + 7*a] for k in range(7)] # [vx,vy,vz,rx,ry,rz,frame]
+            animationDict[ic].append(animationFrag)
+
+    print(animationDict)
+
+
 while window.running:
 
     camera.lookat(0.0, 0.0, 0.0)
@@ -56,6 +83,16 @@ while window.running:
     if window.get_event(ti.ui.PRESS):
         if window.event.key == 'c':
             g_selector.selection_Count_Up()
+
+        if window.event.key == 'x': # export selection
+            print("==== EXPORT!! ====")
+            g_selector.export_selection()
+
+        if window.event.key == 'i':
+            print("==== IMPORT!! ====")
+            g_selector.import_selection()
+            load_animation()
+
         if window.event.key == ' ':
             run_sim = not run_sim
 

@@ -116,44 +116,52 @@ class SelectionTool :
         # self.selected_indices_cpu = {}
         count_sum = 0
 
-        print("==== selection count ====")
+        # print("==== selection count ====")
+
         for i in range(self.num_maxCounter) :
             i_selected = np.argwhere(is_selected_np == (i+1))
             i_selected =  list(i_selected[:,0])
             self.selected_indices_cpu[i+1] = list([int(x) for x in i_selected])
 
-            # print(i+1,"th selection",self.selected_indices_cpu[i])
-            print(i+1,"th selection count",len(self.selected_indices_cpu[i+1]))
+            # print(i+1,"th selection",self.selected_indices_cpu[i+1])
+            # print(i+1,"th selection count",len(self.selected_indices_cpu[i+1]))
+
             count_sum = count_sum + len(self.selected_indices_cpu[i+1])
 
-        print("total selection count : ", count_sum)
-        print("==========================")
+        # print("total selection count : ", count_sum)
+        # print("==========================")
 
-        print(self.selected_indices_cpu)
+        # print(self.selected_indices_cpu)
 
         with open('handle.json', 'w', encoding='utf-8') as f:
             json.dump(self.selected_indices_cpu, f, ensure_ascii=False, indent=4)
 
-        #write
-        # with open('data.json') as f:
-        #     wantVariableName = json.load(f)
-        # wantVariableName = {int(k): v for k, v in wantVariableName.items()}
 
-        with open('handle.json') as f:
-            wantVariableName = json.load(f)
-        wantVariableName = {int(k): v for k, v in wantVariableName.items()}
-
-
-        for i in range(self.num_maxCounter) :
-            for j in range(len(wantVariableName[i+1])) :
-                if not wantVariableName[i+1][j] == self.selected_indices_cpu[i+1][j] :
-                    print("nononoonononoonononoonononoonononoonononoonononoonononoonononoonononoonononoo",wantVariableName[i+1][j],self.selected_indices_cpu[i+1][j])
+        # with open('handle.json') as f:
+        #     testRead = json.load(f)
+        # testRead = {int(k): v for k, v in testRead.items()}
+        #
+        # for i in range(self.num_maxCounter) :
+        #     for j in range(len(testRead[i+1])) :
+        #         if not testRead[i+1][j] == self.selected_indices_cpu[i+1][j] :
+        #             print("nononoonononoonononoonononoonononoonononoonononoonononoonononoonononoonononoo",testRead[i+1][j],self.selected_indices_cpu[i+1][j])
 
     def import_selection(self):
         with open('handle.json') as f:
             self.selected_indices_cpu = json.load(f)
         self.selected_indices_cpu = {int(k): v for k, v in self.selected_indices_cpu.items()}
 
+        # for i in range(self.num_maxCounter) :
+        #     print(i+1,"th selection",self.selected_indices_cpu[i+1])
+        #     print(i+1,"th selection count",len(self.selected_indices_cpu[i+1]))
+
+        self.is_selected.fill(0)
+
+        for i in range(self.num_maxCounter) :
+            idxCount = i+1
+            idx = self.selected_indices_cpu[idxCount]
+            for j in idx :
+                self.is_selected[j] = idxCount # 1,2,3,4
 
 
     @ti.kernel
