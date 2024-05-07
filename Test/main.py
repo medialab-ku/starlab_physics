@@ -1,5 +1,5 @@
 import taichi as ti
-from Scenes import test_fem as scene1
+from Scenes import scene1 as scene1
 import XPBD as xpbd
 
 import selection_tool as st
@@ -27,25 +27,29 @@ print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
 n_substep = 20
 dt_ui = sim.dt[0]
+dHat_ui = sim.dHat[0]
 
 def show_options():
     global n_substep
     global dt_ui
     global sim
+    global dHat_ui
 
     old_dt = dt_ui
+    old_dHat = dHat_ui
     with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.15) as w :
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
-        n_substep = w.slider_int("substeps", n_substep, 1, 40)
+        n_substep = w.slider_int("substeps", n_substep, 1, 100)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
 
     if not old_dt == dt_ui :
         # sim.dt[0] = dt_ui if dt_ui > 0.00001 else 0.00001
         sim.dt[0] = dt_ui
 
-
-
+    if not old_dHat == dHat_ui:
+        sim.dHat[0] = dHat_ui
 
 
 while window.running:
