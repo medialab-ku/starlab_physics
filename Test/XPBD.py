@@ -2357,7 +2357,7 @@ class Solver:
         self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
         # self.solve_stretch_constarints_x()
-        self.solve_pressure_constraints_x()
+        # self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):

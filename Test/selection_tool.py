@@ -1,5 +1,6 @@
 import taichi as ti
 import numpy as np
+import json
 
 @ti.data_oriented
 class SelectionTool :
@@ -8,10 +9,15 @@ class SelectionTool :
         # self.selected_indices = ti.field(dtype = ti.uint32,shape = (max_num_verts_dynamic,))
         self.num_selected = 0
 
+        self.selectionCounter = ti.field(dtype = ti.int32,shape = ())
+        self.selectionCounter[None] = 1
+        self.num_maxCounter = 4
+
         self.LMB_mouse_pressed = False
 
         self.MODE_SELECTION = True #True add, False sub
 
+        self.selected_indices_cpu = {}
         self.is_selected = ti.field(dtype=ti.uint32, shape=(max_num_verts_dynamic))
         self.window = window
         self.camera = camera
@@ -53,7 +59,8 @@ class SelectionTool :
         self._check_inside_selection_box(xmin,xmax,ymin,ymax,self.MODE_SELECTION)
         ti.sync()
 
-        self.get_selection_array()
+        # self.get_selection_array()
+        # self.export_selection()
 
         self.mouse_click_pos = [0, 0, 0, 0]
         self.reset_ti_rect_selection()
@@ -71,8 +78,7 @@ class SelectionTool :
             x_c,y_c = pos_h_in_clipSpace[0] * 0.5 + 0.5,pos_h_in_clipSpace[1] * 0.5 + 0.5 # viewport transform
 
             if x_c > xmin and x_c < xmax and y_c > ymin and y_c < ymax:
-
-                self.is_selected[i] = mode
+                self.is_selected[i] = mode if mode == 0 else self.selectionCounter[None]
 
 
     def update_ti_rect_selection(self):
@@ -94,12 +100,61 @@ class SelectionTool :
         self.ti_mouse_click_pos[2][1] = 0
         self.ti_mouse_click_pos[3][0] = 0
         self.ti_mouse_click_pos[3][1] = 0
+
     def get_selection_array(self):
         is_selected_np = self.is_selected.to_numpy()
         self.selected_indices_cpu = np.argwhere(is_selected_np == True)
         self.selected_indices_cpu = self.selected_indices_cpu[:,0]
         self.num_selected = self.selected_indices_cpu.shape[0]
         print("selection_tool.get_selection_array()::"," num_selected : ",self.num_selected," :: idx : ",self.selected_indices_cpu)
+
+
+
+
+    def export_selection(self):
+        is_selected_np = self.is_selected.to_numpy()
+        # self.selected_indices_cpu = {}
+        count_sum = 0
+
+        print("==== selection count ====")
+        for i in range(self.num_maxCounter) :
+            i_selected = np.argwhere(is_selected_np == (i+1))
+            i_selected =  list(i_selected[:,0])
+            self.selected_indices_cpu[i+1] = list([int(x) for x in i_selected])
+
+            # print(i+1,"th selection",self.selected_indices_cpu[i])
+            print(i+1,"th selection count",len(self.selected_indices_cpu[i+1]))
+            count_sum = count_sum + len(self.selected_indices_cpu[i+1])
+
+        print("total selection count : ", count_sum)
+        print("==========================")
+
+        print(self.selected_indices_cpu)
+
+        with open('handle.json', 'w', encoding='utf-8') as f:
+            json.dump(self.selected_indices_cpu, f, ensure_ascii=False, indent=4)
+
+        #write
+        # with open('data.json') as f:
+        #     wantVariableName = json.load(f)
+        # wantVariableName = {int(k): v for k, v in wantVariableName.items()}
+
+        with open('handle.json') as f:
+            wantVariableName = json.load(f)
+        wantVariableName = {int(k): v for k, v in wantVariableName.items()}
+
+
+        for i in range(self.num_maxCounter) :
+            for j in range(len(wantVariableName[i+1])) :
+                if not wantVariableName[i+1][j] == self.selected_indices_cpu[i+1][j] :
+                    print("nononoonononoonononoonononoonononoonononoonononoonononoonononoonononoonononoo",wantVariableName[i+1][j],self.selected_indices_cpu[i+1][j])
+
+    def import_selection(self):
+        with open('handle.json') as f:
+            self.selected_indices_cpu = json.load(f)
+        self.selected_indices_cpu = {int(k): v for k, v in self.selected_indices_cpu.items()}
+
+
 
     @ti.kernel
     def renderTestPos(self):
@@ -108,3 +163,7 @@ class SelectionTool :
                 self.renderTestPosition[i] = ti.Vector([-999,-999,-999])
             else :
                 self.renderTestPosition[i] = self.simulation_x[i]
+
+    def selection_Count_Up(self):
+        self.selectionCounter[None] = (self.selectionCounter[None] % self.num_maxCounter) + 1
+        print("current_selectionCounter = ", self.selectionCounter[None])

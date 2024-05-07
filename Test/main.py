@@ -45,9 +45,6 @@ def show_options():
         sim.dt[0] = dt_ui
 
 
-
-
-
 while window.running:
 
     camera.lookat(0.0, 0.0, 0.0)
@@ -57,6 +54,8 @@ while window.running:
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
 
     if window.get_event(ti.ui.PRESS):
+        if window.event.key == 'c':
+            g_selector.selection_Count_Up()
         if window.event.key == ' ':
             run_sim = not run_sim
 
