@@ -11,11 +11,13 @@ meshes_dynamic = []
 
 tet_meshes_dynamic = []
 
-tet_mesh_dynamic_1 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.1, trans=ti.math.vec3(0.8, 0.2, 0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# tet_mesh_dynamic_1 = TetMesh("../models/MESH/bunny_tiny.1.node",  scale=0.1, trans=ti.math.vec3(0.8, 0.2, 0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_2 = TetMesh("../models/MESH/cube.1.node",  scale=1.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # tet_mesh_dynamic_2 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(-0.8, 0.2, -0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # tet_mesh_dynamic_3 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # tet_mesh_dynamic_4 = TetMesh("../models/MESH/dragon.1.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_meshes_dynamic.append(tet_mesh_dynamic_1)
+# tet_meshes_dynamic.append(tet_mesh_dynamic_1)
+tet_meshes_dynamic.append(tet_mesh_dynamic_2)
 
 meshes_static = []
 mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=2.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

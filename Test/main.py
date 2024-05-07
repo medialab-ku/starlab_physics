@@ -1,5 +1,5 @@
 import taichi as ti
-from Scenes import scene1 as scene1
+from Scenes import test_fem as scene1
 import XPBD as xpbd
 
 import selection_tool as st
@@ -37,7 +37,7 @@ def show_options():
 
     old_dt = dt_ui
     old_dHat = dHat_ui
-    with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.15) as w :
+    with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.15) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
