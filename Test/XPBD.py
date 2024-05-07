@@ -2231,7 +2231,7 @@ class Solver:
 
 
     @ti.kernel
-    def solve_stretch_constraints_x(self):
+    def solve_fem_constraints_x(self):
 
         for tid in range(self.max_num_tetra_dynamic):
 
@@ -2268,9 +2268,11 @@ class Solver:
             self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C2 * ld
             self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C3 * ld
 
-            H_vol = (F - R) @ self.Dm_inv[tid].transpose()
+            J = ti.math.determinant(F)
+            F_trace = sig[0, 0] + sig[1, 1] + sig[2, 2]
 
-            C_vol = 0
+            C_vol = 0.5 * (F_trace - 3) * (F_trace - 3)
+            H_vol = (F_trace - 3) * self.Dm_inv[tid].transpose()
 
             nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
             nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
@@ -2377,7 +2379,7 @@ class Solver:
 
         self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
-        self.solve_stretch_constraints_x()
+        self.solve_fem_constraints_x()
         # self.solve_pressure_constraints_x()
         self.update_dx()
 
