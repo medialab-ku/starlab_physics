@@ -1,6 +1,6 @@
 import random
-from mesh import Mesh
-from particle import Particle
+from Test.mesh import Mesh
+from Test.particle import Particle
 import taichi as ti
 from TetMesh import TetMesh
 

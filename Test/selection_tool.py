@@ -12,7 +12,7 @@ class SelectionTool :
 
         self.MODE_SELECTION = True #True add, False sub
 
-        self.is_selected = ti.field(dtype = ti.uint32,shape = (max_num_verts_dynamic,))
+        self.is_selected = ti.field(dtype=ti.uint32, shape=(max_num_verts_dynamic))
         self.window = window
         self.camera = camera
         self.max_numverts_dynamic = max_num_verts_dynamic
@@ -64,14 +64,15 @@ class SelectionTool :
             # self.is_selected[i] = False
 
             pos = self.simulation_x[i]
-            pos_h = ti.Vector([pos[0],pos[1],pos[2],1])
+            pos_h = ti.Vector([pos[0], pos[1], pos[2], 1])
             pos_h_in_clipSpace = self.ti_projTrnasform[None]@self.ti_viewTrnasform[None]@pos_h
             pos_h_in_clipSpace = pos_h_in_clipSpace/pos_h_in_clipSpace[3]
 
             x_c,y_c = pos_h_in_clipSpace[0] * 0.5 + 0.5,pos_h_in_clipSpace[1] * 0.5 + 0.5 # viewport transform
 
-            if x_c > xmin and x_c < xmax and y_c > ymin and y_c < ymax :
-                self.is_selected[i]= mode
+            if x_c > xmin and x_c < xmax and y_c > ymin and y_c < ymax:
+
+                self.is_selected[i] = mode
 
 
     def update_ti_rect_selection(self):

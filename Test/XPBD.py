@@ -34,7 +34,7 @@ class Solver:
         self.cell_size = 2 * particle_radius
         self.grid_origin = -self.grid_size
         self.grid_num = np.ceil(2 * self.grid_size / self.cell_size).astype(int)
-        print(self.grid_num)
+        # print(self.grid_num)
 
         self.enable_velocity_update = False
 
@@ -98,12 +98,10 @@ class Solver:
             self.max_num_verts_dynamic += self.particles[pid].num_particles
 
 
-        print(self.offset_verts_dynamic)
-        print(self.offset_tetras_dynamic)
-        print(self.max_num_verts_dynamic)
-        print(self.max_num_tetra_dynamic)
-
-
+        # print(self.offset_verts_dynamic)
+        # print(self.offset_tetras_dynamic)
+        # print(self.max_num_verts_dynamic)
+        # print(self.max_num_tetra_dynamic)
 
         self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
@@ -111,24 +109,40 @@ class Solver:
         self.dv = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.nc = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
+        self.fixed = ti.field(dtype=ti.u8, shape=self.max_num_verts_dynamic)
         self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
-
         self.l0 = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
 
         self.face_indices_dynamic = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_dynamic)
         self.edge_indices_dynamic = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_dynamic)
         self.tetra_indices_dynamic = ti.field(dtype=ti.i32, shape=4 * self.max_num_tetra_dynamic)
 
-        if is_verts_dynamic_empty is True:
-            self.max_num_verts_dynamic = 0
+        self.fixed.fill(1)
 
-        if is_mesh_dynamic_empty is True:
-            self.max_num_edges_dynamic = 0
-            self.max_num_faces_dynamic = 0
+        self.max_num_cached_pairs = 32
+        self.friction_coeff = 0.5
 
-        if is_tet_mesh_dynamic_empty is True:
-            self.max_num_tetra_dynamic = 0
+        # self.vt_dynamic_active_set = ti.field(int, shape=(self.num_verts, self.max_num_cached_pairs))
+        # self.vt_dynamic_active_set_num = ti.field(int, shape=(self.max_num_cached_pairs))
+
+        self.vt_active_set = ti.field(int, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
+        self.vt_active_set_num = ti.field(int, shape=(self.max_num_verts_dynamic))
+
+        self.vt_active_set_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
+        self.vt_active_set_num_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic))
+
+        self.tv_active_set = ti.field(int, shape=(self.max_num_faces_dynamic, self.max_num_cached_pairs))
+        self.tv_active_set_num = ti.field(int, shape=(self.max_num_faces_dynamic))
+
+        self.ee_active_set = ti.field(int, shape=(self.max_num_edges_dynamic, self.max_num_cached_pairs))
+        self.ee_active_set_num = ti.field(int, shape=(self.max_num_edges_dynamic))
+
+        self.max_num_cached_ee_pairs = 1000
+
+        self.ee_active_set_dynamic = ti.Vector.field(n=2, dtype=int, shape=self.max_num_cached_ee_pairs)
+        self.num_cached_ee_pairs = ti.field(int, shape=1)
+
 
 
         self.max_num_verts_static = 0
@@ -149,7 +163,7 @@ class Solver:
         self.offset_edges_static = ti.field(int, shape=num_meshes_static)
         self.offset_faces_static = ti.field(int, shape=num_meshes_static)
 
-        for mid in range(num_meshes_static):
+        for mid in range(len(self.meshes_static)):
             self.offset_verts_static[mid] = self.max_num_verts_static
             self.offset_edges_static[mid] = self.max_num_edges_static
             self.offset_faces_static[mid] = self.max_num_faces_static
@@ -164,6 +178,16 @@ class Solver:
         print(self.max_num_edges_static)
 
         self.x_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
+
+        if is_verts_dynamic_empty is True:
+            self.max_num_verts_dynamic = 0
+
+        if is_mesh_dynamic_empty is True:
+            self.max_num_edges_dynamic = 0
+            self.max_num_faces_dynamic = 0
+
+        if is_tet_mesh_dynamic_empty is True:
+            self.max_num_tetra_dynamic = 0
 
         if self.is_meshes_static_empty is True:
             self.max_num_verts_static = 0
@@ -187,34 +211,16 @@ class Solver:
         self.grid_particles_num_temp_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
         self.prefix_sum_executor_static = ti.algorithms.PrefixSumExecutor(self.grid_particles_num_static.shape[0])
 
-        self.grid_ids_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
-        self.grid_ids_buffer_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
-        self.grid_ids_new_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
-        self.cur2org_static = ti.field(int, shape=self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static)
+        num_grid_ids = self.max_num_verts_static + self.max_num_faces_static + self.max_num_edges_static
 
+        if num_grid_ids < 1:
+            num_grid_ids = 1
 
-        self.max_num_cached_pairs = 32
-        self.friction_coeff = 0.5
+        self.grid_ids_static = ti.field(int, shape=num_grid_ids)
+        self.grid_ids_buffer_static = ti.field(int, shape=num_grid_ids)
+        self.grid_ids_new_static = ti.field(int, shape=num_grid_ids)
+        self.cur2org_static = ti.field(int, shape=num_grid_ids)
 
-        # self.vt_dynamic_active_set = ti.field(int, shape=(self.num_verts, self.max_num_cached_pairs))
-        # self.vt_dynamic_active_set_num = ti.field(int, shape=(self.max_num_cached_pairs))
-
-        self.vt_active_set = ti.field(int, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
-        self.vt_active_set_num = ti.field(int, shape=(self.max_num_verts_dynamic))
-
-        self.vt_active_set_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
-        self.vt_active_set_num_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic))
-
-        self.tv_active_set = ti.field(int, shape=(self.max_num_faces_dynamic, self.max_num_cached_pairs))
-        self.tv_active_set_num = ti.field(int, shape=(self.max_num_faces_dynamic))
-
-        self.ee_active_set = ti.field(int, shape=(self.max_num_edges_dynamic, self.max_num_cached_pairs))
-        self.ee_active_set_num = ti.field(int, shape=(self.max_num_edges_dynamic))
-
-        self.max_num_cached_ee_pairs = 1000
-
-        self.ee_active_set_dynamic = ti.Vector.field(n=2, dtype=int, shape=self.max_num_cached_ee_pairs)
-        self.num_cached_ee_pairs =ti.field(int, shape=1)
 
         self.broad_phase_static()
 
@@ -432,13 +438,8 @@ class Solver:
 
         # self.m_inv[0] = 0.0
         for i in range(self.max_num_verts_dynamic):
-                self.y[i] = self.x[i] + self.dt * self.v[i] + self.g * self.dt * self.dt
+                self.y[i] = self.x[i] + self.fixed[i] * self.dt * self.v[i] + self.g * self.dt * self.dt
 
-
-    @ti.kernel
-    def compute_y_particle(self, particle: ti.template()):
-        for i in range(particle.num_particles):
-            particle.y[i] = particle.x[i] + particle.v[i] * self.dt + self.g * self.dt * self.dt
 
     @ti.kernel
     def counting_sort(self):
@@ -1862,16 +1863,18 @@ class Solver:
             v0, v1 = self.edge_indices_dynamic[2 * ei + 0], self.edge_indices_dynamic[2 * ei + 1]
             x0, x1 = self.y[v0], self.y[v1]
             l0 = self.l0[ei]
-
             x10 = x0 - x1
-            center = 0.5 * (x0 + x1)
             lij = x10.norm()
-            normal = x10 / lij
-            p0 = center + 0.5 * l0 * normal
-            p1 = center - 0.5 * l0 * normal
 
-            self.dx[v0] += (p0 - x0)
-            self.dx[v1] += (p1 - x1)
+            C = lij - l0
+            nabla_C = x10 / lij
+
+            schur = (self.fixed[v0] * self.m_inv[v0] + self.fixed[v1] * self.m_inv[v1]) * nabla_C.dot(nabla_C) + 1e-4
+
+            ld = C / schur
+
+            self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * ld * nabla_C
+            self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * nabla_C
             self.nc[v0] += 1
             self.nc[v1] += 1
 
@@ -2289,7 +2292,6 @@ class Solver:
     @ti.kernel
     def confine_to_boundary(self):
 
-
         for vi in range(self.max_num_verts_dynamic):
 
             if self.y[vi][0] > self.padding * self.grid_size[0]:
@@ -2361,7 +2363,7 @@ class Solver:
 
         self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
-        self.solve_stretch_constarints_x()
+        # self.solve_stretch_constarints_x()
         self.solve_pressure_constraints_x()
         self.update_dx()
 
@@ -2377,9 +2379,15 @@ class Solver:
         for vi in range(self.max_num_verts_dynamic):
             if self.nc[vi] > 0.0:
                 self.dx[vi] = self.dx[vi] / self.nc[vi]
-                self.y[vi] += self.dx[vi]
+                self.y[vi] += self.fixed[vi] * self.dx[vi]
 
-
+    @ti.kernel
+    def set_fixed_vertices(self, fixed_vertices: ti.template()):
+        for vi in range(self.max_num_verts_dynamic):
+            if fixed_vertices[vi] == 1:
+                self.fixed[vi] = 0
+            else:
+                self.fixed[vi] = 1
     @ti.kernel
     def update_dv(self):
         for vi in range(self.max_num_verts_dynamic):
@@ -2387,7 +2395,7 @@ class Solver:
                 self.dv[vi] = self.dv[vi] / self.nc[vi]
 
             if self.m_inv[vi] > 0.0:
-                self.v[vi] += self.dv[vi]
+                self.v[vi] += self.fixed[vi] * self.dv[vi]
 
     def forward(self, n_substeps):
 
