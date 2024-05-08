@@ -48,6 +48,8 @@ def show_options():
 
 
 def load_animation() :
+    global sim
+
     with open('animation.json') as f:
         animation_raw = json.load(f)
     animation_raw = {int(k): v for k, v in animation_raw.items()}
@@ -69,8 +71,8 @@ def load_animation() :
             animationFrag = [animation_raw[ic][k + 7*a] for k in range(7)] # [vx,vy,vz,rx,ry,rz,frame]
             animationDict[ic].append(animationFrag)
 
-    print(animationDict)
-
+    # print(animationDict)
+    sim._set_animation(animationDict,g_selector.is_selected)
 
 while window.running:
 
@@ -128,6 +130,7 @@ while window.running:
         g_selector.update_ti_rect_selection()
 
     if run_sim:
+        sim.animate_handle(g_selector.is_selected)
         sim.forward(n_substeps=n_substep)
 
     show_options()
