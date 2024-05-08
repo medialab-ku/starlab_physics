@@ -20,6 +20,10 @@ boundary = (
     screen_res[0] / screen_to_world_ratio,
     screen_res[1] / screen_to_world_ratio,
 )
+
+boundary3d = (3.0, 3.0, 3.0)
+
+
 cell_size = 2.51
 cell_recpr = 1.0 / cell_size
 
@@ -63,6 +67,7 @@ b[0] = ti.math.vec2(0.5, 0.5)
 
 x_old = ti.Vector.field(dim, float, shape=num_particles)
 x = ti.Vector.field(dim, float, shape=num_particles)
+x3d = ti.Vector.field(3, float, shape=num_particles)
 positions_render = ti.Vector.field(dim, float)
 v = ti.Vector.field(dim, float, shape=num_particles)
 grid_num_particles = ti.field(int)
@@ -367,6 +372,7 @@ def init_particles():
     for i in range(num_particles):
         delta = h_ * 0.8
         offs = ti.Vector([(boundary[0] - delta * num_particles_x) * 0.5, boundary[1] * 0.02])
+        offs3 = ti.Vector([(boundary[0] - delta * num_particles_x) * 0.5, boundary[1] * 0.02])
         x[i] = ti.Vector([i % num_particles_x, i // num_particles_x]) * delta + offs
         for c in ti.static(range(dim)):
             v[i][c] = (ti.random() - 0.5) * 4
@@ -388,26 +394,58 @@ def print_stats():
 #
 #     arr = velocities.to_numpy()
 
+@ti.kernel
+def project_to_3d():
+
+    for i in range(num_particles):
+        x3d[i, 0] = x[i, 0]
+        x3d[i, 1] = x[i, 1]
+        x3d[i, 2] = 0.0
+
 def main():
+    run_sim = True
     init_particles()
     print(f"boundary={boundary} grid={grid_size} cell_size={cell_size}")
     window = ti.ui.Window(name="PBF 2D", res=screen_res)
     canvas = window.get_canvas()
+    scene = ti.ui.Scene()
     canvas.set_background_color((0.066, 0.18, 0.25))
+    camera = ti.ui.Camera()
+    camera.position(2., 4.0, 7.0)
+    camera.fov(40)
+    camera.up(0, 1, 0)
+
     # scene = ti.ui.Scene()
     # camera = ti.ui.Camera()
     # camera.position()
     # i = 0
 
     while window.running:
+        camera.lookat(0.5, 0.5, 0.5)
+        scene.set_camera(camera)
+        scene.ambient_light((0.5, 0.5, 0.5))
+        scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
+        scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
         # move_board()
-        run_pbf()
+        if window.get_event(ti.ui.PRESS):
+            if window.event.key == ' ':
+                run_sim = not run_sim
+
+            if window.event.key == 'r':
+                init_particles()
+                run_sim = False
+
+
+        # if run_sim:
+        #     run_pbf()
+
         arr = v.to_numpy()
         magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
         norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))
         heatmap_rgb = plt.cm.coolwarm(norm(magnitudes))[:, :3]  # Use plasma colormap for heatmap
         per_vertex_color.from_numpy(heatmap_rgb)
-        canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color)
+        scene.particles(centers=x3d, radius=particle_radius, per_vertex_color=per_vertex_color)
+        # canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color)
         window.show()
 
 if __name__ == "__main__":
