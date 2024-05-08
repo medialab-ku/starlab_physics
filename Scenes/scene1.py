@@ -1,9 +1,6 @@
 import random
-from Test.mesh import Mesh
-from Test.particle import Particle
+from framework.mesh import Mesh
 import taichi as ti
-from TetMesh import TetMesh
-
 
 ti.init(arch=ti.cuda, device_memory_GB=3)
 

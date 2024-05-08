@@ -1,10 +1,9 @@
 import taichi as ti
 from Scenes import test_fem as scene1
-import XPBD as xpbd
 
 import selection_tool as st
 
-sim = xpbd.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3.5, 3.5, 3.5), particle_radius=0.02, dHat=1e-3)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3.5, 3.5, 3.5), particle_radius=0.02, dHat=1e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
