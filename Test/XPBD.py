@@ -230,10 +230,11 @@ class Solver:
         self.max_num_anim = 40
         self.num_animation = ti.field(dtype = ti.i32,shape = 4)   # maximum number of handle set
         self.cur_animation = ti.field(dtype = ti.i32,shape = 4)   # maximum number of handle set
+        self.anim_rotation_mat = ti.Matrix.field(4,4,dtype = ti.f32,shape = 4)
+
         self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
         self.active_anim_frame = ti.field(dtype = ti.i32,shape = (4,self.max_num_anim)) # maximum number of animation
         self.action_anim = ti.Vector.field(6,dtype = ti.f32,shape = (4,self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
-
         self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
 
 
@@ -2486,10 +2487,10 @@ class Solver:
         self.set_fixed_vertices(is_selected)
 
 
-        print(self.num_animation)
-        print(self.active_anim_frame)
-        print(self.action_anim)
-        print(self.anim_local_origin)
+        # print(self.num_animation)
+        # print(self.active_anim_frame)
+        # print(self.action_anim)
+        # print(self.anim_local_origin)
 
         # self.frame[0] = 0
         #
@@ -2501,69 +2502,81 @@ class Solver:
         #
         # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
 
-    def animate_handle(self, is_selected):
-        self.do_animation(is_selected)
 
     @ti.func
-    def vector_rotation(self,axis,degree,vec):
+    def apply_rotation(self,mat_rot,vec):
+        v = ti.Vector([vec[0],vec[1],vec[2],1])
+        vv = mat_rot@v
+        return ti.Vector([vv[0],vv[1],vv[2]])
+
+    @ti.func
+    def get_animation_rotation_mat(self, axis, degree):
         s = ti.sin(degree * 0.5)
         c = ti.cos(degree * 0.5)
         axis = s * axis
-        q = ti.Vector([axis[0],axis[1],axis[2],c])
-        v = ti.Vector([vec[0],vec[1],vec[2],1])
-
+        q = ti.Vector([axis[0], axis[1], axis[2], c])
         M = ti.math.mat4(0.0)
+
         M[3, 3] = 1.0
+
         M[0, 0] = 1 - 2 * (q[1] ** 2 + q[2] ** 2)
         M[1, 1] = 1 - 2 * (q[0] ** 2 + q[2] ** 2)
         M[2, 2] = 1 - 2 * (q[0] ** 2 + q[1] ** 2)
-        M[2, 1] = 2 * (q[1] * q[2] - q[3] * q[0])
+
+        M[2, 1] = 2 * (q[1] * q[2] + q[3] * q[0])
         M[1, 2] = 2 * (q[1] * q[2] - q[3] * q[0])
+
+        M[2, 0] = 2 * (q[0] * q[2] - q[3] * q[1])
         M[0, 2] = 2 * (q[0] * q[2] + q[3] * q[1])
-        M[2, 0] = 2 * (q[0] * q[2] + q[3] * q[1])
+
+        M[1, 0] = 2 * (q[0] * q[1] + q[3] * q[2])
         M[0, 1] = 2 * (q[0] * q[1] - q[3] * q[2])
-        M[1, 0] = 2 * (q[0] * q[1] - q[3] * q[2])
 
-        res = M@vec
+        return M
 
-        return ti.Vector[res[0],res[1],res[2]]
     @ti.kernel
-    def do_animation(self,is_selected : ti.template()):
+    def animate_handle(self,is_selected : ti.template()):
 
         for idx_set in ti.ndrange(4) :
             cur_anim = self.cur_animation[idx_set]
             max_anim = self.num_animation[idx_set]
-            print(idx_set, cur_anim,max_anim)
+            is_animation_changed = False or (self.frame[0] == 0) # when frame = 0 animation changed
             while self.active_anim_frame[idx_set,cur_anim] < self.frame[0] and cur_anim < max_anim:
                 self.cur_animation[idx_set] = self.cur_animation[idx_set] + 1
                 cur_anim = self.cur_animation[idx_set]
-            print(idx_set, cur_anim,max_anim)
+                is_animation_changed = True
 
             if cur_anim < max_anim:
                 vel = self.action_anim[idx_set, cur_anim]
                 lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
+                self.anim_local_origin[idx_set]+= lin_vel * self.dt[0]
 
-                self.anim_local_origin[idx_set]+= lin_vel
+                ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
+                degree_rate = ang_vel.norm()
+
+                if is_animation_changed and degree_rate > 1e-4 :
+                    axis = ti.math.normalize(ang_vel)
+                    self.anim_rotation_mat[idx_set] = self.get_animation_rotation_mat(axis,degree_rate * self.dt[0])
 
         for i in self.anim_x :
             if is_selected[i] >= 1 :
+
                 idx_set = is_selected[i]-1
+
                 cur_anim = self.cur_animation[idx_set]
                 max_anim = self.num_animation[idx_set]
 
                 if cur_anim < max_anim:
                     vel = self.action_anim[idx_set,cur_anim]
                     lin_vel = ti.Vector([vel[0],vel[1],vel[2]])
-                    ang_vel = ti.Vector([vel[3],vel[4],vel[5]])
-
-                    degree_rate = ang_vel.norm()
-
                     self.anim_x[i] = self.anim_x[i] + lin_vel * self.dt[0]
 
-                    if degree_rate > 1e-2:
-                        axis_rot = ti.math.normalize(ang_vel)
-                        rotated_vector = self.vector_rotation(axis_rot,degree_rate * self.dt[0],self.anim_x[i] - self.anim_local_origin[idx_set])
-                        self.anim_x[i] = rotated_vector + self.anim_local_origin[idx_set]
-                #TODO Rotation matrix must be calculated once!!
+                    ang_vel = ti.Vector([vel[3],vel[4],vel[5]])
+                    degree_rate = ang_vel.norm()
+                    if degree_rate > 1e-4 :
+                        mat_rot = self.anim_rotation_mat[idx_set]
+
+                        self.anim_x[i] = self.apply_rotation(mat_rot,self.anim_x[i] - self.anim_local_origin[idx_set]) + self.anim_local_origin[idx_set]
+
                 self.x[i] = self.anim_x[i]
 

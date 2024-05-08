@@ -112,6 +112,13 @@ while window.running:
         if window.event.key == 'h':
             sim.set_fixed_vertices(g_selector.is_selected)
 
+        if window.event.key == 'z':
+            sim.frame[0]=0
+
+        if window.event.key == ti.ui.BACKSPACE:
+            g_selector.is_selected.fill(0)
+            sim.set_fixed_vertices(g_selector.is_selected)
+
         if window.event.key == ti.ui.LMB:
             g_selector.LMB_mouse_pressed = True
             g_selector.mouse_click_pos[0], g_selector.mouse_click_pos[1] = window.get_cursor_pos()
@@ -131,6 +138,7 @@ while window.running:
 
     if run_sim:
         sim.animate_handle(g_selector.is_selected)
+        ti.sync()
         sim.forward(n_substeps=n_substep)
 
     show_options()
