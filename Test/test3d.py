@@ -376,3 +376,9 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    arr = v.to_numpy()
+    magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
+    norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))
+    heatmap_rgb = plt.cm.coolwarm(norm(magnitudes))[:, :3]  # Use plasma colormap for heatmap
+    per_vertex_color.from_numpy(heatmap_rgb)

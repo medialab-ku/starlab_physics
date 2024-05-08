@@ -16,15 +16,11 @@ pixels = ti.field(ti.u8, shape=(512, 512, 3))
 
 screen_res = (700, 700)
 screen_to_world_ratio = 10.0
-boundary = (
-    screen_res[0] / screen_to_world_ratio,
-    screen_res[1] / screen_to_world_ratio,
-)
+boundary = (screen_res[0] / screen_to_world_ratio, screen_res[1] / screen_to_world_ratio)
 
-boundary3d = (3.0, 3.0, 3.0)
+particle_radius = 3.0
 
-
-cell_size = 2.51
+cell_size = 0.5 * particle_radius
 cell_recpr = 1.0 / cell_size
 
 
@@ -37,18 +33,17 @@ dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles_x = 90
-num_particles = num_particles_x * 90
+num_particles_x = 80
+num_particles = num_particles_x * 80
 max_num_particles_per_cell = 100
 max_num_neighbors = 100
 time_delta = 1.0 / 60.0
 epsilon = 1e-5
-particle_radius = 3.0
 particle_radius_in_world = particle_radius / screen_res[1]
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=num_particles)
 indices = np.zeros(num_particles)
 # PBF params
-h_ = 1.1
+h_ = 0.3 * particle_radius
 mass = 1.0
 rho0 = 1.0
 lambda_epsilon = 100.0
@@ -67,7 +62,6 @@ b[0] = ti.math.vec2(0.5, 0.5)
 
 x_old = ti.Vector.field(dim, float, shape=num_particles)
 x = ti.Vector.field(dim, float, shape=num_particles)
-x3d = ti.Vector.field(3, float, shape=num_particles)
 positions_render = ti.Vector.field(dim, float)
 v = ti.Vector.field(dim, float, shape=num_particles)
 grid_num_particles = ti.field(int)
@@ -261,12 +255,10 @@ def substep():
         sum_gradient_sqr = 0.0
         density_constraint = 0.0
 
-
-
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
-            if p_j < 0:
-                break
+            # if p_j < 0:
+            #     break
 
             pos_ji = xi - x[p_j]
             grad_j = spiky_gradient(pos_ji, h_)
@@ -281,26 +273,33 @@ def substep():
             density_constraint = 0.
 
         sum_gradient_sqr += grad_i.dot(grad_i)
-        ld[p_i] = (-density_constraint) / (sum_gradient_sqr + lambda_epsilon)
-
-
-
-
-    # compute position deltas
-    # Eq(12), (14)
-    for p_i in x:
-        pos_i = x[p_i]
-        lambda_i = ld[p_i]
+        ld = (-density_constraint) / (sum_gradient_sqr + lambda_epsilon)
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
-            if p_j < 0:
-                break
+            # if p_j < 0:
+            #     print("fuck")
+            #     break
 
-            lambda_j = ld[p_j]
-            pos_ji = pos_i - x[p_j]
-            scorr_ij = compute_scorr(pos_ji)
-            dx[p_i] += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
+            pos_ji = xi - x[p_j]
+            dx[p_j] -= ld * spiky_gradient(pos_ji, h_)
+
+        # dx[p_i] /= (particle_num_neighbors[p_i] + 1)
+    # compute position deltas
+    # Eq(12), (14)
+    # for p_i in x:
+    #     pos_i = x[p_i]
+    #     lambda_i = ld[p_i]
+    #
+    #     for j in range(particle_num_neighbors[p_i]):
+    #         p_j = particle_neighbors[p_i, j]
+    #         if p_j < 0:
+    #             break
+    #
+    #         lambda_j = ld[p_j]
+    #         pos_ji = pos_i - x[p_j]
+    #         scorr_ij = compute_scorr(pos_ji)
+    #         dx[p_i] += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
 
         # dx[p_i] = dxi
     # apply position deltas
@@ -312,8 +311,7 @@ def substep():
 def epilogue():
     # confine to boundary
     for i in x:
-        pos = x[i]
-        x[i] = confine_position_to_boundary(pos)
+        x[i] = confine_position_to_boundary(x[i])
 
     # update velocities
     for i in x:
@@ -344,27 +342,9 @@ def epilogue():
 def run_pbf():
     prologue()
     broad_phase()
-
     for _ in range(pbf_num_iters):
         substep()
     epilogue()
-
-
-def render(gui):
-    gui.clear(bg_color)
-    pos_np = x.to_numpy()
-    for j in range(dim):
-        pos_np[:, j] *= screen_to_world_ratio / screen_res[j]
-    # gui.circles(pos_np, radius=particle_radius, color=particle_color)
-
-    gui.circles(pos_np, radius=particle_radius, palette=[particle_color, particle_color], palette_indices=indices)
-    gui.rect(
-        (0, 0),
-        (board_states[None][0] / boundary[0], 1),
-        radius=1.5,
-        color=boundary_color,
-    )
-    gui.show()
 
 
 @ti.kernel
@@ -372,7 +352,6 @@ def init_particles():
     for i in range(num_particles):
         delta = h_ * 0.8
         offs = ti.Vector([(boundary[0] - delta * num_particles_x) * 0.5, boundary[1] * 0.02])
-        offs3 = ti.Vector([(boundary[0] - delta * num_particles_x) * 0.5, boundary[1] * 0.02])
         x[i] = ti.Vector([i % num_particles_x, i // num_particles_x]) * delta + offs
         for c in ti.static(range(dim)):
             v[i][c] = (ti.random() - 0.5) * 4
@@ -394,58 +373,22 @@ def print_stats():
 #
 #     arr = velocities.to_numpy()
 
-@ti.kernel
-def project_to_3d():
-
-    for i in range(num_particles):
-        x3d[i, 0] = x[i, 0]
-        x3d[i, 1] = x[i, 1]
-        x3d[i, 2] = 0.0
-
 def main():
-    run_sim = True
     init_particles()
     print(f"boundary={boundary} grid={grid_size} cell_size={cell_size}")
     window = ti.ui.Window(name="PBF 2D", res=screen_res)
     canvas = window.get_canvas()
-    scene = ti.ui.Scene()
     canvas.set_background_color((0.066, 0.18, 0.25))
-    camera = ti.ui.Camera()
-    camera.position(2., 4.0, 7.0)
-    camera.fov(40)
-    camera.up(0, 1, 0)
-
-    # scene = ti.ui.Scene()
-    # camera = ti.ui.Camera()
-    # camera.position()
-    # i = 0
 
     while window.running:
-        camera.lookat(0.5, 0.5, 0.5)
-        scene.set_camera(camera)
-        scene.ambient_light((0.5, 0.5, 0.5))
-        scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
-        scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
-        # move_board()
-        if window.get_event(ti.ui.PRESS):
-            if window.event.key == ' ':
-                run_sim = not run_sim
-
-            if window.event.key == 'r':
-                init_particles()
-                run_sim = False
-
-
-        # if run_sim:
-        #     run_pbf()
-
+        move_board()
+        run_pbf()
         arr = v.to_numpy()
         magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
         norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))
         heatmap_rgb = plt.cm.coolwarm(norm(magnitudes))[:, :3]  # Use plasma colormap for heatmap
         per_vertex_color.from_numpy(heatmap_rgb)
-        scene.particles(centers=x3d, radius=particle_radius, per_vertex_color=per_vertex_color)
-        # canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color)
+        canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color)
         window.show()
 
 if __name__ == "__main__":
