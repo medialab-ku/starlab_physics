@@ -21,16 +21,16 @@ meshes_static = []
 # meshes_static.append(mesh_static_1)
 
 particles = []
-particle_1 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, 1.0, 0.0), scale=1.2, radius=0.01)
-particle_2 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-0.8, 2.0, 0.8), scale=1.2, radius=0.01)
-# particle_2 = Particle('../models/VTK/bunny.vtk', trans=ti.math.vec3(1.0, 0.0, 0.0), radius=0.01)
+# particle_1 = Particle('../models/VTK/cube87K.vtk', trans=ti.math.vec3(0.0, 1.0, 0.0), scale=1.2, radius=0.01)
+particle_2 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-2.0, 0.0, 0), scale=3, radius=0.01)
+particle_3 = Particle('../models/VTK/cube1K.vtk', trans=ti.math.vec3(-2.0, 2.0, 0), scale=3, radius=0.01)
 
 
-particles.append(particle_1)
-# particles.append(particle_2)
+# particles.append(particle_1)
+particles.append(particle_2)
+particles.append(particle_3)
 
 colors_tet_dynamic = []
-
 for tid in range(len(tet_meshes_dynamic)):
     color = (random.randrange(0, 255) / 256, random.randrange(0, 255) / 256, random.randrange(0, 255) / 256)
     colors_tet_dynamic.append(color)

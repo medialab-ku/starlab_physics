@@ -14,7 +14,7 @@ ti.init(arch=ti.gpu)
 
 pixels = ti.field(ti.u8, shape=(512, 512, 3))
 
-screen_res = (700, 700)
+screen_res = (500, 500)
 screen_to_world_ratio = 10.0
 boundary = (screen_res[0] / screen_to_world_ratio, screen_res[1] / screen_to_world_ratio)
 
@@ -33,11 +33,11 @@ dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles_x = 80
-num_particles = num_particles_x * 80
+num_particles_x = 40
+num_particles = num_particles_x * 40
 max_num_particles_per_cell = 100
 max_num_neighbors = 100
-time_delta = 1.0 / 60.0
+time_delta = 1.0 / 600.0
 epsilon = 1e-5
 particle_radius_in_world = particle_radius / screen_res[1]
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=num_particles)
@@ -142,9 +142,9 @@ def confine_position_to_boundary(p):
     for i in ti.static(range(dim)):
         # Use randomness to prevent particles from sticking into each other after clamping
         if p[i] <= bmin + padding:
-            p[i] = bmin + padding + epsilon * ti.random()
+            p[i] = bmin + padding
         elif bmax[i] - padding <= p[i]:
-            p[i] = bmax[i] - padding - epsilon * ti.random()
+            p[i] = bmax[i] - padding
 
     # if p[0] > grid_size[0]:
     #     p[0] = grid_size[0]
@@ -401,7 +401,11 @@ def init_particles():
         x[i] = ti.Vector([i % num_particles_x, i // num_particles_x]) * delta + offs
         for c in ti.static(range(dim)):
             v[i][c] = (ti.random() - 0.5) * 4
+            v[i][c] = 0
     board_states[None] = ti.Vector([boundary[0] - epsilon, -0.0])
+    for i in x:
+        positions_render[i].x = x[i].x * (screen_to_world_ratio / screen_res[0])
+        positions_render[i].y = x[i].y * (screen_to_world_ratio / screen_res[1])
 
 
 def print_stats():
@@ -420,6 +424,7 @@ def print_stats():
 #     arr = velocities.to_numpy()
 
 def main():
+    run_sim = True
     init_particles()
     print(f"boundary={boundary} grid={grid_size} cell_size={cell_size}")
     window = ti.ui.Window(name="PBF 2D", res=screen_res)
@@ -427,8 +432,16 @@ def main():
     canvas.set_background_color((0.066, 0.18, 0.25))
 
     while window.running:
+        if window.get_event(ti.ui.PRESS):
+            if window.event.key == 'r':
+               init_particles()
+            if window.event.key == ' ':
+                run_sim = not run_sim
+
+        if run_sim:
+            run_pbf()
         # move_board()
-        run_pbf()
+
         arr = v.to_numpy()
         magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
         norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))

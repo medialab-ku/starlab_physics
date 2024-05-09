@@ -1939,31 +1939,31 @@ class Solver:
     @ti.kernel
     def solve_pressure_constraints_x(self):
 
-        kernel_radius = 1.5 * self.particle_radius
+        kernel_radius = 4.0 * self.particle_radius
 
         for vi in range(self.max_num_verts_dynamic):
-            C_i = self.poly6_value(0.0, kernel_radius) - 1.0
+            C_i = - 1.0
             nabla_C_ii = ti.math.vec3(0.0)
-            schur = 1e-4
+            schur = 10.0
             xi = self.y[vi]
-
-            # for vj in range(self.max_num_verts_dynamic):
             center_cell = self.pos_to_index(self.y[vi])
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    vj = self.cur2org[p_j]
-                    xj = self.y[vj]
-                    xji = xj - xi
+            for vj in range(self.max_num_verts_dynamic):
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    grid_index = self.flatten_grid_index(center_cell + offset)
+                    for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                        vj = self.cur2org[p_j]
+                    # for vj in range(self.max_num_verts_dynamic):
+                        xj = self.y[vj]
+                        xji = xj - xi
 
-                    if xji.norm() < kernel_radius:
-                        nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
-                        C_i += self.poly6_value(xji.norm(), kernel_radius)
-                        nabla_C_ii -= nabla_C_ji
-                        schur += nabla_C_ji.dot(nabla_C_ji)
+                        if xji.norm() < kernel_radius:
+                            nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
+                            C_i += self.poly6_value(xji.norm(), kernel_radius)
+                            nabla_C_ii -= nabla_C_ji
+                            schur += nabla_C_ji.dot(nabla_C_ji)
 
-                if C_i < 0.0:
-                    C_i = 0.0
+            if C_i < 0.0:
+                C_i = 0.0
 
             schur += nabla_C_ii.dot(nabla_C_ii)
             lambda_i = C_i / schur
@@ -1973,15 +1973,16 @@ class Solver:
                 grid_index = self.flatten_grid_index(center_cell + offset)
                 for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
                     vj = self.cur2org[p_j]
+            # for vj in range(self.max_num_verts_dynamic):
                     xj = self.y[vj]
                     xji = xj - xi
 
                     if xji.norm() < kernel_radius:
                         nabla_C_ji = self.spiky_gradient(xji, kernel_radius)
                         self.dx[vj] -= lambda_i * nabla_C_ji
-                        self.nc[vj] += 1
+                    # self.nc[vj] += 1
 
-            self.dx[vi] -= lambda_i * nabla_C_ii
+            # self.dx[vi] -= lambda_i * nabla_C_ii
             self.nc[vi] += 1
 
     @ti.kernel
@@ -2391,7 +2392,7 @@ class Solver:
         self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
-        # self.solve_pressure_constraints_x()
+        self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
@@ -2432,7 +2433,7 @@ class Solver:
         self.broad_phase()
         for _ in range(n_substeps):
             self.compute_y()
-            self.confine_to_boundary()
+            # self.confine_to_boundary()
             self.solve_constraints_x()
             self.confine_to_boundary()
             self.compute_velocity()
@@ -2447,7 +2448,7 @@ class Solver:
 
         self.dt[0] = dt
         self.frame[0] = self.frame[0]+1
-        print(self.frame[0])
+        # print(self.frame[0])
 
 
     @ti.kernel
