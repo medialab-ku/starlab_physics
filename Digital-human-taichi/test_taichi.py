@@ -135,16 +135,23 @@ def solve_forward():
             for j in range(i + 1, n):
                 x[bat, i] -= L[bat, j * n + i] * x[bat, j]
             x[bat, i] /= L[bat, i * n + i]
-init()
+# init()
+#
+# ti.profiler.clear_kernel_profiler_info()
+# cholesky()
+# solve_backward()
+# solve_forward()
+# query_result1 = ti.profiler.query_kernel_profiler_info(cholesky.__name__)
+# query_result2 = ti.profiler.query_kernel_profiler_info(solve_backward.__name__)
+# query_result3 = ti.profiler.query_kernel_profiler_info(solve_forward.__name__)
+# print("cholesky elapsed time: ", query_result1.avg)
+# print("back elapsed time: ", query_result2.avg)
+# print("forward elapsed time: ", query_result3.avg)
+# print("total elapsed time: ", query_result1.avg + query_result2.avg + query_result3.avg)
 
-ti.profiler.clear_kernel_profiler_info()
-cholesky()
-solve_backward()
-solve_forward()
-query_result1 = ti.profiler.query_kernel_profiler_info(cholesky.__name__)
-query_result2 = ti.profiler.query_kernel_profiler_info(solve_backward.__name__)
-query_result3 = ti.profiler.query_kernel_profiler_info(solve_forward.__name__)
-print("cholesky elapsed time: ", query_result1.avg)
-print("back elapsed time: ", query_result2.avg)
-print("forward elapsed time: ", query_result3.avg)
-print("total elapsed time: ", query_result1.avg + query_result2.avg + query_result3.avg)
+@ti.kernel
+def test():
+    for offset in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
+        print(offset[0], offset[1])
+
+test()

@@ -18,9 +18,9 @@ screen_res = (700, 700)
 screen_to_world_ratio = 10.0
 boundary = (screen_res[0] / screen_to_world_ratio, screen_res[1] / screen_to_world_ratio)
 
-particle_radius = 3.0
-
-cell_size = 0.5 * particle_radius
+particle_radius = 2.0
+h_ = 0.4 * particle_radius
+cell_size = 2 * h_
 cell_recpr = 1.0 / cell_size
 
 
@@ -43,7 +43,6 @@ particle_radius_in_world = particle_radius / screen_res[1]
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=num_particles)
 indices = np.zeros(num_particles)
 # PBF params
-h_ = 0.3 * particle_radius
 mass = 1.0
 rho0 = 1.0
 lambda_epsilon = 100.0
@@ -126,7 +125,7 @@ def compute_scorr(pos_ji):
 
 @ti.func
 def get_cell(pos):
-    return int(pos * cell_recpr)
+    return (pos / cell_size).cast(int)
 
 
 @ti.func
@@ -139,13 +138,29 @@ def is_in_grid(c):
 def confine_position_to_boundary(p):
     bmin = particle_radius_in_world
     bmax = ti.Vector([board_states[None][0], boundary[1]]) - particle_radius_in_world
+    padding = 2.0
     for i in ti.static(range(dim)):
         # Use randomness to prevent particles from sticking into each other after clamping
-        if p[i] <= bmin:
-            p[i] = bmin + epsilon * ti.random()
-        elif bmax[i] <= p[i]:
-            p[i] = bmax[i] - epsilon * ti.random()
+        if p[i] <= bmin + padding:
+            p[i] = bmin + padding + epsilon * ti.random()
+        elif bmax[i] - padding <= p[i]:
+            p[i] = bmax[i] - padding - epsilon * ti.random()
+
+    # if p[0] > grid_size[0]:
+    #     p[0] = grid_size[0]
+    #
+    # if p[0] < 0:
+    #     p[0] = 0
+    #
+    # if p[1] > grid_size[1]:
+    #     p[1] = grid_size[1]
+    #
+    # if p[1] < 0:
+    #     p[1] = 0
+
     return p
+
+
 
 
 @ti.kernel
@@ -210,36 +225,42 @@ def prologue():
         xi += vi * time_delta
         x[i] = confine_position_to_boundary(xi)
 
-    # clear neighbor lookup table
-    for I in ti.grouped(grid_num_particles):
-        grid_num_particles[I] = 0
-    for I in ti.grouped(particle_neighbors):
-        particle_neighbors[I] = -1
+    # # clear neighbor lookup table
+    # for I in ti.grouped(grid_num_particles):
+    #     grid_num_particles[I] = 0
+    # for I in ti.grouped(particle_neighbors):
+    #     particle_neighbors[I] = -1
+    #
+    # # update grid
+    # for p_i in x:
+    #     cell = get_cell(x[p_i])
+    #     # ti.Vector doesn't seem to support unpacking yet
+    #     # but we can directly use int Vectors as indices
+    #     offs = ti.atomic_add(grid_num_particles[cell], 1)
+    #     grid2particles[cell, offs] = p_i
+    # # find particle neighbors
+    # for p_i in x:
+    #     pos_i = x[p_i]
+    #     cell = get_cell(pos_i)
+    #     nb_i = 0
+    #     for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
+    #         cell_to_check = cell + offs
+    #         if is_in_grid(cell_to_check):
+    #             for j in range(grid_num_particles[cell_to_check]):
+    #                 p_j = grid2particles[cell_to_check, j]
+    #                 # if nb_i < max_num_neighbors:
+    #                 particle_neighbors[p_i, nb_i] = p_j
+    #                 nb_i += 1
+    #     particle_num_neighbors[p_i] = nb_i
 
-    # update grid
-    for p_i in x:
-        cell = get_cell(x[p_i])
-        # ti.Vector doesn't seem to support unpacking yet
-        # but we can directly use int Vectors as indices
-        offs = ti.atomic_add(grid_num_particles[cell], 1)
-        grid2particles[cell, offs] = p_i
-    # find particle neighbors
-    for p_i in x:
-        pos_i = x[p_i]
-        cell = get_cell(pos_i)
-        nb_i = 0
-        for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
-            cell_to_check = cell + offs
-            if is_in_grid(cell_to_check):
-                for j in range(grid_num_particles[cell_to_check]):
-                    p_j = grid2particles[cell_to_check, j]
-                    if nb_i < max_num_neighbors and p_j != p_i and (pos_i - x[p_j]).norm() < neighbor_radius:
-                        particle_neighbors[p_i, nb_i] = p_j
-                        nb_i += 1
-        particle_num_neighbors[p_i] = nb_i
 
+@ti.func
+def get_flatten_grid_index(pos: ti.math.vec2):
+    return flatten_grid_index(get_cell(pos))
 
-
+@ti.func
+def flatten_grid_index(grid_index):
+    return grid_index[0] * grid_size[1] + grid_index[1]
 
 
 @ti.kernel
@@ -257,9 +278,6 @@ def substep():
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
-            # if p_j < 0:
-            #     break
-
             pos_ji = xi - x[p_j]
             grad_j = spiky_gradient(pos_ji, h_)
             grad_i += grad_j
@@ -277,32 +295,59 @@ def substep():
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
-            # if p_j < 0:
-            #     print("fuck")
-            #     break
-
             pos_ji = xi - x[p_j]
             dx[p_j] -= ld * spiky_gradient(pos_ji, h_)
 
-        # dx[p_i] /= (particle_num_neighbors[p_i] + 1)
-    # compute position deltas
-    # Eq(12), (14)
-    # for p_i in x:
-    #     pos_i = x[p_i]
-    #     lambda_i = ld[p_i]
-    #
-    #     for j in range(particle_num_neighbors[p_i]):
-    #         p_j = particle_neighbors[p_i, j]
-    #         if p_j < 0:
-    #             break
-    #
-    #         lambda_j = ld[p_j]
-    #         pos_ji = pos_i - x[p_j]
-    #         scorr_ij = compute_scorr(pos_ji)
-    #         dx[p_i] += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
+    for i in x:
+        x[i] += dx[i]
 
-        # dx[p_i] = dxi
-    # apply position deltas
+@ti.kernel
+def solve_pressure_constraints_x():
+
+    dx.fill(0.0)
+    for i in x:
+        grad_i = ti.math.vec2(0.0)
+        sum_gradient_sqr = 0.0
+        density_constraint = 0.0
+        center_cell = get_cell(x[i])
+        for offset in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
+            grid_index = flatten_grid_index(center_cell + offset)
+
+            # if grid_index < 1:
+            #     grid_index = 1
+
+            if grid_index > int(grid_size[0] * grid_size[1]) - 1:
+                grid_index =int(grid_size[0] * grid_size[1]) - 1
+
+            for p_j in range(grid_particles_num[ti.max(0, grid_index - 1)], grid_particles_num[grid_index]):
+                j = cur2org[p_j]
+                pos_ji = x[i] - x[j]
+                grad_j = spiky_gradient(pos_ji, h_)
+                grad_i += grad_j
+                sum_gradient_sqr += grad_j.dot(grad_j)
+                # Eq(2)
+                density_constraint += poly6_value(pos_ji.norm(), h_)
+
+                # Eq(1)
+        density_constraint = density_constraint - 1.0
+        if density_constraint < 0:
+            density_constraint = 0.
+
+        sum_gradient_sqr += grad_i.dot(grad_i)
+        ld = (-density_constraint) / (sum_gradient_sqr + lambda_epsilon)
+        for offset in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
+            grid_index = flatten_grid_index(center_cell + offset)
+            if grid_index < 1:
+                grid_index = 1
+
+            if grid_index > int(grid_size[0] * grid_size[1]) - 1:
+                grid_index = int(grid_size[0] * grid_size[1]) - 1
+            for p_j in range(grid_particles_num[grid_index - 1], grid_particles_num[grid_index]):
+                j = cur2org[p_j]
+                pos_ji = x[i] - x[j]
+                dx[j] -= ld * spiky_gradient(pos_ji, h_)
+
+
     for i in x:
         x[i] += dx[i]
 
@@ -343,7 +388,8 @@ def run_pbf():
     prologue()
     broad_phase()
     for _ in range(pbf_num_iters):
-        substep()
+        # substep()
+        solve_pressure_constraints_x()
     epilogue()
 
 
@@ -381,7 +427,7 @@ def main():
     canvas.set_background_color((0.066, 0.18, 0.25))
 
     while window.running:
-        move_board()
+        # move_board()
         run_pbf()
         arr = v.to_numpy()
         magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
