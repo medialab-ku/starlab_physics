@@ -746,7 +746,7 @@ class Solver:
         x3 = self.x_static[v3]
 
         g0 = ti.math.vec3(0.0)
-        d = self.dHat
+        d = self.dHat[0]
         dtype = di.d_type_PT(x0, x1, x2, x3)
 
         if dtype == 0:
@@ -1315,7 +1315,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g0, g2 = di.g_PP(x0, x2)
                     schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.nc[v0] += 1
@@ -1328,7 +1328,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g0, g3 = di.g_PP(x0, x3)
                     schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.nc[v0] += 1
 
@@ -1341,7 +1341,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g0, g2, g3 = di.g_PE(x0, x2, x3)
                     schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.nc[v0] += 1
@@ -1354,7 +1354,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g1, g2 = di.g_PP(x1, x2)
                     schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v1] += self.m_inv[v0] * ld * g1
                     self.nc[v1] += 1
@@ -1366,7 +1366,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g1, g3 = di.g_PP(x1, x3)
                     schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v1] += self.m_inv[v0] * ld * g1
                     self.nc[v1] += 1
@@ -1379,7 +1379,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g1, g2, g3 = di.g_PE(x1, x2, x3)
                     schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v1] += self.m_inv[v0] * ld * g1
                     self.nc[v1] += 1
@@ -1392,7 +1392,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g2, g0, g1 = di.g_PE(x2, x0, x1)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v1] += self.m_inv[v1] * ld * g1
@@ -1407,7 +1407,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g3, g0, g1 = di.g_PE(x3, x0, x1)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v1] += self.m_inv[v1] * ld * g1
@@ -1422,7 +1422,7 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
                     g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v1] += self.m_inv[v1] * ld * g1
                     self.nc[v0] += 1
@@ -1580,7 +1580,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g0, g2 = di.g_PP(x0, x2)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v2] * g2.dot(g2) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v2] += self.m_inv[v2] * ld * g2
@@ -1595,7 +1595,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g0, g3 = di.g_PP(x0, x3)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v3] += self.m_inv[v3] * ld * g3
@@ -1611,7 +1611,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g0, g2, g3 = di.g_PE(x0, x2, x3)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v2] += self.m_inv[v2] * ld * g2
@@ -1628,7 +1628,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g1, g2 = di.g_PP(x1, x2)
                     schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v1] += self.m_inv[v1] * ld * g1
                     self.dx[v2] += self.m_inv[v2] * ld * g2
@@ -1643,7 +1643,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g1, g3 = di.g_PP(x1, x3)
                     schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v1] += self.m_inv[v1] * ld * g1
                     self.dx[v3] += self.m_inv[v3] * ld * g3
@@ -1658,7 +1658,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g1, g2, g3 = di.g_PE(x1, x2, x3)
                     schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v1] += self.m_inv[v1] * ld * g1
                     self.dx[v2] += self.m_inv[v2] * ld * g2
@@ -1675,7 +1675,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g2, g0, g1 = di.g_PE(x2, x0, x1)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v1] += self.m_inv[v1] * ld * g1
@@ -1693,7 +1693,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g3, g0, g1 = di.g_PE(x3, x0, x1)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v1] += self.m_inv[v1] * ld * g1
@@ -1710,7 +1710,7 @@ class Solver:
                     ti.atomic_add(self.num_cached_ee_pairs[0], 1)
                     g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
                     schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (self.dHat - d) / schur
+                    ld = (dHat - d) / schur
 
                     self.dx[v0] += self.m_inv[v0] * ld * g0
                     self.dx[v1] += self.m_inv[v1] * ld * g1
@@ -2044,7 +2044,7 @@ class Solver:
     @ti.kernel
     def solve_collision_constraints_x(self):
 
-        d = self.dHat
+        d = self.dHat[0]
         for idx in range(self.max_num_verts_dynamic + self.max_num_faces_dynamic + self.max_num_edges_dynamic):
 
             if idx < self.max_num_verts_dynamic:
@@ -2075,7 +2075,7 @@ class Solver:
                     for p_j in range(self.grid_particles_num_static[ti.max(0, grid_index - 1)], self.grid_particles_num_static[grid_index]):
                         vj_s = self.cur2org_static[p_j]
                         if vj_s < self.max_num_verts_static:
-                            self.solve_collision_tv_static_x(fi_d, vj_s, self.dHat)
+                            self.solve_collision_tv_static_x(fi_d, vj_s, d)
 
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
                     grid_index = self.flatten_grid_index(center_cell + offset)
@@ -2083,7 +2083,7 @@ class Solver:
                         vj_d = self.cur2org[p_j]
                         if vj_d < self.max_num_verts_dynamic:
                             if self.is_in_face(vj_d, fi_d) != True:
-                                self.solve_collision_vt_dynamic_x(vj_d, fi_d, self.dHat)
+                                self.solve_collision_vt_dynamic_x(vj_d, fi_d, d)
             else:
 
                 ei_d = idx - self.max_num_verts_dynamic - self.max_num_faces_dynamic
@@ -2098,7 +2098,7 @@ class Solver:
                         vj_s = self.cur2org_static[p_j]
                         if vj_s >= self.max_num_verts_static + self.max_num_faces_static:
                             ej_s = vj_s - (self.max_num_verts_static + self.max_num_faces_static)
-                            self.solve_collision_ee_static_x(ei_d, ej_s, self.dHat)
+                            self.solve_collision_ee_static_x(ei_d, ej_s, d)
 
 
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
@@ -2108,7 +2108,7 @@ class Solver:
                         if vj_d >= self.max_num_verts_dynamic:
                             ej_d = vj_d - self.max_num_verts_dynamic
                             if self.share_vertex(ei_d, ej_d) != True:
-                                self.solve_collision_ee_dynamic_x(ei_d, ej_d, self.dHat)
+                                self.solve_collision_ee_dynamic_x(ei_d, ej_d, d)
 
 
         #-----------brute-force-------------------
@@ -2390,7 +2390,7 @@ class Solver:
 
         self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
-        # self.solve_stretch_constarints_x()
+        self.solve_fem_constraints_x()
         # self.solve_pressure_constraints_x()
         self.update_dx()
 
@@ -2594,6 +2594,5 @@ class Solver:
                         mat_rot = self.anim_rotation_mat[idx_set]
 
                         self.anim_x[i] = self.apply_rotation(mat_rot,self.anim_x[i] - self.anim_local_origin[idx_set]) + self.anim_local_origin[idx_set]
-
                 self.x[i] = self.anim_x[i]
 

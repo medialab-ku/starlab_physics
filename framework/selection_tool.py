@@ -133,7 +133,7 @@ class SelectionTool :
 
         # print(self.selected_indices_cpu)
 
-        with open('handle.json', 'w', encoding='utf-8') as f:
+        with open('animation/handle.json', 'w', encoding='utf-8') as f:
             json.dump(self.selected_indices_cpu, f, ensure_ascii=False, indent=4)
 
 
@@ -147,7 +147,7 @@ class SelectionTool :
         #             print("nononoonononoonononoonononoonononoonononoonononoonononoonononoonononoonononoo",testRead[i+1][j],self.selected_indices_cpu[i+1][j])
 
     def import_selection(self):
-        with open('handle.json') as f:
+        with open('animation/handle.json') as f:
             self.selected_indices_cpu = json.load(f)
         self.selected_indices_cpu = {int(k): v for k, v in self.selected_indices_cpu.items()}
 

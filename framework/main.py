@@ -1,4 +1,5 @@
 import taichi as ti
+import json
 from Scenes import test_fem as scene1
 import XPBD
 import selection_tool as st
@@ -53,7 +54,7 @@ def show_options():
 def load_animation() :
     global sim
 
-    with open('animation.json') as f:
+    with open('animation/animation.json') as f:
         animation_raw = json.load(f)
     animation_raw = {int(k): v for k, v in animation_raw.items()}
 
