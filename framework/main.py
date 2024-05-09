@@ -50,6 +50,32 @@ def show_options():
     if not old_dHat == dHat_ui:
         sim.dHat[0] = dHat_ui
 
+def load_animation() :
+    global sim
+
+    with open('animation.json') as f:
+        animation_raw = json.load(f)
+    animation_raw = {int(k): v for k, v in animation_raw.items()}
+
+    # 4 = (g_selector.num_maxCounter)
+    animationDict = {(i+1):[] for i in range(4)}
+
+    # 4 = (g_selector.num_maxCounter)
+    for i in range(4) :
+        ic = i+1
+        icAnimation = animation_raw[ic]
+        listLen = len(icAnimation)
+        # print(listLen)
+        assert listLen % 7 == 0,str(ic)+"th Animation SETTING ERROR!! ======"
+
+        num_animation = listLen // 7
+
+        for a in range(num_animation) :
+            animationFrag = [animation_raw[ic][k + 7*a] for k in range(7)] # [vx,vy,vz,rx,ry,rz,frame]
+            animationDict[ic].append(animationFrag)
+
+    # print(animationDict)
+    sim._set_animation(animationDict,g_selector.is_selected)
 
 while window.running:
 
@@ -60,6 +86,18 @@ while window.running:
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
 
     if window.get_event(ti.ui.PRESS):
+        if window.event.key == 'c':
+            g_selector.selection_Count_Up()
+
+        if window.event.key == 'x': # export selection
+            print("==== EXPORT!! ====")
+            g_selector.export_selection()
+
+        if window.event.key == 'i':
+            print("==== IMPORT!! ====")
+            g_selector.import_selection()
+            load_animation()
+
         if window.event.key == ' ':
             run_sim = not run_sim
 
@@ -75,6 +113,13 @@ while window.running:
                 print("disable velocity update")
 
         if window.event.key == 'h':
+            sim.set_fixed_vertices(g_selector.is_selected)
+
+        if window.event.key == 'z':
+            sim.frame[0]=0
+
+        if window.event.key == ti.ui.BACKSPACE:
+            g_selector.is_selected.fill(0)
             sim.set_fixed_vertices(g_selector.is_selected)
 
         if window.event.key == ti.ui.LMB:
@@ -95,6 +140,8 @@ while window.running:
         g_selector.update_ti_rect_selection()
 
     if run_sim:
+        sim.animate_handle(g_selector.is_selected)
+        ti.sync()
         sim.forward(n_substeps=n_substep)
 
     show_options()
