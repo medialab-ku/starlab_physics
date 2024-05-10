@@ -113,6 +113,7 @@ class Solver:
         self.dv = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.nc = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
+        self.schur = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.fixed = ti.field(dtype=ti.u8, shape=self.max_num_verts_dynamic)
         self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
@@ -2342,14 +2343,14 @@ class Solver:
         # self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
-        # self.solve_pressure_constraints_x()
+        self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
         self.dv.fill(0.0)
         # self.nc.fill(0)
         self.solve_collision_constraints_v()
-        # self.solve_pressure_constraints_v()
+        self.solve_pressure_constraints_v()
         self.update_dv()
 
     @ti.kernel
@@ -2381,6 +2382,8 @@ class Solver:
         self.dt[0] = dt / n_substeps
 
         self.broad_phase()
+
+        ti.profiler.clear_kernel_profiler_info()
         for _ in range(n_substeps):
             self.compute_y()
             self.confine_to_boundary()
@@ -2393,11 +2396,18 @@ class Solver:
                 # self.confine_to_boundary_v()
             self.update_x()
 
+        if self.enable_velocity_update:
+            query_result1 = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
+            query_result2 = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
+            print("constraint_solve_x(): ", query_result1.avg)
+            print("constraint_solve_v(): ", query_result2.avg)
+            print("ratio: ", 100.0 * (query_result2.avg / query_result1.avg),"%")
+
         self.copy_to_meshes()
         self.copy_to_particles()
 
         self.dt[0] = dt
-        self.frame[0] = self.frame[0]+1
+        self.frame[0] = self.frame[0] + 1
         # print(self.frame[0])
 
 
