@@ -151,6 +151,7 @@ class Solver:
 
         self.max_num_cached_neighbours = 100
         self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.max_num_cached_neighbours))
+        self.particle_neighbours_gradients = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.max_num_cached_neighbours))
         self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
 
 
@@ -1929,11 +1930,12 @@ class Solver:
 
                     if xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.max_num_cached_neighbours:
                         self.particle_neighbours[vi, self.num_particle_neighbours[vi]] = vj
-                        ti.atomic_add(self.num_particle_neighbours[vi], 1)
                         nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
+                        self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = nabla_C_ji
                         self.c[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
                         nabla_C_ii -= nabla_C_ji
                         self.schur[vi] += nabla_C_ji.dot(nabla_C_ji)
+                        ti.atomic_add(self.num_particle_neighbours[vi], 1)
 
             self.schur[vi] += nabla_C_ii.dot(nabla_C_ii)
 
@@ -1944,11 +1946,11 @@ class Solver:
                 #     grid_index = self.flatten_grid_index(center_cell + offset)
                 #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
                 #         vj = self.cur2org[p_j]
-                    vj =  self.particle_neighbours[vi, j]
+                    vj = self.particle_neighbours[vi, j]
                     xj = self.y[vj]
                     xji = xj - xi
 
-                    nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
+                    nabla_C_ji = self.particle_neighbours_gradients[vi, j]
                     self.dx[vj] -= lambda_i * nabla_C_ji
                     self.nc[vj] += 1
 
@@ -1961,24 +1963,20 @@ class Solver:
         for vi in range(self.max_num_verts_dynamic):
             Cv_i = 0.0
             nabla_Cv_ii = ti.math.vec3(0.0)
-            xi = self.y[vi]
             for j in range(self.num_particle_neighbours[vi]):
                 # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
                 #     grid_index = self.flatten_grid_index(center_cell + offset)
                 #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
                 #         vj = self.cur2org[p_j]
                 vj = self.particle_neighbours[vi, j]
-                xj = self.y[vj]
-                xji = xj - xi
 
                 # if xji.norm() < self.kernel_radius:
-                nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
+                nabla_Cv_ji = self.particle_neighbours_gradients[vi, j]
                 Cv_i += nabla_Cv_ji.dot(self.v[vj])
                 nabla_Cv_ii -= nabla_Cv_ji
 
-
-
             lambda_i = Cv_i / self.schur[vi]
+
             if self.c[vi] > 0.0 and Cv_i > 0:
                 for j in range(self.num_particle_neighbours[vi]):
                     # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
@@ -1986,11 +1984,8 @@ class Solver:
                     #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
                     #         vj = self.cur2org[p_j]
                     vj = self.particle_neighbours[vi, j]
-                    xj = self.y[vj]
-                    xji = xj - xi
-
                     # if xji.norm() < self.kernel_radius:
-                    nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
+                    nabla_Cv_ji = self.particle_neighbours_gradients[vi, j]
                     self.dv[vj] -= lambda_i * nabla_Cv_ji
                         # self.nc[vj] += 1
 
@@ -2402,11 +2397,19 @@ class Solver:
             self.update_x()
 
         if self.enable_velocity_update:
-            query_result1 = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_x.__name__)
-            query_result2 = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_v.__name__)
-            print("constraint_solve_x(): ", query_result1.avg)
-            print("constraint_solve_v(): ", query_result2.avg)
-            print("ratio: ", 100.0 * (query_result2.avg / query_result1.avg), "%")
+
+            profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
+            profile_pressure_x = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_x.__name__)
+
+            profile_collision_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
+            profile_pressure_v = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_v.__name__)
+
+            avg_overhead_x = profile_collision_x.avg + profile_pressure_x.avg
+            avg_overhead_v = profile_collision_v.avg + profile_pressure_v.avg
+
+            print("constraint_solve_x(): ", avg_overhead_x)
+            print("constraint_solve_v(): ", avg_overhead_v)
+            print("ratio: ", 100.0 * (avg_overhead_v / avg_overhead_x), "%")
 
         self.copy_to_meshes()
         self.copy_to_particles()
