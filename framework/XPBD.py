@@ -146,10 +146,12 @@ class Solver:
         self.ee_active_set_num = ti.field(int, shape=(self.max_num_edges_dynamic))
 
         self.max_num_cached_ee_pairs = 1000
-
         self.ee_active_set_dynamic = ti.Vector.field(n=2, dtype=int, shape=self.max_num_cached_ee_pairs)
         self.num_cached_ee_pairs = ti.field(int, shape=1)
 
+        self.max_num_cached_neighbours = 100
+        self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.max_num_cached_neighbours))
+        self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
 
 
         self.max_num_verts_static = 0
@@ -1925,7 +1927,9 @@ class Solver:
                     xj = self.y[vj]
                     xji = xj - xi
 
-                    if xji.norm() < self.kernel_radius:
+                    if xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.max_num_cached_neighbours:
+                        self.particle_neighbours[vi, self.num_particle_neighbours[vi]] = vj
+                        ti.atomic_add(self.num_particle_neighbours[vi], 1)
                         nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
                         self.c[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
                         nabla_C_ii -= nabla_C_ji
@@ -1935,17 +1939,18 @@ class Solver:
 
             if self.c[vi] > 0.0:
                 lambda_i = self.c[vi] / self.schur[vi]
-                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                    grid_index = self.flatten_grid_index(center_cell + offset)
-                    for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                        vj = self.cur2org[p_j]
-                        xj = self.y[vj]
-                        xji = xj - xi
+                for j in range(self.num_particle_neighbours[vi]):
+                # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                #     grid_index = self.flatten_grid_index(center_cell + offset)
+                #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                #         vj = self.cur2org[p_j]
+                    vj =  self.particle_neighbours[vi, j]
+                    xj = self.y[vj]
+                    xji = xj - xi
 
-                        if xji.norm() < self.kernel_radius:
-                            nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
-                            self.dx[vj] -= lambda_i * nabla_C_ji
-                            self.nc[vj] += 1
+                    nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
+                    self.dx[vj] -= lambda_i * nabla_C_ji
+                    self.nc[vj] += 1
 
             # self.dx[vi] -= lambda_i * nabla_C_ii
             # self.nc[vi] += 1
@@ -1957,34 +1962,37 @@ class Solver:
             Cv_i = 0.0
             nabla_Cv_ii = ti.math.vec3(0.0)
             xi = self.y[vi]
-            center_cell = self.pos_to_index(self.y[vi])
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    vj = self.cur2org[p_j]
-                    xj = self.y[vj]
-                    xji = xj - xi
+            for j in range(self.num_particle_neighbours[vi]):
+                # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                #     grid_index = self.flatten_grid_index(center_cell + offset)
+                #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                #         vj = self.cur2org[p_j]
+                vj = self.particle_neighbours[vi, j]
+                xj = self.y[vj]
+                xji = xj - xi
 
-                    if xji.norm() < self.kernel_radius:
-                        nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
-                        Cv_i += nabla_Cv_ji.dot(self.v[vj])
-                        nabla_Cv_ii -= nabla_Cv_ji
+                # if xji.norm() < self.kernel_radius:
+                nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
+                Cv_i += nabla_Cv_ji.dot(self.v[vj])
+                nabla_Cv_ii -= nabla_Cv_ji
 
 
 
             lambda_i = Cv_i / self.schur[vi]
             if self.c[vi] > 0.0 and Cv_i > 0:
-                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                    grid_index = self.flatten_grid_index(center_cell + offset)
-                    for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                        vj = self.cur2org[p_j]
-                        xj = self.y[vj]
-                        xji = xj - xi
+                for j in range(self.num_particle_neighbours[vi]):
+                    # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    #     grid_index = self.flatten_grid_index(center_cell + offset)
+                    #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    #         vj = self.cur2org[p_j]
+                    vj = self.particle_neighbours[vi, j]
+                    xj = self.y[vj]
+                    xji = xj - xi
 
-                        if xji.norm() < self.kernel_radius:
-                            nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
-                            self.dv[vj] -= lambda_i * nabla_Cv_ji
-                            # self.nc[vj] += 1
+                    # if xji.norm() < self.kernel_radius:
+                    nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
+                    self.dv[vj] -= lambda_i * nabla_Cv_ji
+                        # self.nc[vj] += 1
 
 
     @ti.kernel
@@ -2334,8 +2342,9 @@ class Solver:
         # self.ee_active_set_num.fill(0)
         # self.ee_active_set.fill(0)
 
-        # self.num_cached_ee_pairs.fill(0)
+        # self.num_cached_ee_pairs.fill(0z
 
+        self.num_particle_neighbours.fill(0)
         # self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()

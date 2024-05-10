@@ -4,7 +4,7 @@ from framework.mesh import Mesh
 import taichi as ti
 
 
-ti.init(arch=ti.cuda, device_memory_GB=6, kernel_profiler=True)
+ti.init(arch=ti.cuda, device_memory_GB=3, kernel_profiler=True)
 
 meshes_dynamic = []
 
