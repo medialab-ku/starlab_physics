@@ -3,7 +3,8 @@ import json
 # from Scenes import test_fluid as scene1
 
 # from Scenes import scene_cylinders as scene1
-from Scenes import scene_thin_shell_twist as scene1
+from Scenes import scene_cylinder_crossing as scene1
+# from Scenes import scene_thin_shell_twist as scene1
 
 import XPBD
 import selection_tool as st
@@ -199,7 +200,8 @@ while window.running:
     canvas.scene(scene)
     window.show()
 
-ti.sync()
-ti.profiler.print_kernel_profiler_info('trace')
 
-print("end frame : ", sim.frame[0])
+# ti.sync()
+# ti.profiler.print_kernel_profiler_info('trace')
+#
+# print("end frame : ", sim.frame[0])

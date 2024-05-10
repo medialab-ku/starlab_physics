@@ -2339,17 +2339,17 @@ class Solver:
 
         # self.num_cached_ee_pairs.fill(0)
 
-        self.solve_spring_constraints_x()
+        # self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
-        self.solve_pressure_constraints_x()
+        # self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
         self.dv.fill(0.0)
         # self.nc.fill(0)
         self.solve_collision_constraints_v()
-        self.solve_pressure_constraints_v()
+        # self.solve_pressure_constraints_v()
         self.update_dv()
 
     @ti.kernel
