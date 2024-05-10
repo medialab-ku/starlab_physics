@@ -114,6 +114,7 @@ class Solver:
         self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.nc = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
         self.schur = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
+        self.c = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.fixed = ti.field(dtype=ti.u8, shape=self.max_num_verts_dynamic)
         self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
@@ -1912,9 +1913,9 @@ class Solver:
     def solve_pressure_constraints_x(self):
 
         for vi in range(self.max_num_verts_dynamic):
-            C_i = - 1.0
+            self.c[vi] = - 1.0
             nabla_C_ii = ti.math.vec3(0.0)
-            schur = 1e-4
+            self.schur[vi] = 1e-4
             xi = self.y[vi]
             center_cell = self.pos_to_index(self.y[vi])
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
@@ -1926,26 +1927,25 @@ class Solver:
 
                     if xji.norm() < self.kernel_radius:
                         nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
-                        C_i += self.poly6_value(xji.norm(), self.kernel_radius)
+                        self.c[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
                         nabla_C_ii -= nabla_C_ji
-                        schur += nabla_C_ji.dot(nabla_C_ji)
+                        self.schur[vi] += nabla_C_ji.dot(nabla_C_ji)
 
-            if C_i < 0.0:
-                C_i = 0.0
+            self.schur[vi] += nabla_C_ii.dot(nabla_C_ii)
 
-            schur += nabla_C_ii.dot(nabla_C_ii)
-            lambda_i = C_i / schur
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    vj = self.cur2org[p_j]
-                    xj = self.y[vj]
-                    xji = xj - xi
+            if self.c[vi] > 0.0:
+                lambda_i = self.c[vi] / self.schur[vi]
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    grid_index = self.flatten_grid_index(center_cell + offset)
+                    for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                        vj = self.cur2org[p_j]
+                        xj = self.y[vj]
+                        xji = xj - xi
 
-                    if xji.norm() < self.kernel_radius:
-                        nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
-                        self.dx[vj] -= lambda_i * nabla_C_ji
-                        self.nc[vj] += 1
+                        if xji.norm() < self.kernel_radius:
+                            nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
+                            self.dx[vj] -= lambda_i * nabla_C_ji
+                            self.nc[vj] += 1
 
             # self.dx[vi] -= lambda_i * nabla_C_ii
             # self.nc[vi] += 1
@@ -1955,9 +1955,7 @@ class Solver:
 
         for vi in range(self.max_num_verts_dynamic):
             Cv_i = 0.0
-            C_i = - 1.0
             nabla_Cv_ii = ti.math.vec3(0.0)
-            schur = 1e-4
             xi = self.y[vi]
             center_cell = self.pos_to_index(self.y[vi])
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
@@ -1970,25 +1968,23 @@ class Solver:
                     if xji.norm() < self.kernel_radius:
                         nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
                         Cv_i += nabla_Cv_ji.dot(self.v[vj])
-                        C_i += self.poly6_value(xji.norm(), self.kernel_radius)
                         nabla_Cv_ii -= nabla_Cv_ji
-                        schur += nabla_Cv_ji.dot(nabla_Cv_ji)
 
 
 
-            schur += nabla_Cv_ii.dot(nabla_Cv_ii)
-            lambda_i = Cv_i / schur
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    vj = self.cur2org[p_j]
-                    xj = self.y[vj]
-                    xji = xj - xi
+            lambda_i = Cv_i / self.schur[vi]
+            if self.c[vi] > 0.0 and Cv_i > 0:
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    grid_index = self.flatten_grid_index(center_cell + offset)
+                    for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                        vj = self.cur2org[p_j]
+                        xj = self.y[vj]
+                        xji = xj - xi
 
-                    if xji.norm() < self.kernel_radius and C_i > 0.0 and Cv_i > 0:
-                        nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
-                        self.dv[vj] -= lambda_i * nabla_Cv_ji
-                        # self.nc[vj] += 1
+                        if xji.norm() < self.kernel_radius:
+                            nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
+                            self.dv[vj] -= lambda_i * nabla_Cv_ji
+                            # self.nc[vj] += 1
 
 
     @ti.kernel
@@ -2397,11 +2393,11 @@ class Solver:
             self.update_x()
 
         if self.enable_velocity_update:
-            query_result1 = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
-            query_result2 = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
+            query_result1 = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_x.__name__)
+            query_result2 = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_v.__name__)
             print("constraint_solve_x(): ", query_result1.avg)
             print("constraint_solve_v(): ", query_result2.avg)
-            print("ratio: ", 100.0 * (query_result2.avg / query_result1.avg),"%")
+            print("ratio: ", 100.0 * (query_result2.avg / query_result1.avg), "%")
 
         self.copy_to_meshes()
         self.copy_to_particles()
