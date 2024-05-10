@@ -1,12 +1,15 @@
 import taichi as ti
 import json
-from Scenes import test_fluid as scene1
+# from Scenes import test_fluid as scene1
+
 # from Scenes import scene_cylinders as scene1
+from Scenes import scene_thin_shell_twist as scene1
+
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=6e-3)
-# sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
+# sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=6e-3)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -195,3 +198,8 @@ while window.running:
     camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
+
+ti.sync()
+ti.profiler.print_kernel_profiler_info('trace')
+
+print("end frame : ", sim.frame[0])
