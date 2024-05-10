@@ -14,7 +14,7 @@ ti.init(arch=ti.gpu)
 
 pixels = ti.field(ti.u8, shape=(512, 512, 3))
 
-screen_res = (500, 500)
+screen_res = (400, 400)
 screen_to_world_ratio = 10.0
 boundary = (screen_res[0] / screen_to_world_ratio, screen_res[1] / screen_to_world_ratio)
 
@@ -26,7 +26,6 @@ cell_recpr = 1.0 / cell_size
 
 def round_up(f, s):
     return (math.floor(f * cell_recpr / s) + 1) * s
-
 
 grid_size = (round_up(boundary[0], 1), round_up(boundary[1], 1))
 dim = 2

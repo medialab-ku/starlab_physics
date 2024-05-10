@@ -4,7 +4,7 @@ from Scenes import test_fluid as scene1
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(3., 3., 1.), particle_radius=0.05, dHat=1e-3)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.04, dHat=1e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -25,15 +25,17 @@ run_sim = True
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
-n_substep = 20
+n_substep = 10
 dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
+friction_coeff_ui = sim.friction_coeff[0]
 
 def show_options():
     global n_substep
     global dt_ui
     global sim
     global dHat_ui
+    global friction_coeff_ui
 
     old_dt = dt_ui
     old_dHat = dHat_ui
@@ -43,6 +45,9 @@ def show_options():
 
         n_substep = w.slider_int("substeps", n_substep, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
+        friction_coeff_ui = w.slider_float("friction coeff.", friction_coeff_ui, 0.0, 1.0)
+
+
 
     if not old_dt == dt_ui :
         # sim.dt[0] = dt_ui if dt_ui > 0.00001 else 0.00001
@@ -50,6 +55,9 @@ def show_options():
 
     if not old_dHat == dHat_ui:
         sim.dHat[0] = dHat_ui
+
+    if not friction_coeff_ui == friction_coeff_ui:
+        sim.friction_coeff_ui[0] = friction_coeff_ui
 
 def load_animation() :
     global sim
@@ -156,8 +164,8 @@ while window.running:
     for pid in range(len(scene1.particles)):
         scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
 
-    for mid in range(len(scene1.meshes_static)):
-        scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid])
+    # for mid in range(len(scene1.meshes_static)):
+    #     scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid])
 
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
