@@ -934,7 +934,7 @@ class Solver:
             v_nor = self.m_inv[v0] * ld * g0
             v_tan = self.v[v0] - v_nor
             self.dv[v0] -= (v_nor)
-            self.nc[v0] += 1
+            # self.nc[v0] += 1
 
 
 
@@ -1952,6 +1952,7 @@ class Solver:
 
         for vi in range(self.max_num_verts_dynamic):
             Cv_i = 0.0
+            C_i = - 1.0
             nabla_Cv_ii = ti.math.vec3(0.0)
             schur = 1e-4
             xi = self.y[vi]
@@ -1966,11 +1967,11 @@ class Solver:
                     if xji.norm() < self.kernel_radius:
                         nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
                         Cv_i += nabla_Cv_ji.dot(self.v[vj])
+                        C_i += self.poly6_value(xji.norm(), self.kernel_radius)
                         nabla_Cv_ii -= nabla_Cv_ji
                         schur += nabla_Cv_ji.dot(nabla_Cv_ji)
 
-            if Cv_i > 0.0:
-                Cv_i = 0.0
+
 
             schur += nabla_Cv_ii.dot(nabla_Cv_ii)
             lambda_i = Cv_i / schur
@@ -1981,10 +1982,10 @@ class Solver:
                     xj = self.y[vj]
                     xji = xj - xi
 
-                    if xji.norm() < self.kernel_radius:
+                    if xji.norm() < self.kernel_radius and C_i > 0.0 and Cv_i > 0:
                         nabla_Cv_ji = self.spiky_gradient(xji, self.kernel_radius)
                         self.dv[vj] -= lambda_i * nabla_Cv_ji
-                        self.nc[vj] += 1
+                        # self.nc[vj] += 1
 
 
     @ti.kernel
@@ -2344,9 +2345,9 @@ class Solver:
 
     def solve_constraints_v(self):
         self.dv.fill(0.0)
-        self.nc.fill(0)
+        # self.nc.fill(0)
         self.solve_collision_constraints_v()
-        # self.solve_pressure_constraints_v()
+        self.solve_pressure_constraints_v()
         self.update_dv()
 
     @ti.kernel
