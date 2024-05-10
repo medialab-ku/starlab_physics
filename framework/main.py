@@ -1,10 +1,13 @@
 import taichi as ti
 import json
-from Scenes import test_fluid as scene1
+# from Scenes import test_fluid as scene1
+from Scenes import scene_cylinders as scene1
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=6e-3)
+# sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=6e-3)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
+
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -21,6 +24,9 @@ colors_static.append((0, 0.5, 0))
 
 run_sim = True
 
+MODE_WIREFRAME = False
+LOOKAt_ORIGIN = True
+
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
@@ -36,10 +42,12 @@ def show_options():
     global sim
     global dHat_ui
     global friction_coeff_ui
+    global MODE_WIREFRAME
+    global LOOKAt_ORIGIN
 
     old_dt = dt_ui
     old_dHat = dHat_ui
-    with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.15) as w:
+    with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.3) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
@@ -47,6 +55,11 @@ def show_options():
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
         friction_coeff_ui = w.slider_float("friction coeff.", friction_coeff_ui, 0.0, 1.0)
 
+
+        MODE_WIREFRAME = w.checkbox("wireframe",MODE_WIREFRAME)
+        LOOKAt_ORIGIN = w.checkbox("Look at origin",LOOKAt_ORIGIN)
+
+        sim.enable_velocity_update = w.checkbox("velocity constraint",sim.enable_velocity_update)
 
 
     if not old_dt == dt_ui :
@@ -88,7 +101,9 @@ def load_animation() :
 
 while window.running:
 
-    camera.lookat(0.0, 0.0, 0.0)
+    if LOOKAt_ORIGIN :
+        camera.lookat(0.0, 0.0, 0.0)
+
     scene.set_camera(camera)
     scene.ambient_light((0.5, 0.5, 0.5))
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.3, 0.3, 0.3))
@@ -98,7 +113,7 @@ while window.running:
         if window.event.key == 'c':
             g_selector.selection_Count_Up()
 
-        if window.event.key == 'x': # export selection
+        if window.event.key == 'x':  # export selection
             print("==== EXPORT!! ====")
             g_selector.export_selection()
 
@@ -112,30 +127,31 @@ while window.running:
 
         if window.event.key == 'r':
             sim.reset()
+            g_selector.is_selected.fill(0)
+            sim.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
 
-        if window.event.key == 'v':
-            sim.enable_velocity_update = not sim.enable_velocity_update
-            if sim.enable_velocity_update is True:
-                print("enable velocity update")
-            else:
-                print("disable velocity update")
+        # if window.event.key == 'v':
+        #     sim.enable_velocity_update = not sim.enable_velocity_update
+        #     if sim.enable_velocity_update is True:
+        #         print("enable velocity update")
+        #     else:
+        #         print("disable velocity update")
 
         if window.event.key == 'h':
             sim.set_fixed_vertices(g_selector.is_selected)
 
         if window.event.key == 'z':
-            sim.frame[0]=0
+            sim.frame[0] = 0
 
         if window.event.key == ti.ui.BACKSPACE:
             g_selector.is_selected.fill(0)
-            sim.set_fixed_vertices(g_selector.is_selected)
 
         if window.event.key == ti.ui.LMB:
             g_selector.LMB_mouse_pressed = True
             g_selector.mouse_click_pos[0], g_selector.mouse_click_pos[1] = window.get_cursor_pos()
 
-        if window.event.key == ti.ui.RMB:
+        if window.event.key == ti.ui.TAB:
             g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
 
     if window.get_event(ti.ui.RELEASE):
@@ -150,22 +166,21 @@ while window.running:
 
     if run_sim:
         sim.animate_handle(g_selector.is_selected)
-        ti.sync()
         sim.forward(n_substeps=n_substep)
 
     show_options()
 
     for mid in range(len(scene1.meshes_dynamic)):
-        scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=scene1.colors_tri_dynamic[mid])
+        scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=scene1.colors_tri_dynamic[mid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
 
     for tid in range(len(scene1.tet_meshes_dynamic)):
-        scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=scene1.colors_tet_dynamic[tid])
+        scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=scene1.colors_tet_dynamic[tid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
 
     for pid in range(len(scene1.particles)):
         scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
 
     # for mid in range(len(scene1.meshes_static)):
-    #     scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid])
+    #     scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
 
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
