@@ -33,10 +33,10 @@ dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles = 40
+num_particles = 3
 num_constraints = ti.field(dtype=float)
 
-l0 = 0.4
+l0 = 3
 
 frame = 0
 max_num_particles_per_cell = 100

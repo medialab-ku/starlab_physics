@@ -41,14 +41,14 @@ class Solver:
         # print(self.grid_num)
 
         self.enable_velocity_update = False
-        self.enable_collision_handling = False
+        self.enable_collision_handling = True
 
         self.max_num_verts_dynamic = 0
         self.max_num_edges_dynamic = 0
         self.max_num_faces_dynamic = 0
         self.max_num_tetra_dynamic = 0
 
-        num_meshes_dynamic = len(self.meshes_dynamic)
+        num_meshes_dynamic = len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)
         num_tet_meshes_dynamic = len(self.tet_meshes_dynamic)
         num_vert_offsets = num_meshes_dynamic + len(self.particles) + num_tet_meshes_dynamic
 
@@ -56,20 +56,20 @@ class Solver:
         is_mesh_dynamic_empty = not bool(len(self.meshes_dynamic))
         is_tet_mesh_dynamic_empty = not bool(len(self.tet_meshes_dynamic))
 
-        if is_verts_dynamic_empty is True:
-            num_vert_offsets = 1
-            self.max_num_verts_dynamic = 1
-
-
-        if is_mesh_dynamic_empty is True:
-            num_meshes_dynamic = 1
-            self.max_num_edges_dynamic = 1
-            self.max_num_faces_dynamic = 1
-
-
-        if is_tet_mesh_dynamic_empty is True:
-            num_tet_meshes_dynamic = 1
-            self.max_num_tetra_dynamic = 1
+        # if is_verts_dynamic_empty is True:
+        #     num_vert_offsets = 1
+        #     self.max_num_verts_dynamic = 1
+        #
+        #
+        # if is_mesh_dynamic_empty is True:
+        #     num_meshes_dynamic = 1
+        #     self.max_num_edges_dynamic = 1
+        #     self.max_num_faces_dynamic = 1
+        #
+        #
+        # if is_tet_mesh_dynamic_empty is True:
+        #     num_tet_meshes_dynamic = 1
+        #     self.max_num_tetra_dynamic = 1
 
 
         self.offset_verts_dynamic = ti.field(int, shape=num_vert_offsets)
@@ -87,14 +87,17 @@ class Solver:
             self.max_num_faces_dynamic += len(self.meshes_dynamic[mid].faces)
 
         self.offset_tet_mesh = self.max_num_verts_dynamic
+        self.offset_spring = self.max_num_edges_dynamic
 
         for tid in range(len(self.tet_meshes_dynamic)):
             self.offset_verts_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
+            self.offset_edges_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_edges_dynamic
             self.offset_tetras_dynamic[tid] = self.max_num_tetra_dynamic
             self.offset_faces_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_faces_dynamic
             self.max_num_verts_dynamic += len(self.tet_meshes_dynamic[tid].verts)
             self.max_num_tetra_dynamic += len(self.tet_meshes_dynamic[tid].cells)
             self.max_num_faces_dynamic += len(self.tet_meshes_dynamic[tid].faces)
+            self.max_num_edges_dynamic += len(self.tet_meshes_dynamic[tid].edges)
 
 
         self.offset_particle = self.max_num_verts_dynamic
@@ -108,6 +111,15 @@ class Solver:
         # print(self.offset_tetras_dynamic)
         # print(self.max_num_verts_dynamic)
         # print(self.max_num_tetra_dynamic)
+
+        if self.max_num_edges_dynamic < 1:
+            self.max_num_edges_dynamic = 1
+
+        if self.max_num_verts_dynamic < 1:
+            self.max_num_verts_dynamic = 1
+
+        if self.max_num_tetra_dynamic < 1:
+            self.max_num_tetra_dynamic = 1
 
         self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
@@ -201,7 +213,7 @@ class Solver:
         if is_verts_dynamic_empty is True:
             self.max_num_verts_dynamic = 0
 
-        if is_mesh_dynamic_empty is True and is_tet_mesh_dynamic_empty:
+        if is_mesh_dynamic_empty and is_tet_mesh_dynamic_empty:
             self.max_num_edges_dynamic = 0
             self.max_num_faces_dynamic = 0
 
@@ -477,6 +489,7 @@ class Solver:
 
         for tid in range(len(self.tet_meshes_dynamic)):
             self.init_tet_mesh_quantities_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
+            self.init_edge_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_edges_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
             self.init_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
             self.init_tet_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_tetras_dynamic[tid], self.tet_meshes_dynamic[tid])
 
@@ -2029,15 +2042,15 @@ class Solver:
     @ti.kernel
     def solve_spring_constraints_x(self):
 
-        for ei in range(self.max_num_edges_dynamic):
+        for ei in range(self.offset_spring):
             v0, v1 = self.edge_indices_dynamic[2 * ei + 0], self.edge_indices_dynamic[2 * ei + 1]
             x0, x1 = self.y[v0], self.y[v1]
             l0 = self.l0[ei]
             x10 = x0 - x1
             lij = x10.norm()
 
-            C = 0.5 * (lij - l0) * (lij - l0)
-            nabla_C = (lij - l0) * (x10 / lij)
+            C = (lij - l0)
+            nabla_C = (x10 / lij)
             schur = (self.fixed[v0] * self.m_inv[v0] + self.fixed[v1] * self.m_inv[v1]) * nabla_C.dot(nabla_C) + 1e-4
             ld = C / schur
 
@@ -2046,7 +2059,7 @@ class Solver:
             self.nc[v0] += 1
             self.nc[v1] += 1
 
-            if C > 0.5 * (1.2 * l0 - l0) * (1.2 * l0 - l0):
+            if lij > 1.05 * l0:
                 self.spring_ids[self.num_springs[0]] = ei
                 self.schur_spring[self.num_springs[0]] = schur
                 self.gradient_spring[self.num_springs[0]] = nabla_C
@@ -2533,14 +2546,14 @@ class Solver:
         # self.num_cached_ee_pairs.fill(0z
 
         self.num_particle_neighbours.fill(0)
-        self.solve_spring_constraints_x()
+        # self.solve_spring_constraints_x()
         if self.enable_collision_handling:
             self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
         self.solve_pressure_constraints_x()
         self.update_dx()
 
-        # print("ratio: ", self.num_springs[0], " ", self.max_num_edges_dynamic)
+        print(self.num_springs[0])
 
     def solve_constraints_v(self):
         self.dv.fill(0.0)

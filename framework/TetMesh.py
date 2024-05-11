@@ -14,7 +14,7 @@ class TetMesh:
                  is_static=False):
 
         self.is_static = is_static
-        self.tet_mesh = patcher.load_mesh(model_path, relations=["FV", "CV", "VV", "CE"])
+        self.tet_mesh = patcher.load_mesh(model_path, relations=["FV", "CV", "EV"])
         self.tet_mesh.verts.place({'m': ti.f32,
                                'm_inv': ti.f32,
                                'x0': ti.math.vec3,
@@ -45,9 +45,6 @@ class TetMesh:
         self.num_verts = len(self.tet_mesh.verts)
 
 
-        self.tet_mesh.edges.place({'Dm_inv': ti.math.mat3, 'V0': ti.f32}) # bounding sphere radius
-
-
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.edges) * 2)
         self.tetra_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.cells) * 4)
@@ -61,6 +58,7 @@ class TetMesh:
         self.verts = self.tet_mesh.verts
         self.cells = self.tet_mesh.cells
         self.faces = self.tet_mesh.faces
+        self.edges = self.tet_mesh.edges
 
         self.trans = trans
         self.rot = rot

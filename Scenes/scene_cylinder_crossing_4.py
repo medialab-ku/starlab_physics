@@ -7,7 +7,7 @@ ti.init(arch=ti.cuda, device_memory_GB=3)
 
 gravity = ti.math.vec3(0.0, 0.0, 0.0)
 dt = 0.03
-grid_size = ti.math.vec3(3.5, 3.5, 3.5)
+grid_size = ti.math.vec3(5, 5, 5)
 particle_radius = 0.02
 dHat = 1e-3
 
@@ -15,10 +15,10 @@ meshes_dynamic = []
 
 tet_meshes_dynamic = []
 
-tet_mesh_dynamic_cylinder1 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=1, trans=ti.math.vec3(0.2, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_mesh_dynamic_cylinder2 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=1, trans=ti.math.vec3(-0.2, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_mesh_dynamic_cylinder3 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=1, trans=ti.math.vec3(0.2, -0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_mesh_dynamic_cylinder4 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=1, trans=ti.math.vec3(-0.2, -0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_cylinder1 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=2, trans=ti.math.vec3(0.4, 0.4, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_cylinder2 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=2, trans=ti.math.vec3(-0.4, 0.4, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_cylinder3 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=2, trans=ti.math.vec3(0.4, -0.4, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_cylinder4 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=2, trans=ti.math.vec3(-0.4, -0.4, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 tet_meshes_dynamic.append(tet_mesh_dynamic_cylinder1)
 tet_meshes_dynamic.append(tet_mesh_dynamic_cylinder2)
 tet_meshes_dynamic.append(tet_mesh_dynamic_cylinder3)
