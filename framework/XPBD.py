@@ -186,7 +186,6 @@ class Solver:
             self.max_num_edges_static += len(self.meshes_static[mid].edges)
             self.max_num_faces_static += len(self.meshes_static[mid].faces)
 
-
         self.face_indices_static = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_static)
         self.edge_indices_static = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_static)
 
@@ -208,7 +207,6 @@ class Solver:
             self.max_num_verts_static = 0
             self.max_num_edges_static = 0
             self.max_num_faces_static = 0
-
 
         self.init_mesh_aggregation()
         self.init_particle_aggregation()
@@ -2089,7 +2087,7 @@ class Solver:
     @ti.kernel
     def solve_pressure_constraints_x(self):
 
-        for vi in range(self.max_num_verts_dynamic):
+        for vi in range(self.offset_particle, self.max_num_verts_dynamic):
             self.c[vi] = - 1.0
             nabla_C_ii = ti.math.vec3(0.0)
             self.schur[vi] = 1e-4
@@ -2134,7 +2132,7 @@ class Solver:
     @ti.kernel
     def solve_pressure_constraints_v(self):
 
-        for vi in range(self.max_num_verts_dynamic):
+        for vi in range(self.offset_particle, self.max_num_verts_dynamic):
             Cv_i = 0.0
             nabla_Cv_ii = ti.math.vec3(0.0)
             for j in range(self.num_particle_neighbours[vi]):
@@ -2411,11 +2409,16 @@ class Solver:
             self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C2 * ld
             self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C3 * ld
 
+            # self.nc[v0] += 1
+            # self.nc[v1] += 1
+            # self.nc[v2] += 1
+            # self.nc[v3] += 1
+
             J = ti.math.determinant(F)
             F_trace = sig[0, 0] + sig[1, 1] + sig[2, 2]
 
-            C_vol = 0.5 * (F_trace - 3) * (F_trace - 3)
-            H_vol = (F_trace - 3) * self.Dm_inv[tid].transpose()
+            C_vol = 0.5 * (J - 1) * (J - 1)
+            H_vol = (J - 1) * self.Dm_inv[tid].transpose()
 
             nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
             nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
@@ -2427,11 +2430,18 @@ class Solver:
                         self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
                         self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + 1e-4)
 
+            ld_vol = C_vol / schur_vol
 
-            self.nc[v0] += 1
-            self.nc[v1] += 1
-            self.nc[v2] += 1
-            self.nc[v3] += 1
+            self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
+            self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
+            self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
+            self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
+
+
+            self.nc[v0] += 2
+            self.nc[v1] += 2
+            self.nc[v2] += 2
+            self.nc[v3] += 2
 
 
     @ti.kernel
@@ -2515,7 +2525,7 @@ class Solver:
 
         self.num_particle_neighbours.fill(0)
         # self.solve_spring_constraints_x()
-        self.solve_collision_constraints_x()
+        # self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
         self.solve_pressure_constraints_x()
         self.update_dx()
