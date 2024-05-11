@@ -60,6 +60,7 @@ class TetMesh:
 
         self.verts = self.tet_mesh.verts
         self.cells = self.tet_mesh.cells
+        self.faces = self.tet_mesh.faces
 
         self.trans = trans
         self.rot = rot

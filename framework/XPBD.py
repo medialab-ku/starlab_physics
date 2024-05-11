@@ -73,7 +73,7 @@ class Solver:
 
         self.offset_verts_dynamic = ti.field(int, shape=num_vert_offsets)
         self.offset_edges_dynamic = ti.field(int, shape=num_meshes_dynamic)
-        self.offset_faces_dynamic = ti.field(int, shape=num_meshes_dynamic)
+        self.offset_faces_dynamic = ti.field(int, shape=num_meshes_dynamic + num_tet_meshes_dynamic)
         self.offset_tetras_dynamic = ti.field(int, shape=num_tet_meshes_dynamic)
 
         for mid in range(len(self.meshes_dynamic)):
@@ -90,9 +90,10 @@ class Solver:
         for tid in range(len(self.tet_meshes_dynamic)):
             self.offset_verts_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
             self.offset_tetras_dynamic[tid] = self.max_num_tetra_dynamic
-
+            self.offset_faces_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_faces_dynamic
             self.max_num_verts_dynamic += len(self.tet_meshes_dynamic[tid].verts)
             self.max_num_tetra_dynamic += len(self.tet_meshes_dynamic[tid].cells)
+            self.max_num_faces_dynamic += len(self.tet_meshes_dynamic[tid].faces)
 
 
         self.offset_particle = self.max_num_verts_dynamic
@@ -392,8 +393,8 @@ class Solver:
 
                 idx_set = is_selected[i] - 1
 
-                cur_anim = self.cur_animation[idx_set]
-                max_anim = self.num_animation[idx_set]
+                cur_anim = int(self.cur_animation[idx_set])
+                max_anim = int(self.num_animation[idx_set])
 
                 if cur_anim < max_anim:
                     vel = self.action_anim[idx_set, cur_anim]
@@ -473,7 +474,7 @@ class Solver:
 
         for tid in range(len(self.tet_meshes_dynamic)):
             self.init_tet_mesh_quantities_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-            # self.init_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
+            self.init_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
             self.init_tet_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_tetras_dynamic[tid], self.tet_meshes_dynamic[tid])
 
         for mid in range(len(self.meshes_static)):
@@ -2555,7 +2556,7 @@ class Solver:
         self.dt[0] = dt / n_substeps
 
 
-        ti.profiler.clear_kernel_profiler_info()
+        # ti.profiler.clear_kernel_profiler_info()
         self.broad_phase()
         # self.search_neighbours()
         for _ in range(n_substeps):
