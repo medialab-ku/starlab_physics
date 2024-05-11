@@ -35,7 +35,7 @@ class Solver:
         self.init_grid()
 
         self.kernel_radius = 4 * particle_radius
-        self.cell_size = 4 * self.kernel_radius
+        self.cell_size = 2.5 * self.kernel_radius
         self.grid_origin = -self.grid_size
         self.grid_num = np.ceil(2 * self.grid_size / self.cell_size).astype(int)
         # print(self.grid_num)
@@ -126,33 +126,37 @@ class Solver:
 
         self.fixed.fill(1)
 
-        self.max_num_cached_pairs = 100
+        self.cache_size = 500
 
         # self.vt_dynamic_active_set = ti.field(int, shape=(self.num_verts, self.max_num_cached_pairs))
         # self.vt_dynamic_active_set_num = ti.field(int, shape=(self.max_num_cached_pairs))
 
-        self.vt_active_set = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
-        self.vt_active_set_g0 = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
-        self.vt_active_set_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
+        self.vt_active_set = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.cache_size))
+        self.vt_active_set_g0 = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
+        self.vt_active_set_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
         self.vt_active_set_num = ti.field(int, shape=(self.max_num_verts_dynamic))
 
-        self.vt_active_set_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic, self.max_num_cached_pairs))
+        self.vt_active_set_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic, self.cache_size))
         self.vt_active_set_num_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic))
 
-        self.tv_active_set = ti.field(int, shape=(self.max_num_faces_dynamic, self.max_num_cached_pairs))
+        self.tv_active_set = ti.field(int, shape=(self.max_num_faces_dynamic, self.cache_size))
         self.tv_active_set_num = ti.field(int, shape=(self.max_num_faces_dynamic))
 
-        self.ee_active_set = ti.field(int, shape=(self.max_num_edges_dynamic, self.max_num_cached_pairs))
+        self.ee_active_set = ti.field(int, shape=(self.max_num_edges_dynamic, self.cache_size))
         self.ee_active_set_num = ti.field(int, shape=(self.max_num_edges_dynamic))
 
-        self.max_num_cached_ee_pairs = 1000
-        self.ee_active_set_dynamic = ti.Vector.field(n=2, dtype=int, shape=self.max_num_cached_ee_pairs)
+        self.ee_active_set_dynamic = ti.Vector.field(n=2, dtype=int, shape=self.cache_size)
         self.num_cached_ee_pairs = ti.field(int, shape=1)
 
-        self.max_num_cached_neighbours = 100
-        self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.max_num_cached_neighbours))
-        self.particle_neighbours_gradients = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.max_num_cached_neighbours))
+
+        self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
+        self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.cache_size))
+        self.particle_neighbours_gradients = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
         self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
+
+        self.cell_particle_ids = ti.field(dtype=ti.uint32, shape=(self.num_cells, self.cache_size))
+        self.cell_num_particles = ti.field(dtype=ti.uint32, shape=self.num_cells)
+
 
 
         self.max_num_verts_static = 0
@@ -207,8 +211,6 @@ class Solver:
 
         self.init_mesh_aggregation()
         self.init_particle_aggregation()
-
-        self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
         self.grid_particles_num = ti.field(int, shape=self.num_cells)
         self.grid_particles_num_temp = ti.field(int, shape= self.num_cells)
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
@@ -249,6 +251,165 @@ class Solver:
 
         self.broad_phase_static()
 
+    @ti.kernel
+    def __init_animation_pos(self, is_selected: ti.template()):
+        for i in is_selected:
+            if is_selected != 0:
+                self.anim_x[i] = self.x[i]
+
+        for i in ti.ndrange(4):
+            count = 0.0
+            origin = ti.Vector([0.0, 0.0, 0.0])
+            idx_set_count = i + 1
+
+            for pidx in ti.ndrange(self.max_num_verts_dynamic):
+                if is_selected[pidx] == idx_set_count:
+                    count += 1
+                    origin += self.x[pidx]
+
+            if count > 0.001:
+                self.anim_local_origin[i] = origin / count
+
+    def _reset_animation(self):
+        self.num_animation.fill(0)
+        self.cur_animation.fill(0)
+        self.active_anim_frame.fill(0)
+        self.action_anim.fill(0.0)
+        self.anim_local_origin.fill(0.0)
+        self.anim_rotation_mat.fill(0.0)
+
+    def _set_animation(self, animationDict, is_selected):
+        self.num_animation.fill(0)
+        self.cur_animation.fill(0)
+        self.active_anim_frame.fill(0)
+        self.action_anim.fill(0.0)
+        self.anim_local_origin.fill(0.0)
+
+        self.num_animation[0] = len(animationDict[1])
+        self.num_animation[1] = len(animationDict[2])
+        self.num_animation[2] = len(animationDict[3])
+        self.num_animation[3] = len(animationDict[4])
+        self.num_animation[3] = len(animationDict[4])
+
+        if (self.num_animation[0] > self.max_num_anim) or (self.num_animation[1] > self.max_num_anim) \
+                or (self.num_animation[2] > self.max_num_anim) or (self.num_animation[3] > self.max_num_anim):
+            print("warning :: length of some animation is longer than ", self.max_num_anim,
+                  ". Subsequent animations are ignored")
+            self.num_animation[0] = self.num_animation[0] if self.num_animation[
+                                                                 0] < self.max_num_anim else self.max_num_anim
+            self.num_animation[1] = self.num_animation[1] if self.num_animation[
+                                                                 1] < self.max_num_anim else self.max_num_anim
+            self.num_animation[2] = self.num_animation[2] if self.num_animation[
+                                                                 2] < self.max_num_anim else self.max_num_anim
+            self.num_animation[3] = self.num_animation[3] if self.num_animation[
+                                                                 3] < self.max_num_anim else self.max_num_anim
+
+        self.__init_animation_pos(is_selected)
+
+        for ic in range(4):
+            animations_ic = animationDict[ic + 1]
+            for a in range(self.num_animation[ic]):
+                animation = animations_ic[a]
+
+                self.active_anim_frame[ic, a] = animation[6]
+                for j in range(6):
+                    self.action_anim[ic, a][j] = animation[j]
+
+        self.set_fixed_vertices(is_selected)
+
+        # print(self.num_animation)
+        # print(self.active_anim_frame)
+        # print(self.action_anim)
+        # print(self.anim_local_origin)
+
+        # self.frame[0] = 0
+        #
+        # self.max_num_anim = 40
+        # self.num_animation = ti.field(dtype = ti.i32,shape = 4)   # maximum number of handle set
+        # self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
+        # self.active_anim_frame = ti.field(dtype = ti.i32,shape = (4,self.max_num_anim)) # maximum number of animation
+        # self.action_anim = ti.Vector.field(6,dtype = ti.f32,shape = (4,self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
+        #
+        # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
+
+    @ti.func
+    def apply_rotation(self, mat_rot, vec):
+        v = ti.Vector([vec[0], vec[1], vec[2], 1])
+        vv = mat_rot @ v
+        return ti.Vector([vv[0], vv[1], vv[2]])
+
+    @ti.func
+    def get_animation_rotation_mat(self, axis, degree):
+        s = ti.sin(degree * 0.5)
+        c = ti.cos(degree * 0.5)
+        axis = s * axis
+        q = ti.Vector([axis[0], axis[1], axis[2], c])
+        M = ti.math.mat4(0.0)
+
+        M[3, 3] = 1.0
+
+        M[0, 0] = 1 - 2 * (q[1] ** 2 + q[2] ** 2)
+        M[1, 1] = 1 - 2 * (q[0] ** 2 + q[2] ** 2)
+        M[2, 2] = 1 - 2 * (q[0] ** 2 + q[1] ** 2)
+
+        M[2, 1] = 2 * (q[1] * q[2] + q[3] * q[0])
+        M[1, 2] = 2 * (q[1] * q[2] - q[3] * q[0])
+
+        M[2, 0] = 2 * (q[0] * q[2] - q[3] * q[1])
+        M[0, 2] = 2 * (q[0] * q[2] + q[3] * q[1])
+
+        M[1, 0] = 2 * (q[0] * q[1] + q[3] * q[2])
+        M[0, 1] = 2 * (q[0] * q[1] - q[3] * q[2])
+
+        return M
+
+    @ti.kernel
+    def animate_handle(self, is_selected: ti.template()):
+
+        for idx_set in ti.ndrange(4):
+            cur_anim = self.cur_animation[idx_set]
+            max_anim = self.num_animation[idx_set]
+            is_animation_changed = False or (self.frame[0] == 0)  # when frame = 0 animation changed
+            while self.active_anim_frame[idx_set, cur_anim] < self.frame[0] and cur_anim < max_anim:
+                self.cur_animation[idx_set] = self.cur_animation[idx_set] + 1
+                cur_anim = self.cur_animation[idx_set]
+                is_animation_changed = True
+
+            if cur_anim < max_anim:
+                vel = self.action_anim[idx_set, cur_anim]
+                lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
+                self.anim_local_origin[idx_set] += lin_vel * self.dt[0]
+
+                ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
+                degree_rate = ang_vel.norm()
+
+                if is_animation_changed and degree_rate > 1e-4:
+                    axis = ti.math.normalize(ang_vel)
+                    self.anim_rotation_mat[idx_set] = self.get_animation_rotation_mat(axis, degree_rate * self.dt[0])
+
+        for i in self.anim_x:
+            if is_selected[i] >= 1:
+
+                idx_set = is_selected[i] - 1
+
+                cur_anim = self.cur_animation[idx_set]
+                max_anim = self.num_animation[idx_set]
+
+                if cur_anim < max_anim:
+                    vel = self.action_anim[idx_set, cur_anim]
+                    lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
+                    self.anim_x[i] = self.anim_x[i] + lin_vel * self.dt[0]
+
+                    ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
+                    degree_rate = ang_vel.norm()
+                    if degree_rate > 1e-4:
+                        mat_rot = self.anim_rotation_mat[idx_set]
+
+                        self.anim_x[i] = self.apply_rotation(mat_rot,
+                                                             self.anim_x[i] - self.anim_local_origin[idx_set]) + \
+                                         self.anim_local_origin[idx_set]
+
+                    self.x[i] = self.anim_x[i]
 
     def copy_to_meshes(self):
         for mid in range(len(self.meshes_dynamic)):
@@ -498,8 +659,8 @@ class Solver:
             self.cur2org_static[new_index] = i
 
     @ti.func
-    def flatten_grid_index(self, grid_index):
-        return grid_index[0] * self.grid_num[1] * self.grid_num[2] + grid_index[1] * self.grid_num[2] + grid_index[2]
+    def flatten_cell_id(self, cell_id):
+        return cell_id[0] * self.grid_num[1] * self.grid_num[2] + cell_id[1] * self.grid_num[2] + cell_id[2]
 
     @ti.func
     def pos_to_index(self, pos):
@@ -515,13 +676,12 @@ class Solver:
 
     @ti.func
     def get_flatten_grid_index(self, pos: ti.math.vec3):
-        return self.flatten_grid_index(self.pos_to_index(pos))
+        return self.flatten_cell_id(self.pos_to_index(pos))
 
 
 
 
     def broad_phase(self):
-
         # self.grid_particles_num.fill(0)
         self.update_grid_id()
         self.prefix_sum_executor.run(self.grid_particles_num)
@@ -533,6 +693,19 @@ class Solver:
         self.update_grid_id_static()
         self.prefix_sum_executor_static.run(self.grid_particles_num_static)
         self.counting_sort_static()
+
+    @ti.kernel
+    def search_neighbours(self):
+
+        for ci in range(self.num_cells):
+            self.cell_num_particles[ci] = 0
+
+        for vi in range(self.max_num_verts_dynamic):
+            grid_index = self.get_flatten_grid_index(self.x[vi])
+            if self.cell_num_particles[grid_index] < self.cache_size:
+                self.cell_particle_ids[grid_index, self.cell_num_particles[grid_index]] = vi
+                ti.atomic_add(self.cell_num_particles[grid_index], 1)
+
 
     @ti.kernel
     def update_grid_id(self):
@@ -796,7 +969,7 @@ class Solver:
             g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
 
         if d < dHat:
-            if self.vt_active_set_num[vid_d] < self.max_num_cached_pairs:
+            if self.vt_active_set_num[vid_d] < self.cache_size:
                 self.vt_active_set[vid_d, self.vt_active_set_num[vid_d]] = ti.math.ivec2(fid_s, dtype)
                 self.vt_active_set_g0[vid_d, self.vt_active_set_num[vid_d]] = g0
                 schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
@@ -1922,13 +2095,13 @@ class Solver:
             xi = self.y[vi]
             center_cell = self.pos_to_index(self.y[vi])
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_grid_index(center_cell + offset)
+                grid_index = self.flatten_cell_id(center_cell + offset)
                 for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
                     vj = self.cur2org[p_j]
                     xj = self.y[vj]
                     xji = xj - xi
 
-                    if xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.max_num_cached_neighbours:
+                    if xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.cache_size:
                         self.particle_neighbours[vi, self.num_particle_neighbours[vi]] = vj
                         nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
                         self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = nabla_C_ji
@@ -2001,7 +2174,7 @@ class Solver:
 
                 center_cell = self.pos_to_index(self.y[vi_d])
                 for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                    grid_index = self.flatten_grid_index(center_cell + offset)
+                    grid_index = self.flatten_cell_id(center_cell + offset)
                     for p_j in range(self.grid_particles_num_static[ti.max(0, grid_index - 1)], self.grid_particles_num_static[grid_index]):
                         vj = self.cur2org_static[p_j]
                         if vj >= self.max_num_verts_static and vj <self.max_num_verts_static + self.max_num_faces_static:
@@ -2343,14 +2516,14 @@ class Solver:
         # self.solve_spring_constraints_x()
         self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
-        # self.solve_pressure_constraints_x()
+        self.solve_pressure_constraints_x()
         self.update_dx()
 
     def solve_constraints_v(self):
         self.dv.fill(0.0)
         # self.nc.fill(0)
         self.solve_collision_constraints_v()
-        # self.solve_pressure_constraints_v()
+        self.solve_pressure_constraints_v()
         self.update_dv()
 
     @ti.kernel
@@ -2381,9 +2554,10 @@ class Solver:
         dt = self.dt[0]
         self.dt[0] = dt / n_substeps
 
-        self.broad_phase()
 
         ti.profiler.clear_kernel_profiler_info()
+        self.broad_phase()
+        # self.search_neighbours()
         for _ in range(n_substeps):
             self.compute_y()
             self.confine_to_boundary()
@@ -2396,6 +2570,16 @@ class Solver:
                 # self.confine_to_boundary_v()
             self.update_x()
 
+        # b1 = ti.profiler.query_kernel_profiler_info(self.update_grid_id.__name__)
+        # b2 = ti.profiler.query_kernel_profiler_info(self.prefix_sum_executor.run.__name__)
+        # b3 = ti.profiler.query_kernel_profiler_info(self.counting_sort.__name__)
+        # b4 = ti.profiler.query_kernel_profiler_info(self.search_neighbours.__name__)
+        #
+        # avg_overhead_b = b1.avg + b2.avg + b3.avg
+        #
+        # print("broadphase(): ", round(avg_overhead_b, 2))
+        # print("search_neighbours(): ", round(b4.avg, 2))
+
         if self.enable_velocity_update:
 
             profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
@@ -2407,9 +2591,9 @@ class Solver:
             avg_overhead_x = profile_collision_x.avg + profile_pressure_x.avg
             avg_overhead_v = profile_collision_v.avg + profile_pressure_v.avg
 
-            print("constraint_solve_x(): ", avg_overhead_x)
-            print("constraint_solve_v(): ", avg_overhead_v)
-            print("ratio: ", 100.0 * (avg_overhead_v / avg_overhead_x), "%")
+            print("constraint_solve_x(): ", round(avg_overhead_x, 2))
+            print("constraint_solve_v(): ", round(avg_overhead_v, 2))
+            print("ratio: ", round(100.0 * (avg_overhead_v / avg_overhead_x), 2), "%")
 
         self.copy_to_meshes()
         self.copy_to_particles()
@@ -2419,157 +2603,4 @@ class Solver:
         # print(self.frame[0])
 
 
-    @ti.kernel
-    def __init_animation_pos(self,is_selected : ti.template()):
-        for i in is_selected :
-            if is_selected !=0 :
-                self.anim_x[i] = self.x[i]
 
-        for i in ti.ndrange(4) :
-            count = 0.0
-            origin = ti.Vector([0.0,0.0,0.0])
-            idx_set_count = i+1
-
-            for pidx in ti.ndrange(self.max_num_verts_dynamic) :
-                if is_selected[pidx] == idx_set_count :
-                    count += 1
-                    origin += self.x[pidx]
-
-            if count >0.001 :
-                self.anim_local_origin[i] = origin/count
-
-    def _reset_animation(self):
-        self.num_animation.fill(0)
-        self.cur_animation.fill(0)
-        self.active_anim_frame.fill(0)
-        self.action_anim.fill(0.0)
-        self.anim_local_origin.fill(0.0)
-        self.anim_rotation_mat.fill(0.0)
-
-    def _set_animation(self,animationDict,is_selected):
-        self.num_animation.fill(0)
-        self.cur_animation.fill(0)
-        self.active_anim_frame.fill(0)
-        self.action_anim.fill(0.0)
-        self.anim_local_origin.fill(0.0)
-
-        self.num_animation[0] = len(animationDict[1])
-        self.num_animation[1] = len(animationDict[2])
-        self.num_animation[2] = len(animationDict[3])
-        self.num_animation[3] = len(animationDict[4])
-        self.num_animation[3] = len(animationDict[4])
-
-        if (self.num_animation[0] > self.max_num_anim) or (self.num_animation[1] > self.max_num_anim)\
-                or (self.num_animation[2] > self.max_num_anim) or (self.num_animation[3] > self.max_num_anim) :
-            print("warning :: length of some animation is longer than ",self.max_num_anim,". Subsequent animations are ignored")
-            self.num_animation[0] = self.num_animation[0] if self.num_animation[0] < self.max_num_anim else self.max_num_anim
-            self.num_animation[1] = self.num_animation[1] if self.num_animation[1] < self.max_num_anim else self.max_num_anim
-            self.num_animation[2] = self.num_animation[2] if self.num_animation[2] < self.max_num_anim else self.max_num_anim
-            self.num_animation[3] = self.num_animation[3] if self.num_animation[3] < self.max_num_anim else self.max_num_anim
-
-        self.__init_animation_pos(is_selected)
-
-        for ic in range(4):
-            animations_ic = animationDict[ic + 1]
-            for a in range(self.num_animation[ic]) :
-                animation = animations_ic[a]
-
-                self.active_anim_frame[ic,a] = animation[6]
-                for j in range(6) :
-                    self.action_anim[ic,a][j] = animation[j]
-
-        self.set_fixed_vertices(is_selected)
-
-
-        # print(self.num_animation)
-        # print(self.active_anim_frame)
-        # print(self.action_anim)
-        # print(self.anim_local_origin)
-
-        # self.frame[0] = 0
-        #
-        # self.max_num_anim = 40
-        # self.num_animation = ti.field(dtype = ti.i32,shape = 4)   # maximum number of handle set
-        # self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
-        # self.active_anim_frame = ti.field(dtype = ti.i32,shape = (4,self.max_num_anim)) # maximum number of animation
-        # self.action_anim = ti.Vector.field(6,dtype = ti.f32,shape = (4,self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
-        #
-        # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-
-
-    @ti.func
-    def apply_rotation(self,mat_rot,vec):
-        v = ti.Vector([vec[0],vec[1],vec[2],1])
-        vv = mat_rot@v
-        return ti.Vector([vv[0],vv[1],vv[2]])
-
-    @ti.func
-    def get_animation_rotation_mat(self, axis, degree):
-        s = ti.sin(degree * 0.5)
-        c = ti.cos(degree * 0.5)
-        axis = s * axis
-        q = ti.Vector([axis[0], axis[1], axis[2], c])
-        M = ti.math.mat4(0.0)
-
-        M[3, 3] = 1.0
-
-        M[0, 0] = 1 - 2 * (q[1] ** 2 + q[2] ** 2)
-        M[1, 1] = 1 - 2 * (q[0] ** 2 + q[2] ** 2)
-        M[2, 2] = 1 - 2 * (q[0] ** 2 + q[1] ** 2)
-
-        M[2, 1] = 2 * (q[1] * q[2] + q[3] * q[0])
-        M[1, 2] = 2 * (q[1] * q[2] - q[3] * q[0])
-
-        M[2, 0] = 2 * (q[0] * q[2] - q[3] * q[1])
-        M[0, 2] = 2 * (q[0] * q[2] + q[3] * q[1])
-
-        M[1, 0] = 2 * (q[0] * q[1] + q[3] * q[2])
-        M[0, 1] = 2 * (q[0] * q[1] - q[3] * q[2])
-
-        return M
-
-    @ti.kernel
-    def animate_handle(self, is_selected: ti.template()):
-
-        for idx_set in ti.ndrange(4):
-            cur_anim = self.cur_animation[idx_set]
-            max_anim = self.num_animation[idx_set]
-            is_animation_changed = False or (self.frame[0] == 0)  # when frame = 0 animation changed
-            while self.active_anim_frame[idx_set, cur_anim] < self.frame[0] and cur_anim < max_anim:
-                self.cur_animation[idx_set] = self.cur_animation[idx_set] + 1
-                cur_anim = self.cur_animation[idx_set]
-                is_animation_changed = True
-
-            if cur_anim < max_anim:
-                vel = self.action_anim[idx_set, cur_anim]
-                lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
-                self.anim_local_origin[idx_set] += lin_vel * self.dt[0]
-
-                ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
-                degree_rate = ang_vel.norm()
-
-                if is_animation_changed and degree_rate > 1e-4:
-                    axis = ti.math.normalize(ang_vel)
-                    self.anim_rotation_mat[idx_set] = self.get_animation_rotation_mat(axis, degree_rate * self.dt[0])
-
-        for i in self.anim_x:
-            if is_selected[i] >= 1:
-
-                idx_set = is_selected[i] - 1
-
-                cur_anim = self.cur_animation[idx_set]
-                max_anim = self.num_animation[idx_set]
-
-                if cur_anim < max_anim:
-                    vel = self.action_anim[idx_set, cur_anim]
-                    lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
-                    self.anim_x[i] = self.anim_x[i] + lin_vel * self.dt[0]
-
-                    ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
-                    degree_rate = ang_vel.norm()
-                    if degree_rate > 1e-4:
-                        mat_rot = self.anim_rotation_mat[idx_set]
-
-                        self.anim_x[i] = self.apply_rotation(mat_rot,self.anim_x[i] - self.anim_local_origin[idx_set]) + self.anim_local_origin[idx_set]
-
-                    self.x[i] = self.anim_x[i]
