@@ -10,8 +10,8 @@ meshes_dynamic = []
 
 tet_meshes_dynamic = []
 
-tet_mesh_dynamic_1 = TetMesh("../models/MESH/cube.1.node",  scale=1.0, trans=ti.math.vec3(0.0, 2.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_mesh_dynamic_2 = TetMesh("../models/MESH/cube.1.node",  scale=1.0, trans=ti.math.vec3(0.0, -1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_1 = TetMesh("../models/MESH/cube.1.node",  scale=1.0, trans=ti.math.vec3(0.0, 2.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_2 = TetMesh("../models/MESH/cube.1.node",  scale=2.0, trans=ti.math.vec3(0.0, -1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # tet_mesh_dynamic_2 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(-0.8, 0.2, -0.8), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # tet_mesh_dynamic_3 = TetMesh("../models/MESH/bunny_tiny.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # tet_mesh_dynamic_4 = TetMesh("../models/MESH/dragon.1.1.node", scale=0.1, trans=ti.math.vec3(0.0, 0.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
@@ -22,11 +22,11 @@ tet_meshes_dynamic.append(tet_mesh_dynamic_2)
 meshes_static = []
 # mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=2.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # mesh_static_2 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-# mesh_static_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 15.0, 0.0), is_static=True)
+mesh_static_3 = Mesh("../models/OBJ/square_big.obj", scale=0.3, trans=ti.math.vec3(0.0, -3.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # mesh_static_4 = Mesh("../models/OBJ/triangle.obj", scale=0.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 
 # meshes_static.append(mesh_static_1)
-# meshes_static.append(mesh_static_3)
+meshes_static.append(mesh_static_3)
 # meshes_static.append(mesh_static_4)
 # meshes_static.append(mesh_static_2)
 
