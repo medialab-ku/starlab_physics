@@ -41,6 +41,7 @@ class Solver:
         # print(self.grid_num)
 
         self.enable_velocity_update = False
+        self.enable_collision_handling = False
 
         self.max_num_verts_dynamic = 0
         self.max_num_edges_dynamic = 0
@@ -120,6 +121,10 @@ class Solver:
         self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
         self.l0 = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
+        self.spring_ids = ti.field(dtype=ti.i32, shape=self.max_num_edges_dynamic)
+        self.num_springs = ti.field(dtype=ti.i32, shape=1)
+        self.schur_spring = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
+        self.gradient_spring = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_edges_dynamic)
 
         self.face_indices_dynamic = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_dynamic)
         self.edge_indices_dynamic = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_dynamic)
@@ -2031,11 +2036,9 @@ class Solver:
             x10 = x0 - x1
             lij = x10.norm()
 
-            C = lij - l0
-            nabla_C = x10 / lij
-
+            C = 0.5 * (lij - l0) * (lij - l0)
+            nabla_C = (lij - l0) * (x10 / lij)
             schur = (self.fixed[v0] * self.m_inv[v0] + self.fixed[v1] * self.m_inv[v1]) * nabla_C.dot(nabla_C) + 1e-4
-
             ld = C / schur
 
             self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * ld * nabla_C
@@ -2043,25 +2046,30 @@ class Solver:
             self.nc[v0] += 1
             self.nc[v1] += 1
 
+            if C > 0.5 * (1.2 * l0 - l0) * (1.2 * l0 - l0):
+                self.spring_ids[self.num_springs[0]] = ei
+                self.schur_spring[self.num_springs[0]] = schur
+                self.gradient_spring[self.num_springs[0]] = nabla_C
+                ti.atomic_add(self.num_springs[0], 1)
+
+
+
+
+
     @ti.kernel
     def solve_spring_constraints_v(self):
 
-        for ei in range(self.max_num_edges_dynamic):
+        for i in range(self.num_springs[0]):
+            ei = self.spring_ids[i]
             v0, v1 = self.edge_indices_dynamic[2 * ei + 0], self.edge_indices_dynamic[2 * ei + 1]
-            x0, x1 = self.y[v0], self.y[v1]
-            l0 = self.l0[ei]
 
-            x10 = x0 - x1
-            center = 0.5 * (x0 + x1)
-            lij = x10.norm()
-            normal = x10 / lij
-            p0 = center + 0.5 * l0 * normal
-            p1 = center - 0.5 * l0 * normal
-
-            self.dx[v0] += (p0 - x0)
-            self.dx[v1] += (p1 - x1)
-            self.nc[v0] += 1
-            self.nc[v1] += 1
+            Cv = self.gradient_spring[i].dot(self.v[v0] - self.v[v1])
+            if Cv > 0:
+                ld_v = Cv / self.schur_spring[i]
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * ld_v * self.gradient_spring[i]
+                self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * self.gradient_spring[i]
+                self.nc[v0] += 1
+                self.nc[v1] += 1
 
     @ti.func
     def spiky_gradient(self, r, h):
@@ -2417,8 +2425,8 @@ class Solver:
             J = ti.math.determinant(F)
             F_trace = sig[0, 0] + sig[1, 1] + sig[2, 2]
 
-            C_vol = 0.5 * (J - 1) * (J - 1)
-            H_vol = (J - 1) * self.Dm_inv[tid].transpose()
+            C_vol = 0.5 * (F_trace - 3) * (F_trace - 3)
+            H_vol = (F_trace - 3) * self.Dm_inv[tid].transpose()
 
             nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
             nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
@@ -2510,6 +2518,7 @@ class Solver:
         self.dx.fill(0.0)
         self.nc.fill(0)
         self.vt_active_set_num.fill(0)
+        self.num_springs[0] = 0
         # self.vt_active_set.fill(0)
 
         # self.tv_active_set_num.fill(0)
@@ -2524,17 +2533,25 @@ class Solver:
         # self.num_cached_ee_pairs.fill(0z
 
         self.num_particle_neighbours.fill(0)
-        # self.solve_spring_constraints_x()
-        # self.solve_collision_constraints_x()
+        self.solve_spring_constraints_x()
+        if self.enable_collision_handling:
+            self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
         self.solve_pressure_constraints_x()
         self.update_dx()
 
+        # print("ratio: ", self.num_springs[0], " ", self.max_num_edges_dynamic)
+
     def solve_constraints_v(self):
         self.dv.fill(0.0)
-        # self.nc.fill(0)
-        self.solve_collision_constraints_v()
-        self.solve_pressure_constraints_v()
+        self.nc.fill(0)
+
+        self.solve_spring_constraints_v()
+
+        if self.enable_collision_handling:
+            self.solve_collision_constraints_v()
+
+        # self.solve_pressure_constraints_v()
         self.update_dv()
 
     @ti.kernel
@@ -2591,20 +2608,28 @@ class Solver:
         # print("broadphase(): ", round(avg_overhead_b, 2))
         # print("search_neighbours(): ", round(b4.avg, 2))
 
-        if self.enable_velocity_update:
+        # if self.enable_velocity_update:
 
-            profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
-            profile_pressure_x = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_x.__name__)
+            # profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
+            # profile_pressure_x = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_x.__name__)
+            #
+            # profile_collision_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
+            # profile_pressure_v = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_v.__name__)
+            #
+            # avg_overhead_x = profile_collision_x.avg + profile_pressure_x.avg
+            # avg_overhead_v = profile_collision_v.avg + profile_pressure_v.avg
 
-            profile_collision_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
-            profile_pressure_v = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_v.__name__)
-
-            avg_overhead_x = profile_collision_x.avg + profile_pressure_x.avg
-            avg_overhead_v = profile_collision_v.avg + profile_pressure_v.avg
-
-            print("constraint_solve_x(): ", round(avg_overhead_x, 2))
-            print("constraint_solve_v(): ", round(avg_overhead_v, 2))
-            print("ratio: ", round(100.0 * (avg_overhead_v / avg_overhead_x), 2), "%")
+            # profile_spring_x = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
+            # profile_spring_v = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_v.__name__)
+            #
+            #
+            # avg_overhead_x = profile_spring_x.avg
+            # avg_overhead_v = profile_spring_v.avg
+            #
+            #
+            # print("constraint_solve_x(): ", round(avg_overhead_x, 2))
+            # print("constraint_solve_v(): ", round(avg_overhead_v, 2))
+            # print("ratio: ", round(100.0 * (avg_overhead_v / avg_overhead_x), 2), "%")
 
         self.copy_to_meshes()
         self.copy_to_particles()

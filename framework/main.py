@@ -1,18 +1,18 @@
 import taichi as ti
 import json
-from Scenes import test_fem as scene1
-
+# from Scenes import test_fem as scene1
+from Scenes import cloth_swing as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
-from Scenes import scene_cube_stretch as scene1
+# from Scenes import scene_cube_stretch as scene1
 # from Scenes import scene_fluid_compression as scene1
 
 import XPBD
 import selection_tool as st
 
-# sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=6e-3)
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=6e-3)
+# sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -28,7 +28,7 @@ colors_static = []
 colors_static.append((0, 0.5, 0))
 colors_static.append((0, 0.5, 0))
 
-run_sim = True
+run_sim = False
 
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
@@ -37,7 +37,7 @@ LOOKAt_ORIGIN = True
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
-n_substep = 10
+n_substep = 20
 dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
 friction_coeff_ui = sim.friction_coeff[0]
@@ -148,9 +148,17 @@ while window.running:
         if window.event.key == 'v':
             sim.enable_velocity_update = not sim.enable_velocity_update
             if sim.enable_velocity_update is True:
-                print("enable velocity update")
+                print("velocity update on")
             else:
-                print("disable velocity update")
+                print("velocity update off")
+
+
+        if window.event.key == 'z':
+            sim.enable_collision_handling = not sim.enable_collision_handling
+            if sim.enable_collision_handling is True:
+                print("collision handling on")
+            else:
+                print("collision handling off")
 
         if window.event.key == 'h':
             sim.set_fixed_vertices(g_selector.is_selected)
