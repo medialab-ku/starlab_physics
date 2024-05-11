@@ -6,7 +6,7 @@ from Scenes import test_fem as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
 from Scenes import scene_cube_stretch as scene1
-
+# from Scenes import scene_fluid_compression as scene1
 
 import XPBD
 import selection_tool as st
@@ -42,6 +42,8 @@ dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
 friction_coeff_ui = sim.friction_coeff[0]
 
+frame_cpu = 0
+
 def show_options():
     global n_substep
     global dt_ui
@@ -67,6 +69,11 @@ def show_options():
 
         sim.enable_velocity_update = w.checkbox("velocity constraint",sim.enable_velocity_update)
 
+        frame_str = "frame : " + str(frame_cpu)
+        w.text(frame_str)
+
+        # if(frame_cpu != sim.frame[0]) :
+        #     print("cpu_gpu frame different!!",frame_cpu,sim.frame[0])
 
     if not old_dt == dt_ui :
         # sim.dt[0] = dt_ui if dt_ui > 0.00001 else 0.00001
@@ -132,6 +139,7 @@ while window.running:
             run_sim = not run_sim
 
         if window.event.key == 'r':
+            frame_cpu = 0
             sim.reset()
             g_selector.is_selected.fill(0)
             sim.set_fixed_vertices(g_selector.is_selected)
@@ -149,6 +157,7 @@ while window.running:
 
         if window.event.key == 'z':
             sim.frame[0] = 0
+            frame_cpu = 0
 
         if window.event.key == ti.ui.BACKSPACE:
             g_selector.is_selected.fill(0)
@@ -173,6 +182,7 @@ while window.running:
     if run_sim:
         sim.animate_handle(g_selector.is_selected)
         sim.forward(n_substeps=n_substep)
+        frame_cpu = frame_cpu+1
 
     show_options()
 
