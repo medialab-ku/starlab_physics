@@ -35,7 +35,7 @@ class Solver:
         self.init_grid()
 
         self.kernel_radius = 4 * particle_radius
-        self.cell_size = 2 * self.kernel_radius
+        self.cell_size = 3 * self.kernel_radius
         self.grid_origin = -self.grid_size
         self.grid_num = np.ceil(2 * self.grid_size / self.cell_size).astype(int)
         # print(self.grid_num)
@@ -1981,45 +1981,47 @@ class Solver:
 
     @ti.kernel
     def solve_collision_constraints_x(self):
-
         d = self.dHat[0]
-        # for idx in range(self.max_num_verts_dynamic + self.max_num_faces_dynamic):
-        #
-        #     if idx < self.max_num_verts_dynamic:
-        #         vi_d = idx
-        #
-        #         center_cell = self.pos_to_index(self.y[vi_d])
-        #         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-        #             grid_index = self.flatten_cell_id(center_cell + offset)
-        #             for p_j in range(self.grid_particles_num_static[ti.max(0, grid_index - 1)], self.grid_particles_num_static[grid_index]):
-        #                 vj = self.cur2org_static[p_j]
-        #                 if vj >= self.max_num_verts_static and vj <self.max_num_verts_static + self.max_num_faces_static:
-        #                     ti_s = vj - self.max_num_verts_static
-        #                     self.solve_collision_vt_static_x(vi_d, ti_s, d)
-        #
-        #     elif idx < self.max_num_verts_dynamic + self.max_num_faces_dynamic:
-        #         fi_d = idx - self.max_num_verts_dynamic
-        #         v0 = self.face_indices_dynamic[3 * fi_d + 0]
-        #         v1 = self.face_indices_dynamic[3 * fi_d + 1]
-        #         v2 = self.face_indices_dynamic[3 * fi_d + 2]
-        #
-        #         x0, x1, x2 = self.y[v0], self.y[v1], self.y[v2]
-        #         center = (x0 + x1 + x2) / 3.0
-        #         center_cell = self.pos_to_index(center)
-        #         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-        #             grid_index = self.flatten_cell_id(center_cell + offset)
-        #             for p_j in range(self.grid_particles_num_static[ti.max(0, grid_index - 1)], self.grid_particles_num_static[grid_index]):
-        #                 vj_s = self.cur2org_static[p_j]
-        #                 if vj_s < self.max_num_verts_static:
-        #                     self.solve_collision_tv_static_x(fi_d, vj_s, d)
-        #
-        #         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-        #             ci = self.flatten_cell_id(center_cell + offset)
-        #             for p_j in range(self.grid_particles_num[ti.max(0, ci - 1)], self.grid_particles_num[ci]):
-        #                 vj_d = self.cur2org[p_j]
-        #                 if vj_d < self.max_num_verts_dynamic:
-        #                     if self.is_in_face(vj_d, fi_d) != True:
-        #                         self.solve_collision_vt_dynamic_x(vj_d, fi_d, d)
+        for idx in range(self.max_num_verts_dynamic + self.max_num_faces_dynamic):
+
+            if idx < self.max_num_verts_dynamic:
+                vi_d = idx
+
+                center_cell = self.pos_to_index(self.y[vi_d])
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    grid_index = self.flatten_cell_id(center_cell + offset)
+                    for p_j in range(self.grid_particles_num_static[ti.max(0, grid_index - 1)], self.grid_particles_num_static[grid_index]):
+                        vj = self.cur2org_static[p_j]
+                        if vj >= self.max_num_verts_static and vj <self.max_num_verts_static + self.max_num_faces_static:
+                            ti_s = vj - self.max_num_verts_static
+                            self.solve_collision_vt_static_x(vi_d, ti_s, d)
+
+            elif idx < self.max_num_verts_dynamic + self.max_num_faces_dynamic:
+                fi_d = idx - self.max_num_verts_dynamic
+                v0 = self.face_indices_dynamic[3 * fi_d + 0]
+                v1 = self.face_indices_dynamic[3 * fi_d + 1]
+                v2 = self.face_indices_dynamic[3 * fi_d + 2]
+
+                x0, x1, x2 = self.y[v0], self.y[v1], self.y[v2]
+                center = (x0 + x1 + x2) / 3.0
+                center_cell = self.pos_to_index(center)
+
+                # for all cells that contain the triangle
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+
+                    grid_index = self.flatten_cell_id(center_cell + offset)
+                    for p_j in range(self.grid_particles_num_static[ti.max(0, grid_index - 1)], self.grid_particles_num_static[grid_index]):
+                        vj_s = self.cur2org_static[p_j]
+                        if vj_s < self.max_num_verts_static:
+                            self.solve_collision_tv_static_x(fi_d, vj_s, d)
+
+                for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    ci = self.flatten_cell_id(center_cell + offset)
+                    for p_j in range(self.grid_particles_num[ti.max(0, ci - 1)], self.grid_particles_num[ci]):
+                        vj_d = self.cur2org[p_j]
+                        if vj_d < self.max_num_verts_dynamic:
+                            if self.is_in_face(vj_d, fi_d) != True:
+                                self.solve_collision_vt_dynamic_x(vj_d, fi_d, d)
         #     else:
         #
         #         ei_d = idx - self.max_num_verts_dynamic - self.max_num_faces_dynamic
@@ -2047,20 +2049,20 @@ class Solver:
         #                         self.solve_collision_ee_dynamic_x(ei_d, ej_d, d)
 
 
-        #-----------brute-force-------------------
-        for vi in range(self.max_num_verts_dynamic):
-
-            for ti in range(self.max_num_faces_dynamic):
-                if self.is_in_face(vi, ti) != True:
-                    self.solve_collision_vt_dynamic_x(vi, ti, d)
-
-            for ti_s in range(self.max_num_faces_static):
-                self.solve_collision_vt_static_x(vi, ti_s, d)
-
-
-        for ti_s in range(self.max_num_faces_static):
-            for vi in range(self.max_num_verts_dynamic):
-                self.solve_collision_tv_static_x(ti_s, vi, d)
+        # #-----------brute-force-------------------
+        # for vi in range(self.max_num_verts_dynamic):
+        #
+        #     for ti in range(self.max_num_faces_dynamic):
+        #         if self.is_in_face(vi, ti) != True:
+        #             self.solve_collision_vt_dynamic_x(vi, ti, d)
+        #
+        #     for ti_s in range(self.max_num_faces_static):s
+        #         self.solve_collision_vt_static_x(vi, ti_s, d)
+        #
+        #
+        # for ti_s in range(self.max_num_faces_static):
+        #     for vi in range(self.max_num_verts_dynamic):
+        #         self.solve_collision_tv_static_x(ti_s, vi, d)
 
 
         # for ei in range(self.max_num_edges_dynamic):
