@@ -2,8 +2,8 @@ import taichi as ti
 import json
 # from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
-# from Scenes import cloth_slide as scene1
-from Scenes import collition_unit_test as scene1
+from Scenes import cloth_slide as scene1
+# from Scenes import collition_unit_test as scene1
 # from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
