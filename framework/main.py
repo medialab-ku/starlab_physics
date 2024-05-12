@@ -2,7 +2,8 @@ import taichi as ti
 import json
 # from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
-from Scenes import cloth_slide as scene1
+# from Scenes import cloth_slide as scene1
+from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
@@ -12,7 +13,7 @@ from Scenes import cloth_slide as scene1
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=6e-3)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(5., 5., 5.), particle_radius=0.02, dHat=3e-3)
 # sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
