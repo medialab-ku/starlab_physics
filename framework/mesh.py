@@ -1,6 +1,7 @@
 import numpy as np
 import taichi as ti
 import meshtaichi_patcher as patcher
+import meshio
 
 @ti.data_oriented
 class Mesh:
@@ -128,4 +129,7 @@ class Mesh:
 
         for v in self.mesh.verts:
             v.x += self.trans
+
+    def export(self, frame):
+        print("TBD")
 

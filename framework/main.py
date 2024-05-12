@@ -14,7 +14,7 @@ from Scenes import cloth_slide as scene1
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), particle_radius=0.02, dHat=3e-3)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(8., 8., 8.), particle_radius=0.02, dHat=1e-3)
 # sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -41,10 +41,11 @@ g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
 n_substep = 20
+frame_end = 100
 dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
 friction_coeff_ui = sim.friction_coeff[0]
-
+mesh_export = False
 frame_cpu = 0
 
 def show_options():
@@ -55,6 +56,8 @@ def show_options():
     global friction_coeff_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
+    global mesh_export
+    global frame_end
 
     old_dt = dt_ui
     old_dHat = dHat_ui
@@ -72,6 +75,10 @@ def show_options():
 
         sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
         sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
+        mesh_export = w.checkbox("export mesh",mesh_export)
+
+        if mesh_export is True:
+            frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
         frame_str = "frame : " + str(frame_cpu)
         verts_str = "# verts: " + str(sim.max_num_verts_dynamic)
@@ -213,8 +220,11 @@ while window.running:
     for pid in range(len(scene1.particles)):
         scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
 
-    # for mid in range(len(scene1.meshes_static)):
-    #     scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
+    if mesh_export and frame_cpu < frame_end:
+        for mid in range(len(scene1.meshes_dynamic)):
+            sim.meshes_dynamic[mid].mesh.export(frame_cpu)
+
+
 
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
@@ -226,7 +236,7 @@ while window.running:
 
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
-    camera.track_user_inputs(window, movement_speed=0.05, hold_key=ti.ui.RMB)
+    camera.track_user_inputs(window, movement_speed=0.15, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
 
