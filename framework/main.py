@@ -61,6 +61,7 @@ def show_options():
 
     old_dt = dt_ui
     old_dHat = dHat_ui
+    old_friction_coeff = dHat_ui
     with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.3) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
@@ -99,8 +100,8 @@ def show_options():
     if not old_dHat == dHat_ui:
         sim.dHat[0] = dHat_ui
 
-    if not friction_coeff_ui == friction_coeff_ui:
-        sim.friction_coeff_ui[0] = friction_coeff_ui
+    if not old_friction_coeff == friction_coeff_ui:
+        sim.friction_coeff[0] = friction_coeff_ui
 
 def load_animation() :
     global sim

@@ -1193,9 +1193,14 @@ class Solver:
         if dvn < 0.0:
             ld = dvn / schur
             dv_nor = self.m_inv[v0] * ld * g0
-            dv_tan = 2 * self.v[v0] - dv_nor
-            self.dv[v0] -= (dv_nor + 0.0 * dv_tan)
+
+            self.dv[v0] -= dv_nor
             self.nc[v0] += 1
+            v_tan = self.v[v0] - ld * g0
+            if v_tan.norm() < friction_coeff * abs(dvn):
+                self.dv[v0] -= v_tan
+            else:
+                self.dv[v0] -= friction_coeff * v_tan
 
 
 
@@ -1921,7 +1926,7 @@ class Solver:
     def solve_collision_constraints_v(self):
 
         friction_coeff = self.friction_coeff[0]
-
+        # print(friction_coeff)
         for vi_d in range(self.max_num_verts_dynamic):
             for j in range(self.vt_active_set_num[vi_d]):
                 g0, schur = self.vt_active_set_g0[vi_d, j], self.vt_active_set_schur[vi_d, j]
