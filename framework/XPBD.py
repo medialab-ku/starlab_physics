@@ -1069,120 +1069,111 @@ class Solver:
 
         if dtype == 0:
             d = di.d_PP(x0, x1)
-            g0, g1 = di.g_PP(x0, x1)
             if d < dHat:
+                g0, g1 = di.g_PP(x0, x1)
+                schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v1] += self.m_inv[v1] * ld * g1
+                self.nc[v1] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
-                    # self.tv_active_set[fid_d, self.tv_active_set_num[fid_d]] = vid_s
-                    schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 0] = g1
-                    ld = (dHat - d) / schur
-                    self.dx[v1] += self.m_inv[v1] * ld * g1
-                    self.nc[v1] += 1
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
         elif dtype == 1:
             d = di.d_PP(x0, x2)
-            g0, g2 = di.g_PP(x0, x2)
             if d < dHat:
+                g0, g2 = di.g_PP(x0, x2)
+                schur = self.m_inv[v3] * g2.dot(g2) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v2] += self.m_inv[v3] * ld * g2
+                self.nc[v2] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
-                    # self.tv_active_set[fid_d, self.tv_active_set_num[fid_d]] = vid_s
-                    schur = self.m_inv[v2] * g2.dot(g2) + 1e-4
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 1] = g2
-                    ld = (dHat - d) / schur
-                    self.dx[v2] += self.m_inv[v2] * ld * g2
-                    self.nc[v2] += 1
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
         elif dtype == 2:
             d = di.d_PP(x0, x3)
-            g0, g3 = di.g_PP(x0, x3)
             if d < dHat:
+                g0, g3 = di.g_PP(x0, x3)
+                schur = self.m_inv[v3] * g3.dot(g3) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v3] += self.m_inv[v3] * ld * g3
+                self.nc[v3] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
-                    # self.tv_active_set[fid_d, self.tv_active_set_num[fid_d]] = vid_s
-                    schur = self.m_inv[v3] * g3.dot(g3) + 1e-4
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 2] = g3
-                    ld = (dHat - d) / schur
-                    self.dx[v3] += self.m_inv[v3] * ld * g3
-                    self.nc[v3] += 1
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
         elif dtype == 3:
             d = di.d_PE(x0, x1, x2)
-            g0, g1, g2 = di.g_PE(x0, x1, x2)
             if d < dHat:
+                g0, g1, g2 = di.g_PE(x0, x1, x2)
+                schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v1] += self.m_inv[v1] * ld * g1
+                self.dx[v2] += self.m_inv[v2] * ld * g2
+                self.nc[v1] += 1
+                self.nc[v2] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
-                    # self.tv_active_set[fid_d, self.tv_active_set_num[fid_d]] = vid_s
-                    schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + 1e-4
-                    ld = (dHat - d) / schur
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 0] = g1
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 1] = g2
-                    self.dx[v1] += self.m_inv[v1] * ld * g1
-                    self.dx[v2] += self.m_inv[v2] * ld * g2
-                    self.nc[v1] += 1
-                    self.nc[v2] += 1
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
 
         elif dtype == 4:
             d = di.d_PE(x0, x2, x3)
-            g0, g2, g3 = di.g_PE(x0, x2, x3)
             if d < dHat:
+                g0, g2, g3 = di.g_PE(x0, x2, x3)
+                schur = self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v2] += self.m_inv[v2] * ld * g2
+                self.dx[v3] += self.m_inv[v3] * ld * g3
+
+                self.nc[v2] += 1
+                self.nc[v3] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
-                    # self.tv_active_set[fid_d, self.tv_active_set_num[fid_d]] = vid_s
-                    schur = self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (dHat - d) / schur
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 1] = g2
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 2] = g3
-                    self.dx[v2] += self.m_inv[v2] * ld * g2
-                    self.dx[v3] += self.m_inv[v3] * ld * g3
-
-                    self.nc[v2] += 1
-                    self.nc[v3] += 1
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
 
         elif dtype == 5:
             d = di.d_PE(x0, x1, x3)
-            g0, g1, g3 = di.g_PE(x0, x1, x3)
             if d < dHat:
+                g0, g1, g3 = di.g_PE(x0, x1, x3)
+                schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v3] * g3.dot(g3) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v1] += self.m_inv[v1] * ld * g1
+                self.dx[v3] += self.m_inv[v3] * ld * g3
+                self.nc[v1] += 1
+                self.nc[v3] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
-                    # self.tv_active_set[fid_d, self.tv_active_set_num[fid_d]] = vid_s
-                    schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (dHat - d) / schur
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 0] = g1
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 2] = g3
-                    self.dx[v1] += self.m_inv[v1] * ld * g1
-                    self.dx[v3] += self.m_inv[v3] * ld * g3
-
-                    self.nc[v1] += 1
-                    self.nc[v3] += 1
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
         elif dtype == 6:
             d = di.d_PT(x0, x1, x2, x3)
-            g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
-
             if d < dHat:
+                g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
+                schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v1] += self.m_inv[v1] * ld * g1
+                self.dx[v2] += self.m_inv[v2] * ld * g2
+                self.dx[v3] += self.m_inv[v3] * ld * g3
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
-                    # self.tv_active_set[fid_d, self.tv_active_set_num[fid_d]] = vid_s
-                    schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
-                    ld = (dHat - d) / schur
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 0] = g1
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 1] = g2
                     self.tv_active_set_g[fid_d, self.tv_active_set_num[fid_d], 2] = g3
-                    self.dx[v1] += self.m_inv[v1] * ld * g1
-                    self.dx[v2] += self.m_inv[v2] * ld * g2
-                    self.dx[v3] += self.m_inv[v3] * ld * g3
-                    self.nc[v1] += 1
-                    self.nc[v2] += 1
-                    self.nc[v3] += 1
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
     @ti.func
@@ -1918,8 +1909,6 @@ class Solver:
         #     for ei_d in range(self.max_num_edges_dynamic):
         #         if ei != ei_d and self.share_vertex(ei, ei_d) != True:
         #             self.solve_collision_ee_dynamic_x(ei, ei_d, d)
-
-
 
 
     @ti.kernel
