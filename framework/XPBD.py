@@ -1235,23 +1235,29 @@ class Solver:
             if g1.norm() > 0.0:
                 self.dv[v1] -= self.m_inv[v1] * ld * g1
                 self.nc[v1] += 1
+                v_tan = self.v[v1] - self.m_inv[v1] * ld * g1
+                if v_tan.norm() < friction_coeff * abs(dvn):
+                    self.dv[v1] -= v_tan
+                else:
+                    self.dv[v1] -= friction_coeff * v_tan
 
             if g2.norm() > 0.0:
                 self.dv[v2] -= self.m_inv[v2] * ld * g2
                 self.nc[v2] += 1
+                v_tan = self.v[v1] - self.m_inv[v1] * ld * g1
+                if v_tan.norm() < friction_coeff * abs(dvn):
+                    self.dv[v2] -= v_tan
+                else:
+                    self.dv[v2] -= friction_coeff * v_tan
 
             if g3.norm() > 0.0:
                 self.dv[v3] -= self.m_inv[v3] * ld * g3
                 self.nc[v3] += 1
-
-            # v_tan = self.v[v1] - self.m_inv[v1] * ld * g1
-            # self.dv[v1] -= friction_coeff * v_tan
-            #
-            # v_tan = self.v[v2] - self.m_inv[v2] * ld * g2
-            # self.dv[v2] -= friction_coeff * v_tan
-            #
-            # v_tan = self.v[v3] - self.m_inv[v3] * ld * g3
-            # self.dv[v3] -= friction_coeff * v_tan
+                v_tan = self.v[v1] - self.m_inv[v1] * ld * g1
+                if v_tan.norm() < friction_coeff * abs(dvn):
+                    self.dv[v3] -= v_tan
+                else:
+                    self.dv[v3] -= friction_coeff * v_tan
 
     @ti.func
     def solve_collision_ee_static_x(self, eid_d, eid_s, dHat):
