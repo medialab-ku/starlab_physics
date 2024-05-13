@@ -1284,7 +1284,6 @@ class Solver:
                 self.nc[v0] += 1
 
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
@@ -1300,7 +1299,6 @@ class Solver:
                 self.nc[v0] += 1
 
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
@@ -1317,7 +1315,6 @@ class Solver:
                 self.nc[v0] += 1
 
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
@@ -1333,7 +1330,6 @@ class Solver:
                 self.nc[v1] += 1
 
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
@@ -1349,38 +1345,35 @@ class Solver:
                 self.nc[v1] += 1
 
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
 
         elif dtype == 5:
             d = di.d_PE(x1, x2, x3)
-            g1, g2, g3 = di.g_PE(x1, x2, x3)
-            schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
-            ld = (dHat - d) / schur
-            self.dx[v1] += self.m_inv[v0] * ld * g1
-            self.nc[v1] += 1
             if d < dHat:
+                g1, g2, g3 = di.g_PE(x1, x2, x3)
+                schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
+                ld = (dHat - d) / schur
+                self.dx[v1] += self.m_inv[v0] * ld * g1
+                self.nc[v1] += 1
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
                     ti.atomic_add(self.ee_active_set_num[eid_d], 1)
 
         elif dtype == 6:
             d = di.d_PE(x2, x0, x1)
-            g2, g0, g1 = di.g_PE(x2, x0, x1)
-            schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + 1e-4
-            ld = (dHat - d) / schur
-
-            self.dx[v0] += self.m_inv[v0] * ld * g0
-            self.dx[v1] += self.m_inv[v1] * ld * g1
-            self.nc[v0] += 1
-            self.nc[v1] += 1
             if d < dHat:
+                g2, g0, g1 = di.g_PE(x2, x0, x1)
+                schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + 1e-4
+                ld = (dHat - d) / schur
+
+                self.dx[v0] += self.m_inv[v0] * ld * g0
+                self.dx[v1] += self.m_inv[v1] * ld * g1
+                self.nc[v0] += 1
+                self.nc[v1] += 1
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
@@ -1398,7 +1391,6 @@ class Solver:
                 self.nc[v0] += 1
                 self.nc[v1] += 1
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
@@ -1415,7 +1407,6 @@ class Solver:
                 self.nc[v0] += 1
                 self.nc[v1] += 1
                 if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set[eid_d, self.ee_active_set_num[eid_d]] = eid_s
                     self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
                     self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
@@ -1423,7 +1414,7 @@ class Solver:
 
 
     @ti.func
-    def solve_collision_ee_static_v(self, eid_d, g0, g1, schur):
+    def solve_collision_ee_static_v(self, eid_d, g0, g1, schur, friction_coeff):
 
         v0 = self.edge_indices_dynamic[2 * eid_d + 0]
         v1 = self.edge_indices_dynamic[2 * eid_d + 1]
@@ -1432,10 +1423,10 @@ class Solver:
         if dvn < 0.0:
             ld = dvn / schur
             if g0.norm() > 0.0:
-                self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * ld * g0
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * ld * g0
                 self.nc[v0] += 1
             if g1.norm() > 0.0:
-                self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * ld * g1
                 self.nc[v1] += 1
 
 
@@ -1906,9 +1897,9 @@ class Solver:
         #         self.solve_collision_tv_static_x(ti_s, vi, d)
 
         #
-        # for ei in range(self.max_num_edges_dynamic):
-        #     for ei_s in range(self.max_num_edges_static):
-        #         self.solve_collision_ee_static_x(ei, ei_s, d)
+        for ei in range(self.max_num_edges_dynamic):
+            for ei_s in range(self.max_num_edges_static):
+                self.solve_collision_ee_static_x(ei, ei_s, d)
         # #
         #     for ei_d in range(self.max_num_edges_dynamic):
         #         if ei != ei_d and self.share_vertex(ei, ei_d) != True:
@@ -1957,10 +1948,12 @@ class Solver:
         #         vid_d = self.vt_active_set[fid_s, i]
         #         self.solve_collision_tv_static_v(fid_s, vid_d, d)
         #
-        # for eid_d in range(self.max_num_edges_dynamic):
-        #     for i in range(self.ee_active_set_num[eid_d]):
-        #         eid_s = self.ee_active_set[eid_d, i]
-        #         self.solve_collision_ee_static_v(eid_d, eid_s, d)
+        for eid_d in range(self.max_num_edges_dynamic):
+            for i in range(self.ee_active_set_num[eid_d]):
+                g0 = self.ee_active_set_g[eid_d, i, 0]
+                g1 = self.ee_active_set_g[eid_d, i, 1]
+                schur = self.ee_active_set_schur[eid_d, i]
+                self.solve_collision_ee_static_v(eid_d, g0, g1, schur, friction_coeff)
         #
         # for i in range(self.num_cached_ee_pairs[0]):
         #     pair_i = self.ee_active_set_dynamic[i]
