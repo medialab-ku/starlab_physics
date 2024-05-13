@@ -1693,11 +1693,11 @@ class Solver:
             self.nc[v0] += 1
             self.nc[v1] += 1
 
-            if lij > 1.05 * l0:
-                self.spring_ids[self.num_springs[0]] = ei
-                self.schur_spring[self.num_springs[0]] = schur
-                self.gradient_spring[self.num_springs[0]] = nabla_C
-                ti.atomic_add(self.num_springs[0], 1)
+            # if lij > 1.05 * l0:
+            #     self.spring_ids[self.num_springs[0]] = ei
+            #     self.schur_spring[self.num_springs[0]] = schur
+            #     self.gradient_spring[self.num_springs[0]] = nabla_C
+            #     ti.atomic_add(self.num_springs[0], 1)
 
 
 
@@ -1905,14 +1905,14 @@ class Solver:
         #     for vi in range(self.max_num_verts_dynamic):
         #         self.solve_collision_tv_static_x(ti_s, vi, d)
 
-
-        for ei in range(self.max_num_edges_dynamic):
-            for ei_s in range(self.max_num_edges_static):
-                self.solve_collision_ee_static_x(ei, ei_s, d)
         #
-            for ei_d in range(self.max_num_edges_dynamic):
-                if ei != ei_d and self.share_vertex(ei, ei_d) != True:
-                    self.solve_collision_ee_dynamic_x(ei, ei_d, d)
+        # for ei in range(self.max_num_edges_dynamic):
+        #     for ei_s in range(self.max_num_edges_static):
+        #         self.solve_collision_ee_static_x(ei, ei_s, d)
+        # #
+        #     for ei_d in range(self.max_num_edges_dynamic):
+        #         if ei != ei_d and self.share_vertex(ei, ei_d) != True:
+        #             self.solve_collision_ee_dynamic_x(ei, ei_d, d)
 
 
 
@@ -1944,15 +1944,15 @@ class Solver:
                 g3 = self.tv_active_set_g[fi_d, j, 2]
                 schur = self.tv_active_set_schur[fi_d, j]
                 self.solve_collision_tv_static_v(fi_d, g1, g2, g3, schur, friction_coeff)
-
-        for i in range(self.ee_active_set_num_dynamic[0]):
-            pair = self.ee_active_set_dynamic[i]
-            g0 = self.ee_active_set_g_dynamic[i, 0]
-            g1 = self.ee_active_set_g_dynamic[i, 1]
-            g2 = self.ee_active_set_g_dynamic[i, 2]
-            g3 = self.ee_active_set_g_dynamic[i, 3]
-            schur = self.ee_active_set_schur_dynamic[i]
-            self.solve_collision_ee_dynamic_v(pair[0], pair[1], g0, g1, g2, g3, schur, friction_coeff)
+        #
+        # for i in range(self.ee_active_set_num_dynamic[0]):
+        #     pair = self.ee_active_set_dynamic[i]
+        #     g0 = self.ee_active_set_g_dynamic[i, 0]
+        #     g1 = self.ee_active_set_g_dynamic[i, 1]
+        #     g2 = self.ee_active_set_g_dynamic[i, 2]
+        #     g3 = self.ee_active_set_g_dynamic[i, 3]
+        #     schur = self.ee_active_set_schur_dynamic[i]
+        #     self.solve_collision_ee_dynamic_v(pair[0], pair[1], g0, g1, g2, g3, schur, friction_coeff)
 
         # for fid_s in range(self.max_num_faces_static):
         #     for i in range(self.tv_active_set_num[fid_s]):
@@ -2131,7 +2131,7 @@ class Solver:
         self.dx.fill(0.0)
         self.nc.fill(0)
         self.vt_active_set_num.fill(0)
-        self.num_springs[0] = 0
+        # self.num_springs[0] = 0
         # self.vt_active_set.fill(0)
         self.tv_active_set_num.fill(0)
         self.tv_active_set.fill(0)
@@ -2172,7 +2172,7 @@ class Solver:
     def update_dx(self):
         for vi in range(self.max_num_verts_dynamic):
             if self.nc[vi] > 0.0:
-                self.dx[vi] = self.dx[vi] / self.nc[vi].cast(float)
+                self.dx[vi] = self.dx[vi] / self.nc[vi]
                 self.y[vi] += self.fixed[vi] * self.dx[vi]
 
     @ti.kernel
