@@ -181,8 +181,6 @@ class Solver:
         self.cell_particle_ids = ti.field(dtype=ti.uint32, shape=(self.num_cells, self.cache_size))
         self.cell_num_particles = ti.field(dtype=ti.uint32, shape=self.num_cells)
 
-
-
         self.max_num_verts_static = 0
         self.max_num_edges_static = 0
         self.max_num_faces_static = 0
@@ -1071,9 +1069,9 @@ class Solver:
             d = di.d_PP(x0, x1)
             if d < dHat:
                 g0, g1 = di.g_PP(x0, x1)
-                schur = self.m_inv[v1] * g1.dot(g1) + 1e-4
+                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.m_inv[v1] * ld * g1
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
                 self.nc[v1] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
@@ -1084,9 +1082,9 @@ class Solver:
             d = di.d_PP(x0, x2)
             if d < dHat:
                 g0, g2 = di.g_PP(x0, x2)
-                schur = self.m_inv[v3] * g2.dot(g2) + 1e-4
+                schur = self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v2] += self.m_inv[v3] * ld * g2
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
                 self.nc[v2] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
@@ -1097,9 +1095,9 @@ class Solver:
             d = di.d_PP(x0, x3)
             if d < dHat:
                 g0, g3 = di.g_PP(x0, x3)
-                schur = self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v3] += self.m_inv[v3] * ld * g3
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
                 self.nc[v3] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
                     self.tv_active_set_schur[fid_d, self.tv_active_set_num[fid_d]] = schur
@@ -1110,10 +1108,10 @@ class Solver:
             d = di.d_PE(x0, x1, x2)
             if d < dHat:
                 g0, g1, g2 = di.g_PE(x0, x1, x2)
-                schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + 1e-4
+                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.m_inv[v1] * ld * g1
-                self.dx[v2] += self.m_inv[v2] * ld * g2
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
                 self.nc[v1] += 1
                 self.nc[v2] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
@@ -1127,10 +1125,10 @@ class Solver:
             d = di.d_PE(x0, x2, x3)
             if d < dHat:
                 g0, g2, g3 = di.g_PE(x0, x2, x3)
-                schur = self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v2] += self.m_inv[v2] * ld * g2
-                self.dx[v3] += self.m_inv[v3] * ld * g3
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
 
                 self.nc[v2] += 1
                 self.nc[v3] += 1
@@ -1145,10 +1143,10 @@ class Solver:
             d = di.d_PE(x0, x1, x3)
             if d < dHat:
                 g0, g1, g3 = di.g_PE(x0, x1, x3)
-                schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.m_inv[v1] * ld * g1
-                self.dx[v3] += self.m_inv[v3] * ld * g3
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
                 self.nc[v1] += 1
                 self.nc[v3] += 1
                 if self.tv_active_set_num[fid_d] < self.cache_size:
@@ -1161,11 +1159,11 @@ class Solver:
             d = di.d_PT(x0, x1, x2, x3)
             if d < dHat:
                 g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
-                schur = self.m_inv[v1] * g1.dot(g1) + self.m_inv[v2] * g2.dot(g2) + self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.m_inv[v1] * ld * g1
-                self.dx[v2] += self.m_inv[v2] * ld * g2
-                self.dx[v3] += self.m_inv[v3] * ld * g3
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
                 self.nc[v1] += 1
                 self.nc[v2] += 1
                 self.nc[v3] += 1
