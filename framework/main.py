@@ -2,8 +2,8 @@ import taichi as ti
 import json
 # from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
-# from Scenes import cloth_slide as scene1
-from Scenes import collition_unit_test as scene1
+from Scenes import cloth_slide as scene1
+# from Scenes import collition_unit_test as scene1
 # from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
@@ -224,8 +224,6 @@ while window.running:
     if mesh_export and frame_cpu < frame_end:
         for mid in range(len(scene1.meshes_dynamic)):
             sim.meshes_dynamic[mid].mesh.export(frame_cpu)
-
-
 
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
