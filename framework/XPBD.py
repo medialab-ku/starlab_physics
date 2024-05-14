@@ -214,6 +214,7 @@ class Solver:
 
         self.x_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
         self.x_static_rest = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
+        self.v_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
 
 
         if is_verts_dynamic_empty is True:
