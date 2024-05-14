@@ -5,19 +5,19 @@ import taichi as ti
 ti.init(arch=ti.cuda, device_memory_GB=3)
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 30.0))
-mesh_dynamic_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.6, 0.0), rot=ti.math.vec3(0.0, 0.0, 60.0))
+mesh_dynamic_1 = Mesh("../models/OBJ/plane.obj", scale=5.0, trans=ti.math.vec3(0.0, 6.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 30.0))
+# mesh_dynamic_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.6, 0.0), rot=ti.math.vec3(0.0, 0.0, 60.0))
 
 
 meshes_dynamic.append(mesh_dynamic_1)
-meshes_dynamic.append(mesh_dynamic_2)
-meshes_dynamic.append(mesh_dynamic_3)
+# meshes_dynamic.append(mesh_dynamic_2)
+# meshes_dynamic.append(mesh_dynamic_3)
 
 tet_meshes_dynamic = []
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=4.0, trans=ti.math.vec3(0.0, -2.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=8.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 meshes_static.append(mesh_static_1)
 
 particles = []
