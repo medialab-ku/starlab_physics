@@ -10,7 +10,7 @@ from Scenes import cloth_slide as scene1
 # from Scenes import scene_thin_shell_twist as scene1
 # from Scenes import scene_cube_stretch as scene1
 # from Scenes import scene_fluid_compression as scene1
-
+import os
 import XPBD
 import selection_tool as st
 
@@ -87,7 +87,6 @@ def show_options():
         w.text(frame_str)
         w.text(verts_str)
         w.text(edges_str)
-
 
 
         # if(frame_cpu != sim.frame[0]) :
@@ -221,9 +220,9 @@ while window.running:
     for pid in range(len(scene1.particles)):
         scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
 
-    if mesh_export and frame_cpu < frame_end:
+    if mesh_export and run_sim and frame_cpu < frame_end:
         for mid in range(len(scene1.meshes_dynamic)):
-            sim.meshes_dynamic[mid].mesh.export(frame_cpu)
+            sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
 
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))

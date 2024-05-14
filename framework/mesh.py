@@ -1,7 +1,8 @@
 import numpy as np
 import taichi as ti
 import meshtaichi_patcher as patcher
-import meshio
+import igl
+import os
 
 @ti.data_oriented
 class Mesh:
@@ -43,6 +44,7 @@ class Mesh:
             self.mesh.verts.m_inv.fill(1.0)
 
         self.mesh.verts.v.fill([0.0, 0.0, 0.0])
+        # self.x_np = self.mesh.get_position_as_numpy()
         self.mesh.verts.x.from_numpy(self.mesh.get_position_as_numpy())
         self.num_verts = len(self.mesh.verts)
 
@@ -63,7 +65,8 @@ class Mesh:
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.edges) * 2)
         self.initFaceIndices()
         self.initEdgeIndices()
-
+        self.fid_np = self.face_indices.to_numpy()
+        self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
         self.verts = self.mesh.verts
         self.faces = self.mesh.faces
         self.edges = self.mesh.edges
@@ -120,7 +123,6 @@ class Mesh:
         for v in self.mesh.verts:
             v.x *= self.scale
 
-
         for v in self.mesh.verts:
             v_4d = ti.Vector([v.x[0], v.x[1], v.x[2], 1])
             rot_rad = ti.math.radians(self.rot)
@@ -130,6 +132,10 @@ class Mesh:
         for v in self.mesh.verts:
             v.x += self.trans
 
-    def export(self, frame):
-        print("TBD")
-
+    def export(self, scene_name, mesh_id, frame):
+        x_np = self.mesh.verts.x.to_numpy()
+        file_name = scene_name + "_" + str(mesh_id) + "_" + str(frame) + ".obj"
+        file_path = os.path.join("results/", file_name)
+        print("exporting ", file_path.__str__())
+        igl.write_triangle_mesh(file_path, x_np, self.fid_np, force_ascii=True)
+        print("done")

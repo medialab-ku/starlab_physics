@@ -56,15 +56,15 @@ class Solver:
         is_mesh_dynamic_empty = not bool(len(self.meshes_dynamic))
         is_tet_mesh_dynamic_empty = not bool(len(self.tet_meshes_dynamic))
 
-        # if is_verts_dynamic_empty is True:
-        #     num_vert_offsets = 1
-        #     self.max_num_verts_dynamic = 1
+        if is_verts_dynamic_empty is True:
+            num_vert_offsets = 1
+            self.max_num_verts_dynamic = 1
         #
         #
-        # if is_mesh_dynamic_empty is True:
-        #     num_meshes_dynamic = 1
-        #     self.max_num_edges_dynamic = 1
-        #     self.max_num_faces_dynamic = 1
+        if is_mesh_dynamic_empty is True:
+            num_meshes_dynamic = 1
+            self.max_num_edges_dynamic = 1
+            self.max_num_faces_dynamic = 1
         #
         #
         if is_tet_mesh_dynamic_empty is True:
@@ -1893,13 +1893,13 @@ class Solver:
         #         self.solve_collision_tv_static_x(ti_s, vi, d)
 
         #
-        for ei in range(self.max_num_edges_dynamic):
-            for ei_s in range(self.max_num_edges_static):
-                self.solve_collision_ee_static_x(ei, ei_s, d)
-        # #
-            for ei_d in range(self.max_num_edges_dynamic):
-                if ei != ei_d and self.share_vertex(ei, ei_d) != True:
-                    self.solve_collision_ee_dynamic_x(ei, ei_d, d)
+        # for ei in range(self.max_num_edges_dynamic):
+        #     for ei_s in range(self.max_num_edges_static):
+        #         self.solve_collision_ee_static_x(ei, ei_s, d)
+        # # #
+        #     for ei_d in range(self.max_num_edges_dynamic):
+        #         if ei != ei_d and self.share_vertex(ei, ei_d) != True:
+        #             self.solve_collision_ee_dynamic_x(ei, ei_d, d)
 
 
     @ti.kernel
