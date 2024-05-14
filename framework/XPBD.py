@@ -2194,7 +2194,9 @@ class Solver:
         # self.v_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
         for i in self.x_static :
             if(self.frame[0] > 90) :
+                x_cur = self.x_static[i]
                 self.x_static[i] = self.x_static_rest[i] + ti.Vector([ 2.5 * ti.sin((self.frame[0]-90) * 100.0 * self.dt[0]),0.0,0.0])
+                self.v_static[i] = (self.x_static[i] -x_cur) / self.dt[0]
 
 
     def forward(self, n_substeps):
