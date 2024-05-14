@@ -483,18 +483,13 @@ class Solver:
             x0, x1 = self.x[v0], self.x[v1]
             x10 = x0 - x1
             self.l0[ei] = x10.norm()
-            # if l0_min >  self.l0[ei]:
-            #     l0_min = self.l0[ei]
-            # l0_min = ti.atomic_min(l0_min,  self.l0[ei])
-
-        # print(l0_min)
-        # rif l0_min * l0_min > self.dHat[0]:
-        #     self.dHat[0] = 0.9 * l0_min * l0_min
+            self.m_inv[v0] += 0.5 * self.l0[ei]
+            self.m_inv[v1] += 0.5 * self.l0[ei]
 
 
 
     @ti.kernel
-    def init_Dm_inv(self):
+    def init_Dm_inv_and_volume(self):
 
         for ti in range(self.max_num_tetra_dynamic):
             v0 = self.tetra_indices_dynamic[4 * ti + 0]
@@ -504,8 +499,18 @@ class Solver:
 
             x0, x1, x2, x3 = self.x[v0], self.x[v1], self.x[v2], self.x[v3]
 
-            Dm = ti.Matrix.cols([x0 - x3, x1 - x3, x2 - x3])
+            x30 = x0 - x3
+            x31 = x1 - x3
+            x32 = x2 - x3
+
+            Dm = ti.Matrix.cols([x30, x31, x32])
+            self.V0[ti] = x32.dot(x30.cross(x31)) / 6.0
             self.Dm_inv[ti] = Dm.inverse()
+            self.m_inv[v0] += 0.25 * self.V0[ti]
+            self.m_inv[v1] += 0.25 * self.V0[ti]
+            self.m_inv[v2] += 0.25 * self.V0[ti]
+            self.m_inv[v3] += 0.25 * self.V0[ti]
+
 
 
 
@@ -526,8 +531,9 @@ class Solver:
             self.init_edge_indices_static_device(self.offset_verts_static[mid], self.offset_edges_static[mid], self.meshes_static[mid])
             self.init_face_indices_static_device(self.offset_verts_static[mid], self.offset_faces_static[mid], self.meshes_static[mid])
 
+        self.m_inv.fill(0.0)
         self.init_rest_length()
-        self.init_Dm_inv()
+        self.init_Dm_inv_and_volume()
 
 
     @ti.kernel
@@ -2001,7 +2007,7 @@ class Solver:
 
 
     @ti.kernel
-    def solve_fem_constraints_x(self, YM, PR):
+    def solve_fem_constraints_x(self, YM: ti.float32, PR: ti.float32):
 
         la = YM / (2.0 * (1.0 + PR))
         mu = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
