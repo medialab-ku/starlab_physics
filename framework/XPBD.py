@@ -71,7 +71,7 @@ class Solver:
             num_tet_meshes_dynamic = 1
             self.max_num_tetra_dynamic = 1
 
-
+        print(num_meshes_dynamic)
         self.offset_verts_dynamic = ti.field(int, shape=num_vert_offsets)
         self.offset_edges_dynamic = ti.field(int, shape=num_meshes_dynamic)
         self.offset_faces_dynamic = ti.field(int, shape=num_meshes_dynamic + num_tet_meshes_dynamic)
@@ -213,6 +213,8 @@ class Solver:
         print(self.max_num_edges_static)
 
         self.x_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
+        self.x_static_rest = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
+
 
         if is_verts_dynamic_empty is True:
             self.max_num_verts_dynamic = 0
@@ -536,6 +538,7 @@ class Solver:
     def init_quantities_static_device(self, offset: ti.int32, mesh: ti.template()):
         for v in mesh.verts:
             self.x_static[offset + v.id] = v.x
+            self.x_static_rest[offset + v.id] = v.x
 
 
     @ti.kernel
@@ -2186,6 +2189,14 @@ class Solver:
             if self.m_inv[vi] > 0.0:
                 self.v[vi] += self.fixed[vi] * self.dv[vi]
 
+    @ti.kernel
+    def move_static_object(self):
+        # self.v_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
+        for i in self.x_static :
+            if(self.frame[0] > 90) :
+                self.x_static[i] = self.x_static_rest[i] + ti.Vector([ 2.5 * ti.sin((self.frame[0]-90) * 100.0 * self.dt[0]),0.0,0.0])
+
+
     def forward(self, n_substeps):
 
         dt = self.dt[0]
@@ -2197,6 +2208,8 @@ class Solver:
         # self.search_neighbours()
         for _ in range(n_substeps):
             self.compute_y()
+
+            self.move_static_object()
             self.confine_to_boundary()
             self.solve_constraints_x()
             self.confine_to_boundary()
