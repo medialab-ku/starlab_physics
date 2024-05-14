@@ -47,10 +47,14 @@ class TetMesh:
         self.tetra_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.cells) * 4)
         self.initTetraIndices()
         self.fid_np = self.get_surface_id()
+        self.num_faces = self.fid_np.shape[0]
+        # print(self.fid_np.shape)
+        self.fid = ti.field(dtype=ti.i32, shape=self.fid_np.shape)
+        self.fid.from_numpy(self.fid_np)
         # self.initEdgeIndices()
 
-        print(len(self.tet_mesh.verts))
-        print(len(self.tet_mesh.cells))
+        # print(len(self.tet_mesh.verts))
+        # print(len(self.tet_mesh.cells))
 
         self.verts = self.tet_mesh.verts
         self.cells = self.tet_mesh.cells
@@ -109,8 +113,6 @@ class TetMesh:
             self.tetra_indices[c.id * 4 + 1] = c.verts[1].id
             self.tetra_indices[c.id * 4 + 2] = c.verts[2].id
             self.tetra_indices[c.id * 4 + 3] = c.verts[3].id
-
-
 
 
     @ti.kernel

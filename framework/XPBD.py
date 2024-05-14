@@ -523,7 +523,8 @@ class Solver:
         for tid in range(len(self.tet_meshes_dynamic)):
             self.init_tet_mesh_quantities_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
             self.init_edge_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_edges_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-            self.init_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
+            self.init_tet_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
+            # self.init_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
             self.init_tet_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_tetras_dynamic[tid], self.tet_meshes_dynamic[tid])
 
         for mid in range(len(self.meshes_static)):
@@ -578,6 +579,15 @@ class Solver:
             self.face_indices_dynamic[3 * (offset_faces + f.id) + 0] = f.verts[0].id + offset_verts
             self.face_indices_dynamic[3 * (offset_faces + f.id) + 1] = f.verts[1].id + offset_verts
             self.face_indices_dynamic[3 * (offset_faces + f.id) + 2] = f.verts[2].id + offset_verts
+
+
+    @ti.kernel
+    def init_tet_face_indices_dynamic_device(self, offset_verts: ti.int32, offset_faces: ti.int32, mesh: ti.template()):
+        for f in range(mesh.num_faces):
+            self.face_indices_dynamic[3 * (offset_faces + f) + 0] = mesh.fid[f, 0] + offset_verts
+            self.face_indices_dynamic[3 * (offset_faces + f) + 1] = mesh.fid[f, 1] + offset_verts
+            self.face_indices_dynamic[3 * (offset_faces + f) + 2] = mesh.fid[f, 2] + offset_verts
+
 
     @ti.kernel
     def init_tet_indices_dynamic_device(self, offset_verts: ti.int32, offset_tets: ti.int32, mesh: ti.template()):
