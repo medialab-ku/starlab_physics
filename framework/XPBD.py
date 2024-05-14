@@ -145,12 +145,12 @@ class Solver:
         self.fixed.fill(1)
 
         self.cache_size = 1000
+        self.cache_size2 = self.max_num_verts_dynamic * self.cache_size
 
-
-        self.vt_active_set = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.cache_size))
-        self.vt_active_set_g0 = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
-        self.vt_active_set_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
-        self.vt_active_set_num = ti.field(int, shape=self.max_num_verts_dynamic)
+        self.vt_active_set = ti.field(dtype=ti.int32, shape=self.cache_size2)
+        self.vt_active_set_g0 = ti.Vector.field(n=3, dtype=ti.f32, shape=self.cache_size2)
+        self.vt_active_set_schur = ti.field(dtype=ti.f32, shape=self.cache_size2)
+        self.vt_active_set_num = ti.field(int, shape=1)
 
         self.vt_active_set_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic, self.cache_size))
         self.vt_active_set_g_dynamic = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size, 4))
@@ -1046,15 +1046,15 @@ class Solver:
             g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
 
         if d < dHat:
-            if self.vt_active_set_num[vid_d] < self.cache_size:
-                self.vt_active_set[vid_d, self.vt_active_set_num[vid_d]] = ti.math.ivec2(fid_s, dtype)
-                self.vt_active_set_g0[vid_d, self.vt_active_set_num[vid_d]] = g0
-                schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                self.vt_active_set_schur[vid_d, self.vt_active_set_num[vid_d]] = schur
-                ld = (dHat - d) / schur
-                self.dx[v0] += self.m_inv[v0] * ld * g0
-                self.nc[v0] += 1
-                ti.atomic_add(self.vt_active_set_num[vid_d], 1)
+            schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
+            ld = (dHat - d) / schur
+            self.dx[v0] += self.m_inv[v0] * ld * g0
+            self.nc[v0] += 1
+            if self.vt_active_set_num[0] < self.cache_size2:
+                self.vt_active_set[self.vt_active_set_num[0]] = vid_d
+                self.vt_active_set_g0[self.vt_active_set_num[0]] = g0
+                self.vt_active_set_schur[self.vt_active_set_num[0]] = schur
+                ti.atomic_add(self.vt_active_set_num[0], 1)
 
     @ti.func
     def solve_collision_tv_static_x(self, fid_d, vid_s, dHat):
@@ -1920,11 +1920,12 @@ class Solver:
 
         friction_coeff = self.friction_coeff[0]
         # print(friction_coeff)
-        for vi_d in range(self.max_num_verts_dynamic):
-            for j in range(self.vt_active_set_num[vi_d]):
-                g0, schur = self.vt_active_set_g0[vi_d, j], self.vt_active_set_schur[vi_d, j]
-                self.solve_collision_vt_static_v(vi_d, g0, schur, friction_coeff)
+        for i in range(self.vt_active_set_num[0]):
+            vi_d = self.vt_active_set[i]
+            g0, schur = self.vt_active_set_g0[i], self.vt_active_set_schur[i]
+            self.solve_collision_vt_static_v(vi_d, g0, schur, friction_coeff)
 
+        for vi_d in range(self.max_num_verts_dynamic):
             for j in range(self.vt_active_set_num_dynamic[vi_d]):
                 fi_d = self.vt_active_set_dynamic[vi_d, j]
                 schur = self.vt_active_set_schur_dynamic[vi_d, j]
