@@ -152,10 +152,11 @@ class Solver:
         self.vt_active_set_schur = ti.field(dtype=ti.f32, shape=self.cache_size2)
         self.vt_active_set_num = ti.field(int, shape=1)
 
-        self.vt_active_set_dynamic = ti.field(int, shape=(self.max_num_verts_dynamic, self.cache_size))
-        self.vt_active_set_g_dynamic = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size, 4))
-        self.vt_active_set_schur_dynamic = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
-        self.vt_active_set_num_dynamic = ti.field(int, shape=self.max_num_verts_dynamic)
+
+        self.vt_active_set_dynamic = ti.field(dtype=ti.i32, shape=(self.cache_size2, 2))
+        self.vt_active_set_g_dynamic = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.cache_size2, 4))
+        self.vt_active_set_schur_dynamic = ti.field(dtype=ti.f32, shape=self.cache_size2)
+        self.vt_active_set_num_dynamic = ti.field(int, shape=1)
 
         self.tv_active_set = ti.field(int, shape=(self.max_num_faces_dynamic, self.cache_size))
         self.tv_active_set_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.cache_size, 3))
@@ -859,12 +860,13 @@ class Solver:
                 self.nc[v0] += 1
                 self.nc[v1] += 1
 
-                if self.vt_active_set_num_dynamic[vid] < self.cache_size:
-                    self.vt_active_set_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = fid
-                    self.vt_active_set_schur_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = schur
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 0] = g0
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 1] = g1
-                    ti.atomic_add(self.vt_active_set_num_dynamic[vid], 1)
+                if self.vt_active_set_num_dynamic[0] < self.cache_size2:
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 0] = vid
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 1] = fid
+                    self.vt_active_set_schur_dynamic[self.vt_active_set_num_dynamic[0]] = schur
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 0] = g0
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 1] = g1
+                    ti.atomic_add(self.vt_active_set_num_dynamic[0], 1)
 
         elif dtype == 1:
             d = di.d_PP(x0, x2)
@@ -877,12 +879,13 @@ class Solver:
                 self.nc[v0] += 1
                 self.nc[v2] += 1
 
-                if self.vt_active_set_num_dynamic[vid] < self.cache_size:
-                    self.vt_active_set_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = fid
-                    self.vt_active_set_schur_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = schur
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 0] = g0
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 2] = g2
-                    ti.atomic_add(self.vt_active_set_num_dynamic[vid], 1)
+                if self.vt_active_set_num_dynamic[0] < self.cache_size2:
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 0] = vid
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 1] = fid
+                    self.vt_active_set_schur_dynamic[self.vt_active_set_num_dynamic[0]] = schur
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 0] = g0
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 2] = g2
+                    ti.atomic_add(self.vt_active_set_num_dynamic[0], 1)
 
         elif dtype == 2:
             d = di.d_PP(x0, x3)
@@ -897,11 +900,12 @@ class Solver:
                 self.nc[v0] += 1
                 self.nc[v3] += 1
 
-                if self.vt_active_set_num_dynamic[vid] < self.cache_size:
-                    self.vt_active_set_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = fid
-                    self.vt_active_set_schur_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = schur
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 0] = g0
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 3] = g3
+                if self.vt_active_set_num_dynamic[0] < self.cache_size2:
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 0] = vid
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 1] = fid
+                    self.vt_active_set_schur_dynamic[self.vt_active_set_num_dynamic[0]] = schur
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 0] = g0
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 3] = g3
                     ti.atomic_add(self.vt_active_set_num_dynamic[vid], 1)
 
         elif dtype == 3:
@@ -920,13 +924,14 @@ class Solver:
                 self.nc[v1] += 1
                 self.nc[v2] += 1
 
-                if self.vt_active_set_num_dynamic[vid] < self.cache_size:
-                    self.vt_active_set_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = fid
-                    self.vt_active_set_schur_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = schur
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 0] = g0
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 1] = g1
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 2] = g2
-                    ti.atomic_add(self.vt_active_set_num_dynamic[vid], 1)
+                if self.vt_active_set_num_dynamic[0] < self.cache_size2:
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 0] = vid
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 1] = fid
+                    self.vt_active_set_schur_dynamic[self.vt_active_set_num_dynamic[0]] = schur
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 0] = g0
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 1] = g1
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 2] = g2
+                    ti.atomic_add(self.vt_active_set_num_dynamic[0], 1)
 
         elif dtype == 4:
             d = di.d_PE(x0, x2, x3)
@@ -943,12 +948,13 @@ class Solver:
                 self.nc[v2] += 1
                 self.nc[v3] += 1
 
-                if self.vt_active_set_num_dynamic[vid] < self.cache_size:
-                    self.vt_active_set_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = fid
-                    self.vt_active_set_schur_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = schur
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 0] = g0
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 2] = g2
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 3] = g3
+                if self.vt_active_set_num_dynamic[0] < self.cache_size2:
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 0] = vid
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 1] = fid
+                    self.vt_active_set_schur_dynamic[self.vt_active_set_num_dynamic[0]] = schur
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 0] = g0
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 2] = g2
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 3] = g3
                     ti.atomic_add(self.vt_active_set_num_dynamic[vid], 1)
 
         elif dtype == 5:
@@ -966,13 +972,14 @@ class Solver:
                 self.nc[v1] += 1
                 self.nc[v3] += 1
 
-                if self.vt_active_set_num_dynamic[vid] < self.cache_size:
-                    self.vt_active_set_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = fid
-                    self.vt_active_set_schur_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = schur
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 0] = g0
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 1] = g1
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 3] = g3
-                    ti.atomic_add(self.vt_active_set_num_dynamic[vid], 1)
+                if self.vt_active_set_num_dynamic[0] < self.cache_size2:
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 0] = vid
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 1] = fid
+                    self.vt_active_set_schur_dynamic[self.vt_active_set_num_dynamic[0]] = schur
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 0] = g0
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 1] = g1
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 3] = g3
+                    ti.atomic_add(self.vt_active_set_num_dynamic[0], 1)
 
         elif dtype == 6:
             d = di.d_PT(x0, x1, x2, x3)
@@ -990,14 +997,15 @@ class Solver:
                 self.nc[v2] += 1
                 self.nc[v3] += 1
 
-                if self.vt_active_set_num_dynamic[vid] < self.cache_size:
-                    self.vt_active_set_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = fid
-                    self.vt_active_set_schur_dynamic[vid, self.vt_active_set_num_dynamic[vid]] = schur
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 0] = g0
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 1] = g1
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 2] = g2
-                    self.vt_active_set_g_dynamic[vid, self.vt_active_set_num_dynamic[vid], 3] = g3
-                    ti.atomic_add(self.vt_active_set_num_dynamic[vid], 1)
+                if self.vt_active_set_num_dynamic[0] < self.cache_size2:
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 0] = vid
+                    self.vt_active_set_dynamic[self.vt_active_set_num_dynamic[0], 1] = fid
+                    self.vt_active_set_schur_dynamic[self.vt_active_set_num_dynamic[0]] = schur
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 0] = g0
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 1] = g1
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 2] = g2
+                    self.vt_active_set_g_dynamic[self.vt_active_set_num_dynamic[0], 3] = g3
+                    ti.atomic_add(self.vt_active_set_num_dynamic[0], 1)
 
 
     @ti.func
@@ -1925,16 +1933,15 @@ class Solver:
             g0, schur = self.vt_active_set_g0[i], self.vt_active_set_schur[i]
             self.solve_collision_vt_static_v(vi_d, g0, schur, friction_coeff)
 
-        for vi_d in range(self.max_num_verts_dynamic):
-            for j in range(self.vt_active_set_num_dynamic[vi_d]):
-                fi_d = self.vt_active_set_dynamic[vi_d, j]
-                schur = self.vt_active_set_schur_dynamic[vi_d, j]
-                g0 = self.vt_active_set_g_dynamic[vi_d, j, 0]
-                g1 = self.vt_active_set_g_dynamic[vi_d, j, 1]
-                g2 = self.vt_active_set_g_dynamic[vi_d, j, 2]
-                g3 = self.vt_active_set_g_dynamic[vi_d, j, 3]
+        for i in range(self.vt_active_set_num[0]):
+            vid_d, fid_d = self.vt_active_set_dynamic[i, 0], self.vt_active_set_dynamic[i, 1]
 
-                self.solve_collision_vt_dynamic_v(vi_d, fi_d, g0, g1, g2, g3, schur, friction_coeff)
+            schur = self.vt_active_set_schur_dynamic[i]
+            g0 = self.vt_active_set_g_dynamic[i, 0]
+            g1 = self.vt_active_set_g_dynamic[i, 1]
+            g2 = self.vt_active_set_g_dynamic[i, 2]
+            g3 = self.vt_active_set_g_dynamic[i, 3]
+            self.solve_collision_vt_dynamic_v(vid_d, fid_d, g0, g1, g2, g3, schur, friction_coeff)
 
         for fi_d in range(self.max_num_faces_dynamic):
             for j in range(self.tv_active_set_num[fi_d]):
