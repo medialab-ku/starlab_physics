@@ -534,6 +534,14 @@ class Solver:
         self.m_inv.fill(0.0)
         self.init_rest_length()
         self.init_Dm_inv_and_volume()
+        self.init_m_inv()
+        # ti.math.inverse(self.m_inv)
+
+    @ti.kernel
+    def init_m_inv(self):
+
+        for i in range(self.max_num_verts_dynamic):
+            self.m_inv[i] = 1.0 / self.m_inv[i]
 
 
     @ti.kernel
@@ -2007,10 +2015,10 @@ class Solver:
 
 
     @ti.kernel
-    def solve_fem_constraints_x(self, YM: ti.float32, PR: ti.float32):
+    def solve_fem_constraints_x(self, YM: ti.f32, PR: ti.f32):
 
-        la = YM / (2.0 * (1.0 + PR))
-        mu = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
+        mu = YM / (2.0 * (1.0 + PR))
+        la = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
 
         for tid in range(self.max_num_tetra_dynamic):
 
@@ -2026,9 +2034,9 @@ class Solver:
             U, sig, V = ti.svd(F)
             R = U @ V.transpose()
 
-            H = (F - R) @ self.Dm_inv[tid].transpose()
+            H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
 
-            C = 0.5 * self.V0[tid] * la * (F - R).norm() * (F - R).norm()
+            C = mu * self.V0[tid] * (F - R).norm() * (F - R).norm()
 
             nabla_C0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
             nabla_C1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
@@ -2040,20 +2048,20 @@ class Solver:
                      self.fixed[v2] * self.m_inv[v2] * nabla_C2.dot(nabla_C2) +
                      self.fixed[v3] * self.m_inv[v3] * nabla_C3.dot(nabla_C3) + 1e-4)
 
-            ld = C / schur
+
+            ld = C / (schur)
 
             self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C0 * ld
             self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C1 * ld
             self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C2 * ld
             self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C3 * ld
 
-
             J = ti.math.determinant(F)
             F_trace = sig[0, 0] + sig[1, 1] + sig[2, 2]
 
-            alpha = mu / la
-            C_vol = (J - 1.0 - alpha)
-            H_vol = self.Dm_inv[tid].transpose()
+            gamma = 1.0
+            C_vol = 0.5 * la * self.V0[tid] * (J - gamma) * (J - gamma)
+            H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
 
             nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
             nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
