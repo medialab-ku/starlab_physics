@@ -133,12 +133,14 @@ class Mesh:
             v.x += self.trans
 
     def export(self, scene_name, mesh_id, frame):
-        directory = os.path.join("results/",scene_name)
+        directory = os.path.join("results/",scene_name,"Mesh_ID_"+str(mesh_id))
+
         try :
             if not os.path.exists(directory):
                 os.makedirs(directory)
         except OSError:
             print("Error: Failed to create folder" + directory)
+
         x_np = self.mesh.verts.x.to_numpy()
         file_name = "Mesh_obj_" + str(frame) + ".obj"
         file_path = os.path.join(directory, file_name)

@@ -1,15 +1,18 @@
 import taichi as ti
 import json
-# from Scenes import test_fem as scene1
+from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
 # from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
-from Scenes import cloth_stack as scene1
+# from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
 # from Scenes import scene_cube_stretch as scene1
 # from Scenes import scene_fluid_compression as scene1
+
+
+
 import os
 import XPBD
 import selection_tool as st
@@ -144,7 +147,7 @@ while window.running:
             g_selector.selection_Count_Up()
 
         if window.event.key == 'x':  # export selection
-            print("==== EXPORT!! ====")
+            print("==== Vertex EXPORT!! ====")
             g_selector.export_selection()
 
         if window.event.key == 'i':
@@ -180,9 +183,6 @@ while window.running:
         if window.event.key == 'h':
             sim.set_fixed_vertices(g_selector.is_selected)
 
-        if window.event.key == 'z':
-            sim.frame[0] = 0
-            frame_cpu = 0
 
         if window.event.key == ti.ui.BACKSPACE:
             g_selector.is_selected.fill(0)
@@ -223,6 +223,9 @@ while window.running:
     if mesh_export and run_sim and frame_cpu < frame_end:
         for mid in range(len(scene1.meshes_dynamic)):
             sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
+
+        for mid in range(len(scene1.tet_meshes_dynamic)):
+            sim.tet_meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
 
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))

@@ -2145,11 +2145,11 @@ class Solver:
         self.ee_active_set_g_dynamic.fill(0.0)
 
         self.num_particle_neighbours.fill(0)
-        self.solve_spring_constraints_x()
+        # self.solve_spring_constraints_x()
         if self.enable_collision_handling:
             self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()
-        self.solve_pressure_constraints_x()
+        # self.solve_pressure_constraints_x()
         self.update_dx()
 
         # print(self.num_springs[0])
@@ -2158,7 +2158,7 @@ class Solver:
         self.dv.fill(0.0)
         self.nc.fill(0)
 
-        self.solve_spring_constraints_v()
+        # self.solve_spring_constraints_v()
 
         if self.enable_collision_handling:
             self.solve_collision_constraints_v()
@@ -2196,7 +2196,7 @@ class Solver:
             if(self.frame[0] > 90) :
                 x_cur = self.x_static[i]
                 self.x_static[i] = self.x_static_rest[i] + ti.Vector([ 2.5 * ti.sin((self.frame[0]-90) * 100.0 * self.dt[0]),0.0,0.0])
-                self.v_static[i] = (self.x_static[i] -x_cur) / self.dt[0]
+                self.v_static[i] = (self.x_static[i] - x_cur) / self.dt[0]
 
 
     def forward(self, n_substeps):
