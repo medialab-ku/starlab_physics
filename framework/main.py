@@ -1,14 +1,14 @@
 import taichi as ti
 import json
-from Scenes import test_fem as scene1
+# from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
 # from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
-from Scenes import cloth_stack as scene1
+# from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
-# from Scenes import scene_cube_stretch as scene1
+from Scenes import scene_cube_stretch as scene1
 # from Scenes import scene_fluid_compression as scene1
 
 
@@ -17,7 +17,7 @@ import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(8., 8., 8.), particle_radius=0.02, dHat=1e-3)
+sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(8., 8., 8.), YM=1e6, PR=0.45, particle_radius=0.02, dHat=1e-3)
 # sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -47,6 +47,8 @@ n_substep = 20
 frame_end = 100
 dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
+PR_ui = sim.PR[0]
+YM_ui = sim.YM[0]
 friction_coeff_ui = sim.friction_coeff[0]
 mesh_export = False
 frame_cpu = 0
@@ -54,6 +56,8 @@ frame_cpu = 0
 def show_options():
     global n_substep
     global dt_ui
+    global YM_ui
+    global PR_ui
     global sim
     global dHat_ui
     global friction_coeff_ui
@@ -65,13 +69,17 @@ def show_options():
     old_dt = dt_ui
     old_dHat = dHat_ui
     old_friction_coeff = dHat_ui
-    with gui.sub_window("Time Step", 0.05, 0.1, 0.2, 0.3) as w:
+    YM_old = YM_ui
+    PR_old = PR_ui
+    with gui.sub_window("Time Step", 0., 0., 0.4, 0.4) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
         n_substep = w.slider_int("substeps", n_substep, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
         friction_coeff_ui = w.slider_float("friction coeff.", friction_coeff_ui, 0.0, 1.0)
+        YM_ui = w.slider_float("Young's modulus", YM_ui, 0.0, 1e8)
+        PR_ui = w.slider_float("Poisson's ratio", PR_ui, 0.0, 0.495)
 
 
         MODE_WIREFRAME = w.checkbox("wireframe",MODE_WIREFRAME)
@@ -91,12 +99,7 @@ def show_options():
         w.text(verts_str)
         w.text(edges_str)
 
-
-        # if(frame_cpu != sim.frame[0]) :
-        #     print("cpu_gpu frame different!!",frame_cpu,sim.frame[0])
-
-    if not old_dt == dt_ui :
-        # sim.dt[0] = dt_ui if dt_ui > 0.00001 else 0.00001
+    if not old_dt == dt_ui:
         sim.dt[0] = dt_ui
 
     if not old_dHat == dHat_ui:
@@ -104,6 +107,12 @@ def show_options():
 
     if not old_friction_coeff == friction_coeff_ui:
         sim.friction_coeff[0] = friction_coeff_ui
+
+    if not YM_old == YM_ui:
+        sim.YM[0] = YM_ui
+
+    if not PR_old == PR_ui:
+        sim.PR[0] = PR_ui
 
 def load_animation() :
     global sim

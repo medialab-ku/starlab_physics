@@ -33,17 +33,17 @@ dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles = 3
+num_particles = 2
 num_constraints = ti.field(dtype=float)
 
-l0 = 3
+l0 = 15
 
 frame = 0
 max_num_particles_per_cell = 100
 max_num_neighbors = 100
-time_delta = 1.0 / 60.0
+time_delta = 1.0 / 120.0
 epsilon = 1e-5
-particle_radius = 2.0
+particle_radius = 20.0
 particle_radius_in_world = particle_radius / screen_res[1]
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=num_particles)
 indices = np.zeros(num_particles)
@@ -127,7 +127,7 @@ def prologue():
         old_positions[i] = positions[i]
     # apply gravity within boundary
     for i in positions:
-        g = ti.Vector([0.0, -9.81])
+        g = ti.Vector([0.0, 0.0])
         pos, vel = positions[i], velocities[i]
         vel += g * time_delta
         pos += vel * time_delta
@@ -153,7 +153,7 @@ def substep():
     for i in range(num_particles):
         positions[i] += (position_deltas[i] / num_constraints[i])
 
-    positions[0] = old_positions[0]
+    # positions[0] = old_positions[0]
 
 @ti.kernel
 def epilogue():
@@ -163,8 +163,13 @@ def epilogue():
 
     position_deltas.fill(0.0)
     for i in range(num_particles - 1):
-        vi = 0.5 * (velocities[i + 1] + velocities[i])
-        vj = 0.5 * (velocities[i + 1] + velocities[i])
+        xij = positions[i + 1] - positions[i]
+        dir = ti.math.normalize(xij)
+        vij = velocities[i + 1] - velocities[i]
+
+        if dir.dot(vij) > 0.0:
+
+
         position_deltas[i] += (vi - velocities[i])
         position_deltas[i + 1] += (vj - velocities[i + 1])
 

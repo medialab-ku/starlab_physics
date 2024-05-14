@@ -12,6 +12,8 @@ class Solver:
                  grid_size,
                  particle_radius,
                  dHat,
+                 YM,
+                 PR,
                  g,
                  dt):
 
@@ -24,6 +26,10 @@ class Solver:
         self.dt[0] = dt
         self.dHat = ti.field(dtype=ti.f32, shape=1)
         self.dHat[0] = dHat
+        self.YM = ti.field(dtype=ti.f32, shape=1) # Young's modulus
+        self.PR = ti.field(dtype=ti.f32, shape=1) # Poisson's ratio
+        self.YM[0] = YM
+        self.PR[0] = PR
         self.grid_size = grid_size
         self.particle_radius = particle_radius
         self.friction_coeff = ti.field(dtype=ti.f32, shape=1)
@@ -59,14 +65,12 @@ class Solver:
         if is_verts_dynamic_empty is True:
             num_vert_offsets = 1
             self.max_num_verts_dynamic = 1
-        #
-        #
+
         if is_mesh_dynamic_empty is True:
             num_meshes_dynamic = 1
             self.max_num_edges_dynamic = 1
             self.max_num_faces_dynamic = 1
-        #
-        #
+
         if is_tet_mesh_dynamic_empty is True:
             num_tet_meshes_dynamic = 1
             self.max_num_tetra_dynamic = 1
@@ -132,7 +136,9 @@ class Solver:
         self.fixed = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
+        self.V0 = ti.field(dtype=ti.f32, shape=self.max_num_tetra_dynamic)
         self.l0 = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
+
         self.spring_ids = ti.field(dtype=ti.i32, shape=self.max_num_edges_dynamic)
         self.num_springs = ti.field(dtype=ti.i32, shape=1)
         self.schur_spring = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
@@ -1698,8 +1704,8 @@ class Solver:
             x10 = x0 - x1
             lij = x10.norm()
 
-            C = 0.5 * (lij - l0) * (lij - l0)
-            nabla_C = (lij - l0) * (x10 / lij)
+            C = (lij - l0)
+            nabla_C = x10.normalized()
             schur = (self.fixed[v0] * self.m_inv[v0] + self.fixed[v1] * self.m_inv[v1]) * nabla_C.dot(nabla_C) + 1e-4
             ld = C / schur
 
@@ -1709,10 +1715,10 @@ class Solver:
             self.nc[v1] += 1
 
             # if lij > 1.05 * l0:
-            #     self.spring_ids[self.num_springs[0]] = ei
-            #     self.schur_spring[self.num_springs[0]] = schur
-            #     self.gradient_spring[self.num_springs[0]] = nabla_C
-            #     ti.atomic_add(self.num_springs[0], 1)
+            # self.spring_ids[ei] = ei
+            self.schur_spring[ei] = schur
+            self.gradient_spring[ei] = nabla_C
+            # ti.atomic_add(self.num_springs[0], 1)
 
 
 
@@ -1721,17 +1727,21 @@ class Solver:
     @ti.kernel
     def solve_spring_constraints_v(self):
 
-        for i in range(self.num_springs[0]):
+        for i in range(self.offset_spring):
             ei = self.spring_ids[i]
             v0, v1 = self.edge_indices_dynamic[2 * ei + 0], self.edge_indices_dynamic[2 * ei + 1]
+            x0, x1 = self.y[v0], self.y[v1]
+            x10 = x0 - x1
+            nabla_C = x10.normalized()
+            Cv = nabla_C.dot(self.v[v0] - self.v[v1])
+            # if Cv > 0:
+                # print("test")
 
-            Cv = self.gradient_spring[i].dot(self.v[v0] - self.v[v1])
-            if Cv > 0:
-                ld_v = Cv / self.schur_spring[i]
-                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * ld_v * self.gradient_spring[i]
-                self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * self.gradient_spring[i]
-                self.nc[v0] += 1
-                self.nc[v1] += 1
+            ld_v = Cv / self.schur_spring[i]
+            self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * ld_v * nabla_C
+            self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * ld_v * nabla_C
+            self.nc[v0] += 1
+            self.nc[v1] += 1
 
     @ti.func
     def spiky_gradient(self, r, h):
@@ -1935,7 +1945,7 @@ class Solver:
 
         friction_coeff = self.friction_coeff[0]
 
-        print(self.vt_active_set_num[0] + self.vt_active_set_num[0] + self.tv_active_set_num[0] + self.ee_active_set_num[0] + self.ee_active_set_num_dynamic[0])
+        # print(self.vt_active_set_num[0] + self.vt_active_set_num[0] + self.tv_active_set_num[0] + self.ee_active_set_num[0] + self.ee_active_set_num_dynamic[0])
         # print(friction_coeff)
         for id in range(self.vt_active_set_num[0] + self.vt_active_set_num[0] + self.tv_active_set_num[0] + self.ee_active_set_num[0] + self.ee_active_set_num_dynamic[0]):
 
@@ -1945,7 +1955,6 @@ class Solver:
                 g0, schur = self.vt_active_set_g0[i], self.vt_active_set_schur[i]
                 self.solve_collision_vt_static_v(vi_d, g0, schur, friction_coeff)
 
-        # for i in range(self.vt_active_set_num[0]):
             elif id < self.vt_active_set_num[0] + self.vt_active_set_num[0]:
                 i = id - self.vt_active_set_num[0]
                 vid_d, fid_d = self.vt_active_set_dynamic[i, 0], self.vt_active_set_dynamic[i, 1]
@@ -1957,7 +1966,6 @@ class Solver:
                 g3 = self.vt_active_set_g_dynamic[i, 3]
                 self.solve_collision_vt_dynamic_v(vid_d, fid_d, g0, g1, g2, g3, schur, friction_coeff)
 
-        # for i in range(self.tv_active_set_num[0]):
             elif id < self.vt_active_set_num[0] + self.vt_active_set_num[0] + self.tv_active_set_num[0]:
                 i = id - self.vt_active_set_num[0] - self.vt_active_set_num[0]
 
@@ -1969,7 +1977,6 @@ class Solver:
 
                 self.solve_collision_tv_static_v(fi_d, g1, g2, g3, schur, friction_coeff)
 
-        # for i in range(self.ee_active_set_num[0]):
             elif id < self.vt_active_set_num[0] + self.vt_active_set_num[0] + self.tv_active_set_num[0] + self.ee_active_set_num[0]:
                 i = id - self.vt_active_set_num[0] - self.vt_active_set_num[0] - self.tv_active_set_num[0]
                 ei = self.ee_active_set[i]
@@ -1980,10 +1987,8 @@ class Solver:
                 self.solve_collision_ee_static_v(ei, g0, g1, schur, friction_coeff)
 
             else:
-
                 i = id - self.vt_active_set_num[0] - self.vt_active_set_num[0] - self.tv_active_set_num[0] -  self.ee_active_set_num_dynamic[0]
 
-        # for i in range(self.ee_active_set_num_dynamic[0]):
                 pair_i = self.ee_active_set_dynamic[i]
                 schur = self.ee_active_set_schur_dynamic[i]
 
@@ -1994,32 +1999,12 @@ class Solver:
 
                 self.solve_collision_ee_dynamic_v(pair_i[0], pair_i[1], g0, g1, g2, g3, schur, friction_coeff)
 
-        # -----------brute-force-------------------
-        # for vi in range(self.max_num_verts_dynamic):
-        #
-        #     # for ti in range(self.max_num_faces_dynamic):
-        #     #     if self.is_in_face(vi, ti) != True:
-        #     #         self.solve_collision_vt_dynamic_v(vi, ti, d)
-        #
-        #     for ti_s in range(self.max_num_faces_static):
-        #         self.solve_collision_vt_static_v(vi, ti_s, d)
-        #
-        #
-        # for ti_s in range(self.max_num_faces_static):
-        #     for vi in range(self.max_num_verts_dynamic):
-        #         self.solve_collision_tv_static_v(ti_s, vi, d)
-
-        # for ei in range(self.max_num_edges_dynamic):
-        #     for ei_s in range(self.max_num_edges_static):
-        #         self.solve_collision_ee_static_v(ei, ei_s, d)
-        #
-        #     for ei_d in range(self.max_num_edges_dynamic):
-        #         if ei != ei_d and self.share_vertex(ei, ei_d) != True:
-        #             self.solve_collision_ee_dynamic_v(ei, ei_d, d)
-
 
     @ti.kernel
-    def solve_fem_constraints_x(self):
+    def solve_fem_constraints_x(self, YM, PR):
+
+        la = YM / (2.0 * (1.0 + PR))
+        mu = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
 
         for tid in range(self.max_num_tetra_dynamic):
 
@@ -2037,7 +2022,7 @@ class Solver:
 
             H = (F - R) @ self.Dm_inv[tid].transpose()
 
-            C = 0.5 * (F - R).norm() * (F - R).norm()
+            C = 0.5 * self.V0[tid] * la * (F - R).norm() * (F - R).norm()
 
             nabla_C0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
             nabla_C1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
@@ -2056,16 +2041,13 @@ class Solver:
             self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C2 * ld
             self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C3 * ld
 
-            # self.nc[v0] += 1
-            # self.nc[v1] += 1
-            # self.nc[v2] += 1
-            # self.nc[v3] += 1
 
             J = ti.math.determinant(F)
             F_trace = sig[0, 0] + sig[1, 1] + sig[2, 2]
 
-            C_vol = 0.5 * (F_trace - 3) * (F_trace - 3)
-            H_vol = (F_trace - 3) * self.Dm_inv[tid].transpose()
+            alpha = mu / la
+            C_vol = (J - 1.0 - alpha)
+            H_vol = self.Dm_inv[tid].transpose()
 
             nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
             nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
@@ -2150,14 +2132,11 @@ class Solver:
         for i in range(self.max_num_verts_dynamic):
                 self.v[i] = (self.y[i] - self.x[i]) / self.dt[0]
 
-
-
-    def solve_constraints_x(self):
-
+    def init_variables(self):
         self.dx.fill(0.0)
         self.nc.fill(0)
         self.vt_active_set_num.fill(0)
-        # self.num_springs[0] = 0
+        self.num_springs.fill(0)
         # self.vt_active_set.fill(0)
         self.tv_active_set_num.fill(0)
         self.tv_active_set.fill(0)
@@ -2174,11 +2153,19 @@ class Solver:
         self.ee_active_set_g_dynamic.fill(0.0)
 
         self.num_particle_neighbours.fill(0)
-        self.solve_spring_constraints_x()
+    def solve_constraints_x(self):
+
+        self.init_variables()
+        
+        # self.solve_spring_constraints_x()
+
         if self.enable_collision_handling:
             self.solve_collision_constraints_x()
-        self.solve_fem_constraints_x()
+
+        self.solve_fem_constraints_x(self.YM[0], self.PR[0])
+
         # self.solve_pressure_constraints_x()
+
         self.update_dx()
 
         # print(self.num_springs[0])
@@ -2187,10 +2174,11 @@ class Solver:
         self.dv.fill(0.0)
         self.nc.fill(0)
 
-        # self.solve_spring_constraints_v()
+        self.solve_spring_constraints_v()
 
         if self.enable_collision_handling:
             self.solve_collision_constraints_v()
+
 
         # self.solve_pressure_constraints_v()
         self.update_dv()
@@ -2243,6 +2231,7 @@ class Solver:
             # self.move_static_object()
             self.confine_to_boundary()
             self.solve_constraints_x()
+
             self.confine_to_boundary()
             self.compute_velocity()
 

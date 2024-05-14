@@ -37,12 +37,6 @@ class TetMesh:
                                    'hc': ti.f32})
         self.density = density
         self.tet_mesh.verts.m.fill(1.0)
-        if self.is_static:
-            self.tet_mesh.verts.m_inv.fill(0.0)
-
-        else:
-            self.tet_mesh.verts.m_inv.fill(1.0)
-
         self.tet_mesh.verts.v.fill([0.0, 0.0, 0.0])
         self.tet_mesh.verts.x.from_numpy(self.tet_mesh.get_position_as_numpy())
         self.num_verts = len(self.tet_mesh.verts)
@@ -115,6 +109,9 @@ class TetMesh:
             self.tetra_indices[c.id * 4 + 1] = c.verts[1].id
             self.tetra_indices[c.id * 4 + 2] = c.verts[2].id
             self.tetra_indices[c.id * 4 + 3] = c.verts[3].id
+
+
+
 
     @ti.kernel
     def setCenterToOrigin(self):
