@@ -182,6 +182,11 @@ class Solver:
         self.ee_active_set_schur_dynamic = ti.field(dtype=ti.f32, shape=self.cache_size)
         self.ee_active_set_num_dynamic = ti.field(int, shape=1)
 
+        self.fem_active_set = ti.field(int, shape=self.max_num_tetra_dynamic)
+        self.fem_active_set_num = ti.field(int, shape=1)
+        self.fem_active_set_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_tetra_dynamic, 4))
+        self.fem_active_set_schur = ti.field(dtype=ti.f32, shape=self.max_num_tetra_dynamic)
+
 
         self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
         self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.cache_size))
@@ -2066,9 +2071,12 @@ class Solver:
             self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C2 * ld
             self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C3 * ld
 
-            J = ti.math.determinant(F)
-            F_trace = sig[0, 0] + sig[1, 1] + sig[2, 2]
+            self.nc[v0] += 1
+            self.nc[v1] += 1
+            self.nc[v2] += 1
+            self.nc[v3] += 1
 
+            J = sig[0, 0] * sig[1, 1] * sig[2, 2]
             gamma = 1.0
             C_vol = 0.5 * la * self.V0[tid] * (J - gamma) * (J - gamma)
             H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
@@ -2090,18 +2098,52 @@ class Solver:
             self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
             self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
 
+            self.nc[v0] += 1
+            self.nc[v1] += 1
+            self.nc[v2] += 1
+            self.nc[v3] += 1
 
-            self.nc[v0] += 2
-            self.nc[v1] += 2
-            self.nc[v2] += 2
-            self.nc[v3] += 2
+            for i in range(ti.static(3)):
+                if sig[i, i] < 1e-2 and self.fem_active_set_num[0] < self.max_num_tetra_dynamic:
+                    self.fem_active_set[self.fem_active_set_num[0]] = tid
+                    ti.atomic_add(self.fem_active_set_num[0], 1)
+
+
+    @ti.kernel
+    def solve_fem_constraints_v(self):
+
+        for i in range(self.fem_active_set_num[0]):
+            tid = self.fem_active_set[i]
+            v0 = self.tetra_indices_dynamic[4 * tid + 0]
+            v1 = self.tetra_indices_dynamic[4 * tid + 1]
+            v2 = self.tetra_indices_dynamic[4 * tid + 2]
+            v3 = self.tetra_indices_dynamic[4 * tid + 3]
+            g0 = self.fem_active_set_g[i, 0]
+            g1 = self.fem_active_set_g[i, 0]
+            g2 = self.fem_active_set_g[i, 0]
+            g3 = self.fem_active_set_g[i, 0]
+
+            Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
+            schur = self.fem_active_set_schur[i]
+            ld_v = Cv / schur
+            if Cv < 0.0:
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld_v
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
+                self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
+                self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
+
+                self.nc[v0] += 1
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
+
 
 
     @ti.kernel
     def update_x(self):
 
         for i in range(self.max_num_verts_dynamic):
-                self.x[i] += self.v[i] * self.dt[0]
+            self.x[i] += self.v[i] * self.dt[0]
 
 
     @ti.kernel
@@ -2176,6 +2218,8 @@ class Solver:
         self.ee_active_set_num_dynamic.fill(0)
         self.ee_active_set_g_dynamic.fill(0.0)
 
+        self.fem_active_set_num.fill(0)
+
         self.num_particle_neighbours.fill(0)
     def solve_constraints_x(self):
 
@@ -2203,7 +2247,7 @@ class Solver:
         if self.enable_collision_handling:
             self.solve_collision_constraints_v()
 
-
+        self.solve_fem_constraints_v()
         # self.solve_pressure_constraints_v()
         self.update_dv()
 
