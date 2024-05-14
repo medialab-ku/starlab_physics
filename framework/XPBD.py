@@ -144,7 +144,7 @@ class Solver:
 
         self.fixed.fill(1)
 
-        self.cache_size = 500
+        self.cache_size = 1000
 
 
         self.vt_active_set = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.cache_size))
@@ -162,10 +162,12 @@ class Solver:
         self.tv_active_set_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.cache_size))
         self.tv_active_set_num = ti.field(int, shape=(self.max_num_faces_dynamic))
 
-        self.ee_active_set = ti.field(int, shape=(self.max_num_edges_dynamic, self.cache_size))
-        self.ee_active_set_num = ti.field(int, shape=(self.max_num_edges_dynamic))
-        self.ee_active_set_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.cache_size, 2))
-        self.ee_active_set_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.cache_size))
+
+        self.cache_size1 = self.max_num_edges_dynamic * self.cache_size
+        self.ee_active_set = ti.field(int, shape=self.cache_size1)
+        self.ee_active_set_num = ti.field(int, shape=1)
+        self.ee_active_set_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.cache_size1, 2))
+        self.ee_active_set_schur = ti.field(dtype=ti.f32, shape=self.cache_size1)
 
         self.ee_active_set_dynamic = ti.Vector.field(n=2, dtype=int, shape=self.cache_size)
         self.ee_active_set_g_dynamic = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.cache_size, 4))
@@ -413,7 +415,7 @@ class Solver:
         for i in self.anim_x:
             if is_selected[i] >= 1:
 
-                idx_set = is_selected[i] - 1
+                idx_set = int(is_selected[i] - 1)
 
                 cur_anim = int(self.cur_animation[idx_set])
                 max_anim = int(self.num_animation[idx_set])
@@ -1287,10 +1289,11 @@ class Solver:
                 self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * ld * g0
                 self.nc[v0] += 1
 
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
 
         elif dtype == 1:
@@ -1302,12 +1305,11 @@ class Solver:
                 self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * ld * g0
                 self.nc[v0] += 1
 
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
-
-
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 2:
             d = di.d_PE(x0, x2, x3)
@@ -1318,10 +1320,11 @@ class Solver:
                 self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * ld * g0
                 self.nc[v0] += 1
 
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 3:
             d = di.d_PP(x1, x2)
@@ -1333,10 +1336,11 @@ class Solver:
                 self.dx[v1] += self.m_inv[v1] * ld * g1
                 self.nc[v1] += 1
 
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 4:
             d = di.d_PP(x1, x3)
@@ -1348,10 +1352,11 @@ class Solver:
                 self.dx[v1] += self.m_inv[v0] * ld * g1
                 self.nc[v1] += 1
 
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 5:
             d = di.d_PE(x1, x2, x3)
@@ -1361,10 +1366,11 @@ class Solver:
                 ld = (dHat - d) / schur
                 self.dx[v1] += self.m_inv[v0] * ld * g1
                 self.nc[v1] += 1
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 6:
             d = di.d_PE(x2, x0, x1)
@@ -1377,11 +1383,12 @@ class Solver:
                 self.dx[v1] += self.m_inv[v1] * ld * g1
                 self.nc[v0] += 1
                 self.nc[v1] += 1
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
+                    self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 7:
             d = di.d_PE(x3, x0, x1)
@@ -1394,11 +1401,12 @@ class Solver:
                 self.dx[v1] += self.m_inv[v1] * ld * g1
                 self.nc[v0] += 1
                 self.nc[v1] += 1
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
+                    self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 8:
             d = di.d_EE(x0, x1, x2, x3)
@@ -1410,11 +1418,12 @@ class Solver:
                 self.dx[v1] += self.m_inv[v1] * ld * g1
                 self.nc[v0] += 1
                 self.nc[v1] += 1
-                if self.ee_active_set_num[eid_d] < self.cache_size:
-                    self.ee_active_set_schur[eid_d, self.ee_active_set_num[eid_d]] = schur
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 0] = g0
-                    self.ee_active_set_g[eid_d, self.ee_active_set_num[eid_d], 1] = g1
-                    ti.atomic_add(self.ee_active_set_num[eid_d], 1)
+                if self.ee_active_set_num[0] < self.cache_size1:
+                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                    self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
+                    self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
+                    ti.atomic_add(self.ee_active_set_num[0], 1)
 
 
     @ti.func
@@ -1879,30 +1888,31 @@ class Solver:
         #                             self.solve_collision_vt_dynamic_x(vj_d, fi_d, d)
 
 
-
-
         # -----------brute-force-------------------
-        for vi in range(self.max_num_verts_dynamic):
+        for i in range(self.max_num_verts_dynamic * self.max_num_faces_dynamic):
+            vi_d = i // self.max_num_faces_dynamic
+            ti_d = i % self.max_num_faces_dynamic
+            if self.is_in_face(vi_d, ti_d) != True:
+                self.solve_collision_vt_dynamic_x(vi_d, ti_d, d)
 
-            for ti in range(self.max_num_faces_dynamic):
-                if self.is_in_face(vi, ti) != True:
-                    self.solve_collision_vt_dynamic_x(vi, ti, d)
+        for i in range(self.max_num_verts_dynamic * self.max_num_faces_static):
+            vi_d = i // self.max_num_faces_static
+            ti_s = i % self.max_num_faces_static
+            self.solve_collision_vt_static_x(vi_d, ti_s, d)
 
-            for ti_s in range(self.max_num_faces_static):
-                self.solve_collision_vt_static_x(vi, ti_s, d)
+        for i in range(self.max_num_faces_dynamic * self.max_num_verts_static):
+            ti_d = i // self.max_num_verts_static
+            vi_s = i % self.max_num_verts_static
+            self.solve_collision_tv_static_x(ti_d, vi_s, d)
 
-        for ti_d in range(self.max_num_faces_dynamic):
-            for vi_s in range(self.max_num_verts_static):
-                self.solve_collision_tv_static_x(ti_d, vi_s, d)
-
-        #
-        for ei in range(self.max_num_edges_dynamic):
-            for ei_s in range(self.max_num_edges_static):
-                self.solve_collision_ee_static_x(ei, ei_s, d)
+        for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
+            ei_d = i // self.max_num_edges_static
+            ei_s = i % self.max_num_edges_static
+            self.solve_collision_ee_static_x(ei_d, ei_s, d)
         # #
-            for ei_d in range(self.max_num_edges_dynamic):
-                if ei != ei_d and self.share_vertex(ei, ei_d) != True:
-                    self.solve_collision_ee_dynamic_x(ei, ei_d, d)
+        # for ei_d in range(self.max_num_edges_dynamic):
+        #     if ei != ei_d and self.share_vertex(ei, ei_d) != True:
+        #         self.solve_collision_ee_dynamic_x(ei, ei_d, d)
 
 
     @ti.kernel
@@ -1947,12 +1957,17 @@ class Solver:
         #         vid_d = self.vt_active_set[fid_s, i]
         #         self.solve_collision_tv_static_v(fid_s, vid_d, d)
         #
-        for eid_d in range(self.max_num_edges_dynamic):
-            for i in range(self.ee_active_set_num[eid_d]):
-                g0 = self.ee_active_set_g[eid_d, i, 0]
-                g1 = self.ee_active_set_g[eid_d, i, 1]
-                schur = self.ee_active_set_schur[eid_d, i]
-                self.solve_collision_ee_static_v(eid_d, g0, g1, schur, friction_coeff)
+
+        if self.ee_active_set_num[0] >= self.cache_size1:
+            print("fuck")
+
+        for i in range(self.ee_active_set_num[0]):
+            ei = self.ee_active_set[i]
+            schur = self.ee_active_set_schur[i]
+
+            g0 = self.ee_active_set_g[i, 0]
+            g1 = self.ee_active_set_g[i, 1]
+            self.solve_collision_ee_static_v(ei, g0, g1, schur, friction_coeff)
 
         for i in range(self.ee_active_set_num_dynamic[0]):
             pair_i = self.ee_active_set_dynamic[i]
@@ -2145,7 +2160,7 @@ class Solver:
         self.ee_active_set_g_dynamic.fill(0.0)
 
         self.num_particle_neighbours.fill(0)
-        # self.solve_spring_constraints_x()
+        self.solve_spring_constraints_x()
         if self.enable_collision_handling:
             self.solve_collision_constraints_x()
         self.solve_fem_constraints_x()

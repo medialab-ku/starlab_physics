@@ -51,8 +51,8 @@ class TetMesh:
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.edges) * 2)
         self.tetra_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.cells) * 4)
-        self.initFaceIndices()
         self.initTetraIndices()
+        self.fid_np = self.get_surface_id()
         # self.initEdgeIndices()
 
         print(len(self.tet_mesh.verts))
@@ -77,8 +77,7 @@ class TetMesh:
         # self.fid_np = np.reshape(self.fid_np, (len(self.tet_mesh.faces), 3))
         #
         # print("rawFID : ",self.fid_np.shape)
-
-        self.fid_np = self.get_surface_id()
+        self.initFaceIndices()
 
     def reset(self):
         self.tet_mesh.verts.x.copy_from(self.tet_mesh.verts.x0)
