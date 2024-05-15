@@ -64,17 +64,6 @@ class TetMesh:
         self.tet_mesh.verts.x.copy_from(self.tet_mesh.verts.x0)
         self.tet_mesh.verts.v.fill(0.)
 
-    @ti.kernel
-    def compute_Dm_inv(self):
-        for c in self.tet_mesh.cells:
-            Ds = ti.Matrix.cols([c.verts[i].x - c.verts[3].x for i in ti.static(range(3))])
-            c.B = Ds.inverse()
-            c.W = ti.abs(Ds.determinant()) / 6
-            ind = [[0, 2, 1], [0, 3, 2], [0, 1, 3], [1, 2, 3]]
-
-            for i in ti.static(range(4)):
-                c.verts[i].m += self.density * c.W / 4
-
 
     @ti.kernel
     def initFaceIndices(self):

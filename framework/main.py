@@ -248,11 +248,11 @@ while window.running:
         for mid in range(len(scene1.meshes_dynamic)):
             sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
 
-        for mid in range(len(scene1.tet_meshes_dynamic)):
-            sim.tet_meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
+        for tid in range(len(scene1.tet_meshes_dynamic)):
+            sim.tet_meshes_dynamic[tid].export(os.path.basename(scene1.__file__), tid, frame_cpu)
 
-        # for mid in range(len(scene1.particles)):
-        #     sim.particles[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
+        for pid in range(len(scene1.particles)):
+            sim.particles[pid].export(os.path.basename(scene1.__file__), pid, frame_cpu)
 
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
