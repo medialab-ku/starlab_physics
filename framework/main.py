@@ -71,15 +71,15 @@ def show_options():
     old_friction_coeff = dHat_ui
     YM_old = YM_ui
     PR_old = PR_ui
-    with gui.sub_window("Time Step", 0., 0., 0.4, 0.4) as w:
+    with gui.sub_window("Time Step", 0., 0., 0.2, 0.5) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
-        n_substep = w.slider_int("substeps", n_substep, 1, 100)
+        n_substep = w.slider_int("# sub", n_substep, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
-        friction_coeff_ui = w.slider_float("friction coeff.", friction_coeff_ui, 0.0, 1.0)
-        YM_ui = w.slider_float("Young's modulus", YM_ui, 0.0, 1e8)
-        PR_ui = w.slider_float("Poisson's ratio", PR_ui, 0.0, 0.495)
+        friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
+        YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
+        PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
 
         MODE_WIREFRAME = w.checkbox("wireframe",MODE_WIREFRAME)
@@ -95,9 +95,25 @@ def show_options():
         frame_str = "frame : " + str(frame_cpu)
         verts_str = "# verts: " + str(sim.max_num_verts_dynamic)
         edges_str = "# edges: " + str(sim.max_num_edges_dynamic)
+        tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
+
         w.text(frame_str)
         w.text(verts_str)
         w.text(edges_str)
+
+        if sim.max_num_tetra_dynamic > 0:
+            w.text(tetra_str)
+            rest_volume = sim.rest_volume[0]
+            current_volume = sim.current_volume[0]
+
+            volume_ratio = round(100.0 * current_volume / rest_volume, 2)
+            volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
+            w.text(volume_ratio_str)
+
+            num_inverted_tetrs = sim.num_inverted_elements[0]
+            num_inverted_tetrs_str = "# inverted tetrs: " + str(num_inverted_tetrs)
+            w.text(num_inverted_tetrs_str)
+
 
     if not old_dt == dt_ui:
         sim.dt[0] = dt_ui

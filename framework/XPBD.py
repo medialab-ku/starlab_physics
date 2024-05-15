@@ -30,6 +30,15 @@ class Solver:
         self.PR = ti.field(dtype=ti.f32, shape=1) # Poisson's ratio
         self.YM[0] = YM
         self.PR[0] = PR
+
+        self.rest_volume = ti.field(dtype=ti.f32, shape=1)
+        self.rest_volume[0] = 0
+
+        self.current_volume = ti.field(dtype=ti.f32, shape=1)
+        self.current_volume[0] = 0
+
+        self.num_inverted_elements = ti.field(dtype=ti.i32, shape=1)
+
         self.grid_size = grid_size
         self.particle_radius = particle_radius
         self.friction_coeff = ti.field(dtype=ti.f32, shape=1)
@@ -496,11 +505,11 @@ class Solver:
     @ti.kernel
     def init_Dm_inv_and_volume(self):
 
-        for ti in range(self.max_num_tetra_dynamic):
-            v0 = self.tetra_indices_dynamic[4 * ti + 0]
-            v1 = self.tetra_indices_dynamic[4 * ti + 1]
-            v2 = self.tetra_indices_dynamic[4 * ti + 2]
-            v3 = self.tetra_indices_dynamic[4 * ti + 3]
+        for tid in range(self.max_num_tetra_dynamic):
+            v0 = self.tetra_indices_dynamic[4 * tid + 0]
+            v1 = self.tetra_indices_dynamic[4 * tid + 1]
+            v2 = self.tetra_indices_dynamic[4 * tid + 2]
+            v3 = self.tetra_indices_dynamic[4 * tid + 3]
 
             x0, x1, x2, x3 = self.x[v0], self.x[v1], self.x[v2], self.x[v3]
 
@@ -509,14 +518,14 @@ class Solver:
             x32 = x2 - x3
 
             Dm = ti.Matrix.cols([x30, x31, x32])
-            self.V0[ti] = x32.dot(x30.cross(x31)) / 6.0
-            self.Dm_inv[ti] = Dm.inverse()
-            self.m_inv[v0] += 0.25 * self.V0[ti]
-            self.m_inv[v1] += 0.25 * self.V0[ti]
-            self.m_inv[v2] += 0.25 * self.V0[ti]
-            self.m_inv[v3] += 0.25 * self.V0[ti]
+            self.V0[tid] = ti.abs(x32.dot(x30.cross(x31))) / 6.0
+            self.Dm_inv[tid] = Dm.inverse()
+            self.m_inv[v0] += 0.25 * self.V0[tid]
+            self.m_inv[v1] += 0.25 * self.V0[tid]
+            self.m_inv[v2] += 0.25 * self.V0[tid]
+            self.m_inv[v3] += 0.25 * self.V0[tid]
 
-
+            ti.atomic_add(self.rest_volume[0], self.V0[tid])
 
 
     def init_mesh_aggregation(self):
@@ -540,6 +549,8 @@ class Solver:
         self.m_inv.fill(0.0)
         self.init_rest_length()
         self.init_Dm_inv_and_volume()
+        self.current_volume[0] = self.rest_volume[0]
+
         self.init_m_inv()
         # ti.math.inverse(self.m_inv)
 
@@ -2051,6 +2062,7 @@ class Solver:
             v3 = self.tetra_indices_dynamic[4 * tid + 3]
 
             x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
+            vol = ti.abs((x0 - x3).dot((x1 - x3).cross(x2 - x3))) / 6.0
             Ds = ti.Matrix.cols([x0 - x3, x1 - x3, x2 - x3])
 
             F = Ds @ self.Dm_inv[tid]
@@ -2085,6 +2097,10 @@ class Solver:
             self.nc[v3] += 1
 
             J = sig[0, 0] * sig[1, 1] * sig[2, 2]
+
+            if J < 0.0:
+                ti.atomic_add(self.num_inverted_elements[0], 1)
+
             gamma = 1.0
             C_vol = 0.5 * la * self.V0[tid] * (J - gamma) * (J - gamma)
             H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
@@ -2110,6 +2126,8 @@ class Solver:
             self.nc[v1] += 1
             self.nc[v2] += 1
             self.nc[v3] += 1
+
+            ti.atomic_add(self.current_volume[0], vol)
 
             for i in range(ti.static(3)):
                 if sig[i, i] < 1e-2 and self.fem_active_set_num[0] < self.max_num_tetra_dynamic:
@@ -2227,6 +2245,9 @@ class Solver:
         self.ee_active_set_g_dynamic.fill(0.0)
 
         self.fem_active_set_num.fill(0)
+
+        self.current_volume.fill(0.0)
+        self.num_inverted_elements.fill(0)
 
         self.num_particle_neighbours.fill(0)
     def solve_constraints_x(self):
