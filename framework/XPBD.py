@@ -35,7 +35,7 @@ class Solver:
         self.rest_volume[0] = 0
 
         self.current_volume = ti.field(dtype=ti.f32, shape=1)
-        self.current_volume[0] = 0
+        self.current_volume[0] = 0.0
 
         self.num_inverted_elements = ti.field(dtype=ti.i32, shape=1)
 
@@ -2062,8 +2062,13 @@ class Solver:
             v3 = self.tetra_indices_dynamic[4 * tid + 3]
 
             x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
-            vol = ti.abs((x0 - x3).dot((x1 - x3).cross(x2 - x3))) / 6.0
-            Ds = ti.Matrix.cols([x0 - x3, x1 - x3, x2 - x3])
+
+            x30 = x0 - x3
+            x31 = x1 - x3
+            x32 = x2 - x3
+
+            vol = ti.abs(x30.dot(x31.cross(x32))) / 6.0
+            Ds = ti.Matrix.cols([x30, x31, x32])
 
             F = Ds @ self.Dm_inv[tid]
             U, sig, V = ti.svd(F)
@@ -2250,6 +2255,7 @@ class Solver:
         self.num_inverted_elements.fill(0)
 
         self.num_particle_neighbours.fill(0)
+
     def solve_constraints_x(self):
 
         self.init_variables()
@@ -2271,12 +2277,12 @@ class Solver:
         self.dv.fill(0.0)
         self.nc.fill(0)
 
-        self.solve_spring_constraints_v()
+        # self.solve_spring_constraints_v()
 
         if self.enable_collision_handling:
             self.solve_collision_constraints_v()
 
-        self.solve_fem_constraints_v()
+        # self.solve_fem_constraints_v()
         # self.solve_pressure_constraints_v()
         self.update_dv()
 

@@ -38,20 +38,12 @@ class Mesh:
         self.scale = scale
 
         self.applyTransform()
-        self.computeInitialLength()
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
 
     def reset(self):
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
         self.mesh.verts.v.fill(0.)
-
-    @ti.kernel
-    def computeInitialLength(self):
-        for e in self.mesh.edges:
-            e.l0 = (e.verts[0].x - e.verts[1].x).norm()
-            e.vid[0] = e.verts[0].id
-            e.vid[1] = e.verts[1].id
 
     @ti.kernel
     def initFaceIndices(self):
