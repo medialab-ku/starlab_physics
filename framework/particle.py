@@ -2,6 +2,8 @@ import taichi as ti
 import meshio
 import numpy as np
 
+import os
+
 @ti.data_oriented
 class Particle:
 
@@ -14,8 +16,13 @@ class Particle:
 
         p = meshio.read(model_path)
         points = p.points
+
         points = np.array(points, dtype=np.float32)
         self.num_particles = points.shape[0]
+
+        self.vtkcells = p.cells
+
+
 
         print(self.num_particles)
 
@@ -70,4 +77,19 @@ class Particle:
             self.x[i] += self.trans
 
     def export(self, scene_name, mesh_id, frame):
-        pass
+        directory = os.path.join("results/",scene_name,"Particle_ID_"+str(mesh_id))
+
+        try :
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+        except OSError:
+            print("Error: Failed to create folder" + directory)
+
+        x_np = self.x.to_numpy()
+        print(x_np.shape)
+        file_name = "Particle_vtk_" + str(frame) + ".vtk"
+        file_path = os.path.join(directory, file_name)
+
+        print("exporting ", file_path.__str__())
+        meshio.write_points_cells(file_path,x_np,self.vtkcells)
+        print("done")
