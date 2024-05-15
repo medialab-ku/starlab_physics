@@ -1459,21 +1459,25 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 8:
-            d = di.d_EE(x0, x1, x2, x3)
-            if d < dHat:
-                g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
-                schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + 1e-4
-                ld = (dHat - d) / schur
-                self.dx[v0] += self.m_inv[v0] * ld * g0
-                self.dx[v1] += self.m_inv[v1] * ld * g1
-                self.nc[v0] += 1
-                self.nc[v1] += 1
-                if self.ee_active_set_num[0] < self.cache_size1:
-                    self.ee_active_set[self.ee_active_set_num[0]] = eid_d
-                    self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
-                    self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
-                    self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
-                    ti.atomic_add(self.ee_active_set_num[0], 1)
+            x01 = x0 - x1
+            x23 = x2 - x3
+            metric_para_EE = x01.cross(x23).norm()
+            if metric_para_EE > 1e-6:
+                d = di.d_EE(x0, x1, x2, x3)
+                if d < dHat:
+                    g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
+                    schur = self.m_inv[v0] * g0.dot(g0) + self.m_inv[v1] * g1.dot(g1) + 1e-4
+                    ld = (dHat - d) / schur
+                    self.dx[v0] += self.m_inv[v0] * ld * g0
+                    self.dx[v1] += self.m_inv[v1] * ld * g1
+                    self.nc[v0] += 1
+                    self.nc[v1] += 1
+                    if self.ee_active_set_num[0] < self.cache_size1:
+                        self.ee_active_set[self.ee_active_set_num[0]] = eid_d
+                        self.ee_active_set_schur[self.ee_active_set_num[0]] = schur
+                        self.ee_active_set_g[self.ee_active_set_num[0], 0] = g0
+                        self.ee_active_set_g[self.ee_active_set_num[0], 1] = g1
+                        ti.atomic_add(self.ee_active_set_num[0], 1)
 
 
     @ti.func
@@ -1670,29 +1674,33 @@ class Solver:
                     ti.atomic_add(self.ee_active_set_num[0], 1)
 
         elif dtype == 8:
-            d = di.d_EE(x0, x1, x2, x3)
-            if d < dHat:
-                g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
-                schur = self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) + self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
-                ld = (dHat - d) / schur
+            x01 = x0 - x1
+            x23 = x2 - x3
+            metric_para_EE = x01.cross(x23).norm()
+            if metric_para_EE > 1e-6:
+                d = di.d_EE(x0, x1, x2, x3)
+                if d < dHat:
+                    g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
+                    schur = self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) + self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
+                    ld = (dHat - d) / schur
 
-                self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * ld * g0
-                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
-                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
-                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
-                self.nc[v0] += 1
-                self.nc[v1] += 1
-                self.nc[v2] += 1
-                self.nc[v3] += 1
+                    self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * ld * g0
+                    self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
+                    self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
+                    self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
+                    self.nc[v0] += 1
+                    self.nc[v1] += 1
+                    self.nc[v2] += 1
+                    self.nc[v3] += 1
 
-                if self.ee_active_set_num_dynamic[0] < self.cache_size:
-                    self.ee_active_set_dynamic[self.ee_active_set_num[0]] = ti.math.ivec2(ei0, ei1)
-                    self.ee_active_set_schur_dynamic[self.ee_active_set_num[0]] = schur
-                    self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 0] = g0
-                    self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 1] = g1
-                    self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 2] = g2
-                    self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 3] = g3
-                    ti.atomic_add(self.ee_active_set_num[0], 1)
+                    if self.ee_active_set_num_dynamic[0] < self.cache_size:
+                        self.ee_active_set_dynamic[self.ee_active_set_num[0]] = ti.math.ivec2(ei0, ei1)
+                        self.ee_active_set_schur_dynamic[self.ee_active_set_num[0]] = schur
+                        self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 0] = g0
+                        self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 1] = g1
+                        self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 2] = g2
+                        self.ee_active_set_g_dynamic[self.ee_active_set_num[0], 3] = g3
+                        ti.atomic_add(self.ee_active_set_num[0], 1)
 
     @ti.func
     def solve_collision_ee_dynamic_v(self, ei0, ei1, g0, g1, g2, g3, schur, friction_coeff):
