@@ -57,11 +57,18 @@ class Solver:
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
+        self.enable_move_obstacle = False
+
+        self.obs_lin_vel = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
+        self.obs_lin_vel.fill(0.0)
+        self.obs_ang_vel = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
+        self.obs_ang_vel.fill(0.0)
 
         self.max_num_verts_dynamic = 0
         self.max_num_edges_dynamic = 0
         self.max_num_faces_dynamic = 0
         self.max_num_tetra_dynamic = 0
+
 
         num_meshes_dynamic = len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)
         num_tet_meshes_dynamic = len(self.tet_meshes_dynamic)
@@ -2360,12 +2367,30 @@ class Solver:
 
     @ti.kernel
     def move_static_object(self):
+
+        center = ti.math.vec3(0.0)
         for i in self.x_static:
-            x_cur = self.x_static[i]
-            offset = 30
-            if self.frame[0] >= 30:
-                self.v_static[i] = ti.math.vec3(0., 20.0 * ti.math.sin(30. * (self.frame[0] - offset) * self.dt[0]), 0.)
-                self.x_static[i] += self.v_static[i] * self.dt[0]
+            center += self.x_static[i]
+
+        center /= self.max_num_verts_static
+
+        for i in self.x_static:
+            ri = self.x_static[i] - center
+            v_4d = ti.Vector([ri[0], ri[1], ri[2], 1])
+            rot_rad = ti.math.radians(self.obs_ang_vel[0] * self.dt[0])
+            rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
+
+            center += self.obs_lin_vel[0] * self.dt[0]
+
+            self.x_static[i] = ti.math.vec3(rv[0], rv[1], rv[2]) + center
+            self.v_static[i] = ri.cross(self.obs_ang_vel[0]) + self.obs_lin_vel[0]
+
+        # for i in self.x_static:
+        #     x_cur = self.x_static[i]
+        #     offset = 30
+        #     if self.frame[0] >= 30:
+        #         self.v_static[i] = ti.math.vec3(0., 20.0 * ti.math.sin(30. * (self.frame[0] - offset) * self.dt[0]), 0.)
+        #         self.x_static[i] += self.v_static[i] * self.dt[0]
 
 
     def forward(self, n_substeps):
@@ -2380,7 +2405,8 @@ class Solver:
         for _ in range(n_substeps):
             self.compute_y()
 
-            self.move_static_object()
+            if self.enable_move_obstacle:
+                self.move_static_object()
             self.confine_to_boundary()
             self.solve_constraints_x()
 
