@@ -8,8 +8,9 @@ import json
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
-from Scenes import scene_cube_stretch as scene1
+# from Scenes import scene_cube_stretch as scene1
 # from Scenes import scene_fluid_compression as scene1
+from Scenes import moving_obstacle as scene1
 
 
 
@@ -18,8 +19,6 @@ import XPBD
 import selection_tool as st
 
 sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(8., 8., 8.), YM=1e6, PR=0.45, particle_radius=0.02, dHat=1e-3)
-# sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=scene1.gravity, dt=scene1.dt, grid_size=scene1.grid_size, particle_radius=scene1.particle_radius, dHat=scene1.dHat)
-
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -78,8 +77,9 @@ def show_options():
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
-        YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
-        PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
+        if sim.max_num_tetra_dynamic > 0:
+            YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
+            PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
         MODE_WIREFRAME = w.checkbox("wireframe", MODE_WIREFRAME)
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
@@ -93,14 +93,16 @@ def show_options():
 
         frame_str = "# frame: " + str(frame_cpu)
         verts_str = "# verts: " + str(sim.max_num_verts_dynamic)
-        edges_str = "# edges: " + str(sim.max_num_edges_dynamic)
-        tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
 
         w.text(frame_str)
         w.text(verts_str)
-        w.text(edges_str)
+
+        if sim.num_springs[0] > 0:
+            edges_str = "# edges: " + str(sim.max_num_edges_dynamic)
+            w.text(edges_str)
 
         if sim.max_num_tetra_dynamic > 0:
+            tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
             w.text(tetra_str)
             rest_volume = sim.rest_volume[0]
             current_volume = sim.current_volume[0]
@@ -112,7 +114,6 @@ def show_options():
             num_inverted_tetrs = sim.num_inverted_elements[0]
             num_inverted_tetrs_str = "# inverted tetrs: " + str(num_inverted_tetrs)
             w.text(num_inverted_tetrs_str)
-
 
     if not old_dt == dt_ui:
         sim.dt[0] = dt_ui
@@ -129,7 +130,7 @@ def show_options():
     if not PR_old == PR_ui:
         sim.PR[0] = PR_ui
 
-def load_animation() :
+def load_animation():
     global sim
 
     with open('animation/animation.json') as f:
@@ -140,7 +141,7 @@ def load_animation() :
     animationDict = {(i+1):[] for i in range(4)}
 
     # 4 = (g_selector.num_maxCounter)
-    for i in range(4) :
+    for i in range(4):
         ic = i+1
         icAnimation = animation_raw[ic]
         listLen = len(icAnimation)
@@ -254,7 +255,6 @@ while window.running:
         for pid in range(len(scene1.particles)):
             sim.particles[pid].export(os.path.basename(scene1.__file__), pid, frame_cpu)
 
-
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     scene.mesh(sim.x_static,  indices=sim.face_indices_static, color=(0, 0, 0), show_wireframe=True)
     scene.mesh(sim.x,  indices=sim.face_indices_dynamic, color=(0, 0, 0), show_wireframe=True)
@@ -267,5 +267,3 @@ while window.running:
     camera.track_user_inputs(window, movement_speed=0.15, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
-
-# print("end frame : ", sim.frame[0])
