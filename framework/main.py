@@ -71,7 +71,7 @@ def show_options():
     old_friction_coeff = dHat_ui
     YM_old = YM_ui
     PR_old = PR_ui
-    with gui.sub_window("Time Step", 0., 0., 0.2, 0.5) as w:
+    with gui.sub_window("Time Step", 0., 0., 0.3, 0.5) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
@@ -81,18 +81,17 @@ def show_options():
         YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
         PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
-
-        MODE_WIREFRAME = w.checkbox("wireframe",MODE_WIREFRAME)
-        LOOKAt_ORIGIN = w.checkbox("Look at origin",LOOKAt_ORIGIN)
+        MODE_WIREFRAME = w.checkbox("wireframe", MODE_WIREFRAME)
+        LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
 
         sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
         sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
-        mesh_export = w.checkbox("export mesh",mesh_export)
+        mesh_export = w.checkbox("export mesh", mesh_export)
 
         if mesh_export is True:
             frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
-        frame_str = "frame : " + str(frame_cpu)
+        frame_str = "# frame: " + str(frame_cpu)
         verts_str = "# verts: " + str(sim.max_num_verts_dynamic)
         edges_str = "# edges: " + str(sim.max_num_edges_dynamic)
         tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
@@ -155,7 +154,7 @@ def load_animation() :
             animationDict[ic].append(animationFrag)
 
     # print(animationDict)
-    sim._set_animation(animationDict,g_selector.is_selected)
+    sim._set_animation(animationDict, g_selector.is_selected)
 
 while window.running:
 

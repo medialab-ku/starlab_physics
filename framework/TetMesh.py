@@ -18,25 +18,8 @@ class TetMesh:
 
         self.is_static = is_static
         self.tet_mesh = patcher.load_mesh(model_path, relations=["FV", "CV", "EV"])
-        self.tet_mesh.verts.place({'m': ti.f32,
-                               'm_inv': ti.f32,
-                               'x0': ti.math.vec3,
-                               'x': ti.math.vec3,
-                               'v': ti.math.vec3,
-                               'f_ext': ti.math.vec3,
-                               'y': ti.math.vec3,
-                               'ld': ti.f32,
-                               'x_k': ti.math.vec3,
-                               'p': ti.math.vec3,
-                               'nc': ti.uint32,
-                                   'deg': ti.uint32,
-                                   'dx': ti.math.vec3,
-                                   'g': ti.math.vec3,
-                                   'gc': ti.math.vec3,
-                                   'h': ti.f32,
-                                   'hc': ti.f32})
+        self.tet_mesh.verts.place({'x0': ti.math.vec3, 'x': ti.math.vec3, 'v': ti.math.vec3})
         self.density = density
-        self.tet_mesh.verts.m.fill(1.0)
         self.tet_mesh.verts.v.fill([0.0, 0.0, 0.0])
         self.tet_mesh.verts.x.from_numpy(self.tet_mesh.get_position_as_numpy())
         self.num_verts = len(self.tet_mesh.verts)

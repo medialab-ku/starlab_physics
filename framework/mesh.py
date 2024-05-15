@@ -16,49 +16,11 @@ class Mesh:
 
         self.is_static = is_static
         self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV"])
-        self.mesh.verts.place({'m': ti.f32,
-                               'm_inv': ti.f32,
-                               'x0': ti.math.vec3,
-                               'x': ti.math.vec3,
-                               'v': ti.math.vec3,
-                               'f_ext': ti.math.vec3,
-                               'y': ti.math.vec3,
-                               'ld': ti.f32,
-                               'x_k': ti.math.vec3,
-                               'p': ti.math.vec3,
-                               'nc': ti.uint32,
-                               'deg': ti.uint32,
-                               'dx': ti.math.vec3,
-                               'g': ti.math.vec3,
-                               'gc': ti.math.vec3,
-                               'h': ti.f32,
-                               'hc': ti.f32})
-
-
-
-        self.mesh.verts.m.fill(1.0)
-        if self.is_static:
-            self.mesh.verts.m_inv.fill(0.0)
-
-        else:
-            self.mesh.verts.m_inv.fill(1.0)
+        self.mesh.verts.place({'x0': ti.math.vec3, 'x': ti.math.vec3, 'v': ti.math.vec3})
 
         self.mesh.verts.v.fill([0.0, 0.0, 0.0])
-        # self.x_np = self.mesh.get_position_as_numpy()
         self.mesh.verts.x.from_numpy(self.mesh.get_position_as_numpy())
         self.num_verts = len(self.mesh.verts)
-
-
-        self.mesh.edges.place({'l0': ti.f32,
-                               'ld': ti.f32,
-                               'vid': ti.math.ivec2,
-                               'x': ti.math.vec3,
-                               'v': ti.math.vec3,
-                               'hij': ti.math.mat3, # bounding sphere radius
-                               'hinv': ti.math.mat2}) # bounding sphere radius
-
-        # self.mesh.faces.place({'aabb_min': ti.math.vec3,
-        #                        'aabb_max': ti.math.vec3})  # bounding sphere radius
 
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.i32, shape=len(self.mesh.faces) * 3)

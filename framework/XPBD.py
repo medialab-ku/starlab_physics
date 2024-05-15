@@ -566,14 +566,14 @@ class Solver:
         for v in mesh.verts:
             self.x[offset + v.id] = v.x
             self.v[offset + v.id] = v.v
-            self.m_inv[offset + v.id] = v.m_inv
+            # self.m_inv[offset + v.id] = v.m_inv
 
     @ti.kernel
     def init_tet_mesh_quantities_dynamic_device(self, offset: ti.int32, mesh: ti.template()):
         for v in mesh.verts:
             self.x[offset + v.id] = v.x
             self.v[offset + v.id] = v.v
-            self.m_inv[offset + v.id] = v.m_inv
+            # self.m_inv[offset + v.id] = v.m_inv
 
 
     @ti.kernel
