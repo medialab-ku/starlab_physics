@@ -2362,9 +2362,10 @@ class Solver:
     def move_static_object(self):
         for i in self.x_static:
             x_cur = self.x_static[i]
-            self.v_static[i] = ti.math.vec3(0., 2.0 * ti.math.sin(20. * self.frame[0] * self.dt[0]), 0.)
-            self.x_static[i] += self.v_static[i] * self.dt[0]
-
+            offset = 30
+            if self.frame[0] >= 30:
+                self.v_static[i] = ti.math.vec3(0., 20.0 * ti.math.sin(30. * (self.frame[0] - offset) * self.dt[0]), 0.)
+                self.x_static[i] += self.v_static[i] * self.dt[0]
 
 
     def forward(self, n_substeps):

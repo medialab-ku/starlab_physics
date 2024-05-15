@@ -5,7 +5,7 @@ import taichi as ti
 ti.init(arch=ti.cuda, device_memory_GB=3)
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.4, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_1 = Mesh("../models/OBJ/simpleCube.obj", scale=1.0, trans=ti.math.vec3(0.0, 2.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 meshes_dynamic.append(mesh_dynamic_1)
 # meshes_dynamic.append(mesh_dynamic_2)
@@ -14,7 +14,7 @@ meshes_dynamic.append(mesh_dynamic_1)
 tet_meshes_dynamic = []
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.6, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_static_1 = Mesh("../models/OBJ/simpleCube.obj", scale=1.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 45.0), is_static=True)
 meshes_static.append(mesh_static_1)
 
 particles = []
