@@ -16,7 +16,8 @@ meshes_dynamic = []
 
 tet_meshes_dynamic = []
 
-tet_mesh_dynamic_2 = TetMesh("../models/MESH/cube.1.node",  scale=0.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# tet_mesh_dynamic_2 = TetMesh("../models/MESH/cube.1.node",  scale=0.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_2 = TetMesh("../models/MESH/beam.node",  scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 90.0))
 
 tet_meshes_dynamic.append(tet_mesh_dynamic_2)
 

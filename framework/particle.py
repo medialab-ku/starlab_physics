@@ -68,3 +68,6 @@ class Particle:
 
         for i in range(self.num_particles):
             self.x[i] += self.trans
+
+    def export(self, scene_name, mesh_id, frame):
+        pass
