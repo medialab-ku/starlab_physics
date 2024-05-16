@@ -30,7 +30,7 @@ camera.fov(40)
 camera.up(0, 1, 0)
 
 colors_static = []
-colors_static.append((0, 0.5, 0))
+colors_static.append((1.0, 0.0, 0))
 colors_static.append((0, 0.5, 0))
 
 run_sim = False
@@ -313,6 +313,9 @@ while window.running:
 
     for mid in range(len(scene1.meshes_dynamic)):
         scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=scene1.colors_tri_dynamic[mid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
+
+    for mid in range(len(scene1.meshes_static)):
+        scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid] if not MODE_WIREFRAME else (0, 0, 0), show_wireframe=MODE_WIREFRAME)
 
     for tid in range(len(scene1.tet_meshes_dynamic)):
         scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=scene1.colors_tet_dynamic[tid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
