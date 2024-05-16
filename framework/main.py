@@ -183,6 +183,25 @@ def show_options():
     if not old_lin_vel_z_ui == lin_vel_z_ui:
         sim.obs_lin_vel[0][2] = lin_vel_z_ui
 
+    with gui.sub_window("Debug", 0.8, 0.8, 0.3, 0.5) as w:
+
+        if sim.max_num_tetra_dynamic > 0:
+            rest_volume = sim.rest_volume[0]
+            current_volume = sim.current_volume[0]
+
+            volume_ratio = round(100.0 * current_volume / rest_volume, 2)
+            volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
+            w.text(volume_ratio_str)
+
+        num_ee_static_str = "# ee_static: " + str(sim.ee_active_set_num[0])
+        w.text(num_ee_static_str)
+
+        num_vt_static_str = "# vt_static: " + str(sim.vt_active_set_num[0])
+        w.text(num_vt_static_str)
+
+        num_tv_static_str = "# tv_static: " + str(sim.tv_active_set_num[0])
+        w.text(num_tv_static_str)
+
 def load_animation():
     global sim
 

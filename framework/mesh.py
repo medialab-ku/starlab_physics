@@ -79,8 +79,10 @@ class Mesh:
 
         for v in self.mesh.verts:
             v_4d = ti.Vector([v.x[0], v.x[1], v.x[2], 1])
-            rot_rad = ti.math.radians(self.rot)
-            rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
+            rot_rad_x = ti.math.radians(self.rot[0])
+            rot_rad_y = ti.math.radians(self.rot[1])
+            rot_rad_z = ti.math.radians(self.rot[2])
+            rv = ti.math.rotation3d(rot_rad_x, rot_rad_y, rot_rad_z) @ v_4d
             v.x = ti.Vector([rv[0], rv[1], rv[2]])
 
         for v in self.mesh.verts:
