@@ -193,6 +193,9 @@ def show_options():
             volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
             w.text(volume_ratio_str)
 
+        num_vt_dynamic_str = "# vt_dynamic: " + str(sim.vt_active_set_num_dynamic[0])
+        w.text(num_vt_dynamic_str)
+
         num_ee_static_str = "# ee_static: " + str(sim.ee_active_set_num[0])
         w.text(num_ee_static_str)
 

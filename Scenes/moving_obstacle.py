@@ -5,11 +5,12 @@ import taichi as ti
 ti.init(arch=ti.cuda, device_memory_GB=3)
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(180.0, 0.0, 0.0))
+mesh_dynamic_1 = Mesh("../models/OBJ/square_big.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_2 = Mesh("../models/OBJ/square_big.obj", scale=0.1, trans=ti.math.vec3(0.0, 1.2, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 meshes_dynamic.append(mesh_dynamic_1)
-# meshes_dynamic.append(mesh_dynamic_2)
-# meshes_dynamic.append(mesh_dynamic_3)s
+meshes_dynamic.append(mesh_dynamic_2)
+# meshes_dynamic.append(mesh_dynamic_3)
 
 tet_meshes_dynamic = []
 
