@@ -151,6 +151,7 @@ class Solver:
         self.c = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.fixed = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
+        self.m = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
         self.V0 = ti.field(dtype=ti.f32, shape=self.max_num_tetra_dynamic)
         self.l0 = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
@@ -287,8 +288,6 @@ class Solver:
         self.grid_ids_buffer_static = ti.field(int, shape=num_grid_ids)
         self.grid_ids_new_static = ti.field(int, shape=num_grid_ids)
         self.cur2org_static = ti.field(int, shape=num_grid_ids)
-
-
 
         self.frame = ti.field(dtype=ti.i32, shape=1)
         self.frame[0] = 0
@@ -504,10 +503,8 @@ class Solver:
             x0, x1 = self.x[v0], self.x[v1]
             x10 = x0 - x1
             self.l0[ei] = x10.norm()
-            self.m_inv[v0] += 0.5 * self.l0[ei]
-            self.m_inv[v1] += 0.5 * self.l0[ei]
-
-
+            self.m[v0] += 0.5 * self.l0[ei]
+            self.m[v1] += 0.5 * self.l0[ei]
 
     @ti.kernel
     def init_Dm_inv_and_volume(self):
@@ -527,13 +524,12 @@ class Solver:
             Dm = ti.Matrix.cols([x30, x31, x32])
             self.V0[tid] = ti.abs(x32.dot(x30.cross(x31))) / 6.0
             self.Dm_inv[tid] = Dm.inverse()
-            self.m_inv[v0] += 0.25 * self.V0[tid]
-            self.m_inv[v1] += 0.25 * self.V0[tid]
-            self.m_inv[v2] += 0.25 * self.V0[tid]
-            self.m_inv[v3] += 0.25 * self.V0[tid]
+            self.m[v0] += 0.25 * self.V0[tid]
+            self.m[v1] += 0.25 * self.V0[tid]
+            self.m[v2] += 0.25 * self.V0[tid]
+            self.m[v3] += 0.25 * self.V0[tid]
 
             ti.atomic_add(self.rest_volume[0], self.V0[tid])
-
 
     def init_mesh_aggregation(self):
         for mid in range(len(self.meshes_dynamic)):
@@ -553,7 +549,7 @@ class Solver:
             self.init_edge_indices_static_device(self.offset_verts_static[mid], self.offset_edges_static[mid], self.meshes_static[mid])
             self.init_face_indices_static_device(self.offset_verts_static[mid], self.offset_faces_static[mid], self.meshes_static[mid])
 
-        self.m_inv.fill(0.0)
+        self.m.fill(0.0)
         self.init_rest_length()
         self.init_Dm_inv_and_volume()
         self.current_volume[0] = self.rest_volume[0]
@@ -564,8 +560,7 @@ class Solver:
     @ti.kernel
     def init_m_inv(self):
         for i in range(self.max_num_verts_dynamic):
-            self.m_inv[i] = 1.0 / self.m_inv[i]
-
+            self.m_inv[i] = 1.0 / self.m[i]
 
     @ti.kernel
     def init_mesh_quantities_dynamic_device(self, offset: ti.int32, mesh: ti.template()):
@@ -1344,8 +1339,8 @@ class Solver:
                 self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
                 self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
                 #
-                # self.dv[v0] += (vTan - vTan0)
-                # self.dv[v1] += (vTan - vTan1)
+                self.dv[v0] += (vTan - vTan0)
+                self.dv[v1] += (vTan - vTan1)
 
                 self.nc[v0] += 1
                 self.nc[v1] += 1
@@ -1360,8 +1355,8 @@ class Solver:
                 self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
                 self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
 
-                # self.dv[v0] += (vTan - vTan0)
-                # self.dv[v2] += (vTan - vTan2)
+                self.dv[v0] += (vTan - vTan0)
+                self.dv[v2] += (vTan - vTan2)
 
                 self.nc[v0] += 1
                 self.nc[v2] += 1
@@ -1376,8 +1371,8 @@ class Solver:
                 self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
                 self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
 
-                # self.dv[v0] += (vTan - vTan0)
-                # self.dv[v3] += (vTan - vTan3)
+                self.dv[v0] += (vTan - vTan0)
+                self.dv[v3] += (vTan - vTan3)
 
                 self.nc[v0] += 1
                 self.nc[v3] += 1
@@ -1395,9 +1390,9 @@ class Solver:
                 self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
                 self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
 
-                # self.dv[v0] += (vTan - vTan0)
-                # self.dv[v1] += (vTan - vTan1)
-                # self.dv[v2] += (vTan - vTan2)
+                self.dv[v0] += (vTan - vTan0)
+                self.dv[v1] += (vTan - vTan1)
+                self.dv[v2] += (vTan - vTan2)
 
                 self.nc[v0] += 1
                 self.nc[v1] += 1
@@ -1417,9 +1412,9 @@ class Solver:
                 self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
                 self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
 
-                # self.dv[v0] += (vTan - vTan0)
-                # self.dv[v2] += (vTan - vTan2)
-                # self.dv[v3] += (vTan - vTan3)
+                self.dv[v0] += (vTan - vTan0)
+                self.dv[v2] += (vTan - vTan2)
+                self.dv[v3] += (vTan - vTan3)
 
                 self.nc[v0] += 1
                 self.nc[v2] += 1
@@ -1438,9 +1433,9 @@ class Solver:
                 self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
                 self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
 
-                # self.dv[v0] += (vTan - vTan0)
-                # self.dv[v1] += (vTan - vTan1)
-                # self.dv[v3] += (vTan - vTan3)
+                self.dv[v0] += (vTan - vTan0)
+                self.dv[v1] += (vTan - vTan1)
+                self.dv[v3] += (vTan - vTan3)
 
                 self.nc[v0] += 1
                 self.nc[v1] += 1
@@ -1463,10 +1458,10 @@ class Solver:
                 self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
                 self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
 
-                # self.dv[v0] += (vTan - vTan0)
-                # self.dv[v1] += (vTan - vTan1)
-                # self.dv[v2] += (vTan - vTan2)
-                # self.dv[v3] += (vTan - vTan3)
+                self.dv[v0] += (vTan - vTan0)
+                self.dv[v1] += (vTan - vTan1)
+                self.dv[v2] += (vTan - vTan2)
+                self.dv[v3] += (vTan - vTan3)
 
                 self.nc[v0] += 1
                 self.nc[v1] += 1
@@ -1936,7 +1931,7 @@ class Solver:
                 self.nc[v2] += 1
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 0] = g0
@@ -1949,21 +1944,18 @@ class Solver:
                 g0, g3 = di.g_PP(x0, x3)
                 schur = self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-
                 self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * ld * g0
                 self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
                 self.nc[v0] += 1
                 self.nc[v3] += 1
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 0] = g0
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 3] = g3
                     ti.atomic_add(self.ee_active_set_num_dynamic[0], 1)
-
-
 
         elif dtype == 2:
             d = di.d_PE(x0, x2, x3)
@@ -1979,7 +1971,7 @@ class Solver:
                 self.nc[v3] += 1
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 0] = g0
@@ -2000,7 +1992,7 @@ class Solver:
                 self.nc[v2] += 1
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 1] = g1
@@ -2019,7 +2011,7 @@ class Solver:
                 self.nc[v3] += 1
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 1] = g1
@@ -2042,7 +2034,7 @@ class Solver:
 
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 1] = g1
@@ -2066,7 +2058,7 @@ class Solver:
                 self.nc[v2] += 1
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 0] = g0
@@ -2090,7 +2082,7 @@ class Solver:
                 self.nc[v3] += 1
                 if self.ee_active_set_num_dynamic[0] < self.cache_size:
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                    self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                     self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                     self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                     self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 0] = g0
@@ -2115,6 +2107,7 @@ class Solver:
                     self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
                     self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
                     self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
+
                     self.nc[v0] += 1
                     self.nc[v1] += 1
                     self.nc[v2] += 1
@@ -2122,7 +2115,7 @@ class Solver:
 
                     if self.ee_active_set_num_dynamic[0] < self.cache_size:
                         self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 0] = ei0
-                        self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei0
+                        self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 1] = ei1
                         self.ee_active_set_dynamic[self.ee_active_set_num_dynamic[0], 2] = dtype
                         self.ee_active_set_schur_dynamic[self.ee_active_set_num_dynamic[0]] = schur
                         self.ee_active_set_g_dynamic[self.ee_active_set_num_dynamic[0], 0] = g0
@@ -2144,8 +2137,89 @@ class Solver:
         if dvn < 0.0:
             ld = dvn / schur
 
+            if dtype == 0:
 
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
+                self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
 
+                self.nc[v0] += 1
+                self.nc[v2] += 1
+
+            elif dtype == 1:
+
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
+                self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+                self.nc[v0] += 1
+                self.nc[v3] += 1
+
+            elif dtype == 2:
+
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
+                self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
+                self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+                self.nc[v0] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
+
+            elif dtype == 3:
+
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
+                self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
+
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+
+            elif dtype == 4:
+
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
+                self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+                self.nc[v1] += 1
+                self.nc[v3] += 1
+
+            elif dtype == 5:
+
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
+                self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
+                self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
+
+            elif dtype == 6:
+
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
+                self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
+
+                self.nc[v0] += 1
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+
+            elif dtype == 7:
+
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
+                self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+                self.nc[v0] += 1
+                self.nc[v1] += 1
+                self.nc[v3] += 1
+
+            elif dtype == 8:
+
+                self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * g0 * ld
+                self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
+                self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
+                self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+                self.nc[v0] += 1
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
 
     @ti.kernel
     def solve_spring_constraints_x(self):
@@ -2387,9 +2461,10 @@ class Solver:
             ei_s = i % self.max_num_edges_static
             self.solve_collision_ee_static_x(ei_d, ei_s, d)
         # #
-        # for ei_d in range(self.max_num_edges_dynamic):
-        #     if ei != ei_d and self.share_vertex(ei, ei_d) != True:
-        #         self.solve_collision_ee_dynamic_x(ei, ei_d, d)
+        for ei in range(self.max_num_edges_dynamic):
+            for ei_d in range(self.max_num_edges_dynamic):
+                if ei != ei_d and self.share_vertex(ei, ei_d) != True:
+                    self.solve_collision_ee_dynamic_x(ei, ei_d, d)
 
 
     @ti.kernel
