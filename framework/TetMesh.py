@@ -29,6 +29,10 @@ class TetMesh:
         self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.edges) * 2)
         self.tetra_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.cells) * 4)
         self.initTetraIndices()
+        self.initFaceIndices()
+
+        ti.sync()
+
         self.fid_np = self.get_surface_id()
         self.num_faces = self.fid_np.shape[0]
         # print(self.fid_np.shape)
@@ -36,8 +40,8 @@ class TetMesh:
         self.fid.from_numpy(self.fid_np)
         # self.initEdgeIndices()
 
-        # print(len(self.tet_mesh.verts))
-        # print(len(self.tet_mesh.cells))
+        print(len(self.tet_mesh.verts))
+        print(len(self.tet_mesh.cells))
 
         self.verts = self.tet_mesh.verts
         self.cells = self.tet_mesh.cells
@@ -53,12 +57,16 @@ class TetMesh:
         # self.compute_Dm_inv()
         self.tet_mesh.verts.x0.copy_from(self.tet_mesh.verts.x)
 
+        print("asdf")
+        print(self.tet_mesh.verts.x0)
+
+        self.eid_np = self.get_surface_edge_id()
+
 
         # self.fid_np = self.face_indices.to_numpy()
         # self.fid_np = np.reshape(self.fid_np, (len(self.tet_mesh.faces), 3))
         #
         # print("rawFID : ",self.fid_np.shape)
-        self.initFaceIndices()
 
     def reset(self):
         self.tet_mesh.verts.x.copy_from(self.tet_mesh.verts.x0)
@@ -126,6 +134,11 @@ class TetMesh:
             print("Error: Failed to create folder" + directory)
 
         x_np = self.tet_mesh.verts.x.to_numpy()
+
+        #offset 문제인 것 같음.
+        print("BUG!!!! : self.tet_mesh.verts.x has nan")
+        print(self.tet_mesh.verts.x)
+
         file_name = "TetMesh_obj_" + str(frame) + ".obj"
         file_path = os.path.join(directory, file_name)
         print("exporting ", file_path.__str__())
@@ -154,9 +167,18 @@ class TetMesh:
         tid_np = self.tetra_indices.to_numpy()
         tid_np = np.reshape(tid_np, (len(self.tet_mesh.cells), 4))
 
+        # print("tid")
+        # print(tid_np)
+        # print(tid_np.shape)
+
         f = self.__list_faces(tid_np)
         f = self.__extract_unique_triangles(f)
 
         return f
 
 
+    def get_surface_edge_id(self):
+        pass
+        # print("=====surf id=====")
+        # print(self.fid_np)
+        # print(self.fid_np.shape)
