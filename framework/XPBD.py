@@ -1895,9 +1895,9 @@ class Solver:
                 dvTan1 = 0.5 * (vTan2 + vTan3) - vTan1
                 # print(0.5 * (vTan2 + vTan3))
                 self.dv[v0] -= self.fixed[v0] * self.m_inv[v0] * ld * g0
-                self.dv[v0] += dvTan0
+                # self.dv[v0] += dvTan0
                 self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * ld * g1
-                self.dv[v1] += dvTan1
+                # self.dv[v1] += dvTan1
                 self.nc[v0] += 1
                 self.nc[v1] += 1
 
