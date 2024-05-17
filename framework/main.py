@@ -333,6 +333,9 @@ while window.running:
         for pid in range(len(scene1.particles)):
             sim.particles[pid].export(os.path.basename(scene1.__file__), pid, frame_cpu)
 
+    if frame_cpu == 60:
+        print(sim.vt_active_set_num[0])
+
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     scene.mesh(sim.x_static,  indices=sim.face_indices_static, color=(0, 0, 0), show_wireframe=True)
     scene.mesh(sim.x,  indices=sim.face_indices_dynamic, color=(0, 0, 0), show_wireframe=True)
