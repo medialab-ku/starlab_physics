@@ -2647,24 +2647,16 @@ class Solver:
 
 
         # -----------brute-force-------------------
-        # for i in range(self.max_num_verts_dynamic * self.max_num_faces_dynamic):
-        #     vi_d = i // self.max_num_faces_dynamic
-        #     ti_d = i % self.max_num_faces_dynamic
-        #     if self.is_in_face(vi_d, ti_d) != True:
-        #         self.solve_collision_vt_dynamic_x(vi_d, ti_d, d)
 
-        # for vi_d in range(self.max_num_verts_dynamic):
-        #     for fi_s in range(self.max_num_faces_static):
-        #         self.solve_collision_vt_static_x(vi_d, fi_s, d)
+
+        for vi_d in range(self.max_num_verts_dynamic):
+            for fi_s in range(self.max_num_faces_static):
+                self.solve_collision_vt_static_x(vi_d, fi_s, d)
 
         for fi_d in range(self.max_num_faces_dynamic):
             for vi_s in range(self.max_num_verts_static):
                 self.solve_collision_tv_static_x(fi_d, vi_s, d)
-        #
-        # for i in range(self.max_num_faces_dynamic * self.max_num_verts_static):
-        #     ti_d = i // self.max_num_verts_static
-        #     vi_s = i % self.max_num_verts_static
-        #     self.solve_collision_tv_static_x(ti_d, vi_s, d)
+
         # # #
         # for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
         #     ei_d = i // self.max_num_edges_static
@@ -2683,28 +2675,21 @@ class Solver:
         mu = self.friction_coeff[0]
         d = self.dHat[0]
 
-        # for vi_d in range(self.max_num_verts_dynamic):
-        #     for j in range(self.vt_static_pair_num[vi_d]):
-        #         fi_s, dtype = self.vt_static_pair[vi_d, j, 0], self.vt_static_pair[vi_d, j, 1]
-        #         g0, g1, g2, g3 = self.vt_static_pair_g[vi_d, j, 0],  self.vt_static_pair_g[vi_d, j, 1],  self.vt_static_pair_g[vi_d, j, 2],  self.vt_static_pair_g[vi_d, j, 3]
-        #         schur = self.vt_static_pair_schur[vi_d, j]
-        #         self.solve_collision_vt_static_v(vi_d, fi_s, dtype, g0, g1, g2, g3, schur, mu)
+        for vi_d in range(self.max_num_verts_dynamic):
+            for j in range(self.vt_static_pair_num[vi_d]):
+                fi_s, dtype = self.vt_static_pair[vi_d, j, 0], self.vt_static_pair[vi_d, j, 1]
+                g0, g1, g2, g3 = self.vt_static_pair_g[vi_d, j, 0],  self.vt_static_pair_g[vi_d, j, 1],  self.vt_static_pair_g[vi_d, j, 2],  self.vt_static_pair_g[vi_d, j, 3]
+                schur = self.vt_static_pair_schur[vi_d, j]
+                self.solve_collision_vt_static_v(vi_d, fi_s, dtype, g0, g1, g2, g3, schur, mu)
 
-        # for i in range(self.max_num_verts_dynamic * self.max_num_faces_static):
-        #     vi_d = i // self.max_num_faces_static
-        #     ti_s = i % self.max_num_faces_static
-        #     self.solve_collision_vt_static_v(vi_d, ti_s, d, mu)
-        #
+
         for fi_d in range(self.max_num_faces_dynamic):
             for j in range(self.tv_static_pair_num[fi_d]):
                 vi_s, dtype = self.tv_static_pair[fi_d, j, 0], self.tv_static_pair[fi_d, j, 1]
                 g0, g1, g2, g3 = self.tv_static_pair_g[fi_d, j, 0],  self.tv_static_pair_g[fi_d, j, 1],  self.tv_static_pair_g[fi_d, j, 2],  self.tv_static_pair_g[fi_d, j, 3]
                 schur = self.tv_static_pair_schur[fi_d, j]
                 self.solve_collision_tv_static_v(fi_d, vi_s, dtype, g0, g1, g2, g3, schur, mu)
-            # for vi_s in range(self.max_num_verts_static):
-            #     self.solve_collision_tv_static_v(fi_d, vi_s, d, mu)
-        #
-        #     # #
+
         # for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
         #     ei_d = i // self.max_num_edges_static
         #     ei_s = i % self.max_num_edges_static
