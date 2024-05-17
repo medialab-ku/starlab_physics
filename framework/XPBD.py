@@ -170,17 +170,18 @@ class Solver:
         self.cache_size = 1000
         self.cache_size2 = self.max_num_verts_dynamic * self.cache_size
 
-        self.vt_active_set = ti.field(dtype=ti.int32, shape=(self.cache_size2, 3))
-        self.vt_active_set_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.cache_size2, 4))
-        self.vt_active_set_schur = ti.field(dtype=ti.f32, shape=self.cache_size2)
-        self.vt_active_set_num = ti.field(int, shape=1)
-
 
         self.vt_static_pair_cache_size = 40
         self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
         self.vt_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
         self.vt_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 4))
         self.vt_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size))
+
+        self.tv_static_pair_cache_size = 40
+        self.tv_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 2))
+        self.tv_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dynamic)
+        self.tv_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 4))
+        self.tv_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size))
 
         self.vt_active_set_dynamic = ti.field(dtype=ti.i32, shape=(self.cache_size2, 3))
         self.vt_active_set_g_dynamic = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.cache_size2, 4))
@@ -1130,9 +1131,23 @@ class Solver:
             self.dx[v0] += self.m_inv[v0] * ld * g0
             self.nc[v0] += 1
 
+            if self.vt_static_pair_num[v0] < self.vt_static_pair_cache_size:
+                self.vt_static_pair[v0, self.vt_static_pair_num[v0], 0] = fid_s
+                self.vt_static_pair[v0, self.vt_static_pair_num[v0], 1] = dtype
+
+                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 0] = g0
+                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 1] = g1
+                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 2] = g2
+                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 3] = g3
+
+                self.vt_static_pair_schur[v0, self.vt_static_pair_num[v0]] = schur
+                self.vt_static_pair_num[v0] += 1
+
+
+
 
     @ti.func
-    def solve_collision_vt_static_v(self, vid_d, fid_s, dHat, mu):
+    def solve_collision_vt_static_v(self, vid_d, fid_s, dtype, g0, g1, g2, g3, schur, mu):
 
         v0 = vid_d
         v1 = self.face_indices_static[3 * fid_s + 0]
@@ -1144,158 +1159,121 @@ class Solver:
         x2 = self.x_static[v2]
         x3 = self.x_static[v3]
 
-        dtype = di.d_type_PT(x0, x1, x2, x3)
-
+        Cv = g0.dot(self.v[v0]) + g1.dot(self.v_static[v1]) + g2.dot(self.v_static[v2]) + g3.dot(self.v_static[v3])
         if dtype == 0:
-            d = di.d_PP(x0, x1)
-            if d < dHat:
-                g0, g1 = di.g_PP(x0, x1)
-                Cv = g0.dot(self.v[v0]) + g1.dot(self.v_static[v1])
-                if Cv < 0.:
-                    schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld_v = -Cv / schur
-                    self.dv[v0] += self.m_inv[v0] * ld_v * g0
-                    self.nc[v0] += 1
-                    vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
-                    g0Tan = self.v_static[v1] - vTan0
-                    cTan = 0.5 * g0Tan.dot(g0Tan)
-                    schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan = self.m_inv[v0] * ldTan * g0Tan
+            if Cv < 0.:
+                ld_v = -Cv / schur
+                self.dv[v0] += self.m_inv[v0] * ld_v * g0
+                self.nc[v0] += 1
+                vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
+                g0Tan = self.v_static[v1] - vTan0
+                cTan = 0.5 * g0Tan.dot(g0Tan)
+                schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan = self.m_inv[v0] * ldTan * g0Tan
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v0] += mu * dvTan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v0] += mu * dvTan
 
         elif dtype == 1:
-            d = di.d_PP(x0, x2)
-            if d < dHat:
-                g0, g2 = di.g_PP(x0, x2)
-                Cv = g0.dot(self.v[v0]) + g2.dot(self.v_static[v2])
-                if Cv < 0.:
-                    schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld_v = -Cv / schur
-                    self.dv[v0] += self.m_inv[v0] * ld_v * g0
-                    self.nc[v0] += 1
-                    vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
-                    g0Tan = self.v_static[v2] - vTan0
-                    cTan = 0.5 * g0Tan.dot(g0Tan)
-                    schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan = self.m_inv[v0] * ldTan * g0Tan
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v0] += mu * dvTan
+            if Cv < 0.:
+                ld_v = -Cv / schur
+                self.dv[v0] += self.m_inv[v0] * ld_v * g0
+                self.nc[v0] += 1
+                vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
+                g0Tan = self.v_static[v2] - vTan0
+                cTan = 0.5 * g0Tan.dot(g0Tan)
+                schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan = self.m_inv[v0] * ldTan * g0Tan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v0] += mu * dvTan
 
         elif dtype == 2:
-            d = di.d_PP(x0, x3)
-            if d < dHat:
-                g0, g3 = di.g_PP(x0, x3)
-                Cv = g0.dot(self.v[v0]) + g3.dot(self.v_static[v3])
-                if Cv < 0.:
-                    schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld_v = -Cv / schur
-                    self.dv[v0] += self.m_inv[v0] * ld_v * g0
-                    self.nc[v0] += 1
-                    vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
-                    g0Tan = self.v_static[v3] - vTan0
-                    cTan = 0.5 * g0Tan.dot(g0Tan)
-                    schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan = self.m_inv[v0] * ldTan * g0Tan
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v0] += mu * dvTan
+            if Cv < 0.:
+                ld_v = -Cv / schur
+                self.dv[v0] += self.m_inv[v0] * ld_v * g0
+                self.nc[v0] += 1
+                vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
+                g0Tan = self.v_static[v3] - vTan0
+                cTan = 0.5 * g0Tan.dot(g0Tan)
+                schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan = self.m_inv[v0] * ldTan * g0Tan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v0] += mu * dvTan
 
 
         elif dtype == 3:
-            d = di.d_PE(x0, x1, x2)
-            if d < dHat:
-                g0, g1, g2 = di.g_PE(x0, x1, x2)
-                Cv = g0.dot(self.v[v0]) + g1.dot(self.v_static[v1]) + g2.dot(self.v_static[v2])
-                if Cv < 0.:
-                    schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld_v = -Cv / schur
-                    self.dv[v0] += self.m_inv[v0] * ld_v * g0
-                    self.nc[v0] += 1
-                    vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
-                    a, b = g1.norm(), g2.norm()
-                    p = (a * self.v_static[v1] + b * self.v_static[v2]) / (a + b)
-                    g0Tan = p - vTan0
-                    cTan = 0.5 * g0Tan.dot(g0Tan)
-                    schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan = self.m_inv[v0] * ldTan * g0Tan
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v0] += mu * dvTan
+            if Cv < 0.:
+                ld_v = -Cv / schur
+                self.dv[v0] += self.m_inv[v0] * ld_v * g0
+                self.nc[v0] += 1
+                vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
+                a, b = g1.norm(), g2.norm()
+                p = (a * self.v_static[v1] + b * self.v_static[v2]) / (a + b)
+                g0Tan = p - vTan0
+                cTan = 0.5 * g0Tan.dot(g0Tan)
+                schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan = self.m_inv[v0] * ldTan * g0Tan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v0] += mu * dvTan
 
         elif dtype == 4:
-            d = di.d_PE(x0, x2, x3)
-            if d < dHat:
-                g0, g2, g3 = di.g_PE(x0, x2, x3)
-                Cv = g0.dot(self.v[v0]) + g2.dot(self.v_static[v2]) + g3.dot(self.v_static[v3])
-                if Cv < 0.:
-                    schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld_v = -Cv / schur
-                    self.dv[v0] += self.m_inv[v0] * ld_v * g0
-                    self.nc[v0] += 1
-                    vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
-                    a, b = g2.norm(), g3.norm()
-                    p = (a * self.v_static[v2] + b * self.v_static[v3]) / (a + b)
-                    g0Tan = p - vTan0
-                    cTan = 0.5 * g0Tan.dot(g0Tan)
-                    schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan = self.m_inv[v0] * ldTan * g0Tan
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v0] += mu * dvTan
+            if Cv < 0.:
+                ld_v = -Cv / schur
+                self.dv[v0] += self.m_inv[v0] * ld_v * g0
+                self.nc[v0] += 1
+                vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
+                a, b = g2.norm(), g3.norm()
+                p = (a * self.v_static[v2] + b * self.v_static[v3]) / (a + b)
+                g0Tan = p - vTan0
+                cTan = 0.5 * g0Tan.dot(g0Tan)
+                schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan = self.m_inv[v0] * ldTan * g0Tan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v0] += mu * dvTan
 
         elif dtype == 5:
-            d = di.d_PE(x0, x1, x3)
-            if d < dHat:
-                g0, g1, g3 = di.g_PE(x0, x1, x3)
-                Cv = g0.dot(self.v[v0]) + g1.dot(self.v_static[v1]) + g3.dot(self.v_static[v3])
-                if Cv < 0.:
-                    schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld_v = -Cv / schur
-                    self.dv[v0] += self.m_inv[v0] * ld_v * g0
-                    self.nc[v0] += 1
-                    vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
-                    a, b = g1.norm(), g3.norm()
-                    p = (a * self.v_static[v1] + b * self.v_static[v3]) / (a + b)
-                    g0Tan = vTan0 - p
-                    cTan = 0.5 * g0Tan.dot(g0Tan)
-                    schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan = self.m_inv[v0] * ldTan * g0Tan
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v0] += mu * dvTan
+            if Cv < 0.:
+                ld_v = -Cv / schur
+                self.dv[v0] += self.m_inv[v0] * ld_v * g0
+                self.nc[v0] += 1
+                vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
+                a, b = g1.norm(), g3.norm()
+                p = (a * self.v_static[v1] + b * self.v_static[v3]) / (a + b)
+                g0Tan = vTan0 - p
+                cTan = 0.5 * g0Tan.dot(g0Tan)
+                schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan = self.m_inv[v0] * ldTan * g0Tan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v0] += mu * dvTan
 
         elif dtype == 6:
-            d = di.d_PT(x0, x1, x2, x3)
-            if d < dHat:
-                g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
-                Cv = g0.dot(self.v[v0]) + g1.dot(self.v_static[v1]) + g2.dot(self.v_static[v2]) + g3.dot(
-                    self.v_static[v3])
-                if Cv < 0.:
-                    schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
-                    ld_v = -Cv / schur
-                    self.dv[v0] += self.m_inv[v0] * ld_v * g0
-                    self.nc[v0] += 1
-                    vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
-                    a, b, c = g1.norm(), g2.norm(), g3.norm()
-                    p = (a * self.v_static[v1] + b * self.v_static[v2] + c * self.v_static[v3]) / (a + b + c)
-                    g0Tan = p - vTan0
-                    cTan = 0.5 * g0Tan.dot(g0Tan)
-                    schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan = self.m_inv[v0] * ldTan * g0Tan
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v0] += mu * dvTan
+            if Cv < 0.:
+                ld_v = -Cv / schur
+                self.dv[v0] += self.m_inv[v0] * ld_v * g0
+                self.nc[v0] += 1
+                vTan0 = self.v[v0] + self.m_inv[v0] * ld_v * g0
+                a, b, c = g1.norm(), g2.norm(), g3.norm()
+                p = (a * self.v_static[v1] + b * self.v_static[v2] + c * self.v_static[v3]) / (a + b + c)
+                g0Tan = p - vTan0
+                cTan = 0.5 * g0Tan.dot(g0Tan)
+                schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan = self.m_inv[v0] * ldTan * g0Tan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v0] += mu * dvTan
 
     @ti.func
     def solve_collision_tv_static_x(self, fid_d, vid_s, dHat):
@@ -1311,7 +1289,9 @@ class Solver:
         x3 = self.y[v3]
 
         dtype = di.d_type_PT(x0, x1, x2, x3)
-
+        d = dHat
+        g0, g1, g2, g3 = ti.math.vec3(0.0), ti.math.vec3(0.0), ti.math.vec3(0.0), ti.math.vec3(0.0)
+        schur = 0.0
         if dtype == 0:
             d = di.d_PP(x0, x1)
             if d < dHat:
@@ -1351,8 +1331,6 @@ class Solver:
                 self.nc[v1] += 1
                 self.nc[v2] += 1
 
-
-
         elif dtype == 4:
             d = di.d_PE(x0, x2, x3)
             if d < dHat:
@@ -1365,7 +1343,6 @@ class Solver:
                 self.nc[v2] += 1
                 self.nc[v3] += 1
 
-
         elif dtype == 5:
             d = di.d_PE(x0, x1, x3)
             if d < dHat:
@@ -1376,7 +1353,6 @@ class Solver:
                 self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
                 self.nc[v1] += 1
                 self.nc[v3] += 1
-
 
         elif dtype == 6:
             d = di.d_PT(x0, x1, x2, x3)
@@ -1391,9 +1367,17 @@ class Solver:
                 self.nc[v2] += 1
                 self.nc[v3] += 1
 
+        # if d < dHat and self.tv_static_pair_num[fid_d] < self.tv_static_pair_num:
+        #     self.tv_static_pair[fid_d, self.tv_static_pair_num[fid_d], 0] = vid_s
+        #     self.tv_static_pair[fid_d, self.tv_static_pair_num[fid_d], 1] = dtype
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 0] = g0
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 1] = g1
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 2] = g2
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 3] = g3
+        #     self.tv_static_pair_schur[fid_d, self.tv_static_pair_num[fid_d]] = schur
 
     @ti.func
-    def solve_collision_tv_static_v(self, fid_d, vid_s, dHat, mu):
+    def solve_collision_tv_static_v(self, fid_d, vid_s, dtype, g0, g1, g2, g3, schur, mu):
 
         v0 = vid_s
         v1 = self.face_indices_dynamic[3 * fid_d + 0]
@@ -1406,218 +1390,182 @@ class Solver:
         x3 = self.y[v3]
 
         dtype = di.d_type_PT(x0, x1, x2, x3)
-
+        Cv = g0.dot(self.v_static[v0]) + g1.dot(self.v[v1]) + g3.dot(self.v[v3])
         if dtype == 0:
-            d = di.d_PP(x0, x1)
-            if d < dHat:
-                g0, g1 = di.g_PP(x0, x1)
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + 1e-4
-                Cv = g0.dot(self.v_static[v0]) + g1.dot(self.v[v1])
-                if Cv < 0.0:
-                    ld_v = - Cv / schur
-                    self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
-                    self.nc[v1] += 1
-                    vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
-                    g1Tan = self.v_static[v0] - vTan1
-                    cTan = 0.5 * g1Tan.dot(g1Tan)
-                    schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan1 = self.m_inv[v1] * ldTan * g1Tan
+            if Cv < 0.0:
+                ld_v = - Cv / schur
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
+                self.nc[v1] += 1
+                vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
+                g1Tan = self.v_static[v0] - vTan1
+                cTan = 0.5 * g1Tan.dot(g1Tan)
+                schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan1 = self.m_inv[v1] * ldTan * g1Tan
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v1] += mu * dvTan1
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v1] += mu * dvTan1
 
         elif dtype == 1:
-            d = di.d_PP(x0, x2)
-            if d < dHat:
-                g0, g2 = di.g_PP(x0, x2)
-                schur = self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + 1e-4
-                Cv = g0.dot(self.v_static[v0]) + g2.dot(self.v[v2])
-                if Cv < 0.0:
-                    ld_v = - Cv / schur
-                    self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
-                    self.nc[v2] += 1
+            if Cv < 0.0:
+                ld_v = - Cv / schur
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
+                self.nc[v2] += 1
 
-                    vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
-                    g2Tan = self.v_static[v0] - vTan2
-                    cTan = 0.5 * g2Tan.dot(g2Tan)
-                    schur = self.m_inv[v2] * g2Tan.dot(g2Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan2 = self.m_inv[v2] * ldTan * g2Tan
+                vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
+                g2Tan = self.v_static[v0] - vTan2
+                cTan = 0.5 * g2Tan.dot(g2Tan)
+                schur = self.m_inv[v2] * g2Tan.dot(g2Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan2 = self.m_inv[v2] * ldTan * g2Tan
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v2] += mu * dvTan2
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v2] += mu * dvTan2
 
         elif dtype == 2:
-            d = di.d_PP(x0, x3)
-            if d < dHat:
-                g0, g3 = di.g_PP(x0, x3)
-                schur = self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
-                Cv = g0.dot(self.v_static[v0]) + g3.dot(self.v[v3])
-                if Cv < 0.0:
-                    ld_v = - Cv / schur
-                    self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
-                    self.nc[v3] += 1
+            if Cv < 0.0:
+                ld_v = - Cv / schur
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
+                self.nc[v3] += 1
 
-                    vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
-                    g3Tan = self.v_static[v0] - vTan3
-                    cTan = 0.5 * g3Tan.dot(g3Tan)
-                    schur = self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan3 = self.m_inv[v3] * ldTan * g3Tan
+                vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
+                g3Tan = self.v_static[v0] - vTan3
+                cTan = 0.5 * g3Tan.dot(g3Tan)
+                schur = self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan3 = self.m_inv[v3] * ldTan * g3Tan
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-                    self.dv[v3] += mu * dvTan3
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+                self.dv[v3] += mu * dvTan3
 
         elif dtype == 3:
-            d = di.d_PE(x0, x1, x2)
-            if d < dHat:
-                g0, g1, g2 = di.g_PE(x0, x1, x2)
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + 1e-4
-                Cv = g0.dot(self.v_static[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2])
-                if Cv < 0.0:
-                    ld_v = - Cv / schur
-                    self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
-                    self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
-                    self.nc[v1] += 1
-                    self.nc[v2] += 1
 
-                    vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
-                    vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
+            if Cv < 0.0:
+                ld_v = - Cv / schur
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
+                self.nc[v1] += 1
+                self.nc[v2] += 1
 
-                    a, b = g1.norm(), g2.norm()
-                    a1 = a / (a + b)
-                    b1 = b / (a + b)
-                    p = a1 * vTan1 + b1 * vTan2
-                    g1Tan = a1 * (self.v_static[v0] - p)
-                    g2Tan = b1 * (self.v_static[v0] - p)
-                    cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
-                    schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan1 = self.m_inv[v1] * ldTan * g1Tan
-                    dvTan2 = self.m_inv[v2] * ldTan * g2Tan
+                vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
+                vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
+                a, b = g1.norm(), g2.norm()
+                a1 = a / (a + b)
+                b1 = b / (a + b)
+                p = a1 * vTan1 + b1 * vTan2
+                g1Tan = a1 * (self.v_static[v0] - p)
+                g2Tan = b1 * (self.v_static[v0] - p)
+                cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
+                schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan1 = self.m_inv[v1] * ldTan * g1Tan
+                dvTan2 = self.m_inv[v2] * ldTan * g2Tan
 
-                    self.dv[v1] += mu * dvTan1
-                    self.dv[v2] += mu * dvTan2
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
+
+                self.dv[v1] += mu * dvTan1
+                self.dv[v2] += mu * dvTan2
 
         elif dtype == 4:
-            d = di.d_PE(x0, x2, x3)
-            if d < dHat:
-                g0, g2, g3 = di.g_PE(x0, x2, x3)
-                schur = self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
-                Cv = g0.dot(self.v_static[v0]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
-                if Cv < 0.0:
-                    ld_v = -Cv / schur
-                    self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
-                    self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
+            if Cv < 0.0:
+                ld_v = -Cv / schur
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
 
-                    self.nc[v2] += 1
-                    self.nc[v3] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
 
-                    vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
-                    vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
+                vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
+                vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
 
-                    a, b = g2.norm(), g3.norm()
-                    a1 = a / (a + b)
-                    b1 = b / (a + b)
-                    p = a1 * vTan2 + b1 * vTan3
-                    g2Tan = a1 * (self.v_static[v0] - p)
-                    g3Tan = b1 * (self.v_static[v0] - p)
-                    cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
-                    schur = self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan2 = self.m_inv[v2] * ldTan * g2Tan
-                    dvTan3 = self.m_inv[v3] * ldTan * g3Tan
+                a, b = g2.norm(), g3.norm()
+                a1 = a / (a + b)
+                b1 = b / (a + b)
+                p = a1 * vTan2 + b1 * vTan3
+                g2Tan = a1 * (self.v_static[v0] - p)
+                g3Tan = b1 * (self.v_static[v0] - p)
+                cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
+                schur = self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan2 = self.m_inv[v2] * ldTan * g2Tan
+                dvTan3 = self.m_inv[v3] * ldTan * g3Tan
 
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
 
-                    self.dv[v2] += mu * dvTan2
-                    self.dv[v3] += mu * dvTan3
-
+                self.dv[v2] += mu * dvTan2
+                self.dv[v3] += mu * dvTan3
 
         elif dtype == 5:
-            d = di.d_PE(x0, x1, x3)
-            if d < dHat:
-                g0, g1, g3 = di.g_PE(x0, x1, x3)
+            if Cv < 0.0:
+                ld_v = -Cv / schur
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
+                self.nc[v1] += 1
+                self.nc[v3] += 1
 
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
-                Cv = g0.dot(self.v_static[v0]) + g1.dot(self.v[v1]) + g3.dot(self.v[v3])
-                if Cv < 0.0:
-                    ld_v = -Cv / schur
-                    self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
-                    self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
-                    self.nc[v1] += 1
-                    self.nc[v3] += 1
+                vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
+                vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
+                a, b = g1.norm(), g3.norm()
+                a1 = a / (a + b)
+                b1 = b / (a + b)
+                p = a1 * vTan1 + b1 * vTan3
+                g1Tan = a1 * (self.v_static[v0] - p)
+                g3Tan = b1 * (self.v_static[v0] - p)
+                cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
+                schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan1 = self.m_inv[v1] * ldTan * g1Tan
+                dvTan3 = self.m_inv[v3] * ldTan * g3Tan
 
-                    vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
-                    vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
-                    a, b = g1.norm(), g3.norm()
-                    a1 = a / (a + b)
-                    b1 = b / (a + b)
-                    p = a1 * vTan1 + b1 * vTan3
-                    g1Tan = a1 * (self.v_static[v0] - p)
-                    g3Tan = b1 * (self.v_static[v0] - p)
-                    cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
-                    schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan1 = self.m_inv[v1] * ldTan * g1Tan
-                    dvTan3 = self.m_inv[v3] * ldTan * g3Tan
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
-
-                    self.dv[v1] += mu * dvTan1
-                    self.dv[v3] += mu * dvTan3
+                self.dv[v1] += mu * dvTan1
+                self.dv[v3] += mu * dvTan3
 
         elif dtype == 6:
-            d = di.d_PT(x0, x1, x2, x3)
-            if d < dHat:
-                g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
-                Cv = g0.dot(self.v_static[v0]) + g1.dot(self.v[v1]) + g3.dot(self.v[v3])
-                if Cv < 0.0:
-                    ld_v = -Cv / schur
+            if Cv < 0.0:
+                ld_v = -Cv / schur
 
-                    self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
-                    self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
-                    self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
-                    self.nc[v1] += 1
-                    self.nc[v2] += 1
-                    self.nc[v3] += 1
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld_v * g1
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld_v * g2
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld_v * g3
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
 
-                    vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
-                    vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
-                    vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
+                vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
+                vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
+                vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
 
-                    a, b, c = g1.norm(), g2.norm(), g3.norm()
-                    a1 = a / (a + b + c)
-                    b1 = b / (a + b + c)
-                    c1 = c / (a + b + c)
-                    p = a1 * vTan1 + b1 * vTan2 + c1 * vTan3
-                    g1Tan = a1 * (self.v_static[v0] - p)
-                    g2Tan = b1 * (self.v_static[v0] - p)
-                    g3Tan = c1 * (self.v_static[v0] - p)
-                    cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
-                    schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
-                    ldTan = cTan / schur
-                    dvTan1 = self.m_inv[v1] * ldTan * g1Tan
-                    dvTan2 = self.m_inv[v2] * ldTan * g2Tan
-                    dvTan3 = self.m_inv[v3] * ldTan * g3Tan
+                a, b, c = g1.norm(), g2.norm(), g3.norm()
+                a1 = a / (a + b + c)
+                b1 = b / (a + b + c)
+                c1 = c / (a + b + c)
+                p = a1 * vTan1 + b1 * vTan2 + c1 * vTan3
+                g1Tan = a1 * (self.v_static[v0] - p)
+                g2Tan = b1 * (self.v_static[v0] - p)
+                g3Tan = c1 * (self.v_static[v0] - p)
+                cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
+                schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
+                ldTan = cTan / schur
+                dvTan1 = self.m_inv[v1] * ldTan * g1Tan
+                dvTan2 = self.m_inv[v2] * ldTan * g2Tan
+                dvTan3 = self.m_inv[v3] * ldTan * g3Tan
 
-                    if mu * abs(Cv) > cTan:
-                        mu = 1.0
+                if mu * abs(Cv) > cTan:
+                    mu = 1.0
 
-                    self.dv[v1] += mu * dvTan1
-                    self.dv[v2] += mu * dvTan2
-                    self.dv[v3] += mu * dvTan3
+                self.dv[v1] += mu * dvTan1
+                self.dv[v2] += mu * dvTan2
+                self.dv[v3] += mu * dvTan3
 
     @ti.func
     def solve_collision_vt_dynamic_v(self, vid_d, fid_d, dtype, g0, g1, g2, g3, schur, friction_coeff):
@@ -2705,20 +2653,23 @@ class Solver:
         #     if self.is_in_face(vi_d, ti_d) != True:
         #         self.solve_collision_vt_dynamic_x(vi_d, ti_d, d)
 
-        for i in range(self.max_num_verts_dynamic * self.max_num_faces_static):
-            vi_d = i // self.max_num_faces_static
-            ti_s = i % self.max_num_faces_static
-            self.solve_collision_vt_static_x(vi_d, ti_s, d)
+        # for vi_d in range(self.max_num_verts_dynamic):
+        #     for fi_s in range(self.max_num_faces_static):
+        #         self.solve_collision_vt_static_x(vi_d, fi_s, d)
+
+        for fi_d in range(self.max_num_faces_dynamic):
+            for vi_s in range(self.max_num_verts_static):
+                self.solve_collision_tv_static_x(fi_d, vi_s, d)
         #
-        for i in range(self.max_num_faces_dynamic * self.max_num_verts_static):
-            ti_d = i // self.max_num_verts_static
-            vi_s = i % self.max_num_verts_static
-            self.solve_collision_tv_static_x(ti_d, vi_s, d)
-        # #
-        for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
-            ei_d = i // self.max_num_edges_static
-            ei_s = i % self.max_num_edges_static
-            self.solve_collision_ee_static_x(ei_d, ei_s, d)
+        # for i in range(self.max_num_faces_dynamic * self.max_num_verts_static):
+        #     ti_d = i // self.max_num_verts_static
+        #     vi_s = i % self.max_num_verts_static
+        #     self.solve_collision_tv_static_x(ti_d, vi_s, d)
+        # # #
+        # for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
+        #     ei_d = i // self.max_num_edges_static
+        #     ei_s = i % self.max_num_edges_static
+        #     self.solve_collision_ee_static_x(ei_d, ei_s, d)
 
         # for ei in range(self.max_num_edges_dynamic):
         #     for ei_d in range(self.max_num_edges_dynamic):
@@ -2731,87 +2682,33 @@ class Solver:
 
         mu = self.friction_coeff[0]
         d = self.dHat[0]
-        for i in range(self.max_num_verts_dynamic * self.max_num_faces_static):
-            vi_d = i // self.max_num_faces_static
-            ti_s = i % self.max_num_faces_static
-            self.solve_collision_vt_static_v(vi_d, ti_s, d, mu)
 
-        for i in range(self.max_num_faces_dynamic * self.max_num_verts_static):
-            ti_d = i // self.max_num_verts_static
-            vi_s = i % self.max_num_verts_static
-            self.solve_collision_tv_static_v(ti_d, vi_s, d, mu)
+        # for vi_d in range(self.max_num_verts_dynamic):
+        #     for j in range(self.vt_static_pair_num[vi_d]):
+        #         fi_s, dtype = self.vt_static_pair[vi_d, j, 0], self.vt_static_pair[vi_d, j, 1]
+        #         g0, g1, g2, g3 = self.vt_static_pair_g[vi_d, j, 0],  self.vt_static_pair_g[vi_d, j, 1],  self.vt_static_pair_g[vi_d, j, 2],  self.vt_static_pair_g[vi_d, j, 3]
+        #         schur = self.vt_static_pair_schur[vi_d, j]
+        #         self.solve_collision_vt_static_v(vi_d, fi_s, dtype, g0, g1, g2, g3, schur, mu)
 
-            # #
-        for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
-            ei_d = i // self.max_num_edges_static
-            ei_s = i % self.max_num_edges_static
-            self.solve_collision_ee_static_v(ei_d, ei_s, d, mu)
-        # #
-
-        # for i in range(self.vt_active_set_num[0]):
-        #     vi_d = self.vt_active_set[i, 0]
-        #     fi_s = self.vt_active_set[i, 1]
-        #     dtype = self.vt_active_set[i, 2]
-        #     g0, g1, g2, g3 = self.vt_active_set_g[i, 0], self.vt_active_set_g[i, 1], self.vt_active_set_g[i, 2], self.vt_active_set_g[i, 3]
-        #     schur = self.vt_active_set_schur[i]
-
-        # for vid in range(self.max_num_verts_dynamic):
-        #     for j in range(self.vt_static_pair_num[vid]):
-        #         fi_s, dtype = self.vt_static_pair[vid, j, 0], self.vt_static_pair[vid, j, 1]
-        #         g0, g1, g2, g3 = self.vt_static_pair_g[vid, j, 0], self.vt_static_pair_g[vid, j, 1], self.vt_static_pair_g[vid, j, 2], self.vt_static_pair_g[vid, j, 3]
-        #         schur = self.vt_static_pair_schur[vid, j]
-        #         self.solve_collision_vt_static_v(vid, fi_s, dtype, g0, g1, g2, g3, schur, friction_coeff)
-
-        # test = 0
-        # ti.loop_config(serialize=True)
-        # for vid in range(self.max_num_verts_dynamic):
-        #     test += self.vt_static_pair_num[vid]
+        # for i in range(self.max_num_verts_dynamic * self.max_num_faces_static):
+        #     vi_d = i // self.max_num_faces_static
+        #     ti_s = i % self.max_num_faces_static
+        #     self.solve_collision_vt_static_v(vi_d, ti_s, d, mu)
         #
-        # self.vt_active_set_num[0] = test
-
-        # for i in range(self.vt_active_set_num_dynamic[0]):
+        for fi_d in range(self.max_num_faces_dynamic):
+            for j in range(self.tv_static_pair_num[fi_d]):
+                vi_s, dtype = self.tv_static_pair[fi_d, j, 0], self.tv_static_pair[fi_d, j, 1]
+                g0, g1, g2, g3 = self.tv_static_pair_g[fi_d, j, 0],  self.tv_static_pair_g[fi_d, j, 1],  self.tv_static_pair_g[fi_d, j, 2],  self.tv_static_pair_g[fi_d, j, 3]
+                schur = self.tv_static_pair_schur[fi_d, j]
+                self.solve_collision_tv_static_v(fi_d, vi_s, dtype, g0, g1, g2, g3, schur, mu)
+            # for vi_s in range(self.max_num_verts_static):
+            #     self.solve_collision_tv_static_v(fi_d, vi_s, d, mu)
         #
-        #     vid_d, fid_d, dtype = self.vt_active_set_dynamic[i, 0], self.vt_active_set_dynamic[i, 1], self.vt_active_set_dynamic[i, 2]
-        #     schur = self.vt_active_set_schur_dynamic[i]
-        #     g0 = self.vt_active_set_g_dynamic[i, 0]
-        #     g1 = self.vt_active_set_g_dynamic[i, 1]
-        #     g2 = self.vt_active_set_g_dynamic[i, 2]
-        #     g3 = self.vt_active_set_g_dynamic[i, 3]
-        #     self.solve_collision_vt_dynamic_v(vid_d, fid_d, dtype, g0, g1, g2, g3, schur, friction_coeff)
-
-        # for i in range(self.tv_active_set_num[0]):
-        #     fi_d, vi_s, dtype = self.tv_active_set[i, 0], self.tv_active_set[i, 1],  self.tv_active_set[i, 2]
-        #     g0 = self.tv_active_set_g[i, 0]
-        #     g1 = self.tv_active_set_g[i, 1]
-        #     g2 = self.tv_active_set_g[i, 2]
-        #     g3 = self.tv_active_set_g[i, 3]
-        #     schur = self.tv_active_set_schur[i]
-        #
-        #     self.solve_collision_tv_static_v(fi_d, vi_s, dtype, g0, g1, g2, g3, schur, friction_coeff)
-        #
-        # for i in range(self.ee_active_set_num[0]):
-        #     ei_d = self.ee_active_set[i, 0]
-        #     ei_s = self.ee_active_set[i, 1]
-        #     dtype = self.ee_active_set[i, 2]
-        #     schur = self.ee_active_set_schur[i]
-        #
-        #     g0 = self.ee_active_set_g[i, 0]
-        #     g1 = self.ee_active_set_g[i, 1]
-        #     g2 = self.ee_active_set_g[i, 2]
-        #     g3 = self.ee_active_set_g[i, 3]
-        #
-        #     self.solve_collision_ee_static_v(ei_d, ei_s, dtype, g0, g1, g2, g3, schur, friction_coeff)
-
-        # for i in range(self.ee_active_set_num_dynamic[0]):
-        #     pair_i = self.ee_active_set_dynamic[i]
-        #     schur = self.ee_active_set_schur_dynamic[i]
-        #
-        #     g0 = self.ee_active_set_g_dynamic[i, 0]
-        #     g1 = self.ee_active_set_g_dynamic[i, 1]
-        #     g2 = self.ee_active_set_g_dynamic[i, 2]
-        #     g3 = self.ee_active_set_g_dynamic[i, 3]
-        #
-        #     self.solve_collision_ee_dynamic_v(pair_i[0], pair_i[1], g0, g1, g2, g3, schur, friction_coeff)
+        #     # #
+        # for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
+        #     ei_d = i // self.max_num_edges_static
+        #     ei_s = i % self.max_num_edges_static
+        #     self.solve_collision_ee_static_v(ei_d, ei_s, d, mu)
 
 
     @ti.kernel
@@ -3094,7 +2991,7 @@ class Solver:
         self.dt[0] = dt / n_substeps
 
 
-        # ti.profiler.clear_kernel_profiler_info()
+        ti.profiler.clear_kernel_profiler_info()
         # self.broad_phase()
         # self.search_neighbours()
         for _ in range(n_substeps):
@@ -3127,16 +3024,16 @@ class Solver:
         # print("broadphase(): ", round(avg_overhead_b, 2))
         # print("search_neighbours(): ", round(b4.avg, 2))
 
-        # if self.enable_velocity_update:
-        #
-        #     profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
+        if self.enable_velocity_update:
+
+            profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
         #     profile_pressure_x = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_x.__name__)
-        #
-        #     profile_collision_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
+
+            profile_collision_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
         #     profile_pressure_v = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_v.__name__)
         #
-        #     avg_overhead_x = profile_collision_x.avg + profile_pressure_x.avg
-        #     avg_overhead_v = profile_collision_v.avg + profile_pressure_v.avg
+            avg_overhead_x = profile_collision_x.avg
+            avg_overhead_v = profile_collision_v.avg
         #
         #     # profile_spring_x = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
         #     # profile_spring_v = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_v.__name__)
@@ -3146,9 +3043,9 @@ class Solver:
         #     # avg_overhead_v = profile_spring_v.avg
         #
         #
-        #     print("constraint_solve_x(): ", round(avg_overhead_x, 2))
-        #     print("constraint_solve_v(): ", round(avg_overhead_v, 2))
-        #     print("ratio: ", round(100.0 * (avg_overhead_v / avg_overhead_x), 2), "%")
+            print("constraint_solve_x(): ", round(avg_overhead_x, 2))
+            print("constraint_solve_v(): ", round(avg_overhead_v, 2))
+            print("ratio: ", round(100.0 * (avg_overhead_v / avg_overhead_x), 2), "%")
 
         self.copy_to_meshes()
         self.copy_to_particles()

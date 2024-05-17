@@ -193,17 +193,17 @@ def show_options():
             volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
             w.text(volume_ratio_str)
 
-        num_vt_dynamic_str = "# vt_dynamic: " + str(sim.vt_active_set_num_dynamic[0])
-        w.text(num_vt_dynamic_str)
-
-        num_ee_static_str = "# ee_static: " + str(sim.ee_active_set_num[0])
-        w.text(num_ee_static_str)
-
-        num_vt_static_str = "# vt_static: " + str(sim.vt_active_set_num[0])
-        w.text(num_vt_static_str)
-
-        num_tv_static_str = "# tv_static: " + str(sim.tv_active_set_num[0])
-        w.text(num_tv_static_str)
+        # num_vt_dynamic_str = "# vt_dynamic: " + str(sim.vt_active_set_num_dynamic[0])
+        # w.text(num_vt_dynamic_str)
+        #
+        # num_ee_static_str = "# ee_static: " + str(sim.ee_active_set_num[0])
+        # w.text(num_ee_static_str)
+        #
+        # num_vt_static_str = "# vt_static: " + str(sim.vt_active_set_num[0])
+        # w.text(num_vt_static_str)
+        #
+        # num_tv_static_str = "# tv_static: " + str(sim.tv_active_set_num[0])
+        # w.text(num_tv_static_str)
 
 def load_animation():
     global sim
@@ -333,8 +333,6 @@ while window.running:
         for pid in range(len(scene1.particles)):
             sim.particles[pid].export(os.path.basename(scene1.__file__), pid, frame_cpu)
 
-    if frame_cpu == 60:
-        print(sim.vt_active_set_num[0])
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     scene.mesh(sim.x_static,  indices=sim.face_indices_static, color=(0, 0, 0), show_wireframe=True)
