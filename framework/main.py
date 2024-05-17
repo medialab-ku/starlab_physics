@@ -325,13 +325,18 @@ while window.running:
 
     if mesh_export and run_sim and frame_cpu < frame_end:
         for mid in range(len(scene1.meshes_dynamic)):
-            sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
+            sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu,is_static=False)
 
         for tid in range(len(scene1.tet_meshes_dynamic)):
             sim.tet_meshes_dynamic[tid].export(os.path.basename(scene1.__file__), tid, frame_cpu)
 
         for pid in range(len(scene1.particles)):
             sim.particles[pid].export(os.path.basename(scene1.__file__), pid, frame_cpu)
+
+        for sid in range(len(scene1.meshes_static)):
+            sim.meshes_static[sid].export(os.path.basename(scene1.__file__), sid, frame_cpu, is_static=True)
+
+
 
     scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     scene.mesh(sim.x_static,  indices=sim.face_indices_static, color=(0, 0, 0), show_wireframe=True)
