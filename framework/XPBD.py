@@ -477,11 +477,19 @@ class Solver:
         for tid in range(len(self.tet_meshes_dynamic)):
             self.copy_to_tet_meshes_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
 
+        for sid in range(len(self.meshes_static)):
+            self.copy_to_static_meshes_device(self.offset_verts_static[sid], self.meshes_static[sid])
     @ti.kernel
     def copy_to_meshes_device(self, offset: ti.int32, mesh: ti.template()):
         for v in mesh.verts:
             v.x = self.x[offset + v.id]
             v.v = self.v[offset + v.id]
+
+    @ ti.kernel
+    def copy_to_static_meshes_device(self, offset: ti.int32, mesh: ti.template()):
+        for v in mesh.verts:
+            v.x = self.x_static[offset + v.id]
+            v.v = self.v_static[offset + v.id]
 
     @ti.kernel
     def copy_to_tet_meshes_device(self, offset: ti.int32, mesh: ti.template()):

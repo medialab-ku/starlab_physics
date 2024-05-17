@@ -88,8 +88,12 @@ class Mesh:
         for v in self.mesh.verts:
             v.x += self.trans
 
-    def export(self, scene_name, mesh_id, frame):
-        directory = os.path.join("results/",scene_name,"Mesh_ID_"+str(mesh_id))
+    def export(self, scene_name, mesh_id, frame,is_static = False):
+
+        if is_static:
+            directory = os.path.join("results/", scene_name, "StaticMesh_ID_" + str(mesh_id))
+        else:
+            directory = os.path.join("results/", scene_name, "Mesh_ID_" + str(mesh_id))
 
         try :
             if not os.path.exists(directory):
