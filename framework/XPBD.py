@@ -1492,8 +1492,8 @@ class Solver:
                     a1 = a / (a + b)
                     b1 = b / (a + b)
                     p = a1 * vTan1 + b1 * vTan2
-                    g1Tan = a1 * (p - self.v_static[v0])
-                    g2Tan = b1 * (p - self.v_static[v0])
+                    g1Tan = a1 * (self.v_static[v0] - p)
+                    g2Tan = b1 * (self.v_static[v0] - p)
                     cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                     schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + 1e-4
                     ldTan = cTan / schur
@@ -1527,8 +1527,8 @@ class Solver:
                     a1 = a / (a + b)
                     b1 = b / (a + b)
                     p = a1 * vTan2 + b1 * vTan3
-                    g2Tan = a1 * (p - self.v_static[v0])
-                    g3Tan = b1 * (p - self.v_static[v0])
+                    g2Tan = a1 * (self.v_static[v0] - p)
+                    g3Tan = b1 * (self.v_static[v0] - p)
                     cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                     schur = self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                     ldTan = cTan / schur
@@ -1563,8 +1563,8 @@ class Solver:
                     a1 = a / (a + b)
                     b1 = b / (a + b)
                     p = a1 * vTan1 + b1 * vTan3
-                    g1Tan = a1 * (p - self.v_static[v0])
-                    g3Tan = b1 * (p - self.v_static[v0])
+                    g1Tan = a1 * (self.v_static[v0] - p)
+                    g3Tan = b1 * (self.v_static[v0] - p)
                     cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                     schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                     ldTan = cTan / schur
@@ -1602,9 +1602,9 @@ class Solver:
                     b1 = b / (a + b + c)
                     c1 = c / (a + b + c)
                     p = a1 * vTan1 + b1 * vTan2 + c1 * vTan3
-                    g1Tan = a1 * (p - self.v_static[v0])
-                    g2Tan = b1 * (p - self.v_static[v0])
-                    g3Tan = c1 * (p - self.v_static[v0])
+                    g1Tan = a1 * (self.v_static[v0] - p)
+                    g2Tan = b1 * (self.v_static[v0] - p)
+                    g3Tan = c1 * (self.v_static[v0] - p)
                     cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                     schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                     ldTan = cTan / schur
@@ -1905,7 +1905,7 @@ class Solver:
         if dtype == 0:
             d = di.d_PP(x0, x2)
             if d < dHat:
-                g0, g2 = di.g_PE(x0, x2)
+                g0, g2 = di.g_PP(x0, x2)
                 schur = self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) + 1e-4
                 Cv = g0.dot(self.v[v0]) + g2.dot(self.v_static[v2])
                 if Cv < 0.0:
@@ -2038,7 +2038,7 @@ class Solver:
                     p1 = c1 * self.v_static[v2] + d1 * self.v_static[v3]
 
                     vTan1 = self.v[v1] + self.fixed[v1] * self.m_inv[v1] * ld_v * g1
-                    g1Tan = self.v_static[v3] - vTan1
+                    g1Tan = p1 - vTan1
                     cTan = 0.5 * (p1 - vTan1).dot(p1 - vTan1)
                     schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + 1e-4
                     ldTan = cTan / schur
@@ -2735,11 +2735,17 @@ class Solver:
             vi_d = i // self.max_num_faces_static
             ti_s = i % self.max_num_faces_static
             self.solve_collision_vt_static_v(vi_d, ti_s, d, mu)
-        #
-        # for i in range(self.max_num_faces_dynamic * self.max_num_verts_static):
-        #     ti_d = i // self.max_num_verts_static
-        #     vi_s = i % self.max_num_verts_static
-        #     self.solve_collision_tv_static_v(ti_d, vi_s, d, mu)
+
+        for i in range(self.max_num_faces_dynamic * self.max_num_verts_static):
+            ti_d = i // self.max_num_verts_static
+            vi_s = i % self.max_num_verts_static
+            self.solve_collision_tv_static_v(ti_d, vi_s, d, mu)
+
+            # #
+        for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
+            ei_d = i // self.max_num_edges_static
+            ei_s = i % self.max_num_edges_static
+            self.solve_collision_ee_static_v(ei_d, ei_s, d, mu)
         # #
 
         # for i in range(self.vt_active_set_num[0]):
