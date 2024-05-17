@@ -1278,7 +1278,7 @@ class Solver:
                     ti.atomic_add(self.tv_active_set_num[fid_d], 1)
 
     @ti.func
-    def solve_collision_vt_static_v(self, vid_d, fid_s, dtype, g0, g1, g2, g3, schur, friction_coeff):
+    def solve_collision_vt_static_v(self, vid_d, fid_s, dtype, g0, g1, g2, g3, schur, mu):
 
         v0 = vid_d
         v1 = self.face_indices_static[3 * fid_s + 0]
@@ -1295,13 +1295,22 @@ class Solver:
             vTan0 = self.v[v0] - self.m_inv[v0] * ld * g0
             dvTan0 = ti.math.vec3(0.0)
             if dtype == 0:
-                dvTan0 = self.v_static[v1] - vTan0
+                if mu * abs(dvn) > (vTan0 - self.v_static[v1]).norm():
+                    dvTan0 = (self.v_static[v1] - vTan0)
+                else:
+                    dvTan0 = mu * (self.v_static[v1] - vTan0)
 
             elif dtype == 1:
-                dvTan0 = self.v_static[v2] - vTan0
+                if mu * abs(dvn) > (vTan0 - self.v_static[v2]).norm():
+                    dvTan0 = (self.v_static[v2] - vTan0)
+                else:
+                    dvTan0 = mu * (self.v_static[v2] - vTan0)
 
             elif dtype == 2:
-                dvTan0 = self.v_static[v3] - vTan0
+                if mu * abs(dvn) > (vTan0 - self.v_static[v3]).norm():
+                    dvTan0 = (self.v_static[v3] - vTan0)
+                else:
+                    dvTan0 = mu * (self.v_static[v3] - vTan0)
 
             elif dtype == 3:
                 dvTan0 = 0.5 * (self.v_static[v1] + self.v_static[v2]) - vTan0
@@ -1315,7 +1324,7 @@ class Solver:
             elif dtype == 6:
                 dvTan0 = (self.v_static[v1] + self.v_static[v2] + self.v_static[v3]) / 3.0 - vTan0
 
-            # self.dv[v0] += dvTan0
+            self.dv[v0] += dvTan0
 
     @ti.func
     def solve_collision_vt_dynamic_v(self, vid_d, fid_d, dtype, g0, g1, g2, g3, schur, friction_coeff):
@@ -1470,7 +1479,7 @@ class Solver:
 
 
     @ti.func
-    def solve_collision_tv_static_v(self, fid_d, vid_s, dtype, g0, g1, g2, g3, schur, friction_coeff):
+    def solve_collision_tv_static_v(self, fid_d, vid_s, dtype, g0, g1, g2, g3, schur, mu):
 
         v0 = vid_s
         v1 = self.face_indices_dynamic[3 * fid_d + 0]
@@ -1482,35 +1491,44 @@ class Solver:
         if dvn < 0.0:
             ld = dvn / schur
             if dtype == 0:
+                dvTan1 = ti.math.vec3(0.0)
                 vTan1 = self.v[v1] - self.fixed[v1] * self.m_inv[v1] * g1 * ld
 
                 self.dv[v1] -= self.fixed[v1] * self.m_inv[v1] * g1 * ld
 
-                dvTan1 = self.v_static[v0] - vTan1
+                if mu * abs(dvn) > (vTan1 - self.v_static[v0]).norm():
+                    dvTan1 = self.v_static[v0] - vTan1
+                else:
+                    dvTan1 = mu * (self.v_static[v0] - vTan1)
 
-                # self.dv[v1] += dvTan1
+                self.dv[v1] += dvTan1
 
                 self.nc[v1] += 1
 
             elif dtype == 1:
-
+                dvTan2 = ti.math.vec3(0.0)
                 vTan2 = self.v[v2] - self.fixed[v2] * self.m_inv[v2] * g2 * ld
 
                 self.dv[v2] -= self.fixed[v2] * self.m_inv[v2] * g2 * ld
 
-                dvTan2 = self.v_static[v0] - vTan2
+                if mu * abs(dvn) > (vTan2 - self.v_static[v0]).norm():
+                    dvTan2 = self.v_static[v0] - vTan2
+                else:
+                    dvTan2 = mu * (self.v_static[v0] - vTan2)
 
-                # self.dv[v2] += dvTan2
+                self.dv[v2] += dvTan2
 
             elif dtype == 2:
-
+                dvTan3 = ti.math.vec3(0.0)
                 vTan3 = self.v[v3] - self.fixed[v3] * self.m_inv[v3] * g3 * ld
-
                 self.dv[v3] -= self.fixed[v3] * self.m_inv[v3] * g3 * ld
 
-                dvTan3 = self.v_static[v0] - vTan3
+                if mu * abs(dvn) > (vTan3 - self.v_static[v0]).norm():
+                    dvTan3 = self.v_static[v0] - vTan3
+                else:
+                    dvTan3 = mu * (self.v_static[v0] - vTan3)
 
-                # self.dv[v3] += dvTan3
+                self.dv[v3] += dvTan3
 
                 self.nc[v3] += 1
 
@@ -1524,8 +1542,8 @@ class Solver:
                 dvTan1 = self.v_static[v0] - vTan1
                 dvTan2 = self.v_static[v0] - vTan2
 
-                # self.dv[v1] += dvTan1
-                # self.dv[v2] += dvTan2
+                self.dv[v1] += mu * dvTan1
+                self.dv[v2] += mu * dvTan2
 
                 self.nc[v1] += 1
                 self.nc[v2] += 1
@@ -1542,8 +1560,8 @@ class Solver:
                 dvTan2 = self.v_static[v0] - vTan2
                 dvTan3 = self.v_static[v0] - vTan3
 
-                # self.dv[v2] += dvTan2
-                # self.dv[v3] += dvTan3
+                self.dv[v2] += mu * dvTan2
+                self.dv[v3] += mu * dvTan3
 
                 self.nc[v2] += 1
                 self.nc[v3] += 1
@@ -1559,8 +1577,8 @@ class Solver:
                 dvTan1 = self.v_static[v0] - vTan1
                 dvTan3 = self.v_static[v0] - vTan3
 
-                # self.dv[v1] += dvTan1
-                # self.dv[v3] += dvTan3
+                self.dv[v1] += mu * dvTan1
+                self.dv[v3] += mu * dvTan3
 
                 self.nc[v1] += 1
                 self.nc[v3] += 1
@@ -1578,10 +1596,10 @@ class Solver:
                 dvTan1 = self.v_static[v0] - vTan1
                 dvTan2 = self.v_static[v0] - vTan2
                 dvTan3 = self.v_static[v0] - vTan3
-                #
-                # self.dv[v1] += dvTan1
-                # self.dv[v2] += dvTan2
-                # self.dv[v3] += dvTan3
+
+                self.dv[v1] += mu * dvTan1
+                self.dv[v2] += mu * dvTan2
+                self.dv[v3] += mu * dvTan3
 
                 self.nc[v1] += 1
                 self.nc[v2] += 1
