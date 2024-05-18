@@ -700,6 +700,9 @@ class Solver:
         for mid in range(len(self.meshes_dynamic)):
             self.meshes_dynamic[mid].reset()
 
+        for mid in range(len(self.meshes_static)):
+            self.meshes_static[mid].reset()
+
         for pid in range(len(self.particles)):
             self.particles[pid].reset()
 
