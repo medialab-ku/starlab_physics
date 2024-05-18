@@ -67,6 +67,17 @@ class Solver:
         self.obs_ang_vel = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
         self.obs_ang_vel.fill(0.0)
 
+        self.manual_lin_vels = ti.Vector.field(n=3, dtype=ti.f32, shape=4)
+        self.manual_lin_vels.fill(0.0)
+        self.manual_ang_vels = ti.Vector.field(n=3, dtype=ti.f32, shape=4)
+        self.manual_ang_vels.fill(0.0)
+
+        self.manual_ang_vels[0] = ti.Vector([70.0, 0.0, 0.0])
+        self.manual_ang_vels[1] = ti.Vector([-30.0, 0.0, 0.0])
+        self.manual_ang_vels[2] = ti.Vector([0, -5.0, 0.0])
+        self.manual_ang_vels[3] = ti.Vector([0.0, 1.0, 0.0])
+
+
         self.max_num_verts_dynamic = 0
         self.max_num_edges_dynamic = 0
         self.max_num_faces_dynamic = 0
@@ -2894,6 +2905,28 @@ class Solver:
         #         self.v_static[i] = ti.math.vec3(0., 20.0 * ti.math.sin(30. * (self.frame[0] - offset) * self.dt[0]), 0.)
         #         self.x_static[i] += self.v_static[i] * self.dt[0]
 
+    @ti.kernel
+    def move_each_static_object(self, start_idx: ti.template(), len: ti.template(), sid: ti.template()):
+
+        center = ti.math.vec3(0.0)
+        for i in ti.ndrange(len):
+            center += self.x_static[i + start_idx]
+
+        center /= len
+
+        for i in ti.ndrange(len):
+            old = self.x_static[i + start_idx]
+            ri = self.x_static[i + start_idx] - center
+            v_4d = ti.Vector([ri[0], ri[1], ri[2], 1])
+
+            rot_rad = ti.math.radians(self.manual_ang_vels[sid] * self.dt[0])
+            rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
+
+            center += self.obs_lin_vel[sid] * self.dt[0]
+
+            self.x_static[i + start_idx] = ti.math.vec3(rv[0], rv[1], rv[2]) + center
+            self.v_static[i + start_idx] = (self.x_static[i + start_idx] - old) / self.dt[0]
+
 
     def forward(self, n_substeps):
 
@@ -2907,8 +2940,21 @@ class Solver:
         for _ in range(n_substeps):
             self.compute_y()
 
+            # GUI static mesh animation
+
+            # if self.enable_move_obstacle:
+            #     self.move_static_object()
+
+            #manually set static mesh animation.
+            # self.manual_ang_vels and self.manual_lin_vels
             if self.enable_move_obstacle:
-                self.move_static_object()
+                for sid in range(len(self.meshes_static)):
+                    n_vert = 0
+                    if sid == len(self.meshes_static) - 1:
+                        n_vert = self.max_num_verts_static - self.offset_verts_static[sid]
+                    else:
+                        n_vert = self.offset_verts_static[sid + 1] - self.offset_verts_static[sid]
+                    self.move_each_static_object(self.offset_verts_static[sid], n_vert, sid)
 
             else:
                 self.v_static.fill(0.0)

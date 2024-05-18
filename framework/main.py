@@ -32,6 +32,8 @@ camera.up(0, 1, 0)
 colors_static = []
 colors_static.append((1.0, 0.0, 0))
 colors_static.append((0, 0.5, 0))
+colors_static.append((1, 0.5, 0))
+colors_static.append((0, 0.5, 1))
 
 run_sim = False
 
