@@ -1375,11 +1375,10 @@ class Solver:
                 vTan2 = self.v[v2] + self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
 
                 a, b = g1.norm(), g2.norm()
-                a1 = a / (a + b)
-                b1 = b / (a + b)
-                p = a1 * vTan1 + b1 * vTan2
-                g1Tan = a1 * (self.v_static[v0] - p)
-                g2Tan = b1 * (self.v_static[v0] - p)
+                ab = (a + b)
+                p = (a * vTan1 + b * vTan2) / (a + b)
+                g1Tan = (a / ab) * (self.v_static[v0] - p)
+                g2Tan = (b / ab) * (self.v_static[v0] - p)
                 cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                 schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + 1e-4
                 ldTan = cTan / schur
@@ -1405,11 +1404,10 @@ class Solver:
                 vTan3 = self.v[v3] + self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
 
                 a, b = g2.norm(), g3.norm()
-                a1 = a / (a + b)
-                b1 = b / (a + b)
-                p = a1 * vTan2 + b1 * vTan3
-                g2Tan = a1 * (self.v_static[v0] - p)
-                g3Tan = b1 * (self.v_static[v0] - p)
+                ab = (a + b)
+                p = (a * vTan2 + b * vTan3) /ab
+                g2Tan = (a/ab) * (self.v_static[v0] - p)
+                g3Tan = (b/ab) * (self.v_static[v0] - p)
                 cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                 schur = self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                 ldTan = cTan / schur
@@ -1434,11 +1432,10 @@ class Solver:
                 vTan1 = self.v[v1] + self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
                 vTan3 = self.v[v3] + self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
                 a, b = g1.norm(), g3.norm()
-                a1 = a / (a + b)
-                b1 = b / (a + b)
-                p = a1 * vTan1 + b1 * vTan3
-                g1Tan = a1 * (self.v_static[v0] - p)
-                g3Tan = b1 * (self.v_static[v0] - p)
+                ab = (a + b)
+                p = (a * vTan1 + b * vTan3) / ab
+                g1Tan = (a/ab) * (self.v_static[v0] - p)
+                g3Tan = (b/ab) * (self.v_static[v0] - p)
                 cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                 schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                 ldTan = cTan / schur
@@ -1467,13 +1464,11 @@ class Solver:
                 vTan3 = self.v[v3] + self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
 
                 a, b, c = g1.norm(), g2.norm(), g3.norm()
-                a1 = a / (a + b + c)
-                b1 = b / (a + b + c)
-                c1 = c / (a + b + c)
-                p = a1 * vTan1 + b1 * vTan2 + c1 * vTan3
-                g1Tan = a1 * (self.v_static[v0] - p)
-                g2Tan = b1 * (self.v_static[v0] - p)
-                g3Tan = c1 * (self.v_static[v0] - p)
+                abc = (a + b + c)
+                p = (a * vTan1 + b * vTan2 + c * vTan3) / abc
+                g1Tan = (a / abc) * (self.v_static[v0] - p)
+                g2Tan = (b / abc) * (self.v_static[v0] - p)
+                g3Tan = (c / abc) * (self.v_static[v0] - p)
                 cTan = 0.5 * (self.v_static[v0] - p).dot(self.v_static[v0] - p)
                 schur = self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                 ldTan = cTan / schur
@@ -1523,7 +1518,6 @@ class Solver:
                 self.dv[v0] += mu * dvTan0
                 self.dv[v1] += mu * dvTan1
 
-
             elif dtype == 1:
 
                 self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld_v
@@ -1564,7 +1558,7 @@ class Solver:
                 schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                 ldTan = cTan / schur
                 dvTan0 = self.m_inv[v0] * ldTan * g0Tan
-                dvTan3 = self.m_inv[v1] * ldTan * g3Tan
+                dvTan3 = self.m_inv[v3] * ldTan * g3Tan
 
                 if mu * abs(Cv) > cTan:
                     mu = 1.0
@@ -1586,10 +1580,11 @@ class Solver:
                 vTan2 = self.v[v2] + self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
 
                 a, b = g1.norm(), g2.norm()
-                p = (a * vTan1 + b * vTan2) / (a + b)
+                ab = a + b
+                p = (a * vTan1 + b * vTan2) / ab
                 g0Tan = p - vTan0
-                g1Tan = -a * g0Tan
-                g2Tan = -b * g0Tan
+                g1Tan = -( a / ab) * g0Tan
+                g2Tan = -( b / ab) * g0Tan
                 cTan = 0.5 * (g0Tan.dot(g0Tan) + g1Tan.dot(g1Tan) + g2Tan.dot(g2Tan))
                 schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + 1e-4
                 ldTan = cTan / schur
@@ -1617,11 +1612,12 @@ class Solver:
                 vTan3 = self.v[v3] + self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
 
                 a, b = g2.norm(), g3.norm()
-                p = (a * vTan2 + b * vTan3) / (a + b)
+                ab = a + b
+                p = (a * vTan2 + b * vTan3) /ab
                 g0Tan = p - vTan0
-                g2Tan = -a * g0Tan
-                g3Tan = -b * g0Tan
-                cTan = 0.5 * (g0Tan.dot(g0Tan) + g2Tan.dot(g2Tan) + g2Tan.dot(g2Tan))
+                g2Tan = -(a/ab) * g0Tan
+                g3Tan = -(b/ab) * g0Tan
+                cTan = 0.5 * (g0Tan.dot(g0Tan) + g2Tan.dot(g2Tan) + g3Tan.dot(g3Tan))
                 schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                 ldTan = cTan / schur
                 dvTan0 = self.m_inv[v0] * ldTan * g0Tan
@@ -1649,10 +1645,11 @@ class Solver:
                 vTan3 = self.v[v3] + self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
 
                 a, b = g1.norm(), g3.norm()
-                p = (a * vTan1 + b * vTan3) / (a + b)
+                ab = a + b
+                p = (a * vTan1 + b * vTan3) / ab
                 g0Tan = p - vTan0
-                g1Tan = -a * g0Tan
-                g3Tan = -b * g0Tan
+                g1Tan = -( a/ab)* g0Tan
+                g3Tan = -( b/ab)* g0Tan
                 cTan = 0.5 * (g0Tan.dot(g0Tan) + g1Tan.dot(g1Tan) + g3Tan.dot(g3Tan))
                 schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                 ldTan = cTan / schur
@@ -1683,11 +1680,12 @@ class Solver:
                 vTan3 = self.v[v3] + self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
 
                 a, b, c = g1.norm(), g2.norm(), g3.norm()
-                p = (a * vTan1 + b * vTan2 + c * vTan3) / (a + b + c)
+                abc = a + b + c
+                p = (a * vTan1 + b * vTan2 + c * vTan3) / abc
                 g0Tan = p - vTan0
-                g1Tan = -a * g0Tan
-                g2Tan = -b * g0Tan
-                g3Tan = -c * g0Tan
+                g1Tan = - (a/abc) * g0Tan
+                g2Tan = - (b/abc) * g0Tan
+                g3Tan = - (c/abc) * g0Tan
                 cTan = 0.5 * (g0Tan.dot(g0Tan) + g1Tan.dot(g1Tan) + g2Tan.dot(g2Tan) + g3Tan.dot(g3Tan))
                 schur = self.m_inv[v0] * g0Tan.dot(g0Tan) + self.m_inv[v1] * g1Tan.dot(g1Tan) + self.m_inv[v2] * g2Tan.dot(g2Tan) + self.m_inv[v3] * g3Tan.dot(g3Tan) + 1e-4
                 ldTan = cTan / schur
@@ -1701,8 +1699,6 @@ class Solver:
                 self.dv[v1] += mu * dvTan1
                 self.dv[v2] += mu * dvTan2
                 self.dv[v3] += mu * dvTan3
-
-
 
     @ti.func
     def solve_collision_ee_static_x(self, eid_d, eid_s, dHat):
