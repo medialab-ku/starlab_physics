@@ -8,14 +8,19 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import matplotlib
 import matplotlib.pyplot as plt
+
+import os
+
 matplotlib.use('TkAgg')
 plt.rcParams['font.family'] = 'Times New Roman'
 
 import taichi as ti
 
+
 ti.init(arch=ti.gpu)
 
-screen_res = (550, 550)
+
+screen_res = (1600, 600)
 screen_to_world_ratio = 10.0
 boundary = (
     screen_res[0] / screen_to_world_ratio,
@@ -29,23 +34,31 @@ def round_up(f, s):
     return (math.floor(f * cell_recpr / s) + 1) * s
 
 
+
+num_particles_x = 160
+num_particles = num_particles_x * 120
+
+
+
 grid_size = (round_up(boundary[0], 1), round_up(boundary[1], 1))
 dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles_x = 90
-num_particles = num_particles_x * 90
+
+
 num_frames = 1000
 max_num_particles_per_cell = 100
 max_num_neighbors = 100
-time_delta = 1.0 / 60.0
+time_delta = 1.0 / 180.0
 epsilon = 1e-5
 particle_radius = 3.0
 particle_radius_in_world = particle_radius / screen_res[1]
 per_vertex_color = ti.Vector.field(3, ti.float32, shape=num_particles)
 indices = np.zeros(num_particles)
 # PBF params
+
+
 h_ = 1.1
 mass = 1.0
 rho0 = 1.0
@@ -57,8 +70,12 @@ corrK = 0.001
 # corrN = 4.0
 neighbor_radius = h_ * 1.05
 
+
+
 poly6_factor = 315.0 / 64.0 / math.pi
 spiky_grad_factor = -45.0 / math.pi
+
+
 
 b = ti.Vector.field(2, dtype=ti.f32, shape=1)
 b[0] = ti.math.vec2(1.0, 1.0)
@@ -76,6 +93,8 @@ position_deltas = ti.Vector.field(dim, float)
 # velocities_deltas = ti.Vector.field(dim, float)
 # 0: x-pos, 1: timestep in sin()
 board_states = ti.Vector.field(2, float)
+
+
 
 ti.root.dense(ti.i, num_particles).place(old_positions, positions, velocities, positions_render)
 grid_snode = ti.root.dense(ti.ij, grid_size)
@@ -149,8 +168,8 @@ def move_board():
     # probably more accurate to exert force on particles according to hooke's law.
     b = board_states[None]
     b[1] += 1.0
-    period = 45
-    vel_strength = 10.0
+    period = 200
+    vel_strength = 50.0
     if b[1] >= 2 * period:
         b[1] = 0
     b[0] += -ti.sin(b[1] * np.pi / period) * vel_strength * time_delta
@@ -258,6 +277,9 @@ def substep():
     for i in positions:
         velocities[i] = (positions[i] - old_positions[i]) / time_delta
 
+
+
+
     for p_i in positions:
         pos_i = positions[p_i]
         vel_i = velocities[p_i]
@@ -304,9 +326,130 @@ def substep():
         # vel_delta_i /= rho0
         position_deltas[p_i] = vel_delta_i
         # apply position deltas
+
     for i in positions:
         velocities[i] += position_deltas[i]
         positions[i] = old_positions[i] + velocities[i] * time_delta
+
+
+@ti.kernel
+def substep_pos():
+    # compute lambdas
+    # Eq (8) ~ (11)
+    for p_i in positions:
+        pos_i = positions[p_i]
+
+        grad_i = ti.Vector([0.0, 0.0])
+        sum_gradient_sqr = 0.0
+        density_constraint = 0.0
+
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+            pos_ji = pos_i - positions[p_j]
+            grad_j = spiky_gradient(pos_ji, h_)
+            grad_i += grad_j
+            sum_gradient_sqr += grad_j.dot(grad_j)
+            # Eq(2)
+            density_constraint += poly6_value(pos_ji.norm(), h_)
+
+        # Eq(1)
+        density_constraint = (mass * density_constraint / rho0) - 1.0
+        if density_constraint < 0:
+            density_constraint = 0.
+
+        sum_gradient_sqr += grad_i.dot(grad_i)
+        lambdas[p_i] = (-density_constraint) / (sum_gradient_sqr + lambda_epsilon)
+    # compute position deltas
+    # Eq(12), (14)
+    for p_i in positions:
+        pos_i = positions[p_i]
+        lambda_i = lambdas[p_i]
+
+        pos_delta_i = ti.Vector([0.0, 0.0])
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+            lambda_j = lambdas[p_j]
+            pos_ji = pos_i - positions[p_j]
+            scorr_ij = compute_scorr(pos_ji)
+            pos_delta_i += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
+
+        pos_delta_i /= rho0
+        position_deltas[p_i] = pos_delta_i
+    # apply position deltas
+    for i in positions:
+        positions[i] += position_deltas[i]
+
+    for i in positions:
+        pos = positions[i]
+        positions[i] = confine_position_to_boundary(pos)
+
+        # update velocities
+    for i in positions:
+        velocities[i] = (positions[i] - old_positions[i]) / time_delta
+
+
+
+###############################################
+    #
+    # for p_i in positions:
+    #     pos_i = positions[p_i]
+    #     vel_i = velocities[p_i]
+    #     grad_i = ti.Vector([0.0, 0.0])
+    #     sum_gradient_sqr = 0.0
+    #     velocity_constraint = 0.0
+    #
+    #     for j in range(particle_num_neighbors[p_i]):
+    #         p_j = particle_neighbors[p_i, j]
+    #         if p_j < 0:
+    #             break
+    #         pos_ji = pos_i - positions[p_j]
+    #         vel_ji = vel_i - velocities[p_j]
+    #         grad_j = spiky_gradient(pos_ji, h_)
+    #         grad_i += grad_j
+    #         sum_gradient_sqr += grad_j.dot(grad_j)
+    #         # Eq(2)
+    #         velocity_constraint += grad_j.dot(vel_ji)
+    #
+    #     # Eq(1)
+    #     velocity_constraint = (mass * velocity_constraint)
+    #
+    #     if velocity_constraint < 0:
+    #         velocity_constraint = 0.0
+    #
+    #     sum_gradient_sqr += grad_i.dot(grad_i)
+    #     lambdas[p_i] = (-velocity_constraint) / (sum_gradient_sqr + lambda_epsilon)
+    #     # compute position deltas
+    #     # Eq(12), (14)
+    # for p_i in positions:
+    #     pos_i = positions[p_i]
+    #     lambda_i = lambdas[p_i]
+    #
+    #     vel_delta_i = ti.Vector([0.0, 0.0])
+    #     for j in range(particle_num_neighbors[p_i]):
+    #         p_j = particle_neighbors[p_i, j]
+    #         if p_j < 0:
+    #             break
+    #         lambda_j = lambdas[p_j]
+    #         pos_ji = pos_i - positions[p_j]
+    #         scorr_ij = compute_scorr(pos_ji)
+    #         vel_delta_i += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
+    #
+    #     # vel_delta_i /= rho0
+    #     position_deltas[p_i] = vel_delta_i
+    #     # apply position deltas
+
+    # for i in positions:
+    #     velocities[i] += position_deltas[i]
+    #     positions[i] = old_positions[i] + velocities[i] * time_delta
+
+
+
+
+
 
 
 
@@ -355,9 +498,14 @@ def epilogue():
     # per_vertex_color.fill(ti.math.vec3(6, 133, 135))
 
 def run_pbf():
+    global vel_solve_flag
+
     prologue()
     for _ in range(pbf_num_iters):
-        substep()
+        if vel_solve_flag :
+            substep()
+        else :
+            substep_pos()
     epilogue()
 
 
@@ -404,10 +552,30 @@ def print_stats():
 #
 #     arr = velocities.to_numpy()
 
+img_export = False
+board_move_flag = False
+vel_solve_flag = False
+def show_options(gui):
+    global img_export
+    global board_move_flag
+    global vel_solve_flag
+
+    with gui.sub_window("Time Step", 0., 0., 0.3, 0.3) as w:
+        img_export = w.checkbox("export !!", img_export)
+        board_move_flag = w.checkbox("board_move_flag", board_move_flag)
+        vel_solve_flag = w.checkbox("velSolve!!!", vel_solve_flag)
+
 def main():
+
+    global img_export
+    global board_move_flag
+
+
+    frame = 0
     init_particles()
     print(f"boundary={boundary} grid={grid_size} cell_size={cell_size}")
     window = ti.ui.Window(name="PBF 2D(Velocity Adjustment)", res=screen_res)
+    gui = window.get_gui()
     canvas = window.get_canvas()
     canvas.set_background_color((0.066, 0.18, 0.25))
     # scene = ti.ui.Scene()
@@ -433,15 +601,30 @@ def main():
     # plt.ylabel('avg. density error')
     # plt.show()
 
+    directory = os.path.join("results/", "pbf2d_vel.py")
+    try:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    except OSError:
+        print("Error: Failed to create folder" + directory)
 
     while window.running:
-        move_board()
+
+        if board_move_flag :
+            move_board()
+
+
         run_pbf()
+
+
         arr = velocities.to_numpy()
         magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
         norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))
         heatmap_rgb = plt.cm.coolwarm(norm(magnitudes))[:, :3]  # Use plasma colormap for heatmap
         per_vertex_color.from_numpy(heatmap_rgb)
+
+        show_options(gui)
+
         # canvas.circles()
         canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color)
         # if i < 1000:
@@ -452,6 +635,13 @@ def main():
         # ti.tools.imwrite(arr, filename)
         # window.save_image(filename)
         window.show()
+
+
+        if img_export :
+            window.save_image("./results/pbf2d_vel.py/" + str(frame) + ".jpg")
+
+
+        frame = frame +1
 
         # else:
         #     # video_manager.make_video(gif=True, mp4=True)
