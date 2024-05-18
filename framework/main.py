@@ -2,9 +2,9 @@ import taichi as ti
 import json
 # from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
-from Scenes import cloth_slide as scene1
+# from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
-# from Scenes import cloth_stack as scene1
+from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
@@ -42,10 +42,11 @@ LOOKAt_ORIGIN = True
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
-n_substep = 20
+n_substep = 5
 frame_end = 100
 dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
+strain_limit_ui = sim.strain_limit[0]
 ang_vel_x_ui = sim.obs_ang_vel[0][0]
 ang_vel_y_ui = sim.obs_ang_vel[0][1]
 ang_vel_z_ui = sim.obs_ang_vel[0][2]
@@ -63,6 +64,7 @@ frame_cpu = 0
 def show_options():
     global n_substep
     global dt_ui
+    global strain_limit_ui
     global YM_ui
     global PR_ui
     global sim
@@ -76,6 +78,7 @@ def show_options():
     old_dt = dt_ui
     old_dHat = dHat_ui
     old_friction_coeff = dHat_ui
+    old_strain_limit = strain_limit_ui
     YM_old = YM_ui
     PR_old = PR_ui
 
@@ -86,8 +89,10 @@ def show_options():
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
+        strain_limit_ui = w.slider_float("strain limit", strain_limit_ui, 0.0, 1.0)
+        YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
         if sim.max_num_tetra_dynamic > 0:
-            YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
+            PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
             PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
         MODE_WIREFRAME = w.checkbox("wireframe", MODE_WIREFRAME)
@@ -102,13 +107,11 @@ def show_options():
 
         frame_str = "# frame: " + str(frame_cpu)
         verts_str = "# verts: " + str(sim.max_num_verts_dynamic)
+        edges_str = "# edges: " + str(sim.max_num_edges_dynamic)
 
         w.text(frame_str)
         w.text(verts_str)
-
-        if sim.num_springs[0] > 0:
-            edges_str = "# edges: " + str(sim.max_num_edges_dynamic)
-            w.text(edges_str)
+        w.text(edges_str)
 
         if sim.max_num_tetra_dynamic > 0:
             tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
@@ -138,6 +141,9 @@ def show_options():
 
     if not PR_old == PR_ui:
         sim.PR[0] = PR_ui
+
+    if not old_strain_limit == strain_limit_ui:
+        sim.strain_limit[0] = strain_limit_ui
 
     global ang_vel_x_ui
     global ang_vel_y_ui
