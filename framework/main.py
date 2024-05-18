@@ -1,10 +1,11 @@
 import taichi as ti
 import json
-# from Scenes import test_fem as scene1
+
+from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
 # from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
-from Scenes import cloth_stack as scene1
+# from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
@@ -44,7 +45,7 @@ LOOKAt_ORIGIN = True
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
-n_substep = 5
+n_substep = 25
 frame_end = 100
 dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
