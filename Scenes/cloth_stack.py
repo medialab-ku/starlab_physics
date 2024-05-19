@@ -7,7 +7,7 @@ ti.init(arch=ti.cuda, device_memory_GB=3, kernel_profiler=enable_profiler)
 
 meshes_dynamic = []
 mesh_dynamic_1 = Mesh("../models/OBJ/plane.obj", scale=5.0, trans=ti.math.vec3(0.0, 4.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-# mesh_dynamic_2 = Mesh("../models/OBJ/square_big.obj", scale=0.3, trans=ti.math.vec3(0.0, 5.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 40.0))
+mesh_dynamic_2 = Mesh("../models/OBJ/plane.obj", scale=5.0, trans=ti.math.vec3(0.0, 5.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 40.0))
 # mesh_dynamic_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.6, 0.0), rot=ti.math.vec3(0.0, 0.0, 60.0))
 
 

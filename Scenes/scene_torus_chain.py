@@ -17,11 +17,11 @@ meshes_dynamic = []
 
 tet_meshes_dynamic = []
 tet_mesh_dynamic_1 = TetMesh("../models/MESH/torus3k.1.node", scale=2.0, trans=ti.math.vec3(0.0, -3.0, 0.0), rot=ti.math.vec3(0,0,90), is_static=True) # 10k element
-tet_mesh_dynamic_2 = TetMesh("../models/MESH/torus3k.1.node", scale=2.0, trans=ti.math.vec3(0.0, -6.0, 0.0), rot=ti.math.vec3(0,0,0), is_static=True) # 10k element
-tet_mesh_dynamic_3 = TetMesh("../models/MESH/torus3k.1.node", scale=2.0, trans=ti.math.vec3(0.0, -9.0, 0.0), rot=ti.math.vec3(0,0,90), is_static=True) # 10k element
+# tet_mesh_dynamic_2 = TetMesh("../models/MESH/torus3k.1.node", scale=2.0, trans=ti.math.vec3(0.0, -6.0, 0.0), rot=ti.math.vec3(0,0,0), is_static=True) # 10k element
+# tet_mesh_dynamic_3 = TetMesh("../models/MESH/torus3k.1.node", scale=2.0, trans=ti.math.vec3(0.0, -9.0, 0.0), rot=ti.math.vec3(0,0,90), is_static=True) # 10k element
 tet_meshes_dynamic.append(tet_mesh_dynamic_1)
-tet_meshes_dynamic.append(tet_mesh_dynamic_2)
-tet_meshes_dynamic.append(tet_mesh_dynamic_3)
+# tet_meshes_dynamic.append(tet_mesh_dynamic_2)
+# tet_meshes_dynamic.append(tet_mesh_dynamic_3)
 
 
 meshes_static = []
