@@ -2,7 +2,7 @@ import random
 from framework.mesh import Mesh
 import taichi as ti
 
-ti.init(arch=ti.cuda, device_memory_GB=3,  kernel_profiler=False)
+ti.init(arch=ti.cuda, device_memory_GB=3,  kernel_profiler=True)
 
 meshes_dynamic = []
 mesh_dynamic_1 = Mesh("../models/OBJ/plane10K.obj", scale=1.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90.0, 0.0, 0.0))
