@@ -17,7 +17,7 @@ plt.rcParams['font.family'] = 'Times New Roman'
 import taichi as ti
 
 
-ti.init(arch=ti.gpu)
+ti.init(arch=ti.cuda)
 
 
 screen_res = (1600, 600)
@@ -36,13 +36,13 @@ def round_up(f, s):
 
 
 num_particles_x = 160
-num_particles = num_particles_x * 120
+num_particles = num_particles_x * 90
 
 
 
 grid_size = (round_up(boundary[0], 1), round_up(boundary[1], 1))
 dim = 2
-bg_color = 0x112F41
+bg_color = 0x000000
 particle_color = 0x068587
 boundary_color = 0xEBACA2
 
@@ -50,7 +50,7 @@ boundary_color = 0xEBACA2
 num_frames = 1000
 max_num_particles_per_cell = 100
 max_num_neighbors = 100
-time_delta = 1.0 / 180.0
+time_delta = 1.0 / 600.0
 epsilon = 1e-5
 particle_radius = 3.0
 particle_radius_in_world = particle_radius / screen_res[1]
@@ -89,10 +89,12 @@ particle_num_neighbors = ti.field(int)
 particle_neighbors = ti.field(int)
 lambdas = ti.field(float)
 density_error_frames = ti.field(float)
+density_error_avg = ti.field(dtype = ti.float32,shape=1)
 position_deltas = ti.Vector.field(dim, float)
 # velocities_deltas = ti.Vector.field(dim, float)
 # 0: x-pos, 1: timestep in sin()
 board_states = ti.Vector.field(2, float)
+board_vel_x = ti.field(float,shape = 1)
 
 
 
@@ -107,6 +109,17 @@ ti.root.dense(ti.i, num_particles).place(lambdas, position_deltas)
 ti.root.dense(ti.i, num_particles).place(density_error_frames)
 # ti.root.dense(ti.i, num_particles).place(lambdas, velocities_deltas)
 ti.root.place(board_states)
+
+
+board_render_pos = ti.Vector.field(2,dtype=ti.f32,shape=4)
+board_render_idx = ti.field(dtype=ti.i32,shape=6)
+
+board_render_idx[0] = 0
+board_render_idx[1] = 1
+board_render_idx[2] = 2
+board_render_idx[3] = 0
+board_render_idx[4] = 1
+board_render_idx[5] = 3
 
 
 @ti.func
@@ -151,16 +164,60 @@ def is_in_grid(c):
 
 
 @ti.func
-def confine_position_to_boundary(p):
+def confine_position_to_boundary(x):
     bmin = particle_radius_in_world
     bmax = ti.Vector([board_states[None][0], boundary[1]]) - particle_radius_in_world
-    for i in ti.static(range(dim)):
         # Use randomness to prevent particles from sticking into each other after clamping
-        if p[i] <= bmin:
-            p[i] = bmin + epsilon * ti.random()
-        elif bmax[i] <= p[i]:
-            p[i] = bmax[i] - epsilon * ti.random()
-    return p
+
+    for i in ti.static(range(dim)):
+        if x[i] <= bmin:
+            x[i] = bmin + epsilon * ti.random()
+        elif bmax[i] <= x[i]:
+            x[i] = bmax[i] - epsilon * ti.random()
+
+    return x
+
+@ti.func
+def confine_position_and_velocity_to_boundary(x,v):
+    bmin = particle_radius_in_world
+    bmax = ti.Vector([board_states[None][0], boundary[1]]) - particle_radius_in_world
+
+        # Use randomness to prevent particles from sticking into each other after clamping
+
+    vel_confined = -1
+
+    if x[0] <= bmin:
+        x[0] = bmin + epsilon * ti.random()
+
+        if v[0] < 0.0 :
+            v[0] = 0.0
+            vel_confined = 1
+
+    elif bmax[0] <= x[0] :
+        x[0] = bmax[0] -epsilon * ti.random()
+
+        if v[0] - board_vel_x[0] > 0.0 :
+            v[0] = board_vel_x[0]
+            vel_confined = 1
+
+    if x[1] <= bmin:
+        x[1] = bmin + epsilon * ti.random()
+
+        if v[1] < 0.0 :
+            v[1] = 0.0
+            vel_confined = 1
+
+
+    elif bmax[1] <= x[1] :
+        x[1] = bmax[1] - epsilon * ti.random()
+
+        if v[1] > 0.0 :
+            v[1] = 0.0
+            vel_confined = 1
+
+
+    return ti.Vector([x[0],x[1],v[0],v[1],vel_confined])
+
 
 
 @ti.kernel
@@ -168,12 +225,14 @@ def move_board():
     # probably more accurate to exert force on particles according to hooke's law.
     b = board_states[None]
     b[1] += 1.0
-    period = 200
-    vel_strength = 50.0
+    period = 400
+    vel_strength = 160.0
     if b[1] >= 2 * period:
         b[1] = 0
-    b[0] += -ti.sin(b[1] * np.pi / period) * vel_strength * time_delta
+    board_vel_x[0] = -ti.sin(b[1] * np.pi / period) * vel_strength  * 1/time_delta / 600
+    b[0] += board_vel_x[0] * time_delta
     board_states[None] = b
+
 
 
 @ti.kernel
@@ -187,7 +246,14 @@ def prologue():
         pos, vel = positions[i], velocities[i]
         vel += g * time_delta
         pos += vel * time_delta
+
         positions[i] = confine_position_to_boundary(pos)
+
+        # pos_and_vel = confine_position_and_velocity_to_boundary(pos,vel)
+        # positions[i][0] = pos_and_vel[0]
+        # positions[i][1] = pos_and_vel[1]
+        # velocities[i][0] = pos_and_vel[2]
+        # velocities[i][1] = pos_and_vel[3]
 
     # clear neighbor lookup table
     for I in ti.grouped(grid_num_particles):
@@ -261,7 +327,7 @@ def substep():
             lambda_j = lambdas[p_j]
             pos_ji = pos_i - positions[p_j]
             scorr_ij = compute_scorr(pos_ji)
-            pos_delta_i += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
+            pos_delta_i += (lambda_i + lambda_j + scorr_ij) * spiky_gradient(pos_ji, h_)
 
         pos_delta_i /= rho0
         position_deltas[p_i] = pos_delta_i
@@ -271,13 +337,20 @@ def substep():
 
     for i in positions:
         pos = positions[i]
-        positions[i] = confine_position_to_boundary(pos)
 
-        # update velocities
-    for i in positions:
+        positions[i] = confine_position_to_boundary(pos)
         velocities[i] = (positions[i] - old_positions[i]) / time_delta
 
 
+        # pos_and_vel = confine_position_and_velocity_to_boundary(pos,velocities[i])
+        #
+        # positions[i][0] = pos_and_vel[0]
+        # positions[i][1] = pos_and_vel[1]
+        # if pos_and_vel[4] > 0 :
+        #     velocities[i][0] = pos_and_vel[2]
+        #     velocities[i][1] = pos_and_vel[3]
+        # else :
+        #     velocities[i] = (positions[i] - old_positions[i]) / time_delta
 
 
     for p_i in positions:
@@ -375,7 +448,7 @@ def substep_pos():
             lambda_j = lambdas[p_j]
             pos_ji = pos_i - positions[p_j]
             scorr_ij = compute_scorr(pos_ji)
-            pos_delta_i += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
+            pos_delta_i += (lambda_i + lambda_j + scorr_ij) * spiky_gradient(pos_ji, h_)
 
         pos_delta_i /= rho0
         position_deltas[p_i] = pos_delta_i
@@ -385,11 +458,25 @@ def substep_pos():
 
     for i in positions:
         pos = positions[i]
-        positions[i] = confine_position_to_boundary(pos)
 
-        # update velocities
-    for i in positions:
+
+        positions[i] = confine_position_to_boundary(pos)
         velocities[i] = (positions[i] - old_positions[i]) / time_delta
+
+        #
+        # pos_and_vel = confine_position_and_velocity_to_boundary(pos,velocities[i])
+        #
+        # positions[i][0] = pos_and_vel[0]
+        # positions[i][1] = pos_and_vel[1]
+        # if pos_and_vel[4]>0 :
+        #     velocities[i][0] = pos_and_vel[2]
+        #     velocities[i][1] = pos_and_vel[3]
+        # else :
+        #     velocities[i] = (positions[i] - old_positions[i]) / time_delta
+
+    #     # update velocities
+    # for i in positions:
+    #     velocities[i] = (positions[i] - old_positions[i]) / time_delta
 
 
 
@@ -459,26 +546,28 @@ def epilogue():
         positions_render[i].x = positions[i].x * (screen_to_world_ratio / screen_res[0])
         positions_render[i].y = positions[i].y * (screen_to_world_ratio / screen_res[1])
 
-    # for p_i in positions:
-    #     pos_i = positions[p_i]
-    #
-    #     grad_i = ti.Vector([0.0, 0.0])
-    #     sum_gradient_sqr = 0.0
-    #     density_constraint = 0.0
-    #
-    #     for j in range(particle_num_neighbors[p_i]):
-    #         p_j = particle_neighbors[p_i, j]
-    #         if p_j < 0:
-    #             break
-    #         pos_ji = pos_i - positions[p_j]
-    #         grad_j = spiky_gradient(pos_ji, h_)
-    #         grad_i += grad_j
-    #         sum_gradient_sqr += grad_j.dot(grad_j)
-    #         # Eq(2)
-    #         density_constraint += poly6_value(pos_ji.norm(), h_)
-    #
-    #     # Eq(1)
-    #     density_error_frames[p_i] = (mass * density_constraint / rho0) - 1
+
+    for p_i in positions:
+        pos_i = positions[p_i]
+
+        grad_i = ti.Vector([0.0, 0.0])
+        sum_gradient_sqr = 0.0
+        density_constraint = 0.0
+
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+            pos_ji = pos_i - positions[p_j]
+            grad_j = spiky_gradient(pos_ji, h_)
+            grad_i += grad_j
+            sum_gradient_sqr += grad_j.dot(grad_j)
+            # Eq(2)
+            density_constraint += poly6_value(pos_ji.norm(), h_)
+
+        # Eq(1)
+        density_error_frames[p_i] = (mass * density_constraint / rho0) - 1
+
     # no vorticity/xsph because we cannot do cross product in 2D...
 
     # for i in velocities:
@@ -533,7 +622,7 @@ def init_particles():
         offs = ti.Vector([(boundary[0] - delta * num_particles_x) * 0.5, boundary[1] * 0.02])
         positions[i] = ti.Vector([i % num_particles_x, i // num_particles_x]) * delta + offs
         for c in ti.static(range(dim)):
-            velocities[i][c] = (ti.random() - 0.5) * 4
+            velocities[i][c] = 0
     board_states[None] = ti.Vector([boundary[0] - epsilon, -0.0])
 
 
@@ -552,32 +641,69 @@ def print_stats():
 #
 #     arr = velocities.to_numpy()
 
-img_export = False
+img_export = True
 board_move_flag = False
 vel_solve_flag = False
+magnitude_vis = False
+config_export = False
+run_sim = True
+
 def show_options(gui):
     global img_export
     global board_move_flag
     global vel_solve_flag
+    global magnitude_vis
+    global config_export
+    global run_sim
 
+    old_board_move_flag = board_move_flag
     with gui.sub_window("Time Step", 0., 0., 0.3, 0.3) as w:
         img_export = w.checkbox("export !!", img_export)
         board_move_flag = w.checkbox("board_move_flag", board_move_flag)
         vel_solve_flag = w.checkbox("velSolve!!!", vel_solve_flag)
+        magnitude_vis = w.checkbox("magnitude", magnitude_vis)
+
+        config_export = w.checkbox("pos, vel export", config_export)
+        run_sim = w.checkbox("run_sim", run_sim)
+
+    if not (board_move_flag or board_move_flag == old_board_move_flag) :
+        board_vel_x[0] = 0.0
+
+    if config_export :
+        config_export = not config_export
+        pos_np = positions.to_numpy()
+        np.save("./config_pdf2d_vel/pos",pos_np)
+        vel_np = velocities.to_numpy()
+        np.save("./config_pdf2d_vel/vel",vel_np)
+
+def init_from_np() :
+    pos_np = np.load("./config_pdf2d_vel/pos.npy")
+    vel_np = np.load("./config_pdf2d_vel/vel.npy")
+    positions.from_numpy(pos_np)
+    velocities.from_numpy(vel_np)
+
+@ti.kernel
+def get_density_error() :
+    for i in density_error_frames :
+        density_error_avg[0] += density_error_frames[i]/num_particles
 
 def main():
 
     global img_export
+    global magnitude_vis
+    global run_sim
     global board_move_flag
+    global vel_solve_flag
 
 
     frame = 0
     init_particles()
+    init_from_np()
     print(f"boundary={boundary} grid={grid_size} cell_size={cell_size}")
     window = ti.ui.Window(name="PBF 2D(Velocity Adjustment)", res=screen_res)
     gui = window.get_gui()
     canvas = window.get_canvas()
-    canvas.set_background_color((0.066, 0.18, 0.25))
+    canvas.set_background_color((0.3, 0.3, 0.3))
     # scene = ti.ui.Scene()
     # camera = ti.ui.Camera()
     # camera.position()
@@ -610,23 +736,57 @@ def main():
 
     while window.running:
 
+
+        # if frame == 240:
+        #     board_move_flag = True
+        # if frame == 240 + 240:
+        #     magnitude_vis = True
+        # if frame > 240 and (frame - 240) % 800 == 0 and  ((frame - 240)//800)%2 ==0 :
+        #     vel_solve_flag = False
+        # if frame > 240 and (frame - 240) % 800 == 0 and  ((frame - 240)//800)%2 ==1 :
+        #     vel_solve_flag = True
+
+
+
+        if frame == 480:
+            board_move_flag = True
+
+        if frame == 480 + 800 * 2:
+            magnitude_vis = True
+
+        if frame == 480 + 800 * 4:
+            board_move_flag = False
+
+
+
         if board_move_flag :
             move_board()
 
+        if run_sim:
+            run_pbf()
 
-        run_pbf()
-
-
-        arr = velocities.to_numpy()
-        magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
-        norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))
-        heatmap_rgb = plt.cm.coolwarm(norm(magnitudes))[:, :3]  # Use plasma colormap for heatmap
-        per_vertex_color.from_numpy(heatmap_rgb)
-
-        show_options(gui)
+        # show_options(gui)
 
         # canvas.circles()
-        canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color)
+        if magnitude_vis :
+            arr = velocities.to_numpy()
+            magnitudes = np.linalg.norm(arr, axis=1)  # Compute magnitudes of vectors
+            norm = Normalize(vmin=np.min(magnitudes), vmax=np.max(magnitudes))
+            heatmap_rgb = plt.cm.coolwarm(norm(magnitudes))[:, :3]  # Use plasma colormap for heatmap
+            per_vertex_color.from_numpy(heatmap_rgb)
+            canvas.circles(centers=positions_render, radius=particle_radius_in_world, per_vertex_color=per_vertex_color )
+        else :
+            canvas.circles(centers=positions_render, radius=particle_radius_in_world, color = (.0,.0,1.0))
+
+
+        board_render_pos[0] = ti.Vector([(board_states[None][0])/160,0])
+        board_render_pos[1] = ti.Vector([(board_states[None][0]+400)/160,1])
+        board_render_pos[2] = ti.Vector([(board_states[None][0]+400)/160,0])
+        board_render_pos[3] = ti.Vector([(board_states[None][0])/160,1])
+
+        # print(board_states[None][0])
+        canvas.triangles(vertices=board_render_pos,indices=board_render_idx,color = (0.1,0.1,0.1))
+
         # if i < 1000:
         # filename = f'results/frame_{i:05d}.png'  # create filename with suffix png
         # print(f'Frame {i} is recorded in {filename}')
@@ -634,12 +794,18 @@ def main():
         # # video_manager.write_frame(arr)
         # ti.tools.imwrite(arr, filename)
         # window.save_image(filename)
+
+        if img_export and frame % 10 == 0 :
+            real_frame = frame//10
+            # window.save_image("./results/pbf2d_vel.py/" + str(real_frame) + ".jpg")
+
+            density_error_avg[0] = 0
+            get_density_error()
+            d_err = round(density_error_avg[0],5)
+            d_err = d_err if d_err> 0.0 else 0.0
+            print(real_frame, " | ", d_err)
+
         window.show()
-
-
-        if img_export :
-            window.save_image("./results/pbf2d_vel.py/" + str(frame) + ".jpg")
-
 
         frame = frame +1
 
