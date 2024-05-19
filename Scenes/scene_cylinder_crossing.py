@@ -3,6 +3,7 @@ from framework.mesh import Mesh
 import taichi as ti
 from framework.TetMesh import TetMesh
 
+enable_profiler = False
 ti.init(arch=ti.cuda, device_memory_GB=3)
 
 gravity = ti.math.vec3(0.0, 0.0, 0.0)
@@ -15,8 +16,8 @@ meshes_dynamic = []
 
 tet_meshes_dynamic = []
 
-tet_mesh_dynamic_cylinder1 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=1, trans=ti.math.vec3(0.0, 1, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-tet_mesh_dynamic_cylinder2 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=1, trans=ti.math.vec3(0.0, -1, 0.0), rot=ti.math.vec3(0.0, 0.0, 90.0))
+tet_mesh_dynamic_cylinder1 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=20, trans=ti.math.vec3(0.0, 3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+tet_mesh_dynamic_cylinder2 = TetMesh("../models/MESH/long_cylinder4k.1.node", scale=20, trans=ti.math.vec3(0.0, -3, 0.0), rot=ti.math.vec3(0.0, 0.0, 90.0))
 tet_meshes_dynamic.append(tet_mesh_dynamic_cylinder1)
 tet_meshes_dynamic.append(tet_mesh_dynamic_cylinder2)
 
@@ -28,10 +29,10 @@ tet_meshes_dynamic.append(tet_mesh_dynamic_cylinder2)
 
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=2.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_static_2 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_static_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 15.0, 0.0), is_static=True)
-mesh_static_4 = Mesh("../models/OBJ/tet.obj", scale=0.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+# mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=2.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+# mesh_static_2 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+# mesh_static_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 15.0, 0.0), is_static=True)
+# mesh_static_4 = Mesh("../models/OBJ/tet.obj", scale=0.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 
 # meshes_static.append(mesh_static_1)
 # meshes_static.append(mesh_static_3)

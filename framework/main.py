@@ -1,12 +1,12 @@
 import taichi as ti
 import json
 
-from Scenes import test_fem as scene1
+# from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
 # from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
-from Scenes import cloth_stack as scene1
-# from Scenes import scene_cylinder_crossing as scene1
+# from Scenes import cloth_stack as scene1
+from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
 # from Scenes import scene_cube_stretch as scene1
@@ -17,7 +17,7 @@ import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=1e6, PR=0.45, particle_radius=0.02, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, 0.0, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=1e6, PR=0.45, particle_radius=0.02, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -281,10 +281,6 @@ while window.running:
             else:
                 print("velocity update off")
 
-
-        if window.event.key == 'g':
-            sim.random_noise()
-
         if window.event.key == 'z':
             sim.enable_collision_handling = not sim.enable_collision_handling
             if sim.enable_collision_handling is True:
@@ -359,6 +355,6 @@ while window.running:
 
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
-    camera.track_user_inputs(window, movement_speed=0.15, hold_key=ti.ui.RMB)
+    camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
