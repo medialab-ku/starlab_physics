@@ -54,6 +54,8 @@ class Solver:
         self.aabb_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         self.grid_edge_indices = ti.field(dtype=ti.u32, shape=12 * 2)
 
+        self.grid_max = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
+        self.grid_min = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
         self.padding = 0.2
         self.init_grid()
 
@@ -61,6 +63,7 @@ class Solver:
         self.cell_size = 3 * self.kernel_radius
         self.grid_origin = -self.grid_size
         self.grid_num = np.ceil(2 * self.grid_size / self.cell_size).astype(int)
+        self.grid_num_dynamic = ti.Vector.field(n=3, dtype=ti.i32, shape=1)
         # print(self.grid_num)
 
         self.enable_velocity_update = False
@@ -191,6 +194,18 @@ class Solver:
         self.edge_indices_dynamic = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_dynamic)
         self.tetra_indices_dynamic = ti.field(dtype=ti.i32, shape=4 * self.max_num_tetra_dynamic)
 
+        self.aabb_face = ti.Vector.field(n=3, dtype=ti.f32,  shape=(self.max_num_faces_dynamic, 2))
+        self.aabb_edge = ti.Vector.field(n=3, dtype=ti.f32,  shape=(self.max_num_faces_dynamic, 2))
+
+        self.dynamic_cell_size = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
+        self.dynamic_cell_num  = ti.Vector.field(n=3, dtype=ti.i32, shape=1)
+        self.max_num_grid_size = 40 * 40 * 40
+        self.cell_cache_size = 40
+        self.object_ids_in_cell = ti.field(dtype=ti.i32, shape=(self.max_num_grid_size, self.cell_cache_size, 3))
+        self.num_object_ids_in_cell = ti.field(dtype=ti.i32, shape=(self.max_num_grid_size))
+        self.num_grid_size = ti.field(dtype=ti.i32, shape=1)
+        self.num_grid_size[0] = 0
+
         self.fixed.fill(1)
 
         self.vt_static_pair_cache_size = 40
@@ -229,9 +244,6 @@ class Solver:
         # self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
 
         self.cache_size = 10
-        self.cell_particle_ids = ti.field(dtype=ti.uint32, shape=(self.num_cells, self.cache_size))
-        self.cell_num_particles = ti.field(dtype=ti.uint32, shape=self.num_cells)
-
         self.max_num_verts_static = 0
         self.max_num_edges_static = 0
         self.max_num_faces_static = 0
@@ -285,6 +297,8 @@ class Solver:
 
         self.init_mesh_aggregation()
         self.init_particle_aggregation()
+
+
         self.grid_particles_num = ti.field(int, shape=self.num_cells)
         self.grid_particles_num_temp = ti.field(int, shape= self.num_cells)
         self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
@@ -321,7 +335,7 @@ class Solver:
         self.action_anim = ti.Vector.field(6, dtype=ti.f32, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
         self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
 
-        self.broad_phase_static()
+        # self.broad_phase_static()
         self.test_var = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
     
         self.test()
@@ -350,6 +364,9 @@ class Solver:
         # print(aabb_min)
         # print(aabb_max)
 
+        self.grid_max[0] = aabb_max
+        self.grid_min[0] = aabb_min
+
         self.aabb_vertices[0] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
         self.aabb_vertices[1] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
         self.aabb_vertices[2] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
@@ -359,6 +376,31 @@ class Solver:
         self.aabb_vertices[5] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
         self.aabb_vertices[6] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
         self.aabb_vertices[7] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
+
+    @ti.kernel
+    def determine_cell_size_and_num(self):
+
+        #0: min
+        #1: max
+
+        self.dynamic_cell_size[0] = ti.math.vec3(0.0)
+        r_padding = self.padding * ti.math.vec3(1.0)
+        for fi in range(self.max_num_faces_dynamic):
+            v0, v1, v2 = self.face_indices_dynamic[3 * fi + 0], self.face_indices_dynamic[3 * fi + 1], self.face_indices_dynamic[3 * fi + 2]
+            x0, x1, x2 = self.x[v0], self.x[v1], self.x[v2]
+
+            self.aabb_face[fi, 0] = ti.min(x0, x1, x2)
+            self.aabb_face[fi, 1] = ti.max(x0, x1, x2)
+            r = (self.aabb_face[fi, 1] - self.aabb_face[fi, 0]) + r_padding
+            ti.atomic_max(self.dynamic_cell_size[0], r)
+
+        # a = ti.floor((self.grid_max[0][0] - self.grid_min[0][0]) /self.dynamic_cell_size[0][0])
+        # print(a)
+        for i in range(3):
+            self.dynamic_cell_num[0][i] = ti.floor((self.grid_max[0][i] - self.grid_min[0][i]) /self.dynamic_cell_size[0][i], dtype=ti.int32)
+
+        self.num_grid_size[0] = self.dynamic_cell_num[0][0] * self.dynamic_cell_num[0][1] * self.dynamic_cell_num[0][2]
+        # print(self.num_grid_size[0])
 
     @ti.kernel
     def __init_animation_pos(self, is_selected: ti.template()):
@@ -814,18 +856,12 @@ class Solver:
 
     @ti.func
     def flatten_cell_id(self, cell_id):
-        return cell_id[0] * self.grid_num[1] * self.grid_num[2] + cell_id[1] * self.grid_num[2] + cell_id[2]
+        return cell_id[0] * self.num_grid_size[0][1] * self.num_grid_size[0][2] + cell_id[1] * self.num_grid_size[0][2] + cell_id[2]
 
     @ti.func
     def pos_to_index(self, pos):
-        idx = ((pos - self.grid_origin) / self.cell_size).cast(int)
+        idx = ((pos - self.grid_min) / self.dynamic_cell_size).cast(int)
 
-        for i in ti.static(range(3)):
-            if idx[i] < 0:
-                idx[i] = 0
-
-            if idx[i] > self.grid_num[i] - 1:
-                idx[i] = self.grid_num[i] - 1
         return idx
 
     @ti.func
@@ -848,18 +884,16 @@ class Solver:
         self.prefix_sum_executor_static.run(self.grid_particles_num_static)
         self.counting_sort_static()
 
-    @ti.kernel
-    def search_neighbours(self):
-
-        for ci in range(self.num_cells):
-            self.cell_num_particles[ci] = 0
-
-        for vi in range(self.max_num_verts_dynamic):
-            grid_index = self.get_flatten_grid_index(self.x[vi])
-            if self.cell_num_particles[grid_index] < self.cache_size:
-                self.cell_particle_ids[grid_index, self.cell_num_particles[grid_index]] = vi
-                ti.atomic_add(self.cell_num_particles[grid_index], 1)
-
+    # @ti.kernel
+    # def search_neighbours(self):
+    #
+    #     for fid in range(self.max_num_faces_dynamic):
+    #         v0, v1, v2 = self.face_indices_dynamic[3 * fid + 0], self.face_indices_dynamic[3 * fid + 1], self.face_indices_dynamic[3 * fid + 2]
+    #         x0, x1, x2 = self.x[v0], self.x[v1], self.x[v2]
+    #
+    #         center = (x0 + x1 + x2) / 3.0
+    #         flattened_cell_id = self.flatten_cell_id(center)
+    #         self.object_ids_in_cell[flattened_cell_id, self.num_object_ids_in_cell[flattened_cell_id], 0] = fid
 
     @ti.kernel
     def update_grid_id(self):
@@ -874,18 +908,6 @@ class Solver:
             grid_index = self.get_flatten_grid_index(self.x[vi])
             self.grid_ids[vi] = grid_index
             ti.atomic_add(self.grid_particles_num[grid_index], 1)
-            #
-            # else:
-            #     ei = i - self.max_num_verts_dynamic
-            #
-            #     v0, v1 = self.edge_indices_dynamic[2 * ei + 0], self.edge_indices_dynamic[2 * ei + 1]
-            #     x0, x1 = self.x[v0], self.x[v1]
-            #
-            #     center = 0.5 * (x0 + x1)
-            #
-            #     grid_index = self.get_flatten_grid_index(center)
-            #     self.grid_ids[ei + self.max_num_edges_dynamic] = grid_index
-            #     ti.atomic_add(self.grid_particles_num[grid_index], 1)
 
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num_temp[I] = self.grid_particles_num[I]
@@ -2586,6 +2608,16 @@ class Solver:
                 self.solve_collision_vt_static_x(vi_d, fi_s, d)
 
         for fi_d in range(self.max_num_faces_dynamic):
+            # v1 = self.face_indices_dynamic[3 * fi_d + 0]
+            # v2 = self.face_indices_dynamic[3 * fi_d + 1]
+            # v3 = self.face_indices_dynamic[3 * fi_d + 2]
+            # x1 = self.y[v1]
+            # x2 = self.y[v2]
+            # x3 = self.y[v3]
+            #
+            # center = (x1 + x2 + x3) / 3.0
+            # cell_id3d = self.pos_to_index(center)
+            # cell_id1d = self.flatten_cell_id(cell_id3d)
             for vi_s in range(self.max_num_verts_static):
                 self.solve_collision_tv_static_x(fi_d, vi_s, d)
 
@@ -2603,10 +2635,10 @@ class Solver:
                 if self.share_vertex(ei_d, ej_d) != True and ei_d != ej_d:
                     self.solve_collision_ee_dynamic_x(ei_d, ej_d, d)
 
-        #
-        # for ei_d in range(self.max_num_edges_dynamic):
-        #     for ei_s in range(self.max_num_edges_static):
-        #         self.solve_collision_ee_static_x(ei_d, ei_s, d)
+
+        for ei_d in range(self.max_num_edges_dynamic):
+            for ei_s in range(self.max_num_edges_static):
+                self.solve_collision_ee_static_x(ei_d, ei_s, d)
 
         # # #
         # for i in range(self.max_num_edges_dynamic * self.max_num_edges_static):
@@ -2893,12 +2925,12 @@ class Solver:
 
         self.init_variables()
         
-        self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
+        # self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
 
         if self.enable_collision_handling:
             self.solve_collision_constraints_x()
 
-        # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
+        self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
         # self.solve_pressure_constraints_x()
 
@@ -3004,10 +3036,11 @@ class Solver:
 
 
         # self.broad_phase()
-        # self.search_neighbours()
         for _ in range(n_substeps):
             self.compute_y()
-            self.compute_aabb()
+            # self.compute_aabb()
+            # self.determine_cell_size_and_num()
+            # self.search_neighbours()
             # GUI static mesh animation
 
             # if self.enable_move_obstacle:
