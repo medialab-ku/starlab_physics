@@ -82,7 +82,7 @@ class Solver:
         self.manual_ang_vels.fill(0.0)
 
         self.manual_ang_vels[0] = ti.Vector([70.0, 0.0, 0.0])
-        self.manual_ang_vels[1] = ti.Vector([-30.0, 0.0, 0.0])
+        self.manual_ang_vels[1] = ti.Vector([-70.0, 0.0, 0.0])
         self.manual_ang_vels[2] = ti.Vector([0, -5.0, 0.0])
         self.manual_ang_vels[3] = ti.Vector([0.0, 1.0, 0.0])
 
@@ -3103,19 +3103,19 @@ class Solver:
             # if self.enable_move_obstacle:
             #     self.move_static_object()
 
-            #manually set static mesh animation.
+            # manually set static mesh animation.
             # self.manual_ang_vels and self.manual_lin_vels
-            # if self.enable_move_obstacle:
-            #     for sid in range(len(self.meshes_static)):
-            #         n_vert = 0
-            #         if sid == len(self.meshes_static) - 1:
-            #             n_vert = self.max_num_verts_static - self.offset_verts_static[sid]
-            #         else:
-            #             n_vert = self.offset_verts_static[sid + 1] - self.offset_verts_static[sid]
-            #         self.move_each_static_object(self.offset_verts_static[sid], n_vert, sid)
-            #
-            # else:
-            #     self.v_static.fill(0.0)
+            if self.enable_move_obstacle:
+                for sid in range(len(self.meshes_static)):
+                    n_vert = 0
+                    if sid == len(self.meshes_static) - 1:
+                        n_vert = self.max_num_verts_static - self.offset_verts_static[sid]
+                    else:
+                        n_vert = self.offset_verts_static[sid + 1] - self.offset_verts_static[sid]
+                    self.move_each_static_object(self.offset_verts_static[sid], n_vert, sid)
+
+            else:
+                self.v_static.fill(0.0)
 
             self.solve_constraints_x()
 
