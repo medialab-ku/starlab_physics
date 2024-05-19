@@ -60,8 +60,6 @@ class TetMesh:
         # self.compute_Dm_inv()
         self.tet_mesh.verts.x0.copy_from(self.tet_mesh.verts.x)
 
-        print("asdf")
-        print(self.tet_mesh.verts.x0)
 
 
         # self.fid_np = self.face_indices.to_numpy()
