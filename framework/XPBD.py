@@ -51,9 +51,10 @@ class Solver:
         self.friction_coeff = ti.field(dtype=ti.f32, shape=1)
         self.friction_coeff[0] = 0.1
         self.grid_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
+        self.aabb_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         self.grid_edge_indices = ti.field(dtype=ti.u32, shape=12 * 2)
 
-        self.padding = 0.9
+        self.padding = 0.2
         self.init_grid()
 
         self.kernel_radius = 4 * particle_radius
@@ -82,7 +83,6 @@ class Solver:
         self.manual_ang_vels[1] = ti.Vector([-30.0, 0.0, 0.0])
         self.manual_ang_vels[2] = ti.Vector([0, -5.0, 0.0])
         self.manual_ang_vels[3] = ti.Vector([0.0, 1.0, 0.0])
-
 
         self.max_num_verts_dynamic = 0
         self.max_num_edges_dynamic = 0
@@ -322,6 +322,43 @@ class Solver:
         self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
 
         self.broad_phase_static()
+        self.test_var = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
+    
+        self.test()
+
+    @ti.kernel
+    def test(self):
+
+        for i in range(self.max_num_verts_dynamic):
+            self.test_var[i] = ti.math.vec3(i, self.max_num_verts_dynamic - i, 0)
+
+        max = ti.math.vec3(0.0)
+        for i in range(self.max_num_verts_dynamic):
+            ti.atomic_max(max, self.test_var[i])
+
+        print(max[0], max[1], max[2])
+        
+    @ti.kernel
+    def compute_aabb(self):
+        aabb_min = ti.math.vec3(0.0)
+        aabb_max = ti.math.vec3(0.0)
+
+        for i in range(self.max_num_verts_dynamic):
+            temp = self.y[i]
+            ti.atomic_max(aabb_max, temp)
+            ti.atomic_min(aabb_min, temp)
+        # print(aabb_min)
+        # print(aabb_max)
+
+        self.aabb_vertices[0] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
+        self.aabb_vertices[1] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
+        self.aabb_vertices[2] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
+        self.aabb_vertices[3] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
+
+        self.aabb_vertices[4] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
+        self.aabb_vertices[5] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
+        self.aabb_vertices[6] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
+        self.aabb_vertices[7] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
 
     @ti.kernel
     def __init_animation_pos(self, is_selected: ti.template()):
@@ -2856,12 +2893,12 @@ class Solver:
 
         self.init_variables()
         
-        # self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
+        self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
 
         if self.enable_collision_handling:
             self.solve_collision_constraints_x()
 
-        self.solve_fem_constraints_x(self.YM[0], self.PR[0])
+        # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
         # self.solve_pressure_constraints_x()
 
@@ -2964,11 +3001,13 @@ class Solver:
 
         if self.enable_profiler:
             ti.profiler.clear_kernel_profiler_info()
+
+
         # self.broad_phase()
         # self.search_neighbours()
         for _ in range(n_substeps):
             self.compute_y()
-
+            self.compute_aabb()
             # GUI static mesh animation
 
             # if self.enable_move_obstacle:
@@ -3048,4 +3087,11 @@ class Solver:
         # print(self.frame[0])
 
 
+    @ti.kernel
+    def random_noise(self):
+        scale = 2.0
+        for vi in range(self.max_num_verts_dynamic):
+            v = ti.math.vec3(ti.random(dtype=float), ti.random(dtype=float), ti.random(dtype=float))
+            # v.normalized()
+            self.x[vi] += scale * v * self.dt[0]
 

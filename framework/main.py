@@ -1,11 +1,11 @@
 import taichi as ti
 import json
 
-from Scenes import test_fem as scene1
+# from Scenes import test_fem as scene1
 # from Scenes import cloth_swing as scene1
 # from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
-# from Scenes import cloth_stack as scene1
+from Scenes import cloth_stack as scene1
 # from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
@@ -282,6 +282,9 @@ while window.running:
                 print("velocity update off")
 
 
+        if window.event.key == 'g':
+            sim.random_noise()
+
         if window.event.key == 'z':
             sim.enable_collision_handling = not sim.enable_collision_handling
             if sim.enable_collision_handling is True:
@@ -346,7 +349,8 @@ while window.running:
         for sid in range(len(scene1.meshes_static)):
             sim.meshes_static[sid].export(os.path.basename(scene1.__file__), sid, frame_cpu, is_static=True)
 
-    scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
+    # scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
+    scene.lines(sim.aabb_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     scene.mesh(sim.x_static,  indices=sim.face_indices_static, color=(0, 0, 0), show_wireframe=True)
     scene.mesh(sim.x,  indices=sim.face_indices_dynamic, color=(0, 0, 0), show_wireframe=True)
 
