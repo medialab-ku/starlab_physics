@@ -844,6 +844,20 @@ class Solver:
         self.init_particle_aggregation()
         self._reset_animation()
 
+        self.init_vel()
+    @ti.kernel
+    def init_vel(self):
+        for i in range(self.max_num_verts_dynamic):
+
+            scale = 1.5
+            w = ti.math.vec3(0, 0, 1)
+            if self.x[i][0] < 0.0:
+                self.v[i][0] = scale
+
+            elif self.x[i][0] > 0.0:
+                self.v[i][0] = -scale
+
+            self.v[i] += self.x[i].cross(w)
 
     @ti.kernel
     def compute_y(self):
@@ -2726,12 +2740,12 @@ class Solver:
             U, sig, V = ti.svd(F)
             R = U @ V.transpose()
 
-            if U.determinant() < 0:
-                for i in ti.static(range(3)): U[i, 2] *= -1
-                sig[2, 2] = -sig[2, 2]
-            if V.determinant() < 0:
-                for i in ti.static(range(3)): V[i, 2] *= -1
-                sig[2, 2] = -sig[2, 2]
+            # if U.determinant() < 0:
+            #     for i in ti.static(range(3)): U[i, 2] *= -1
+            #     sig[2, 2] = -sig[2, 2]
+            # if V.determinant() < 0:
+            #     for i in ti.static(range(3)): V[i, 2] *= -1
+            #     sig[2, 2] = -sig[2, 2]
 
             H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
 
@@ -2746,7 +2760,9 @@ class Solver:
             schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
                      self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
                      self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
-                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + alpha)
+                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-3)
+
+
 
             ld = -C / schur
 
@@ -2762,11 +2778,11 @@ class Solver:
 
 
             J = sig[0, 0] * sig[1, 1] * sig[2, 2]
-            # J = F.trace()
+            J = F.trace()
             if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
                 ti.atomic_add(self.num_inverted_elements[0], 1)
 
-            gamma = 1.0
+            gamma = 3.
             C_vol = 0.5 * la * self.V0[tid] * (J - gamma) * (J - gamma)
             H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
 
@@ -2854,11 +2870,11 @@ class Solver:
                 self.nc[v3] += 1
 
             J = sig[0, 0] * sig[1, 1] * sig[2, 2]
-            # J = F.trace()
-            if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
-                ti.atomic_add(self.num_inverted_elements[0], 1)
+            J = F.trace()
+            # if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
+            #     ti.atomic_add(self.num_inverted_elements[0], 1)
 
-            gamma = 1.0
+            gamma = 3.0
             H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
 
             nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
@@ -2875,10 +2891,10 @@ class Solver:
 
             if Cv > 0:
                 ld_vol = -Cv / schur_vol
-                self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
-                self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
-                self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
-                self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
+                self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
+                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
+                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
+                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
 
                 self.nc[v0] += 1
                 self.nc[v1] += 1

@@ -13,11 +13,12 @@ import json
 # from Scenes import scene_fluid_compression as scene1
 # from Scenes import moving_obstacle as scene1r
 from Scenes import scene_torus_chain as scene1
+from Scenes import test_damping as scene1
 import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, particle_radius=0.02, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, 0.0, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, particle_radius=0.02, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
