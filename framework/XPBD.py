@@ -49,7 +49,7 @@ class Solver:
         self.grid_size = grid_size
         self.particle_radius = particle_radius
         self.friction_coeff = ti.field(dtype=ti.f32, shape=1)
-        self.friction_coeff[0] = 0.1
+        self.friction_coeff[0] = 0
         self.grid_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         self.aabb_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         self.grid_edge_indices = ti.field(dtype=ti.u32, shape=12 * 2)
@@ -2622,27 +2622,27 @@ class Solver:
     def solve_collision_constraints_x(self):
         d = self.dHat[0]
 
-        # for vi_d in range(self.max_num_verts_dynamic):
-        #     for fi_s in range(self.max_num_faces_static):
-        #         self.solve_collision_vt_static_x(vi_d, fi_s, d)
-        #
-        # for fi_d in range(self.max_num_faces_dynamic):
-        #     for vi_s in range(self.max_num_verts_static):
-        #         self.solve_collision_tv_static_x(fi_d, vi_s, d)
+        for vi_d in range(self.max_num_verts_dynamic):
+            for fi_s in range(self.max_num_faces_static):
+                self.solve_collision_vt_static_x(vi_d, fi_s, d)
+
+        for fi_d in range(self.max_num_faces_dynamic):
+            for vi_s in range(self.max_num_verts_static):
+                self.solve_collision_tv_static_x(fi_d, vi_s, d)
 
         for fi_d in range(self.max_num_faces_dynamic):
             for vi_d in range(self.max_num_verts_dynamic):
                 if self.is_in_face(vi_d, fi_d) != True:
                     self.solve_collision_tv_dynamic_x(fi_d, vi_d, d)
         #
-        # for ei_d in range(self.max_num_edges_dynamic):
-        #     for ei_s in range(self.max_num_edges_static):
-        #         self.solve_collision_ee_static_x(ei_d, ei_s, d)
-
         for ei_d in range(self.max_num_edges_dynamic):
-            for ej_d in range(self.max_num_edges_dynamic):
-                if self.share_vertex(ei_d, ej_d) != True and ei_d != ej_d:
-                    self.solve_collision_ee_dynamic_x(ei_d, ej_d, d)
+            for ei_s in range(self.max_num_edges_static):
+                self.solve_collision_ee_static_x(ei_d, ei_s, d)
+
+        # for ei_d in range(self.max_num_edges_dynamic):
+        #     for ej_d in range(self.max_num_edges_dynamic):
+        #         if self.share_vertex(ei_d, ej_d) != True and ei_d != ej_d:
+        #             self.solve_collision_ee_dynamic_x(ei_d, ej_d, d)
 
 
         # for ei_d in range(self.max_num_edges_dynamic):
@@ -2725,9 +2725,17 @@ class Solver:
             F = Ds @ self.Dm_inv[tid]
             U, sig, V = ti.svd(F)
             R = U @ V.transpose()
-            H = 2.0 * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
 
-            C = self.V0[tid] * (ti.pow(sig[0, 0] - 1.0, 2) + ti.pow(sig[1, 1] - 1.0, 2) + ti.pow(sig[2, 2] - 1.0, 2))
+            if U.determinant() < 0:
+                for i in ti.static(range(3)): U[i, 2] *= -1
+                sig[2, 2] = -sig[2, 2]
+            if V.determinant() < 0:
+                for i in ti.static(range(3)): V[i, 2] *= -1
+                sig[2, 2] = -sig[2, 2]
+
+            H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
+
+            C = mu * self.V0[tid] * (ti.pow(sig[0, 0] - 1.0, 2) + ti.pow(sig[1, 1] - 1.0, 2) + ti.pow(sig[2, 2] - 1.0, 2))
 
             g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
             g1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
@@ -2738,7 +2746,7 @@ class Solver:
             schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
                      self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
                      self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
-                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4)
+                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + alpha)
 
             ld = -C / schur
 
@@ -2809,6 +2817,14 @@ class Solver:
             F = Ds @ self.Dm_inv[tid]
             U, sig, V = ti.svd(F)
             R = U @ V.transpose()
+
+            if U.determinant() < 0:
+                for i in ti.static(range(3)): U[i, 2] *= -1
+                sig[2, 2] = -sig[2, 2]
+            if V.determinant() < 0:
+                for i in ti.static(range(3)): V[i, 2] *= -1
+                sig[2, 2] = -sig[2, 2]
+
             H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
 
             g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
@@ -2823,17 +2839,53 @@ class Solver:
                      self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + alpha)
 
             Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
-            ld = -Cv / schur
 
-            self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
-            self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
-            self.dv[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
-            self.dv[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
+            if Cv > 0:
+                ld = -Cv / schur
 
-            self.nc[v0] += 1
-            self.nc[v1] += 1
-            self.nc[v2] += 1
-            self.nc[v3] += 1
+                self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
+                self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
+                self.dv[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
+                self.dv[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+                self.nc[v0] += 1
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
+
+            J = sig[0, 0] * sig[1, 1] * sig[2, 2]
+            # J = F.trace()
+            if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
+                ti.atomic_add(self.num_inverted_elements[0], 1)
+
+            gamma = 1.0
+            H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
+
+            nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
+            nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
+            nabla_C_vol_2 = ti.Vector([H_vol[j, 2] for j in ti.static(range(3))])
+            nabla_C_vol_3 = -(nabla_C_vol_0 + nabla_C_vol_1 + nabla_C_vol_2)
+            alpha = 1.0 / (la * self.V0[tid] * self.dt[0] * self.dt[0])
+            schur_vol = (self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0.dot(nabla_C_vol_0) +
+                         self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1.dot(nabla_C_vol_1) +
+                         self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
+                         self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + alpha)
+
+            Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
+
+            if Cv > 0:
+                ld_vol = -Cv / schur_vol
+                self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
+                self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
+                self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
+                self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
+
+                self.nc[v0] += 1
+                self.nc[v1] += 1
+                self.nc[v2] += 1
+                self.nc[v3] += 1
+
+
 
 
 
@@ -2956,7 +3008,7 @@ class Solver:
         if self.enable_collision_handling:
             self.solve_collision_constraints_v()
 
-        # self.solve_fem_constraints_v(self.YM[0], self.PR[0])
+        self.solve_fem_constraints_v(self.YM[0], self.PR[0])
         # self.solve_pressure_constraints_v()
         self.update_dv()
 
@@ -3041,7 +3093,7 @@ class Solver:
 
         # self.compute_aabb_static()
         # self.broad_phase_static()
-        self.broad_phase_static()
+        # self.broad_phase_static()
         for _ in range(n_substeps):
             self.compute_y()
             # self.determine_cell_size_and_num()

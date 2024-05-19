@@ -6,18 +6,18 @@ import json
 # from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
 # from Scenes import cloth_stack as scene1
-from Scenes import scene_cylinder_crossing as scene1
+# from Scenes import scene_cylinder_crossing as scene1
 # from Scenes import scene_cylinder_crossing_4 as scene1
 # from Scenes import scene_thin_shell_twist as scene1
 # from Scenes import scene_cube_stretch as scene1
 # from Scenes import scene_fluid_compression as scene1
-# from Scenes import moving_obstacle as scene1
-# from Scenes import scene_torus_chain as scene1
+# from Scenes import moving_obstacle as scene1r
+from Scenes import scene_torus_chain as scene1
 import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, 0.0, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=1e6, PR=0.45, particle_radius=0.02, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, particle_radius=0.02, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -43,7 +43,7 @@ LOOKAt_ORIGIN = True
 g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
-n_substep = 25
+n_substep = 40
 frame_end = 100
 dt_ui = sim.dt[0]
 dHat_ui = sim.dHat[0]
