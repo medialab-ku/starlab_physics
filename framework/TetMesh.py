@@ -40,9 +40,9 @@ class TetMesh:
         self.fid.from_numpy(self.fid_np)
         # self.initEdgeIndices()
 
-        self.eid = ti.field(dtype = ti.i32, shape = (self.fid_np.shape[0] *3,2))
+        self.eid = ti.field(dtype = ti.i32, shape = (self.fid_np.shape[0] *3, 2))
         self.set_eid()
-
+        self.num_edges = self.fid_np.shape[0] * 3
         print(len(self.tet_mesh.verts))
         print(len(self.tet_mesh.cells))
 
@@ -67,7 +67,7 @@ class TetMesh:
         #
         # print("rawFID : ",self.fid_np.shape)
 
-        self.initFaceIndices()
+        # self.initFaceIndices()
 
     def reset(self):
         self.tet_mesh.verts.x.copy_from(self.tet_mesh.verts.x0)
@@ -181,12 +181,12 @@ class TetMesh:
     @ti.kernel
     def set_eid(self):
         for i in ti.ndrange(self.fid.shape[0]) :
-            self.eid[3 * i,0] = self.fid[i,0]
-            self.eid[3 * i,1] = self.fid[i,1]
+            self.eid[3 * i, 0] = self.fid[i, 0]
+            self.eid[3 * i, 1] = self.fid[i, 1]
 
-            self.eid[3 * i + 1,0] = self.fid[i,1]
-            self.eid[3 * i + 1,1] = self.fid[i,2]
+            self.eid[3 * i + 1, 0] = self.fid[i, 1]
+            self.eid[3 * i + 1, 1] = self.fid[i, 2]
 
-            self.eid[3 * i + 2,0] = self.fid[i,2]
-            self.eid[3 * i + 2,1] = self.fid[i,0]
+            self.eid[3 * i + 2, 0] = self.fid[i, 2]
+            self.eid[3 * i + 2, 1] = self.fid[i, 0]
 
