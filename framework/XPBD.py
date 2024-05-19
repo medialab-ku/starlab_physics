@@ -5,6 +5,7 @@ import distance as di
 @ti.data_oriented
 class Solver:
     def __init__(self,
+                 enable_profiler,
                  meshes_dynamic,
                  meshes_static,
                  tet_meshes_dynamic,
@@ -64,6 +65,8 @@ class Solver:
         self.enable_velocity_update = False
         self.enable_collision_handling = False
         self.enable_move_obstacle = False
+        self.enable_profiler = enable_profiler
+        self.export_mesh = False
 
         self.obs_lin_vel = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
         self.obs_lin_vel.fill(0.0)
@@ -170,10 +173,9 @@ class Solver:
         self.m = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
         self.V0 = ti.field(dtype=ti.f32, shape=self.max_num_tetra_dynamic)
-        self.fem_cache = ti.field(dtype=ti.i32, shape=self.max_num_tetra_dynamic)
-        self.fem_cache = ti.field(dtype=ti.i32, shape=self.max_num_tetra_dynamic)
-        self.fem_cache_schur = ti.field(dtype=ti.f32, shape=self.max_num_tetra_dynamic)
-        self.fem_cache_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_tetra_dynamic, 4))
+        self.fem_cache = ti.field(dtype=ti.i32, shape=(self.max_num_tetra_dynamic, 3))
+        self.fem_cache_schur = ti.field(dtype=ti.f32, shape=(self.max_num_tetra_dynamic, 3))
+        self.fem_cache_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_tetra_dynamic, 3, 4))
 
         self.l0 = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
         self.spring_cache = ti.field(dtype=ti.i32, shape=self.max_num_edges_dynamic)
@@ -190,7 +192,6 @@ class Solver:
         self.tetra_indices_dynamic = ti.field(dtype=ti.i32, shape=4 * self.max_num_tetra_dynamic)
 
         self.fixed.fill(1)
-
 
         self.vt_static_pair_cache_size = 40
         self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
@@ -221,12 +222,6 @@ class Solver:
         self.ee_dynamic_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dynamic)
         self.ee_dynamic_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size, 4))
         self.ee_dynamic_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size))
-
-        self.fem_active_set = ti.field(int, shape=self.max_num_tetra_dynamic)
-        self.fem_active_set_num = ti.field(int, shape=1)
-        self.fem_active_set_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_tetra_dynamic, 4))
-        self.fem_active_set_schur = ti.field(dtype=ti.f32, shape=self.max_num_tetra_dynamic)
-
 
         self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
         # self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.cache_size))
@@ -2647,50 +2642,44 @@ class Solver:
             x31 = x1 - x3
             x32 = x2 - x3
 
-            vol = ti.abs(x30.dot(x31.cross(x32))) / 6.0
             Ds = ti.Matrix.cols([x30, x31, x32])
 
             F = Ds @ self.Dm_inv[tid]
             U, sig, V = ti.svd(F)
             R = U @ V.transpose()
-            for j in ti.static(range(3)):
-                a = self.unit_vector[j]
-                aaT = a.outer_product(a)
-                Qj = (sig[j, j] - 1.0) * U @ aaT @ V.transpose()
-                H = 2.0 * mu * self.V0[tid] * Qj @ self.Dm_inv[tid].transpose()
+            H = 2.0 * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
 
-                C = mu * self.V0[tid] * ti.pow(sig[j, j] - 1.0, 2)
+            C = self.V0[tid] * (ti.pow(sig[0, 0] - 1.0, 2) + ti.pow(sig[1, 1] - 1.0, 2) + ti.pow(sig[2, 2] - 1.0, 2))
 
-                nabla_C0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
-                nabla_C1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
-                nabla_C2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
-                nabla_C3 = -(nabla_C0 + nabla_C1 + nabla_C2)
+            g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
+            g1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
+            g2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
+            g3 = -(g0 + g1 + g2)
 
-                alpha = 1.0 / (mu * self.V0[tid] * self.dt[0] * self.dt[0])
-                schur = (self.fixed[v0] * self.m_inv[v0] * nabla_C0.dot(nabla_C0) +
-                         self.fixed[v1] * self.m_inv[v1] * nabla_C1.dot(nabla_C1) +
-                         self.fixed[v2] * self.m_inv[v2] * nabla_C2.dot(nabla_C2) +
-                         self.fixed[v3] * self.m_inv[v3] * nabla_C3.dot(nabla_C3) + alpha)
+            alpha = 1.0 / (mu * self.V0[tid] * self.dt[0] * self.dt[0])
+            schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
+                     self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
+                     self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
+                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4)
 
+            ld = -C / schur
 
-                ld = -C / (schur)
+            self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
+            self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
+            self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
+            self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
 
-                self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * nabla_C0 * ld
-                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * nabla_C1 * ld
-                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * nabla_C2 * ld
-                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * nabla_C3 * ld
-
-                self.nc[v0] += 1
-                self.nc[v1] += 1
-                self.nc[v2] += 1
-                self.nc[v3] += 1
+            self.nc[v0] += 1
+            self.nc[v1] += 1
+            self.nc[v2] += 1
+            self.nc[v3] += 1
 
 
-            J = sig[0, 0] * sig[1, 1] * sig[2, 2]
-
-            # if J < 0.0:
+            # J = sig[0, 0] * sig[1, 1] * sig[2, 2]
+            # # J = F.trace()
+            # if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
             #     ti.atomic_add(self.num_inverted_elements[0], 1)
-
+            #
             # gamma = 1.0
             # C_vol = 0.5 * la * self.V0[tid] * (J - gamma) * (J - gamma)
             # H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
@@ -2699,11 +2688,11 @@ class Solver:
             # nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
             # nabla_C_vol_2 = ti.Vector([H_vol[j, 2] for j in ti.static(range(3))])
             # nabla_C_vol_3 = -(nabla_C_vol_0 + nabla_C_vol_1 + nabla_C_vol_2)
-            #
+            # alpha = 1.0 / (la * self.V0[tid] * self.dt[0] * self.dt[0])
             # schur_vol = (self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0.dot(nabla_C_vol_0) +
             #             self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1.dot(nabla_C_vol_1) +
             #             self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
-            #             self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + 1e-4)
+            #             self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + alpha)
             #
             # ld_vol = C_vol / schur_vol
             #
@@ -2720,29 +2709,54 @@ class Solver:
             # ti.atomic_add(self.current_volume[0], vol)
 
     @ti.kernel
-    def solve_fem_constraints_v(self):
+    def solve_fem_constraints_v(self, YM: ti.f32, PR: ti.f32):
+        mu = YM / (2.0 * (1.0 + PR))
+        la = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
 
         for tid in range(self.max_num_tetra_dynamic):
-            if self.fem_cache[tid] > 0:
-                v0 = self.tetra_indices_dynamic[4 * tid + 0]
-                v1 = self.tetra_indices_dynamic[4 * tid + 1]
-                v2 = self.tetra_indices_dynamic[4 * tid + 2]
-                v3 = self.tetra_indices_dynamic[4 * tid + 3]
 
-                g0, g1, g2, g3 = self.fem_cache_g[tid, 0], self.fem_cache_g[tid, 1], self.fem_cache_g[tid, 2], self.fem_cache_g[tid, 3]
-                Cv = self.v[v0].dot(g0) + self.v[v1].dot(g1) + self.v[v2].dot(g2) +self.v[v3].dot(g3)
-                if Cv < 0.:
-                    ld_v = -Cv / self.fem_cache_schur[tid]
+            v0 = self.tetra_indices_dynamic[4 * tid + 0]
+            v1 = self.tetra_indices_dynamic[4 * tid + 1]
+            v2 = self.tetra_indices_dynamic[4 * tid + 2]
+            v3 = self.tetra_indices_dynamic[4 * tid + 3]
 
-                    self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld_v
-                    self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld_v
-                    self.dv[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld_v
-                    self.dv[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld_v
+            x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
 
-                    self.nc[v0] += 1
-                    self.nc[v1] += 1
-                    self.nc[v2] += 1
-                    self.nc[v3] += 1
+            x30 = x0 - x3
+            x31 = x1 - x3
+            x32 = x2 - x3
+
+            Ds = ti.Matrix.cols([x30, x31, x32])
+
+            F = Ds @ self.Dm_inv[tid]
+            U, sig, V = ti.svd(F)
+            R = U @ V.transpose()
+            H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
+
+            g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
+            g1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
+            g2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
+            g3 = -(g0 + g1 + g2)
+
+            alpha = 1.0 / (mu * self.V0[tid] * self.dt[0] * self.dt[0])
+            schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
+                     self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
+                     self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
+                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + alpha)
+
+            Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
+            ld = -Cv / schur
+
+            self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
+            self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
+            self.dv[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
+            self.dv[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
+
+            self.nc[v0] += 1
+            self.nc[v1] += 1
+            self.nc[v2] += 1
+            self.nc[v3] += 1
+
 
 
 
@@ -2835,12 +2849,14 @@ class Solver:
         self.ee_dynamic_pair_schur.fill(0.0)
         self.ee_dynamic_pair.fill(0)
 
+        self.num_inverted_elements.fill(0)
+
 
     def solve_constraints_x(self):
 
         self.init_variables()
         
-        self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
+        # self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
 
         if self.enable_collision_handling:
             self.solve_collision_constraints_x()
@@ -2857,12 +2873,12 @@ class Solver:
         self.dv.fill(0.0)
         self.nc.fill(0)
 
-        self.solve_spring_constraints_v()
+        # self.solve_spring_constraints_v()
 
         if self.enable_collision_handling:
             self.solve_collision_constraints_v()
 
-        self.solve_fem_constraints_v()
+        self.solve_fem_constraints_v(self.YM[0], self.PR[0])
         # self.solve_pressure_constraints_v()
         self.update_dv()
 
@@ -2946,7 +2962,8 @@ class Solver:
         self.dt[0] = dt / n_substeps
 
 
-        ti.profiler.clear_kernel_profiler_info()
+        if self.enable_profiler:
+            ti.profiler.clear_kernel_profiler_info()
         # self.broad_phase()
         # self.search_neighbours()
         for _ in range(n_substeps):
@@ -2992,11 +3009,14 @@ class Solver:
         # print("broadphase(): ", round(avg_overhead_b, 2))
         # print("search_neighbours(): ", round(b4.avg, 2))
         # profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
-        profile_spring_x = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
-        avg_overhead_x = profile_spring_x.avg
-        print("constraint_solve_x(): ", round(avg_overhead_x, 2))
-        avg_overhead_v = 0.0
-        if self.enable_velocity_update:
+
+
+        if self.enable_profiler:
+            profile_spring_x = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
+            avg_overhead_x = profile_spring_x.avg
+            print("constraint_solve_x(): ", round(avg_overhead_x, 2))
+            avg_overhead_v = 0.0
+        if self.enable_velocity_update and self.enable_profiler:
         #
         #     # profile_collision_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
         # #     profile_pressure_x = ti.profiler.query_kernel_profiler_info(self.solve_pressure_constraints_x.__name__)
@@ -3019,7 +3039,7 @@ class Solver:
             print("constraint_solve_v(): ", round(avg_overhead_v, 2))
             print("ratio: ", round(100.0 * (avg_overhead_v / avg_overhead_x), 2), "%")
 
-
+        # if self.export_mesh:
         self.copy_to_meshes()
         self.copy_to_particles()
 

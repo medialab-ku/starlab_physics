@@ -1,8 +1,8 @@
 import taichi as ti
 import json
 
-# from Scenes import test_fem as scene1
-from Scenes import cloth_swing as scene1
+from Scenes import test_fem as scene1
+# from Scenes import cloth_swing as scene1
 # from Scenes import cloth_slide as scene1
 # from Scenes import collition_unit_test as scene1
 # from Scenes import cloth_stack as scene1
@@ -13,13 +13,11 @@ from Scenes import cloth_swing as scene1
 # from Scenes import scene_fluid_compression as scene1
 # from Scenes import moving_obstacle as scene1
 
-
-
 import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(8., 8., 8.), YM=1e6, PR=0.45, particle_radius=0.02, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(8., 8., 8.), YM=1e6, PR=0.45, particle_radius=0.02, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -95,7 +93,6 @@ def show_options():
         strain_limit_ui = w.slider_float("strain limit", strain_limit_ui, 0.0, 1.0)
         YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
         if sim.max_num_tetra_dynamic > 0:
-            PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
             PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
         MODE_WIREFRAME = w.checkbox("wireframe", MODE_WIREFRAME)
@@ -195,12 +192,15 @@ def show_options():
     with gui.sub_window("Debug", 0.8, 0.8, 0.3, 0.5) as w:
 
         if sim.max_num_tetra_dynamic > 0:
-            rest_volume = sim.rest_volume[0]
-            current_volume = sim.current_volume[0]
+            # rest_volume = sim.rest_volume[0]
+            # current_volume = sim.current_volume[0]
+            #
+            # volume_ratio = round(100.0 * current_volume / rest_volume, 2)
+            # volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
+            # w.text(volume_ratio_str)
 
-            volume_ratio = round(100.0 * current_volume / rest_volume, 2)
-            volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
-            w.text(volume_ratio_str)
+            num_inverted_elements_str = "# inverted elements: " + str(sim.num_inverted_elements[0])
+            w.text(num_inverted_elements_str)
 
         # num_vt_dynamic_str = "# vt_dynamic: " + str(sim.vt_active_set_num_dynamic[0])
         # w.text(num_vt_dynamic_str)
@@ -333,6 +333,7 @@ while window.running:
         scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
 
     if mesh_export and run_sim and frame_cpu < frame_end:
+        sim.export_mesh = True
         for mid in range(len(scene1.meshes_dynamic)):
             sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
 
