@@ -7,6 +7,7 @@ class Solver:
     def __init__(self,
                  enable_profiler,
                  meshes_dynamic,
+                 mesh_test,
                  meshes_static,
                  tet_meshes_dynamic,
                  particles,
@@ -19,6 +20,7 @@ class Solver:
                  dt):
 
         self.meshes_dynamic = meshes_dynamic
+        self.mesh_test = mesh_test
         self.tet_meshes_dynamic = tet_meshes_dynamic
         self.meshes_static = meshes_static
         self.particles = particles
@@ -844,7 +846,7 @@ class Solver:
         self.init_particle_aggregation()
         self._reset_animation()
 
-        self.init_vel()
+        # self.init_vel()
     @ti.kernel
     def init_vel(self):
         for i in range(self.max_num_verts_dynamic):
@@ -865,6 +867,10 @@ class Solver:
         for i in range(self.max_num_verts_dynamic):
             self.y[i] = self.x[i] + self.fixed[i] * (self.dt[0] * self.v[i] + self.g * self.dt[0] * self.dt[0])
 
+    @ti.kernel
+    def compute_y_test(self, dt: ti.f32):
+        for v in self.mesh_test.verts:
+            v.y += v.x + dt * v.v
 
     @ti.kernel
     def counting_sort(self):
@@ -2490,15 +2496,31 @@ class Solver:
             self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * nabla_C
             self.nc[v0] += 1
             self.nc[v1] += 1
-            strain = lij / l0 - 1.0
-            if strain > strain_limit:
-                self.spring_cache[ei] = 1
-                self.spring_cache_schur[ei] = schur
-                self.spring_cache_g[ei] = nabla_C
-            else:
-                self.spring_cache[ei] = 0
+            # strain = lij / l0 - 1.0
+            # if strain > strain_limit:
+            #     self.spring_cache[ei] = 1
+            #     self.spring_cache_schur[ei] = schur
+            #     self.spring_cache_g[ei] = nabla_C
+            # else:
+            #     self.spring_cache[ei] = 0
 
+    @ti.kernel
+    def solve_spring_constraints_x_test(self, YM: ti.float32, strain_limit: ti.float32):
 
+        for e in self.mesh_test.edges:
+            l0 = e.l0
+            x10 = e.verts[0].x - e.verts[1].x
+            lij = x10.norm()
+
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
+            ld = C / schur
+
+            e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * ld * nabla_C
+            e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * ld * nabla_C
+            e.verts[0].nc += 1.0
+            e.verts[1].nc += 1.0
 
     @ti.kernel
     def solve_spring_constraints_v(self):
@@ -2912,7 +2934,11 @@ class Solver:
         for i in range(self.max_num_verts_dynamic):
             self.x[i] += self.v[i] * self.dt[0]
 
+    @ti.kernel
+    def update_x_test(self, dt: ti.f32):
 
+        for v in self.mesh_test.verts:
+            v.x += v.v * dt
     @ti.kernel
     def confine_to_boundary(self):
 
@@ -2965,6 +2991,11 @@ class Solver:
         for i in range(self.max_num_verts_dynamic):
                 self.v[i] = (self.y[i] - self.x[i]) / self.dt[0]
 
+    @ti.kernel
+    def compute_velocity_test(self, dt: ti.f32):
+        for v in self.mesh_test.verts:
+            v.v = (v.y - v.x) / dt
+
     def init_variables(self):
         self.dx.fill(0.0)
         self.nc.fill(0)
@@ -2997,21 +3028,25 @@ class Solver:
 
         self.num_inverted_elements.fill(0)
 
+        self.mesh_test.verts.dx.fill(0.0)
+        self.mesh_test.verts.nc.fill(0.0)
+
 
     def solve_constraints_x(self):
 
         self.init_variables()
-        
-        # self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
+        self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
+        self.solve_spring_constraints_x_test(self.YM[0], self.strain_limit[0])
 
-        if self.enable_collision_handling:
-            self.solve_collision_constraints_x()
-
-        self.solve_fem_constraints_x(self.YM[0], self.PR[0])
+        # if self.enable_collision_handling:
+        #     self.solve_collision_constraints_x()
+        #
+        # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
         # self.solve_pressure_constraints_x()
 
         self.update_dx()
+        self.update_dx_test()
 
         # print(self.num_springs[0])
 
@@ -3034,6 +3069,12 @@ class Solver:
             if self.nc[vi] > 0.0:
                 self.dx[vi] = self.dx[vi] / self.nc[vi]
                 self.y[vi] += self.fixed[vi] * self.dx[vi]
+
+    @ti.kernel
+    def update_dx_test(self):
+        for v in self.mesh_test.verts:
+            if v.nc > 0.0:
+                v.y += (v.dx / v.nc)
 
     @ti.kernel
     def set_fixed_vertices(self, fixed_vertices: ti.template()):
@@ -3107,39 +3148,55 @@ class Solver:
         dt = self.dt[0]
         self.dt[0] = dt / n_substeps
 
-        # self.compute_aabb_static()
-        # self.broad_phase_static()
-        # self.broad_phase_static()
+        ti.profiler.clear_kernel_profiler_info()
         for _ in range(n_substeps):
             self.compute_y()
-            # self.determine_cell_size_and_num()
-            # self.search_neighbours()
-            # GUI static mesh animation
-
+            self.compute_y_test(dt)
+            # # self.determine_cell_size_and_num()
+            # # self.search_neighbours()
+            # # GUI static mesh animation
+            #
+            # # if self.enable_move_obstacle:
+            # #     self.move_static_object()
+            #
+            # # manually set static mesh animation.
+            # # self.manual_ang_vels and self.manual_lin_vels
             # if self.enable_move_obstacle:
-            #     self.move_static_object()
-
-            # manually set static mesh animation.
-            # self.manual_ang_vels and self.manual_lin_vels
-            if self.enable_move_obstacle:
-                for sid in range(len(self.meshes_static)):
-                    n_vert = 0
-                    if sid == len(self.meshes_static) - 1:
-                        n_vert = self.max_num_verts_static - self.offset_verts_static[sid]
-                    else:
-                        n_vert = self.offset_verts_static[sid + 1] - self.offset_verts_static[sid]
-                    self.move_each_static_object(self.offset_verts_static[sid], n_vert, sid)
-
-            else:
-                self.v_static.fill(0.0)
+            #     for sid in range(len(self.meshes_static)):
+            #         n_vert = 0
+            #         if sid == len(self.meshes_static) - 1:
+            #             n_vert = self.max_num_verts_static - self.offset_verts_static[sid]
+            #         else:
+            #             n_vert = self.offset_verts_static[sid + 1] - self.offset_verts_static[sid]
+            #         self.move_each_static_object(self.offset_verts_static[sid], n_vert, sid)
+            #
+            # else:
+            #     self.v_static.fill(0.0)
 
             self.solve_constraints_x()
 
             self.compute_velocity()
-
-            self.solve_constraints_v()
-
+            self.compute_velocity_test(dt)
+            # self.solve_constraints_v()
             self.update_x()
+            self.update_x_test(dt)
+
+        compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
+        solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
+        compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity.__name__)
+        update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x.__name__)
+
+        total_1 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
+
+        compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y_test.__name__)
+        solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x_test.__name__)
+        compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity_test.__name__)
+        update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x_test.__name__)
+
+        total_2 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
+
+        if self.frame[0] < 100:
+            print(round(total_1 / total_2, 4))
 
         self.copy_to_meshes()
         self.copy_to_particles()

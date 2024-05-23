@@ -16,8 +16,17 @@ class Mesh:
 
         self.is_static = is_static
         self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV"])
-        self.mesh.verts.place({'x0': ti.math.vec3, 'x': ti.math.vec3, 'v': ti.math.vec3})
-
+        self.mesh.verts.place({'fixed': ti.f32,
+                               'm_inv': ti.f32,
+                               'x0': ti.math.vec3,
+                               'x': ti.math.vec3,
+                               'y': ti.math.vec3,
+                               'v': ti.math.vec3,
+                               'dx': ti.math.vec3,
+                               'nc': ti.f32})
+        self.mesh.edges.place({'l0': ti.f32})
+        self.mesh.verts.fixed.fill(1.0)
+        self.mesh.verts.m_inv.fill(0.0)
         self.mesh.verts.v.fill([0.0, 0.0, 0.0])
         self.mesh.verts.x.from_numpy(self.mesh.get_position_as_numpy())
         self.num_verts = len(self.mesh.verts)
@@ -54,9 +63,19 @@ class Mesh:
 
     @ti.kernel
     def initEdgeIndices(self):
+
         for e in self.mesh.edges:
+            l0 = (e.verts[0].x - e.verts[1].x).norm()
+            e.l0 = l0
+
+            e.verts[0].m_inv += 0.5 * l0
+            e.verts[1].m_inv += 0.5 * l0
+
             self.edge_indices[e.id * 2 + 0] = e.verts[0].id
             self.edge_indices[e.id * 2 + 1] = e.verts[1].id
+
+        for v in self.mesh.verts:
+            v.m_inv = 1.0 / v.m_inv
 
     @ti.kernel
     def setCenterToOrigin(self):
