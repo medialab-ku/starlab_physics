@@ -1,9 +1,9 @@
-import numpy as np
+
 import taichi as ti
 import meshtaichi_patcher as patcher
 import igl
 import os
-
+import numpy as np
 @ti.data_oriented
 class Mesh:
 

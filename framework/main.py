@@ -2,18 +2,7 @@ import taichi as ti
 import json
 
 # from Scenes import test_fem as scene1
-# from Scenes import cloth_swing as scene1
-# from Scenes import cloth_slide as scene1
-# from Scenes import collition_unit_test as scene1
-# from Scenes import cloth_stack as scene1
-# from Scenes import scene_cylinder_crossing as scene1
-# from Scenes import scene_cylinder_crossing_4 as scene1
-# from Scenes import scene_thin_shell_twist as scene1
-# from Scenes import scene_cube_stretch as scene1
-# from Scenes import scene_fluid_compression as scene1
-# from Scenes import moving_obstacle as scene1r
-from Scenes import scene_torus_chain as scene1
-from Scenes import test_damping as scene1
+from Scenes import concat as scene1
 import os
 import XPBD
 import selection_tool as st
