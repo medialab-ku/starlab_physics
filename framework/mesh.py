@@ -27,7 +27,7 @@ class Mesh:
         self.mesh.edges.place({'l0': ti.f32})
         self.mesh.verts.fixed.fill(1.0)
         self.mesh.verts.m_inv.fill(0.0)
-        self.mesh.verts.v.fill([0.0, 0.0, 0.0])
+        self.mesh.verts.v.fill(0.0)
         self.mesh.verts.x.from_numpy(self.mesh.get_position_as_numpy())
         self.num_verts = len(self.mesh.verts)
 
@@ -63,7 +63,6 @@ class Mesh:
 
     @ti.kernel
     def initEdgeIndices(self):
-
         for e in self.mesh.edges:
             l0 = (e.verts[0].x - e.verts[1].x).norm()
             e.l0 = l0

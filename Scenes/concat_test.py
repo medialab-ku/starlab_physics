@@ -32,7 +32,8 @@ scale_list.append(5.0)
 concat.concat_mesh(model_dir, model_names, trans_list, scale_list)
 
 # meshes_dynamic = []
-mesh_dy = Mesh("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+# mesh_dy = Mesh("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = Mesh("../models/OBJ/plane.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # meshes_dynamic.append(mesh_dynamic_1)
 
 
@@ -41,7 +42,7 @@ mesh_dy = Mesh("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0
 tet_meshes_dynamic = []
 
 # meshes_static = []
-mesh_st = Mesh("../models/OBJ/circle3K.obj", scale=6, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+# mesh_st = Mesh("../models/OBJ/circle3K.obj", scale=6, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # meshes_static.append(mesh_static_1)
 
 particles = []

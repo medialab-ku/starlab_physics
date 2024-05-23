@@ -129,8 +129,8 @@ class Solver:
         self.max_num_edges_static = 0
         self.max_num_faces_static = 0
 
-        self.max_num_verts_static = len(self.mesh_st.verts)
-        self.max_num_faces_static = len(self.mesh_st.faces)
+        # self.max_num_verts_static = len(self.mesh_st.verts)
+        # self.max_num_faces_static = len(self.mesh_st.faces)
 
         # self.face_indices_static = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_static)
         # self.edge_indices_static = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_static)
@@ -486,7 +486,8 @@ class Solver:
     def reset(self):
         # self.frame[0] = 0
         self.mesh_dy.reset()
-        self.mesh_st.reset()
+        if self.mesh_st != None:
+            self.mesh_st.reset()
         # for mid in range(len(self.meshes_dynamic)):
         #     self.meshes_dynamic[mid].reset()
         #
@@ -505,12 +506,10 @@ class Solver:
 
         # self.init_vel()
 
-
-
     @ti.kernel
     def compute_y_test(self, dt: ti.f32):
         for v in self.mesh_dy.verts:
-            v.y += v.x + dt * v.v
+            v.y = v.x + v.v * dt + self.g * dt * dt
 
     @ti.kernel
     def counting_sort(self):
@@ -2568,7 +2567,7 @@ class Solver:
     def update_x_test(self, dt: ti.f32):
 
         for v in self.mesh_dy.verts:
-            v.x += v.v * dt
+            v.x += dt * v.v
     # @ti.kernel
     # def confine_to_boundary(self):
     #
@@ -2743,7 +2742,7 @@ class Solver:
 
             self.compute_y_test(dt)
 
-            # self.solve_constraints_x()
+            self.solve_constraints_x()
 
             self.compute_velocity_test(dt)
             # self.solve_constraints_v()

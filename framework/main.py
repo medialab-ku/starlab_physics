@@ -8,7 +8,7 @@ import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, particle_radius=0.02, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, None, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, particle_radius=0.02, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -342,8 +342,8 @@ while window.running:
     scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(0, 0, 0), show_wireframe=True)
     scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(1, 0.5, 0), show_wireframe=False)
 
-    scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0, 0), show_wireframe=True)
-    scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0), show_wireframe=False)
+    # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0, 0), show_wireframe=True)
+    # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0), show_wireframe=Fal se)
 
     # g_selector.renderTestPos()
     # scene.particles(g_selector.renderTestPosition,radius=0.01, color=(1, 0, 1))
