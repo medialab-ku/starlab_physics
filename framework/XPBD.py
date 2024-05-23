@@ -89,6 +89,8 @@ class Solver:
         self.max_num_faces_dynamic = len(self.mesh_dy.faces)
 
 
+        print(self.max_num_verts_dynamic)
+
         self.vt_static_pair_cache_size = 40
         self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
         self.vt_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
@@ -125,10 +127,11 @@ class Solver:
         # self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
 
         self.cache_size = 10
-        self.max_num_verts_static = 0
-        self.max_num_edges_static = 0
-        self.max_num_faces_static = 0
+        self.max_num_verts_static = len(self.mesh_st.verts)
+        self.max_num_edges_static = len(self.mesh_st.edges)
+        self.max_num_faces_static = len(self.mesh_st.faces)
 
+        print(self.max_num_faces_static)
         # self.max_num_verts_static = len(self.mesh_st.verts)
         # self.max_num_faces_static = len(self.mesh_st.faces)
 
@@ -779,14 +782,15 @@ class Solver:
     def solve_collision_vt_static_x(self, vid_d, fid_s, dHat):
 
         v0 = vid_d
-        v1 = self.face_indices_static[3 * fid_s + 0]
-        v2 = self.face_indices_static[3 * fid_s + 1]
-        v3 = self.face_indices_static[3 * fid_s + 2]
+        v1 = self.mesh_st.face_indices[3 * fid_s + 0]
+        v2 = self.mesh_st.face_indices[3 * fid_s + 1]
+        v3 = self.mesh_st.face_indices[3 * fid_s + 2]
 
-        x0 = self.y[v0]
-        x1 = self.x_static[v1]
-        x2 = self.x_static[v2]
-        x3 = self.x_static[v3]
+        x0 = self.mesh_dy.verts.y[v0]
+
+        x1 = self.mesh_st.verts.x[v1]
+        x2 = self.mesh_st.verts.x[v2]
+        x3 = self.mesh_st.verts.x[v3]
 
         g0 = ti.math.vec3(0.0)
         g1 = ti.math.vec3(0.0)
@@ -825,22 +829,22 @@ class Solver:
             g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
 
         if d < dHat:
-            schur = self.m_inv[v0] * g0.dot(g0) + 1e-4
+            schur = self.mesh_st.verts.m_inv[v0] * g0.dot(g0) + 1e-4
             ld = (dHat - d) / schur
-            self.dx[v0] += self.m_inv[v0] * ld * g0
-            self.nc[v0] += 1
-
-            if self.vt_static_pair_num[v0] < self.vt_static_pair_cache_size:
-                self.vt_static_pair[v0, self.vt_static_pair_num[v0], 0] = fid_s
-                self.vt_static_pair[v0, self.vt_static_pair_num[v0], 1] = dtype
-
-                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 0] = g0
-                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 1] = g1
-                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 2] = g2
-                self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 3] = g3
-
-                self.vt_static_pair_schur[v0, self.vt_static_pair_num[v0]] = schur
-                self.vt_static_pair_num[v0] += 1
+            self.mesh_st.verts.dx[v0] += self.mesh_st.verts.m_inv[v0] * ld * g0
+            self.mesh_st.verts.nc[v0] += 1
+        #
+        #     if self.vt_static_pair_num[v0] < self.vt_static_pair_cache_size:
+        #         self.vt_static_pair[v0, self.vt_static_pair_num[v0], 0] = fid_s
+        #         self.vt_static_pair[v0, self.vt_static_pair_num[v0], 1] = dtype
+        #
+        #         self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 0] = g0
+        #         self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 1] = g1
+        #         self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 2] = g2
+        #         self.vt_static_pair_g[v0, self.vt_static_pair_num[v0], 3] = g3
+        #
+        #         self.vt_static_pair_schur[v0, self.vt_static_pair_num[v0]] = schur
+        #         self.vt_static_pair_num[v0] += 1
 
 
     @ti.func
@@ -2297,22 +2301,27 @@ class Solver:
     def solve_collision_constraints_x(self):
         d = self.dHat[0]
 
+        # for v in self.mesh_dy.verts:
+        #     if v.y[1] < 0.0:
+        #         v.y[1] = 0.0
+
         for vi_d in range(self.max_num_verts_dynamic):
             for fi_s in range(self.max_num_faces_static):
                 self.solve_collision_vt_static_x(vi_d, fi_s, d)
 
-        for fi_d in range(self.max_num_faces_dynamic):
-            for vi_s in range(self.max_num_verts_static):
-                self.solve_collision_tv_static_x(fi_d, vi_s, d)
 
-        for fi_d in range(self.max_num_faces_dynamic):
-            for vi_d in range(self.max_num_verts_dynamic):
-                if self.is_in_face(vi_d, fi_d) != True:
-                    self.solve_collision_tv_dynamic_x(fi_d, vi_d, d)
+        # for fi_d in range(self.max_num_faces_dynamic):
+        #     for vi_s in range(self.max_num_verts_static):
+        #         self.solve_collision_tv_static_x(fi_d, vi_s, d)
         #
-        for ei_d in range(self.max_num_edges_dynamic):
-            for ei_s in range(self.max_num_edges_static):
-                self.solve_collision_ee_static_x(ei_d, ei_s, d)
+        # for fi_d in range(self.max_num_faces_dynamic):
+        #     for vi_d in range(self.max_num_verts_dynamic):
+        #         if self.is_in_face(vi_d, fi_d) != True:
+        #             self.solve_collision_tv_dynamic_x(fi_d, vi_d, d)
+        # #
+        # for ei_d in range(self.max_num_edges_dynamic):
+        #     for ei_s in range(self.max_num_edges_static):
+        #         self.solve_collision_ee_static_x(ei_d, ei_s, d)
 
         # for ei_d in range(self.max_num_edges_dynamic):
         #     for ej_d in range(self.max_num_edges_dynamic):
@@ -2567,7 +2576,8 @@ class Solver:
     def update_x_test(self, dt: ti.f32):
 
         for v in self.mesh_dy.verts:
-            v.x += dt * v.v
+            if v.id != 0:
+                v.x += dt * v.v
     # @ti.kernel
     # def confine_to_boundary(self):
     #
@@ -2637,7 +2647,7 @@ class Solver:
         self.solve_spring_constraints_x_test(self.YM[0], self.strain_limit[0])
 
         # if self.enable_collision_handling:
-        #     self.solve_collision_constraints_x()
+        self.solve_collision_constraints_x()
         #
         # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 

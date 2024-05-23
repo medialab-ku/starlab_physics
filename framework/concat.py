@@ -28,8 +28,8 @@ def concat_mesh(model_dir, model_names, translations, scales):
         translate = lambda x, trans: x + trans
         v_list[i] = np.apply_along_axis(lambda row: translate(row, translations[i]), 1, v)
 
-        # add_offset = lambda vid, offset: vid + offset
-        # f_list[i] = add_offset(f, vtx_id_offsets[i])
+        add_offset = lambda vid, offset: vid + offset
+        f_list[i] = add_offset(f, vtx_id_offsets[i])
 
     # if num_models > 1:
     v_concat = np.concatenate(v_list, axis=0)

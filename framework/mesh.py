@@ -15,7 +15,7 @@ class Mesh:
                  is_static=False):
 
         self.is_static = is_static
-        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV"])
+        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "VV", "VE"])
         self.mesh.verts.place({'fixed': ti.f32,
                                'm_inv': ti.f32,
                                'x0': ti.math.vec3,
