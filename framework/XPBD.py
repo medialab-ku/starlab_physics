@@ -831,8 +831,8 @@ class Solver:
         if d < dHat:
             schur = self.mesh_st.verts.m_inv[v0] * g0.dot(g0) + 1e-4
             ld = (dHat - d) / schur
-            self.mesh_st.verts.dx[v0] += self.mesh_st.verts.m_inv[v0] * ld * g0
-            self.mesh_st.verts.nc[v0] += 1
+            self.mesh_dy.verts.dx[v0] += self.mesh_st.verts.m_inv[v0] * ld * g0
+            self.mesh_dy.verts.nc[v0] += 1
         #
         #     if self.vt_static_pair_num[v0] < self.vt_static_pair_cache_size:
         #         self.vt_static_pair[v0, self.vt_static_pair_num[v0], 0] = fid_s
@@ -975,14 +975,14 @@ class Solver:
     def solve_collision_tv_static_x(self, fid_d, vid_s, dHat):
 
         v0 = vid_s
-        v1 = self.face_indices_dynamic[3 * fid_d + 0]
-        v2 = self.face_indices_dynamic[3 * fid_d + 1]
-        v3 = self.face_indices_dynamic[3 * fid_d + 2]
+        v1 = self.mesh_dy.face_indices[3 * fid_d + 0]
+        v2 = self.mesh_dy.face_indices[3 * fid_d + 1]
+        v3 = self.mesh_dy.face_indices[3 * fid_d + 2]
 
-        x0 = self.x_static[v0]
-        x1 = self.y[v1]
-        x2 = self.y[v2]
-        x3 = self.y[v3]
+        x0 = self.mesh_st.verts.x[v0]
+        x1 = self.mesh_dy.verts.y[v1]
+        x2 = self.mesh_dy.verts.y[v2]
+        x3 = self.mesh_dy.verts.y[v3]
 
         dtype = di.d_type_PT(x0, x1, x2, x3)
         d = dHat
@@ -992,86 +992,88 @@ class Solver:
             d = di.d_PP(x0, x1)
             if d < dHat:
                 g0, g1 = di.g_PP(x0, x1)
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + 1e-4
+                schur = self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
-                self.nc[v1] += 1
+                self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * g1
+                self.mesh_dy.verts.nc[v1] += 1
 
         elif dtype == 1:
             d = di.d_PP(x0, x2)
             if d < dHat:
                 g0, g2 = di.g_PP(x0, x2)
-                schur = self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + 1e-4
+                schur = self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * g2.dot(g2) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
-                self.nc[v2] += 1
+                self.mesh_dy.verts.dx[v2] += self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * ld * g2
+                self.mesh_dy.verts.nc[v2] += 1
 
 
         elif dtype == 2:
             d = di.d_PP(x0, x3)
             if d < dHat:
                 g0, g3 = di.g_PP(x0, x3)
-                schur = self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
-                self.nc[v3] += 1
+                self.mesh_dy.verts.dx[v3] += self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * ld * g3
+                self.mesh_dy.verts.nc[v3] += 1
 
         elif dtype == 3:
             d = di.d_PE(x0, x1, x2)
             if d < dHat:
                 g0, g1, g2 = di.g_PE(x0, x1, x2)
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + 1e-4
+                schur = self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * g1.dot(g1) + self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * g2.dot(g2) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
-                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
-                self.nc[v1] += 1
-                self.nc[v2] += 1
+                self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * g1
+                self.mesh_dy.verts.dx[v2] += self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * ld * g2
+                self.mesh_dy.verts.nc[v1] += 1
+                self.mesh_dy.verts.nc[v2] += 1
 
         elif dtype == 4:
             d = di.d_PE(x0, x2, x3)
             if d < dHat:
                 g0, g2, g3 = di.g_PE(x0, x2, x3)
-                schur = self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * g2.dot(g2) + self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
-                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
+                self.mesh_dy.verts.dx[v2] += self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * ld * g2
+                self.mesh_dy.verts.dx[v3] += self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * ld * g3
 
-                self.nc[v2] += 1
-                self.nc[v3] += 1
+                self.mesh_dy.verts.nc[v2] += 1
+                self.mesh_dy.verts.nc[v3] += 1
 
         elif dtype == 5:
             d = di.d_PE(x0, x1, x3)
             if d < dHat:
                 g0, g1, g3 = di.g_PE(x0, x1, x3)
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * g1.dot(g1) + self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
-                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
-                self.nc[v1] += 1
-                self.nc[v3] += 1
+                self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * g1
+                self.mesh_dy.verts.dx[v3] += self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * ld * g3
+                self.mesh_dy.verts.nc[v1] += 1
+                self.mesh_dy.verts.nc[v3] += 1
 
         elif dtype == 6:
             d = di.d_PT(x0, x1, x2, x3)
             if d < dHat:
                 g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
-                schur = self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) + self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) + self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-4
+                schur = (self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * g1.dot(g1) +
+                         self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * g2.dot(g2) +
+                         self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4)
                 ld = (dHat - d) / schur
-                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * ld * g1
-                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * ld * g2
-                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * ld * g3
-                self.nc[v1] += 1
-                self.nc[v2] += 1
-                self.nc[v3] += 1
+                self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * g1
+                self.mesh_dy.verts.dx[v2] += self.mesh_dy.verts.fixed[v2] * self.mesh_dy.verts.m_inv[v2] * ld * g2
+                self.mesh_dy.verts.dx[v3] += self.mesh_dy.verts.fixed[v3] * self.mesh_dy.verts.m_inv[v3] * ld * g3
+                self.mesh_dy.verts.nc[v1] += 1
+                self.mesh_dy.verts.nc[v2] += 1
+                self.mesh_dy.verts.nc[v3] += 1
 
-        if d < dHat and self.tv_static_pair_num[fid_d] < self.tv_static_pair_cache_size:
-            self.tv_static_pair[fid_d, self.tv_static_pair_num[fid_d], 0] = vid_s
-            self.tv_static_pair[fid_d, self.tv_static_pair_num[fid_d], 1] = dtype
-            self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 0] = g0
-            self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 1] = g1
-            self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 2] = g2
-            self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 3] = g3
-            self.tv_static_pair_schur[fid_d, self.tv_static_pair_num[fid_d]] = schur
-            self.tv_static_pair_num[fid_d] += 1
+        # if d < dHat and self.tv_static_pair_num[fid_d] < self.tv_static_pair_cache_size:
+        #     self.tv_static_pair[fid_d, self.tv_static_pair_num[fid_d], 0] = vid_s
+        #     self.tv_static_pair[fid_d, self.tv_static_pair_num[fid_d], 1] = dtype
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 0] = g0
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 1] = g1
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 2] = g2
+        #     self.tv_static_pair_g[fid_d, self.tv_static_pair_num[fid_d], 3] = g3
+        #     self.tv_static_pair_schur[fid_d, self.tv_static_pair_num[fid_d]] = schur
+        #     self.tv_static_pair_num[fid_d] += 1
 
     @ti.func
     def solve_collision_tv_static_v(self, fid_d, vid_s, dtype, g0, g1, g2, g3, schur, mu):
@@ -2301,18 +2303,14 @@ class Solver:
     def solve_collision_constraints_x(self):
         d = self.dHat[0]
 
-        # for v in self.mesh_dy.verts:
-        #     if v.y[1] < 0.0:
-        #         v.y[1] = 0.0
-
         for vi_d in range(self.max_num_verts_dynamic):
             for fi_s in range(self.max_num_faces_static):
                 self.solve_collision_vt_static_x(vi_d, fi_s, d)
 
 
-        # for fi_d in range(self.max_num_faces_dynamic):
-        #     for vi_s in range(self.max_num_verts_static):
-        #         self.solve_collision_tv_static_x(fi_d, vi_s, d)
+        for fi_d in range(self.max_num_faces_dynamic):
+            for vi_s in range(self.max_num_verts_static):
+                self.solve_collision_tv_static_x(fi_d, vi_s, d)
         #
         # for fi_d in range(self.max_num_faces_dynamic):
         #     for vi_d in range(self.max_num_verts_dynamic):
@@ -2576,8 +2574,8 @@ class Solver:
     def update_x_test(self, dt: ti.f32):
 
         for v in self.mesh_dy.verts:
-            if v.id != 0:
-                v.x += dt * v.v
+            # if v.id != 0:
+            v.x += dt * v.v
     # @ti.kernel
     # def confine_to_boundary(self):
     #
@@ -2672,8 +2670,7 @@ class Solver:
     @ti.kernel
     def update_dx_test(self):
         for v in self.mesh_dy.verts:
-            if v.nc > 0.0:
-                v.y += (v.dx / v.nc)
+            v.y += (v.dx / v.nc)
 
     # @ti.kernel
     # def set_fixed_vertices(self, fixed_vertices: ti.template()):
