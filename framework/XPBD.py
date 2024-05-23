@@ -6,11 +6,8 @@ import distance as di
 class Solver:
     def __init__(self,
                  enable_profiler,
-                 meshes_dynamic,
-                 mesh_test,
-                 meshes_static,
-                 tet_meshes_dynamic,
-                 particles,
+                 mesh_dy,
+                 mesh_st,
                  grid_size,
                  particle_radius,
                  dHat,
@@ -19,11 +16,8 @@ class Solver:
                  g,
                  dt):
 
-        self.meshes_dynamic = meshes_dynamic
-        self.mesh_test = mesh_test
-        self.tet_meshes_dynamic = tet_meshes_dynamic
-        self.meshes_static = meshes_static
-        self.particles = particles
+        self.mesh_dy = mesh_dy
+        self.mesh_st = mesh_st
         self.g = g
         self.dt = ti.field(dtype=ti.f32, shape=1)
         self.dt[0] = dt
@@ -88,114 +82,12 @@ class Solver:
         self.manual_ang_vels[2] = ti.Vector([0, -5.0, 0.0])
         self.manual_ang_vels[3] = ti.Vector([0.0, 1.0, 0.0])
 
-        self.max_num_verts_dynamic = 0
-        self.max_num_edges_dynamic = 0
-        self.max_num_faces_dynamic = 0
-        self.max_num_tetra_dynamic = 0
 
 
-        num_meshes_dynamic = len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)
-        num_tet_meshes_dynamic = len(self.tet_meshes_dynamic)
-        num_vert_offsets = num_meshes_dynamic + len(self.particles) + num_tet_meshes_dynamic
+        self.max_num_verts_dynamic = len(self.mesh_dy.verts)
+        self.max_num_edges_dynamic = len(self.mesh_dy.edges)
+        self.max_num_faces_dynamic = len(self.mesh_dy.faces)
 
-        is_verts_dynamic_empty = not bool(num_vert_offsets)
-        is_mesh_dynamic_empty = not bool(len(self.meshes_dynamic))
-        is_tet_mesh_dynamic_empty = not bool(len(self.tet_meshes_dynamic))
-
-        if is_verts_dynamic_empty is True:
-            num_vert_offsets = 1
-            self.max_num_verts_dynamic = 1
-
-        if is_mesh_dynamic_empty is True:
-            num_meshes_dynamic = 1
-            self.max_num_edges_dynamic = 1
-            self.max_num_faces_dynamic = 1
-
-        if is_tet_mesh_dynamic_empty is True:
-            num_tet_meshes_dynamic = 1
-            self.max_num_tetra_dynamic = 1
-
-        print(num_meshes_dynamic)
-        self.offset_verts_dynamic = ti.field(int, shape=num_vert_offsets)
-        self.offset_edges_dynamic = ti.field(int, shape=num_meshes_dynamic)
-        self.offset_faces_dynamic = ti.field(int, shape=num_meshes_dynamic + num_tet_meshes_dynamic)
-        self.offset_tetras_dynamic = ti.field(int, shape=num_tet_meshes_dynamic)
-
-        for mid in range(len(self.meshes_dynamic)):
-            self.offset_verts_dynamic[mid] = self.max_num_verts_dynamic
-            self.offset_edges_dynamic[mid] = self.max_num_edges_dynamic
-            self.offset_faces_dynamic[mid] = self.max_num_faces_dynamic
-
-            self.max_num_verts_dynamic += len(self.meshes_dynamic[mid].verts)
-            self.max_num_edges_dynamic += len(self.meshes_dynamic[mid].edges)
-            self.max_num_faces_dynamic += len(self.meshes_dynamic[mid].faces)
-
-        self.offset_tet_mesh = self.max_num_verts_dynamic
-        self.offset_spring = self.max_num_edges_dynamic
-
-        for tid in range(len(self.tet_meshes_dynamic)):
-            self.offset_verts_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_verts_dynamic
-            self.offset_edges_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_edges_dynamic
-            self.offset_tetras_dynamic[tid] = self.max_num_tetra_dynamic
-            self.offset_faces_dynamic[tid + len(self.meshes_dynamic)] = self.max_num_faces_dynamic
-            self.max_num_verts_dynamic += len(self.tet_meshes_dynamic[tid].verts)
-            self.max_num_tetra_dynamic += len(self.tet_meshes_dynamic[tid].cells)
-            self.max_num_faces_dynamic += len(self.tet_meshes_dynamic[tid].faces)
-            self.max_num_edges_dynamic += len(self.tet_meshes_dynamic[tid].edges)
-
-        self.offset_particle = self.max_num_verts_dynamic
-
-        for pid in range(len(self.particles)):
-            self.offset_verts_dynamic[pid + len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)] = self.max_num_verts_dynamic
-            self.max_num_verts_dynamic += self.particles[pid].num_particles
-
-
-        # print(self.offset_verts_dynamic)
-        # print(self.offset_tetras_dynamic)
-        # print(self.max_num_verts_dynamic)
-        # print(self.max_num_tetra_dynamic)
-
-        if self.max_num_edges_dynamic < 1:
-            self.max_num_edges_dynamic = 1
-
-        if self.max_num_verts_dynamic < 1:
-            self.max_num_verts_dynamic = 1
-
-        if self.max_num_tetra_dynamic < 1:
-            self.max_num_tetra_dynamic = 1
-
-        self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.dx = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.dv = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.nc = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
-        self.schur = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.c = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.fixed = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.m_inv = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.m = ti.field(dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=ti.f32, shape=self.max_num_tetra_dynamic)
-        self.V0 = ti.field(dtype=ti.f32, shape=self.max_num_tetra_dynamic)
-        self.fem_cache = ti.field(dtype=ti.i32, shape=(self.max_num_tetra_dynamic, 3))
-        self.fem_cache_schur = ti.field(dtype=ti.f32, shape=(self.max_num_tetra_dynamic, 3))
-        self.fem_cache_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_tetra_dynamic, 3, 4))
-
-        self.l0 = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
-        self.spring_cache = ti.field(dtype=ti.i32, shape=self.max_num_edges_dynamic)
-        self.spring_cache_schur = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
-        self.spring_cache_g = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_edges_dynamic)
-
-        self.spring_ids = ti.field(dtype=ti.i32, shape=self.max_num_edges_dynamic)
-        self.num_springs = ti.field(dtype=ti.i32, shape=1)
-        self.schur_spring = ti.field(dtype=ti.f32, shape=self.max_num_edges_dynamic)
-        self.gradient_spring = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_edges_dynamic)
-
-        self.face_indices_dynamic = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_dynamic)
-        self.edge_indices_dynamic = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_dynamic)
-        self.tetra_indices_dynamic = ti.field(dtype=ti.i32, shape=4 * self.max_num_tetra_dynamic)
-
-        self.fixed.fill(1)
 
         self.vt_static_pair_cache_size = 40
         self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
@@ -237,542 +129,306 @@ class Solver:
         self.max_num_edges_static = 0
         self.max_num_faces_static = 0
 
-        num_meshes_static = len(self.meshes_static)
+        self.max_num_verts_static = len(self.mesh_st.verts)
+        self.max_num_faces_static = len(self.mesh_st.faces)
 
-        self.is_meshes_static_empty = not bool(num_meshes_static)
-        if self.is_meshes_static_empty is True:
-            num_meshes_static = 1
-            self.max_num_verts_static = 1
-            self.max_num_edges_static = 1
-            self.max_num_faces_static = 1
+        # self.face_indices_static = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_static)
+        # self.edge_indices_static = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_static)
 
+        # self.grid_particles_num = ti.field(int, shape=self.num_cells)
+        # self.grid_particles_num_temp = ti.field(int, shape= self.num_cells)
+        # self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
+        #
+        # self.grid_ids = ti.field(int, shape=self.max_num_verts_dynamic)
+        # self.grid_ids_buffer = ti.field(int, shape=self.max_num_verts_dynamic)
+        # self.grid_ids_new = ti.field(int, shape=self.max_num_verts_dynamic)
+        # self.cur2org = ti.field(int, shape=self.max_num_verts_dynamic)
+        #
+        # self.grid_particles_num_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
+        # self.grid_particles_num_temp_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
+        # self.prefix_sum_executor_static = ti.algorithms.PrefixSumExecutor(self.grid_particles_num_static.shape[0])
+        #
+        # num_grid_ids = self.max_num_verts_static + 3 * self.max_num_faces_static
+        #
+        # if num_grid_ids < 1:
+        #     num_grid_ids = 1
+        #
+        # self.grid_ids_static = ti.field(int, shape=num_grid_ids)
+        # self.grid_ids_buffer_static = ti.field(int, shape=num_grid_ids)
+        # self.grid_ids_new_static = ti.field(int, shape=num_grid_ids)
+        # self.cur2org_static = ti.field(int, shape=num_grid_ids)
 
-        self.offset_verts_static = ti.field(int, shape=num_meshes_static)
-        self.offset_edges_static = ti.field(int, shape=num_meshes_static)
-        self.offset_faces_static = ti.field(int, shape=num_meshes_static)
-
-        for mid in range(len(self.meshes_static)):
-            self.offset_verts_static[mid] = self.max_num_verts_static
-            self.offset_edges_static[mid] = self.max_num_edges_static
-            self.offset_faces_static[mid] = self.max_num_faces_static
-            self.max_num_verts_static += len(self.meshes_static[mid].verts)
-            self.max_num_edges_static += len(self.meshes_static[mid].edges)
-            self.max_num_faces_static += len(self.meshes_static[mid].faces)
-
-        self.face_indices_static = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_static)
-        self.edge_indices_static = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_static)
-
-        print(self.max_num_edges_static)
-
-        self.x_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
-        self.x_static_rest = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
-        self.v_static = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_static)
-
-
-        if is_verts_dynamic_empty is True:
-            self.max_num_verts_dynamic = 0
-
-        if is_mesh_dynamic_empty and is_tet_mesh_dynamic_empty:
-            self.max_num_edges_dynamic = 0
-            self.max_num_faces_dynamic = 0
-
-        if is_tet_mesh_dynamic_empty is True:
-            self.max_num_tetra_dynamic = 0
-
-        if self.is_meshes_static_empty is True:
-            self.max_num_verts_static = 0
-            self.max_num_edges_static = 0
-            self.max_num_faces_static = 0
-
-        self.init_mesh_aggregation()
-        self.init_particle_aggregation()
-
-
-        self.grid_particles_num = ti.field(int, shape=self.num_cells)
-        self.grid_particles_num_temp = ti.field(int, shape= self.num_cells)
-        self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
-
-        self.grid_ids = ti.field(int, shape=self.max_num_verts_dynamic)
-        self.grid_ids_buffer = ti.field(int, shape=self.max_num_verts_dynamic)
-        self.grid_ids_new = ti.field(int, shape=self.max_num_verts_dynamic)
-        self.cur2org = ti.field(int, shape=self.max_num_verts_dynamic)
-
-        self.grid_particles_num_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
-        self.grid_particles_num_temp_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
-        self.prefix_sum_executor_static = ti.algorithms.PrefixSumExecutor(self.grid_particles_num_static.shape[0])
-
-        num_grid_ids = self.max_num_verts_static + 3 * self.max_num_faces_static
-
-        if num_grid_ids < 1:
-            num_grid_ids = 1
-
-        self.grid_ids_static = ti.field(int, shape=num_grid_ids)
-        self.grid_ids_buffer_static = ti.field(int, shape=num_grid_ids)
-        self.grid_ids_new_static = ti.field(int, shape=num_grid_ids)
-        self.cur2org_static = ti.field(int, shape=num_grid_ids)
-
-        self.frame = ti.field(dtype=ti.i32, shape=1)
-        self.frame[0] = 0
-
-        self.max_num_anim = 40
-        self.num_animation = ti.field(dtype=ti.i32, shape=4)   # maximum number of handle set
-        self.cur_animation = ti.field(dtype=ti.i32, shape=4)   # maximum number of handle set
-        self.anim_rotation_mat = ti.Matrix.field(4, 4, dtype=ti.f32, shape=4)
-
-        self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
-        self.active_anim_frame = ti.field(dtype=ti.i32, shape=(4, self.max_num_anim)) # maximum number of animation
-        self.action_anim = ti.Vector.field(6, dtype=ti.f32, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
-        self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-
-        self.broad_phase_static()
-        # self.test_var = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        # self.test()
-
-    @ti.kernel
-    def test(self):
-
-        for i in range(self.max_num_verts_dynamic):
-            self.test_var[i] = ti.math.vec3(i, self.max_num_verts_dynamic - i, 0)
-
-        max = ti.math.vec3(0.0)
-        for i in range(self.max_num_verts_dynamic):
-            ti.atomic_max(max, self.test_var[i])
-
-        print(max[0], max[1], max[2])
-        
-    @ti.kernel
-    def compute_aabb(self):
-        aabb_min = ti.math.vec3(0.0)
-        aabb_max = ti.math.vec3(0.0)
-
-        for i in range(self.max_num_verts_dynamic):
-            temp = self.y[i]
-            ti.atomic_max(aabb_max, temp)
-            ti.atomic_min(aabb_min, temp)
-        # print(aabb_min)
-        # print(aabb_max)
-
-        self.grid_max[0] = aabb_max
-        self.grid_min[0] = aabb_min
-
-        self.aabb_vertices[0] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
-        self.aabb_vertices[1] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
-        self.aabb_vertices[2] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
-        self.aabb_vertices[3] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
-
-        self.aabb_vertices[4] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
-        self.aabb_vertices[5] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
-        self.aabb_vertices[6] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
-        self.aabb_vertices[7] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
-
-    @ti.kernel
-    def compute_aabb_static(self):
-        aabb_min = ti.math.vec3(0.0)
-        aabb_max = ti.math.vec3(0.0)
-
-        for i in range(self.max_num_verts_static):
-            temp = self.x_static[i]
-            ti.atomic_max(aabb_max, temp)
-            ti.atomic_min(aabb_min, temp)
-
-        ones = ti.math.vec3(1.0)
-        aabb_max += self.padding * ones
-        aabb_min -= self.padding * ones
-        self.grid_max_static[0] = aabb_max
-        self.grid_min_static[0] = aabb_min
-
-        self.aabb_vertices[0] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
-        self.aabb_vertices[1] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
-        self.aabb_vertices[2] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
-        self.aabb_vertices[3] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
-
-        self.aabb_vertices[4] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
-        self.aabb_vertices[5] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
-        self.aabb_vertices[6] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
-        self.aabb_vertices[7] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
-
-        #determine cell size
-        r_padding = self.padding * ti.math.vec3(1.0)
-        for fi in range(self.max_num_verts_static):
-            v0, v1, v2 = self.face_indices_static[3 * fi + 0], self.face_indices_static[3 * fi + 1], self.face_indices_static[3 * fi + 2]
-            x0, x1, x2 = self.x_static[v0], self.x_static[v1], self.x_static[v2]
-
-            self.aabb_face[fi, 0] = ti.min(x0, x1, x2)
-            self.aabb_face[fi, 1] = ti.max(x0, x1, x2)
-            r = (self.aabb_face[fi, 1] - self.aabb_face[fi, 0]) + r_padding
-            ti.atomic_max(self.dynamic_cell_size[0], r)
-
-
-
-    @ti.kernel
-    def determine_cell_size_and_num(self):
-
-        #0: min
-        #1: max
-
-        self.dynamic_cell_size[0] = ti.math.vec3(0.0)
-        r_padding = self.padding * ti.math.vec3(1.0)
-        for fi in range(self.max_num_faces_dynamic):
-            v0, v1, v2 = self.face_indices_dynamic[3 * fi + 0], self.face_indices_dynamic[3 * fi + 1], self.face_indices_dynamic[3 * fi + 2]
-            x0, x1, x2 = self.x[v0], self.x[v1], self.x[v2]
-
-            self.aabb_face[fi, 0] = ti.min(x0, x1, x2)
-            self.aabb_face[fi, 1] = ti.max(x0, x1, x2)
-            r = (self.aabb_face[fi, 1] - self.aabb_face[fi, 0]) + r_padding
-            ti.atomic_max(self.dynamic_cell_size[0], r)
-
-
-    @ti.kernel
-    def __init_animation_pos(self, is_selected: ti.template()):
-        for i in is_selected:
-            if is_selected != 0:
-                self.anim_x[i] = self.x[i]
-
-        for i in ti.ndrange(4):
-            count = 0.0
-            origin = ti.Vector([0.0, 0.0, 0.0])
-            idx_set_count = i + 1
-
-            for pidx in ti.ndrange(self.max_num_verts_dynamic):
-                if is_selected[pidx] == idx_set_count:
-                    count += 1
-                    origin += self.x[pidx]
-
-            if count > 0.001:
-                self.anim_local_origin[i] = origin / count
-
-    def _reset_animation(self):
-        self.num_animation.fill(0)
-        self.cur_animation.fill(0)
-        self.active_anim_frame.fill(0)
-        self.action_anim.fill(0.0)
-        self.anim_local_origin.fill(0.0)
-        self.anim_rotation_mat.fill(0.0)
-
-    def _set_animation(self, animationDict, is_selected):
-        self.num_animation.fill(0)
-        self.cur_animation.fill(0)
-        self.active_anim_frame.fill(0)
-        self.action_anim.fill(0.0)
-        self.anim_local_origin.fill(0.0)
-
-        self.num_animation[0] = len(animationDict[1])
-        self.num_animation[1] = len(animationDict[2])
-        self.num_animation[2] = len(animationDict[3])
-        self.num_animation[3] = len(animationDict[4])
-        self.num_animation[3] = len(animationDict[4])
-
-        if (self.num_animation[0] > self.max_num_anim) or (self.num_animation[1] > self.max_num_anim) \
-                or (self.num_animation[2] > self.max_num_anim) or (self.num_animation[3] > self.max_num_anim):
-            print("warning :: length of some animation is longer than ", self.max_num_anim,
-                  ". Subsequent animations are ignored")
-            self.num_animation[0] = self.num_animation[0] if self.num_animation[
-                                                                 0] < self.max_num_anim else self.max_num_anim
-            self.num_animation[1] = self.num_animation[1] if self.num_animation[
-                                                                 1] < self.max_num_anim else self.max_num_anim
-            self.num_animation[2] = self.num_animation[2] if self.num_animation[
-                                                                 2] < self.max_num_anim else self.max_num_anim
-            self.num_animation[3] = self.num_animation[3] if self.num_animation[
-                                                                 3] < self.max_num_anim else self.max_num_anim
-
-        self.__init_animation_pos(is_selected)
-
-        for ic in range(4):
-            animations_ic = animationDict[ic + 1]
-            for a in range(self.num_animation[ic]):
-                animation = animations_ic[a]
-
-                self.active_anim_frame[ic, a] = animation[6]
-                for j in range(6):
-                    self.action_anim[ic, a][j] = animation[j]
-
-        self.set_fixed_vertices(is_selected)
-
-        # print(self.num_animation)
-        # print(self.active_anim_frame)
-        # print(self.action_anim)
-        # print(self.anim_local_origin)
-
+        # self.frame = ti.field(dtype=ti.i32, shape=1)
         # self.frame[0] = 0
         #
         # self.max_num_anim = 40
-        # self.num_animation = ti.field(dtype = ti.i32,shape = 4)   # maximum number of handle set
-        # self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
-        # self.active_anim_frame = ti.field(dtype = ti.i32,shape = (4,self.max_num_anim)) # maximum number of animation
-        # self.action_anim = ti.Vector.field(6,dtype = ti.f32,shape = (4,self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
+        # self.num_animation = ti.field(dtype=ti.i32, shape=4)   # maximum number of handle set
+        # self.cur_animation = ti.field(dtype=ti.i32, shape=4)   # maximum number of handle set
+        # self.anim_rotation_mat = ti.Matrix.field(4, 4, dtype=ti.f32, shape=4)
         #
+        # self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
+        # self.active_anim_frame = ti.field(dtype=ti.i32, shape=(4, self.max_num_anim)) # maximum number of animation
+        # self.action_anim = ti.Vector.field(6, dtype=ti.f32, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
         # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
+        #
+        # self.broad_phase_static()
+        # self.test_var = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
+        # self.test()
 
-    @ti.func
-    def apply_rotation(self, mat_rot, vec):
-        v = ti.Vector([vec[0], vec[1], vec[2], 1])
-        vv = mat_rot @ v
-        return ti.Vector([vv[0], vv[1], vv[2]])
+    # @ti.kernel
+    # def test(self):
+    #
+    #     for i in range(self.max_num_verts_dynamic):
+    #         self.test_var[i] = ti.math.vec3(i, self.max_num_verts_dynamic - i, 0)
+    #
+    #     max = ti.math.vec3(0.0)
+    #     for i in range(self.max_num_verts_dynamic):
+    #         ti.atomic_max(max, self.test_var[i])
+    #
+    #     print(max[0], max[1], max[2])
+    #
+    # @ti.kernel
+    # def compute_aabb(self):
+    #     aabb_min = ti.math.vec3(0.0)
+    #     aabb_max = ti.math.vec3(0.0)
+    #
+    #     for i in range(self.max_num_verts_dynamic):
+    #         temp = self.y[i]
+    #         ti.atomic_max(aabb_max, temp)
+    #         ti.atomic_min(aabb_min, temp)
+    #     # print(aabb_min)
+    #     # print(aabb_max)
+    #
+    #     self.grid_max[0] = aabb_max
+    #     self.grid_min[0] = aabb_min
+    #
+    #     self.aabb_vertices[0] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
+    #     self.aabb_vertices[1] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
+    #     self.aabb_vertices[2] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
+    #     self.aabb_vertices[3] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
+    #
+    #     self.aabb_vertices[4] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
+    #     self.aabb_vertices[5] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
+    #     self.aabb_vertices[6] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
+    #     self.aabb_vertices[7] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
+    #
+    # @ti.kernel
+    # def compute_aabb_static(self):
+    #     aabb_min = ti.math.vec3(0.0)
+    #     aabb_max = ti.math.vec3(0.0)
+    #
+    #     for i in range(self.max_num_verts_static):
+    #         temp = self.x_static[i]
+    #         ti.atomic_max(aabb_max, temp)
+    #         ti.atomic_min(aabb_min, temp)
+    #
+    #     ones = ti.math.vec3(1.0)
+    #     aabb_max += self.padding * ones
+    #     aabb_min -= self.padding * ones
+    #     self.grid_max_static[0] = aabb_max
+    #     self.grid_min_static[0] = aabb_min
+    #
+    #     self.aabb_vertices[0] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
+    #     self.aabb_vertices[1] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
+    #     self.aabb_vertices[2] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
+    #     self.aabb_vertices[3] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
+    #
+    #     self.aabb_vertices[4] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
+    #     self.aabb_vertices[5] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
+    #     self.aabb_vertices[6] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
+    #     self.aabb_vertices[7] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
+    #
+    #     #determine cell size
+    #     r_padding = self.padding * ti.math.vec3(1.0)
+    #     for fi in range(self.max_num_verts_static):
+    #         v0, v1, v2 = self.face_indices_static[3 * fi + 0], self.face_indices_static[3 * fi + 1], self.face_indices_static[3 * fi + 2]
+    #         x0, x1, x2 = self.x_static[v0], self.x_static[v1], self.x_static[v2]
+    #
+    #         self.aabb_face[fi, 0] = ti.min(x0, x1, x2)
+    #         self.aabb_face[fi, 1] = ti.max(x0, x1, x2)
+    #         r = (self.aabb_face[fi, 1] - self.aabb_face[fi, 0]) + r_padding
+    #         ti.atomic_max(self.dynamic_cell_size[0], r)
+    #
+    #
+    #
+    # @ti.kernel
+    # def determine_cell_size_and_num(self):
+    #
+    #     #0: min
+    #     #1: max
+    #
+    #     self.dynamic_cell_size[0] = ti.math.vec3(0.0)
+    #     r_padding = self.padding * ti.math.vec3(1.0)
+    #     for fi in range(self.max_num_faces_dynamic):
+    #         v0, v1, v2 = self.face_indices_dynamic[3 * fi + 0], self.face_indices_dynamic[3 * fi + 1], self.face_indices_dynamic[3 * fi + 2]
+    #         x0, x1, x2 = self.x[v0], self.x[v1], self.x[v2]
+    #
+    #         self.aabb_face[fi, 0] = ti.min(x0, x1, x2)
+    #         self.aabb_face[fi, 1] = ti.max(x0, x1, x2)
+    #         r = (self.aabb_face[fi, 1] - self.aabb_face[fi, 0]) + r_padding
+    #         ti.atomic_max(self.dynamic_cell_size[0], r)
+    #
+    #
+    # @ti.kernel
+    # def __init_animation_pos(self, is_selected: ti.template()):
+    #     for i in is_selected:
+    #         if is_selected != 0:
+    #             self.anim_x[i] = self.x[i]
+    #
+    #     for i in ti.ndrange(4):
+    #         count = 0.0
+    #         origin = ti.Vector([0.0, 0.0, 0.0])
+    #         idx_set_count = i + 1
+    #
+    #         for pidx in ti.ndrange(self.max_num_verts_dynamic):
+    #             if is_selected[pidx] == idx_set_count:
+    #                 count += 1
+    #                 origin += self.x[pidx]
+    #
+    #         if count > 0.001:
+    #             self.anim_local_origin[i] = origin / count
+    #
+    # def _reset_animation(self):
+    #     self.num_animation.fill(0)
+    #     self.cur_animation.fill(0)
+    #     self.active_anim_frame.fill(0)
+    #     self.action_anim.fill(0.0)
+    #     self.anim_local_origin.fill(0.0)
+    #     self.anim_rotation_mat.fill(0.0)
+    #
+    # def _set_animation(self, animationDict, is_selected):
+    #     self.num_animation.fill(0)
+    #     self.cur_animation.fill(0)
+    #     self.active_anim_frame.fill(0)
+    #     self.action_anim.fill(0.0)
+    #     self.anim_local_origin.fill(0.0)
+    #
+    #     self.num_animation[0] = len(animationDict[1])
+    #     self.num_animation[1] = len(animationDict[2])
+    #     self.num_animation[2] = len(animationDict[3])
+    #     self.num_animation[3] = len(animationDict[4])
+    #     self.num_animation[3] = len(animationDict[4])
+    #
+    #     if (self.num_animation[0] > self.max_num_anim) or (self.num_animation[1] > self.max_num_anim) \
+    #             or (self.num_animation[2] > self.max_num_anim) or (self.num_animation[3] > self.max_num_anim):
+    #         print("warning :: length of some animation is longer than ", self.max_num_anim,
+    #               ". Subsequent animations are ignored")
+    #         self.num_animation[0] = self.num_animation[0] if self.num_animation[
+    #                                                              0] < self.max_num_anim else self.max_num_anim
+    #         self.num_animation[1] = self.num_animation[1] if self.num_animation[
+    #                                                              1] < self.max_num_anim else self.max_num_anim
+    #         self.num_animation[2] = self.num_animation[2] if self.num_animation[
+    #                                                              2] < self.max_num_anim else self.max_num_anim
+    #         self.num_animation[3] = self.num_animation[3] if self.num_animation[
+    #                                                              3] < self.max_num_anim else self.max_num_anim
+    #
+    #     self.__init_animation_pos(is_selected)
+    #
+    #     for ic in range(4):
+    #         animations_ic = animationDict[ic + 1]
+    #         for a in range(self.num_animation[ic]):
+    #             animation = animations_ic[a]
+    #
+    #             self.active_anim_frame[ic, a] = animation[6]
+    #             for j in range(6):
+    #                 self.action_anim[ic, a][j] = animation[j]
+    #
+    #     self.set_fixed_vertices(is_selected)
+    #
+    #     # print(self.num_animation)
+    #     # print(self.active_anim_frame)
+    #     # print(self.action_anim)
+    #     # print(self.anim_local_origin)
+    #
+    #     # self.frame[0] = 0
+    #     #
+    #     # self.max_num_anim = 40
+    #     # self.num_animation = ti.field(dtype = ti.i32,shape = 4)   # maximum number of handle set
+    #     # self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
+    #     # self.active_anim_frame = ti.field(dtype = ti.i32,shape = (4,self.max_num_anim)) # maximum number of animation
+    #     # self.action_anim = ti.Vector.field(6,dtype = ti.f32,shape = (4,self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
+    #     #
+    #     # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
+    #
+    # @ti.func
+    # def apply_rotation(self, mat_rot, vec):
+    #     v = ti.Vector([vec[0], vec[1], vec[2], 1])
+    #     vv = mat_rot @ v
+    #     return ti.Vector([vv[0], vv[1], vv[2]])
+    #
+    # @ti.func
+    # def get_animation_rotation_mat(self, axis, degree):
+    #     s = ti.sin(degree * 0.5)
+    #     c = ti.cos(degree * 0.5)
+    #     axis = s * axis
+    #     q = ti.Vector([axis[0], axis[1], axis[2], c])
+    #     M = ti.math.mat4(0.0)
+    #
+    #     M[3, 3] = 1.0
+    #
+    #     M[0, 0] = 1 - 2 * (q[1] ** 2 + q[2] ** 2)
+    #     M[1, 1] = 1 - 2 * (q[0] ** 2 + q[2] ** 2)
+    #     M[2, 2] = 1 - 2 * (q[0] ** 2 + q[1] ** 2)
+    #
+    #     M[2, 1] = 2 * (q[1] * q[2] + q[3] * q[0])
+    #     M[1, 2] = 2 * (q[1] * q[2] - q[3] * q[0])
+    #
+    #     M[2, 0] = 2 * (q[0] * q[2] - q[3] * q[1])
+    #     M[0, 2] = 2 * (q[0] * q[2] + q[3] * q[1])
+    #
+    #     M[1, 0] = 2 * (q[0] * q[1] + q[3] * q[2])
+    #     M[0, 1] = 2 * (q[0] * q[1] - q[3] * q[2])
+    #
+    #     return M
+    #
+    # @ti.kernel
+    # def animate_handle(self, is_selected: ti.template()):
+    #
+    #     for idx_set in ti.ndrange(4):
+    #         cur_anim = self.cur_animation[idx_set]
+    #         max_anim = self.num_animation[idx_set]
+    #         is_animation_changed = False or (self.frame[0] == 0)  # when frame = 0 animation changed
+    #         while self.active_anim_frame[idx_set, cur_anim] < self.frame[0] and cur_anim < max_anim:
+    #             self.cur_animation[idx_set] = self.cur_animation[idx_set] + 1
+    #             cur_anim = self.cur_animation[idx_set]
+    #             is_animation_changed = True
+    #
+    #         if cur_anim < max_anim:
+    #             vel = self.action_anim[idx_set, cur_anim]
+    #             lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
+    #             self.anim_local_origin[idx_set] += lin_vel * self.dt[0]
+    #
+    #             ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
+    #             degree_rate = ang_vel.norm()
+    #
+    #             if is_animation_changed and degree_rate > 1e-4:
+    #                 axis = ti.math.normalize(ang_vel)
+    #                 self.anim_rotation_mat[idx_set] = self.get_animation_rotation_mat(axis, degree_rate * self.dt[0])
+    #
+    #     for i in self.anim_x:
+    #         if is_selected[i] >= 1:
+    #
+    #             idx_set = int(is_selected[i] - 1)
+    #
+    #             cur_anim = int(self.cur_animation[idx_set])
+    #             max_anim = int(self.num_animation[idx_set])
+    #
+    #             if cur_anim < max_anim:
+    #                 vel = self.action_anim[idx_set, cur_anim]
+    #                 lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
+    #                 self.anim_x[i] = self.anim_x[i] + lin_vel * self.dt[0]
+    #
+    #                 ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
+    #                 degree_rate = ang_vel.norm()
+    #                 if degree_rate > 1e-4:
+    #                     mat_rot = self.anim_rotation_mat[idx_set]
+    #
+    #                     self.anim_x[i] = self.apply_rotation(mat_rot,
+    #                                                          self.anim_x[i] - self.anim_local_origin[idx_set]) + \
+    #                                      self.anim_local_origin[idx_set]
+    #
+    #                 self.x[i] = self.anim_x[i]
 
-    @ti.func
-    def get_animation_rotation_mat(self, axis, degree):
-        s = ti.sin(degree * 0.5)
-        c = ti.cos(degree * 0.5)
-        axis = s * axis
-        q = ti.Vector([axis[0], axis[1], axis[2], c])
-        M = ti.math.mat4(0.0)
-
-        M[3, 3] = 1.0
-
-        M[0, 0] = 1 - 2 * (q[1] ** 2 + q[2] ** 2)
-        M[1, 1] = 1 - 2 * (q[0] ** 2 + q[2] ** 2)
-        M[2, 2] = 1 - 2 * (q[0] ** 2 + q[1] ** 2)
-
-        M[2, 1] = 2 * (q[1] * q[2] + q[3] * q[0])
-        M[1, 2] = 2 * (q[1] * q[2] - q[3] * q[0])
-
-        M[2, 0] = 2 * (q[0] * q[2] - q[3] * q[1])
-        M[0, 2] = 2 * (q[0] * q[2] + q[3] * q[1])
-
-        M[1, 0] = 2 * (q[0] * q[1] + q[3] * q[2])
-        M[0, 1] = 2 * (q[0] * q[1] - q[3] * q[2])
-
-        return M
-
-    @ti.kernel
-    def animate_handle(self, is_selected: ti.template()):
-
-        for idx_set in ti.ndrange(4):
-            cur_anim = self.cur_animation[idx_set]
-            max_anim = self.num_animation[idx_set]
-            is_animation_changed = False or (self.frame[0] == 0)  # when frame = 0 animation changed
-            while self.active_anim_frame[idx_set, cur_anim] < self.frame[0] and cur_anim < max_anim:
-                self.cur_animation[idx_set] = self.cur_animation[idx_set] + 1
-                cur_anim = self.cur_animation[idx_set]
-                is_animation_changed = True
-
-            if cur_anim < max_anim:
-                vel = self.action_anim[idx_set, cur_anim]
-                lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
-                self.anim_local_origin[idx_set] += lin_vel * self.dt[0]
-
-                ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
-                degree_rate = ang_vel.norm()
-
-                if is_animation_changed and degree_rate > 1e-4:
-                    axis = ti.math.normalize(ang_vel)
-                    self.anim_rotation_mat[idx_set] = self.get_animation_rotation_mat(axis, degree_rate * self.dt[0])
-
-        for i in self.anim_x:
-            if is_selected[i] >= 1:
-
-                idx_set = int(is_selected[i] - 1)
-
-                cur_anim = int(self.cur_animation[idx_set])
-                max_anim = int(self.num_animation[idx_set])
-
-                if cur_anim < max_anim:
-                    vel = self.action_anim[idx_set, cur_anim]
-                    lin_vel = ti.Vector([vel[0], vel[1], vel[2]])
-                    self.anim_x[i] = self.anim_x[i] + lin_vel * self.dt[0]
-
-                    ang_vel = ti.Vector([vel[3], vel[4], vel[5]])
-                    degree_rate = ang_vel.norm()
-                    if degree_rate > 1e-4:
-                        mat_rot = self.anim_rotation_mat[idx_set]
-
-                        self.anim_x[i] = self.apply_rotation(mat_rot,
-                                                             self.anim_x[i] - self.anim_local_origin[idx_set]) + \
-                                         self.anim_local_origin[idx_set]
-
-                    self.x[i] = self.anim_x[i]
-
-    def copy_to_meshes(self):
-        for mid in range(len(self.meshes_dynamic)):
-            self.copy_to_meshes_device(self.offset_verts_dynamic[mid], self.meshes_dynamic[mid])
-
-        for tid in range(len(self.tet_meshes_dynamic)):
-            self.copy_to_tet_meshes_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-
-        for sid in range(len(self.meshes_static)):
-            self.copy_to_static_meshes_device(self.offset_verts_static[sid], self.meshes_static[sid])
-    @ti.kernel
-    def copy_to_meshes_device(self, offset: ti.int32, mesh: ti.template()):
-        for v in mesh.verts:
-            v.x = self.x[offset + v.id]
-            v.v = self.v[offset + v.id]
-
-    @ ti.kernel
-    def copy_to_static_meshes_device(self, offset: ti.int32, mesh: ti.template()):
-        for v in mesh.verts:
-            v.x = self.x_static[offset + v.id]
-            v.v = self.v_static[offset + v.id]
-
-    @ti.kernel
-    def copy_to_tet_meshes_device(self, offset: ti.int32, mesh: ti.template()):
-        for v in mesh.verts:
-            v.x = self.x[offset + v.id]
-            v.v = self.v[offset + v.id]
-
-    def copy_to_particles(self):
-        for pid in range(len(self.particles)):
-            self.copy_to_particles_device(self.offset_verts_dynamic[pid + len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)], self.particles[pid])
-
-    @ti.kernel
-    def copy_to_particles_device(self, offset: ti.int32, particle: ti.template()):
-        for i in range(particle.num_particles):
-            particle.x[i] = self.x[offset + i]
-            particle.v[i] = self.v[offset + i]
-
-
-    @ti.kernel
-    def init_rest_length(self):
-
-        # l0_min = 1e3
-        for ei in range(self.max_num_edges_dynamic):
-            v0, v1 = self.edge_indices_dynamic[2 * ei + 0], self.edge_indices_dynamic[2 * ei + 1]
-            x0, x1 = self.x[v0], self.x[v1]
-            x10 = x0 - x1
-            self.l0[ei] = x10.norm()
-            self.m[v0] += 0.5 * self.l0[ei]
-            self.m[v1] += 0.5 * self.l0[ei]
-
-    @ti.kernel
-    def init_Dm_inv_and_volume(self):
-
-        for tid in range(self.max_num_tetra_dynamic):
-            v0 = self.tetra_indices_dynamic[4 * tid + 0]
-            v1 = self.tetra_indices_dynamic[4 * tid + 1]
-            v2 = self.tetra_indices_dynamic[4 * tid + 2]
-            v3 = self.tetra_indices_dynamic[4 * tid + 3]
-
-            x0, x1, x2, x3 = self.x[v0], self.x[v1], self.x[v2], self.x[v3]
-
-            x30 = x0 - x3
-            x31 = x1 - x3
-            x32 = x2 - x3
-
-            Dm = ti.Matrix.cols([x30, x31, x32])
-            self.V0[tid] = ti.abs(x32.dot(x30.cross(x31))) / 6.0
-            self.Dm_inv[tid] = Dm.inverse()
-            self.m[v0] += 0.25 * self.V0[tid]
-            self.m[v1] += 0.25 * self.V0[tid]
-            self.m[v2] += 0.25 * self.V0[tid]
-            self.m[v3] += 0.25 * self.V0[tid]
-
-            ti.atomic_add(self.rest_volume[0], self.V0[tid])
-
-    def init_mesh_aggregation(self):
-        for mid in range(len(self.meshes_dynamic)):
-            self.init_mesh_quantities_dynamic_device(self.offset_verts_dynamic[mid], self.meshes_dynamic[mid])
-            self.init_edge_indices_dynamic_device(self.offset_verts_dynamic[mid], self.offset_edges_dynamic[mid], self.meshes_dynamic[mid])
-            self.init_face_indices_dynamic_device(self.offset_verts_dynamic[mid], self.offset_faces_dynamic[mid], self.meshes_dynamic[mid])
-
-        for tid in range(len(self.tet_meshes_dynamic)):
-            self.init_tet_mesh_quantities_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-
-            # self.init_edge_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_edges_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-            self.init_tet_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-            self.init_tet_edge_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_edges_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-            # self.init_face_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_faces_dynamic[tid + len(self.meshes_dynamic)], self.tet_meshes_dynamic[tid])
-            self.init_tet_indices_dynamic_device(self.offset_verts_dynamic[tid + len(self.meshes_dynamic)], self.offset_tetras_dynamic[tid], self.tet_meshes_dynamic[tid])
-
-        for mid in range(len(self.meshes_static)):
-            self.init_quantities_static_device(self.offset_verts_static[mid], self.meshes_static[mid])
-            self.init_edge_indices_static_device(self.offset_verts_static[mid], self.offset_edges_static[mid], self.meshes_static[mid])
-            self.init_face_indices_static_device(self.offset_verts_static[mid], self.offset_faces_static[mid], self.meshes_static[mid])
-
-        self.m.fill(0.0)
-        self.init_rest_length()
-        self.init_Dm_inv_and_volume()
-        self.current_volume[0] = self.rest_volume[0]
-
-        self.init_m_inv()
-        # ti.math.inverse(self.m_inv)
-
-    @ti.kernel
-    def init_m_inv(self):
-        for i in range(self.max_num_verts_dynamic):
-            self.m_inv[i] = 1.0 / self.m[i]
-
-    @ti.kernel
-    def init_mesh_quantities_dynamic_device(self, offset: ti.int32, mesh: ti.template()):
-        for v in mesh.verts:
-            self.x[offset + v.id] = v.x
-            self.v[offset + v.id] = v.v
-            # self.m_inv[offset + v.id] = v.m_inv
-
-    @ti.kernel
-    def init_tet_mesh_quantities_dynamic_device(self, offset: ti.int32, mesh: ti.template()):
-        for v in mesh.verts:
-            self.x[offset + v.id] = v.x
-            self.v[offset + v.id] = v.v
-            # self.m_inv[offset + v.id] = v.m_inv
-
-
-    @ti.kernel
-    def init_quantities_static_device(self, offset: ti.int32, mesh: ti.template()):
-        for v in mesh.verts:
-            self.x_static[offset + v.id] = v.x
-            self.x_static_rest[offset + v.id] = v.x
-
-
-    @ti.kernel
-    def init_edge_indices_dynamic_device(self, offset_verts: ti.int32, offset_edges: ti.int32, mesh: ti.template()):
-        for e in mesh.edges:
-            self.edge_indices_dynamic[2 * (offset_edges + e.id) + 0] = e.verts[0].id + offset_verts
-            self.edge_indices_dynamic[2 * (offset_edges + e.id) + 1] = e.verts[1].id + offset_verts
-
-    @ti.kernel
-    def init_face_indices_dynamic_device(self, offset_verts: ti.int32, offset_faces: ti.int32, mesh: ti.template()):
-        for f in mesh.faces:
-            self.face_indices_dynamic[3 * (offset_faces + f.id) + 0] = f.verts[0].id + offset_verts
-            self.face_indices_dynamic[3 * (offset_faces + f.id) + 1] = f.verts[1].id + offset_verts
-            self.face_indices_dynamic[3 * (offset_faces + f.id) + 2] = f.verts[2].id + offset_verts
-
-
-    @ti.kernel
-    def init_tet_face_indices_dynamic_device(self, offset_verts: ti.int32, offset_faces: ti.int32, mesh: ti.template()):
-        for f in range(mesh.num_faces):
-            self.face_indices_dynamic[3 * (offset_faces + f) + 0] = mesh.fid[f, 0] + offset_verts
-            self.face_indices_dynamic[3 * (offset_faces + f) + 1] = mesh.fid[f, 1] + offset_verts
-            self.face_indices_dynamic[3 * (offset_faces + f) + 2] = mesh.fid[f, 2] + offset_verts
-
-    @ti.kernel
-    def init_tet_edge_indices_dynamic_device(self, offset_verts: ti.int32, offset_edges: ti.int32, mesh: ti.template()):
-        for e in range(mesh.num_edges):
-            self.edge_indices_dynamic[2 * (offset_edges + e) + 0] = mesh.eid[e, 0] + offset_verts
-            self.edge_indices_dynamic[2 * (offset_edges + e) + 1] = mesh.eid[e, 1] + offset_verts
-
-
-    @ti.kernel
-    def init_tet_indices_dynamic_device(self, offset_verts: ti.int32, offset_tets: ti.int32, mesh: ti.template()):
-        for c in mesh.cells:
-            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 0] = c.verts[0].id + offset_verts
-            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 1] = c.verts[1].id + offset_verts
-            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 2] = c.verts[2].id + offset_verts
-            self.tetra_indices_dynamic[4 * (offset_tets + c.id) + 3] = c.verts[3].id + offset_verts
-
-
-    @ti.kernel
-    def init_edge_indices_static_device(self, offset_verts: ti.int32, offset_edges: ti.int32, mesh: ti.template()):
-        for e in mesh.edges:
-            self.edge_indices_static[2 * (offset_edges + e.id) + 0] = e.verts[0].id + offset_verts
-            self.edge_indices_static[2 * (offset_edges + e.id) + 1] = e.verts[1].id + offset_verts
-
-    @ti.kernel
-    def init_face_indices_static_device(self, offset_verts: ti.int32, offset_faces: ti.int32, mesh: ti.template()):
-        for f in mesh.faces:
-            self.face_indices_static[3 * (offset_faces + f.id) + 0] = f.verts[0].id + offset_verts
-            self.face_indices_static[3 * (offset_faces + f.id) + 1] = f.verts[1].id + offset_verts
-            self.face_indices_static[3 * (offset_faces + f.id) + 2] = f.verts[2].id + offset_verts
-
-
-    def init_particle_aggregation(self):
-        for pid in range(len(self.particles)):
-            self.init_particle_quantities_dynamic_device(self.offset_verts_dynamic[pid + len(self.meshes_dynamic) + len(self.tet_meshes_dynamic)], self.particles[pid])
-
-    @ti.kernel
-    def init_particle_quantities_dynamic_device(self, offset: ti.int32, particle: ti.template()):
-        for i in range(particle.num_particles):
-            self.x[offset + i] = particle.x[i]
-            self.v[offset + i] = particle.v[i]
-            self.m_inv[offset + i] = particle.m_inv[i]
 
     def init_grid(self):
 
@@ -828,48 +484,32 @@ class Solver:
 
 
     def reset(self):
-        self.frame[0] = 0
+        # self.frame[0] = 0
+        self.mesh_dy.reset()
+        self.mesh_st.reset()
+        # for mid in range(len(self.meshes_dynamic)):
+        #     self.meshes_dynamic[mid].reset()
+        #
+        # for mid in range(len(self.meshes_static)):
+        #     self.meshes_static[mid].reset()
+        #
+        # for pid in range(len(self.particles)):
+        #     self.particles[pid].reset()
+        #
+        # for tid in range(len(self.tet_meshes_dynamic)):
+        #     self.tet_meshes_dynamic[tid].reset()
 
-        for mid in range(len(self.meshes_dynamic)):
-            self.meshes_dynamic[mid].reset()
-
-        for mid in range(len(self.meshes_static)):
-            self.meshes_static[mid].reset()
-
-        for pid in range(len(self.particles)):
-            self.particles[pid].reset()
-
-        for tid in range(len(self.tet_meshes_dynamic)):
-            self.tet_meshes_dynamic[tid].reset()
-
-        self.init_mesh_aggregation()
-        self.init_particle_aggregation()
-        self._reset_animation()
+        # self.init_mesh_aggregation()
+        # self.init_particle_aggregation()
+        # self._reset_animation()
 
         # self.init_vel()
-    @ti.kernel
-    def init_vel(self):
-        for i in range(self.max_num_verts_dynamic):
 
-            scale = 1.5
-            w = ti.math.vec3(0, 0, 1)
-            if self.x[i][0] < 0.0:
-                self.v[i][0] = scale
 
-            elif self.x[i][0] > 0.0:
-                self.v[i][0] = -scale
-
-            self.v[i] += self.x[i].cross(w)
-
-    @ti.kernel
-    def compute_y(self):
-
-        for i in range(self.max_num_verts_dynamic):
-            self.y[i] = self.x[i] + self.fixed[i] * (self.dt[0] * self.v[i] + self.g * self.dt[0] * self.dt[0])
 
     @ti.kernel
     def compute_y_test(self, dt: ti.f32):
-        for v in self.mesh_test.verts:
+        for v in self.mesh_dy.verts:
             v.y += v.x + dt * v.v
 
     @ti.kernel
@@ -2507,7 +2147,7 @@ class Solver:
     @ti.kernel
     def solve_spring_constraints_x_test(self, YM: ti.float32, strain_limit: ti.float32):
 
-        for e in self.mesh_test.edges:
+        for e in self.mesh_dy.edges:
             l0 = e.l0
             x10 = e.verts[0].x - e.verts[1].x
             lij = x10.norm()
@@ -2737,305 +2377,264 @@ class Solver:
                 self.solve_collision_ee_dynamic_v(ei_d, ej_d, dtype, g0, g1, g2, g3, schur, mu)
 
 
-    @ti.kernel
-    def solve_fem_constraints_x(self, YM: ti.f32, PR: ti.f32):
+    # @ti.kernel
+    # def solve_fem_constraints_x(self, YM: ti.f32, PR: ti.f32):
+    #
+    #     mu = YM / (2.0 * (1.0 + PR))
+    #     la = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
+    #
+    #     for tid in range(self.max_num_tetra_dynamic):
+    #
+    #         v0 = self.tetra_indices_dynamic[4 * tid + 0]
+    #         v1 = self.tetra_indices_dynamic[4 * tid + 1]
+    #         v2 = self.tetra_indices_dynamic[4 * tid + 2]
+    #         v3 = self.tetra_indices_dynamic[4 * tid + 3]
+    #
+    #         x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
+    #
+    #         x30 = x0 - x3
+    #         x31 = x1 - x3
+    #         x32 = x2 - x3
+    #
+    #         Ds = ti.Matrix.cols([x30, x31, x32])
+    #
+    #         F = Ds @ self.Dm_inv[tid]
+    #         U, sig, V = ti.svd(F)
+    #         R = U @ V.transpose()
+    #
+    #         # if U.determinant() < 0:
+    #         #     for i in ti.static(range(3)): U[i, 2] *= -1
+    #         #     sig[2, 2] = -sig[2, 2]
+    #         # if V.determinant() < 0:
+    #         #     for i in ti.static(range(3)): V[i, 2] *= -1
+    #         #     sig[2, 2] = -sig[2, 2]
+    #
+    #         H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
+    #
+    #         C = mu * self.V0[tid] * (ti.pow(sig[0, 0] - 1.0, 2) + ti.pow(sig[1, 1] - 1.0, 2) + ti.pow(sig[2, 2] - 1.0, 2))
+    #
+    #         g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
+    #         g1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
+    #         g2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
+    #         g3 = -(g0 + g1 + g2)
+    #
+    #         alpha = 1.0 / (mu * self.V0[tid] * self.dt[0] * self.dt[0])
+    #         schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
+    #                  self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
+    #                  self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
+    #                  self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-3)
+    #
+    #
+    #
+    #         ld = -C / schur
+    #
+    #         self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
+    #         self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
+    #         self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
+    #         self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
+    #
+    #         self.nc[v0] += 1
+    #         self.nc[v1] += 1
+    #         self.nc[v2] += 1
+    #         self.nc[v3] += 1
+    #
+    #
+    #         J = sig[0, 0] * sig[1, 1] * sig[2, 2]
+    #         J = F.trace()
+    #         if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
+    #             ti.atomic_add(self.num_inverted_elements[0], 1)
+    #
+    #         gamma = 3.
+    #         C_vol = 0.5 * la * self.V0[tid] * (J - gamma) * (J - gamma)
+    #         H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
+    #
+    #         nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
+    #         nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
+    #         nabla_C_vol_2 = ti.Vector([H_vol[j, 2] for j in ti.static(range(3))])
+    #         nabla_C_vol_3 = -(nabla_C_vol_0 + nabla_C_vol_1 + nabla_C_vol_2)
+    #         alpha = 1.0 / (la * self.V0[tid] * self.dt[0] * self.dt[0])
+    #         schur_vol = (self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0.dot(nabla_C_vol_0) +
+    #                     self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1.dot(nabla_C_vol_1) +
+    #                     self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
+    #                     self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + alpha)
+    #
+    #         ld_vol = C_vol / schur_vol
+    #
+    #         self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
+    #         self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
+    #         self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
+    #         self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
+    #
+    #         self.nc[v0] += 1
+    #         self.nc[v1] += 1
+    #         self.nc[v2] += 1
+    #         self.nc[v3] += 1
+    #         #
+    #         # ti.atomic_add(self.current_volume[0], vol)
+    #
+    # @ti.kernel
+    # def solve_fem_constraints_v(self, YM: ti.f32, PR: ti.f32):
+    #     mu = YM / (2.0 * (1.0 + PR))
+    #     la = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
+    #
+    #     for tid in range(self.max_num_tetra_dynamic):
+    #
+    #         v0 = self.tetra_indices_dynamic[4 * tid + 0]
+    #         v1 = self.tetra_indices_dynamic[4 * tid + 1]
+    #         v2 = self.tetra_indices_dynamic[4 * tid + 2]
+    #         v3 = self.tetra_indices_dynamic[4 * tid + 3]
+    #
+    #         x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
+    #
+    #         x30 = x0 - x3
+    #         x31 = x1 - x3
+    #         x32 = x2 - x3
+    #
+    #         Ds = ti.Matrix.cols([x30, x31, x32])
+    #
+    #         F = Ds @ self.Dm_inv[tid]
+    #         U, sig, V = ti.svd(F)
+    #         R = U @ V.transpose()
+    #
+    #         if U.determinant() < 0:
+    #             for i in ti.static(range(3)): U[i, 2] *= -1
+    #             sig[2, 2] = -sig[2, 2]
+    #         if V.determinant() < 0:
+    #             for i in ti.static(range(3)): V[i, 2] *= -1
+    #             sig[2, 2] = -sig[2, 2]
+    #
+    #         H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
+    #
+    #         g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
+    #         g1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
+    #         g2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
+    #         g3 = -(g0 + g1 + g2)
+    #
+    #         alpha = 1.0 / (mu * self.V0[tid] * self.dt[0] * self.dt[0])
+    #         schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
+    #                  self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
+    #                  self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
+    #                  self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + alpha)
+    #
+    #         Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
+    #
+    #         if Cv > 0:
+    #             ld = -Cv / schur
+    #
+    #             self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
+    #             self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
+    #             self.dv[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
+    #             self.dv[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
+    #
+    #             self.nc[v0] += 1
+    #             self.nc[v1] += 1
+    #             self.nc[v2] += 1
+    #             self.nc[v3] += 1
+    #
+    #         J = sig[0, 0] * sig[1, 1] * sig[2, 2]
+    #         J = F.trace()
+    #         # if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
+    #         #     ti.atomic_add(self.num_inverted_elements[0], 1)
+    #
+    #         gamma = 3.0
+    #         H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
+    #
+    #         nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
+    #         nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
+    #         nabla_C_vol_2 = ti.Vector([H_vol[j, 2] for j in ti.static(range(3))])
+    #         nabla_C_vol_3 = -(nabla_C_vol_0 + nabla_C_vol_1 + nabla_C_vol_2)
+    #         alpha = 1.0 / (la * self.V0[tid] * self.dt[0] * self.dt[0])
+    #         schur_vol = (self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0.dot(nabla_C_vol_0) +
+    #                      self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1.dot(nabla_C_vol_1) +
+    #                      self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
+    #                      self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + alpha)
+    #
+    #         Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
+    #
+    #         if Cv > 0:
+    #             ld_vol = -Cv / schur_vol
+    #             self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
+    #             self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
+    #             self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
+    #             self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
+    #
+    #             self.nc[v0] += 1
+    #             self.nc[v1] += 1
+    #             self.nc[v2] += 1
+    #             self.nc[v3] += 1
 
-        mu = YM / (2.0 * (1.0 + PR))
-        la = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
-
-        for tid in range(self.max_num_tetra_dynamic):
-
-            v0 = self.tetra_indices_dynamic[4 * tid + 0]
-            v1 = self.tetra_indices_dynamic[4 * tid + 1]
-            v2 = self.tetra_indices_dynamic[4 * tid + 2]
-            v3 = self.tetra_indices_dynamic[4 * tid + 3]
-
-            x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
-
-            x30 = x0 - x3
-            x31 = x1 - x3
-            x32 = x2 - x3
-
-            Ds = ti.Matrix.cols([x30, x31, x32])
-
-            F = Ds @ self.Dm_inv[tid]
-            U, sig, V = ti.svd(F)
-            R = U @ V.transpose()
-
-            # if U.determinant() < 0:
-            #     for i in ti.static(range(3)): U[i, 2] *= -1
-            #     sig[2, 2] = -sig[2, 2]
-            # if V.determinant() < 0:
-            #     for i in ti.static(range(3)): V[i, 2] *= -1
-            #     sig[2, 2] = -sig[2, 2]
-
-            H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
-
-            C = mu * self.V0[tid] * (ti.pow(sig[0, 0] - 1.0, 2) + ti.pow(sig[1, 1] - 1.0, 2) + ti.pow(sig[2, 2] - 1.0, 2))
-
-            g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
-            g1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
-            g2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
-            g3 = -(g0 + g1 + g2)
-
-            alpha = 1.0 / (mu * self.V0[tid] * self.dt[0] * self.dt[0])
-            schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
-                     self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
-                     self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
-                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + 1e-3)
-
-
-
-            ld = -C / schur
-
-            self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
-            self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
-            self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
-            self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
-
-            self.nc[v0] += 1
-            self.nc[v1] += 1
-            self.nc[v2] += 1
-            self.nc[v3] += 1
-
-
-            J = sig[0, 0] * sig[1, 1] * sig[2, 2]
-            J = F.trace()
-            if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
-                ti.atomic_add(self.num_inverted_elements[0], 1)
-
-            gamma = 3.
-            C_vol = 0.5 * la * self.V0[tid] * (J - gamma) * (J - gamma)
-            H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
-
-            nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
-            nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
-            nabla_C_vol_2 = ti.Vector([H_vol[j, 2] for j in ti.static(range(3))])
-            nabla_C_vol_3 = -(nabla_C_vol_0 + nabla_C_vol_1 + nabla_C_vol_2)
-            alpha = 1.0 / (la * self.V0[tid] * self.dt[0] * self.dt[0])
-            schur_vol = (self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0.dot(nabla_C_vol_0) +
-                        self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1.dot(nabla_C_vol_1) +
-                        self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
-                        self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + alpha)
-
-            ld_vol = C_vol / schur_vol
-
-            self.dx[v0] -= self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
-            self.dx[v1] -= self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
-            self.dx[v2] -= self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
-            self.dx[v3] -= self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
-
-            self.nc[v0] += 1
-            self.nc[v1] += 1
-            self.nc[v2] += 1
-            self.nc[v3] += 1
-            #
-            # ti.atomic_add(self.current_volume[0], vol)
-
-    @ti.kernel
-    def solve_fem_constraints_v(self, YM: ti.f32, PR: ti.f32):
-        mu = YM / (2.0 * (1.0 + PR))
-        la = (YM * PR) / ((1.0 + PR) * (1.0 - 2.0 * PR))
-
-        for tid in range(self.max_num_tetra_dynamic):
-
-            v0 = self.tetra_indices_dynamic[4 * tid + 0]
-            v1 = self.tetra_indices_dynamic[4 * tid + 1]
-            v2 = self.tetra_indices_dynamic[4 * tid + 2]
-            v3 = self.tetra_indices_dynamic[4 * tid + 3]
-
-            x0, x1, x2, x3 = self.y[v0], self.y[v1], self.y[v2], self.y[v3]
-
-            x30 = x0 - x3
-            x31 = x1 - x3
-            x32 = x2 - x3
-
-            Ds = ti.Matrix.cols([x30, x31, x32])
-
-            F = Ds @ self.Dm_inv[tid]
-            U, sig, V = ti.svd(F)
-            R = U @ V.transpose()
-
-            if U.determinant() < 0:
-                for i in ti.static(range(3)): U[i, 2] *= -1
-                sig[2, 2] = -sig[2, 2]
-            if V.determinant() < 0:
-                for i in ti.static(range(3)): V[i, 2] *= -1
-                sig[2, 2] = -sig[2, 2]
-
-            H = 2.0 * mu * self.V0[tid] * (F - R) @ self.Dm_inv[tid].transpose()
-
-            g0 = ti.Vector([H[j, 0] for j in ti.static(range(3))])
-            g1 = ti.Vector([H[j, 1] for j in ti.static(range(3))])
-            g2 = ti.Vector([H[j, 2] for j in ti.static(range(3))])
-            g3 = -(g0 + g1 + g2)
-
-            alpha = 1.0 / (mu * self.V0[tid] * self.dt[0] * self.dt[0])
-            schur = (self.fixed[v0] * self.m_inv[v0] * g0.dot(g0) +
-                     self.fixed[v1] * self.m_inv[v1] * g1.dot(g1) +
-                     self.fixed[v2] * self.m_inv[v2] * g2.dot(g2) +
-                     self.fixed[v3] * self.m_inv[v3] * g3.dot(g3) + alpha)
-
-            Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
-
-            if Cv > 0:
-                ld = -Cv / schur
-
-                self.dv[v0] += self.fixed[v0] * self.m_inv[v0] * g0 * ld
-                self.dv[v1] += self.fixed[v1] * self.m_inv[v1] * g1 * ld
-                self.dv[v2] += self.fixed[v2] * self.m_inv[v2] * g2 * ld
-                self.dv[v3] += self.fixed[v3] * self.m_inv[v3] * g3 * ld
-
-                self.nc[v0] += 1
-                self.nc[v1] += 1
-                self.nc[v2] += 1
-                self.nc[v3] += 1
-
-            J = sig[0, 0] * sig[1, 1] * sig[2, 2]
-            J = F.trace()
-            # if sig[0, 0] * sig[1, 1] * sig[2, 2] < 0.0:
-            #     ti.atomic_add(self.num_inverted_elements[0], 1)
-
-            gamma = 3.0
-            H_vol = la * self.V0[tid] * (J - gamma) * self.Dm_inv[tid].transpose()
-
-            nabla_C_vol_0 = ti.Vector([H_vol[j, 0] for j in ti.static(range(3))])
-            nabla_C_vol_1 = ti.Vector([H_vol[j, 1] for j in ti.static(range(3))])
-            nabla_C_vol_2 = ti.Vector([H_vol[j, 2] for j in ti.static(range(3))])
-            nabla_C_vol_3 = -(nabla_C_vol_0 + nabla_C_vol_1 + nabla_C_vol_2)
-            alpha = 1.0 / (la * self.V0[tid] * self.dt[0] * self.dt[0])
-            schur_vol = (self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0.dot(nabla_C_vol_0) +
-                         self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1.dot(nabla_C_vol_1) +
-                         self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2.dot(nabla_C_vol_2) +
-                         self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3.dot(nabla_C_vol_3) + alpha)
-
-            Cv = g0.dot(self.v[v0]) + g1.dot(self.v[v1]) + g2.dot(self.v[v2]) + g3.dot(self.v[v3])
-
-            if Cv > 0:
-                ld_vol = -Cv / schur_vol
-                self.dx[v0] += self.fixed[v0] * self.m_inv[v0] * nabla_C_vol_0 * ld_vol
-                self.dx[v1] += self.fixed[v1] * self.m_inv[v1] * nabla_C_vol_1 * ld_vol
-                self.dx[v2] += self.fixed[v2] * self.m_inv[v2] * nabla_C_vol_2 * ld_vol
-                self.dx[v3] += self.fixed[v3] * self.m_inv[v3] * nabla_C_vol_3 * ld_vol
-
-                self.nc[v0] += 1
-                self.nc[v1] += 1
-                self.nc[v2] += 1
-                self.nc[v3] += 1
-
-
-
-
-
-
-    @ti.kernel
-    def update_x(self):
-
-        for i in range(self.max_num_verts_dynamic):
-            self.x[i] += self.v[i] * self.dt[0]
 
     @ti.kernel
     def update_x_test(self, dt: ti.f32):
 
-        for v in self.mesh_test.verts:
+        for v in self.mesh_dy.verts:
             v.x += v.v * dt
-    @ti.kernel
-    def confine_to_boundary(self):
+    # @ti.kernel
+    # def confine_to_boundary(self):
+    #
+    #     for vi in range(self.max_num_verts_dynamic):
+    #
+    #         if self.y[vi][0] > self.padding * self.grid_size[0]:
+    #             self.y[vi][0] = self.padding * self.grid_size[0]
+    #
+    #         if self.y[vi][0] < -self.padding * self.grid_size[0]:
+    #             self.y[vi][0] = -self.padding * self.grid_size[0]
+    #
+    #         if self.y[vi][1] > self.padding * self.grid_size[1]:
+    #             self.y[vi][1] = self.padding * self.grid_size[1]
+    #
+    #         if self.y[vi][1] < -self.padding * self.grid_size[1]:
+    #             self.y[vi][1] = -self.padding * self.grid_size[1]
+    #
+    #         if self.y[vi][2] > self.padding * self.grid_size[2]:
+    #             self.y[vi][2] = self.padding * self.grid_size[2]
+    #
+    #         if self.y[vi][2] < -self.padding * self.grid_size[2]:
+    #             self.y[vi][2] = -self.padding * self.grid_size[2]
 
-        for vi in range(self.max_num_verts_dynamic):
-
-            if self.y[vi][0] > self.padding * self.grid_size[0]:
-                self.y[vi][0] = self.padding * self.grid_size[0]
-
-            if self.y[vi][0] < -self.padding * self.grid_size[0]:
-                self.y[vi][0] = -self.padding * self.grid_size[0]
-
-            if self.y[vi][1] > self.padding * self.grid_size[1]:
-                self.y[vi][1] = self.padding * self.grid_size[1]
-
-            if self.y[vi][1] < -self.padding * self.grid_size[1]:
-                self.y[vi][1] = -self.padding * self.grid_size[1]
-
-            if self.y[vi][2] > self.padding * self.grid_size[2]:
-                self.y[vi][2] = self.padding * self.grid_size[2]
-
-            if self.y[vi][2] < -self.padding * self.grid_size[2]:
-                self.y[vi][2] = -self.padding * self.grid_size[2]
-
-    @ti.kernel
-    def confine_to_boundary_v(self):
-
-        for vi in range(self.max_num_verts_dynamic):
-
-            if self.y[vi][0] > self.grid_size[0] and self.v[vi][0] > 0:
-                self.v[vi][0] = 0
-
-            if self.y[vi][0] < -self.grid_size[0] and self.v[vi][0] < 0:
-                self.v[vi][0] = 0
-
-            if self.y[vi][1] > self.grid_size[1] and self.v[vi][1] > 0:
-                self.v[vi][1] = 0
-
-            if self.y[vi][1] < -self.grid_size[1] and self.v[vi][1] < 0:
-                self.v[vi][1] = 0
-
-            if self.y[vi][2] > self.grid_size[2] and self.v[vi][2] > 0:
-                self.v[vi][2] = 0
-
-            if self.y[vi][2] < -self.grid_size[2] and self.v[vi][2] < 0:
-                self.v[vi][2] = 0
-
-
-    @ti.kernel
-    def compute_velocity(self):
-        for i in range(self.max_num_verts_dynamic):
-                self.v[i] = (self.y[i] - self.x[i]) / self.dt[0]
 
     @ti.kernel
     def compute_velocity_test(self, dt: ti.f32):
-        for v in self.mesh_test.verts:
+        for v in self.mesh_dy.verts:
             v.v = (v.y - v.x) / dt
 
     def init_variables(self):
-        self.dx.fill(0.0)
-        self.nc.fill(0)
 
-        self.vt_static_pair_num.fill(0)
-        self.vt_static_pair_g.fill(0.0)
-        self.vt_static_pair_schur.fill(0.0)
-        self.vt_static_pair.fill(0)
+        # self.vt_static_pair_num.fill(0)
+        # self.vt_static_pair_g.fill(0.0)
+        # self.vt_static_pair_schur.fill(0.0)
+        # self.vt_static_pair.fill(0)
+        #
+        #
+        # self.tv_static_pair_num.fill(0)
+        # self.tv_static_pair_g.fill(0.0)
+        # self.tv_static_pair_schur.fill(0.0)
+        # self.tv_static_pair.fill(0)
+        #
+        # self.tv_dynamic_pair_num.fill(0)
+        # self.tv_dynamic_pair_g.fill(0.0)
+        # self.tv_dynamic_pair_schur.fill(0.0)
+        # self.tv_dynamic_pair.fill(0)
+        #
+        # self.ee_static_pair_num.fill(0)
+        # self.ee_static_pair_g.fill(0.0)
+        # self.ee_static_pair_schur.fill(0.0)
+        # self.ee_static_pair.fill(0)
+        #
+        # self.ee_dynamic_pair_num.fill(0)
+        # self.ee_dynamic_pair_g.fill(0.0)
+        # self.ee_dynamic_pair_schur.fill(0.0)
+        # self.ee_dynamic_pair.fill(0)
+        #
+        # self.num_inverted_elements.fill(0)
 
-
-        self.tv_static_pair_num.fill(0)
-        self.tv_static_pair_g.fill(0.0)
-        self.tv_static_pair_schur.fill(0.0)
-        self.tv_static_pair.fill(0)
-
-        self.tv_dynamic_pair_num.fill(0)
-        self.tv_dynamic_pair_g.fill(0.0)
-        self.tv_dynamic_pair_schur.fill(0.0)
-        self.tv_dynamic_pair.fill(0)
-
-        self.ee_static_pair_num.fill(0)
-        self.ee_static_pair_g.fill(0.0)
-        self.ee_static_pair_schur.fill(0.0)
-        self.ee_static_pair.fill(0)
-
-        self.ee_dynamic_pair_num.fill(0)
-        self.ee_dynamic_pair_g.fill(0.0)
-        self.ee_dynamic_pair_schur.fill(0.0)
-        self.ee_dynamic_pair.fill(0)
-
-        self.num_inverted_elements.fill(0)
-
-        self.mesh_test.verts.dx.fill(0.0)
-        self.mesh_test.verts.nc.fill(0.0)
+        self.mesh_dy.verts.dx.fill(0.0)
+        self.mesh_dy.verts.nc.fill(0.0)
 
 
     def solve_constraints_x(self):
 
         self.init_variables()
-        self.solve_spring_constraints_x(self.YM[0], self.strain_limit[0])
         self.solve_spring_constraints_x_test(self.YM[0], self.strain_limit[0])
 
         # if self.enable_collision_handling:
@@ -3044,103 +2643,94 @@ class Solver:
         # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
         # self.solve_pressure_constraints_x()
-
-        self.update_dx()
         self.update_dx_test()
 
         # print(self.num_springs[0])
-
-    def solve_constraints_v(self):
-        self.dv.fill(0.0)
-        self.nc.fill(0)
-
-        # self.solve_spring_constraints_v()
-
-        if self.enable_collision_handling:
-            self.solve_collision_constraints_v()
-
-        self.solve_fem_constraints_v(self.YM[0], self.PR[0])
-        # self.solve_pressure_constraints_v()
-        self.update_dv()
-
-    @ti.kernel
-    def update_dx(self):
-        for vi in range(self.max_num_verts_dynamic):
-            if self.nc[vi] > 0.0:
-                self.dx[vi] = self.dx[vi] / self.nc[vi]
-                self.y[vi] += self.fixed[vi] * self.dx[vi]
+    #
+    # def solve_constraints_v(self):
+    #     self.dv.fill(0.0)
+    #     self.nc.fill(0)
+    #
+    #     # self.solve_spring_constraints_v()
+    #
+    #     if self.enable_collision_handling:
+    #         self.solve_collision_constraints_v()
+    #
+    #     self.solve_fem_constraints_v(self.YM[0], self.PR[0])
+    #     # self.solve_pressure_constraints_v()
+    #     self.update_dv()
 
     @ti.kernel
     def update_dx_test(self):
-        for v in self.mesh_test.verts:
+        for v in self.mesh_dy.verts:
             if v.nc > 0.0:
                 v.y += (v.dx / v.nc)
 
-    @ti.kernel
-    def set_fixed_vertices(self, fixed_vertices: ti.template()):
-        for vi in range(self.max_num_verts_dynamic):
-            if fixed_vertices[vi] >= 1:
-                self.fixed[vi] = 0.0
-            else:
-                self.fixed[vi] = 1.0
-    @ti.kernel
-    def update_dv(self):
-        for vi in range(self.max_num_verts_dynamic):
-            if self.nc[vi] > 0.0:
-                self.dv[vi] = self.dv[vi] / self.nc[vi]
+    # @ti.kernel
+    # def set_fixed_vertices(self, fixed_vertices: ti.template()):
+    #     for vi in range(self.max_num_verts_dynamic):
+    #         if fixed_vertices[vi] >= 1:
+    #             self.fixed[vi] = 0.0
+    #         else:
+    #             self.fixed[vi] = 1.0
+    # @ti.kernel
+    # def update_dv(self):
+    #     for vi in range(self.max_num_verts_dynamic):
+    #         if self.nc[vi] > 0.0:
+    #             self.dv[vi] = self.dv[vi] / self.nc[vi]
+    #
+    #         if self.m_inv[vi] > 0.0:
+    #             self.v[vi] += self.fixed[vi] * self.dv[vi]
 
-            if self.m_inv[vi] > 0.0:
-                self.v[vi] += self.fixed[vi] * self.dv[vi]
+    # @ti.kernel
+    # def move_static_object(self):
+    #
+    #     center = ti.math.vec3(0.0)
+    #     for i in self.x_static:
+    #         center += self.x_static[i]
+    #
+    #     center /= self.max_num_verts_static
+    #
+    #     for i in self.x_static:
+    #         old = self.x_static[i]
+    #         ri = self.x_static[i] - center
+    #         v_4d = ti.Vector([ri[0], ri[1], ri[2], 1])
+    #         rot_rad = ti.math.radians(self.obs_ang_vel[0] * self.dt[0])
+    #         rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
+    #
+    #         center += self.obs_lin_vel[0] * self.dt[0]
+    #
+    #         self.x_static[i] = ti.math.vec3(rv[0], rv[1], rv[2]) + center
+    #         self.v_static[i] = (self.x_static[i] - old) / self.dt[0]
+    #
+    #     # for i in self.x_static:
+    #     #     x_cur = self.x_static[i]
+    #     #     offset = 30
+    #     #     if self.frame[0] >= 30:
+    #     #         self.v_static[i] = ti.math.vec3(0., 20.0 * ti.math.sin(30. * (self.frame[0] - offset) * self.dt[0]), 0.)
+    #     #         self.x_static[i] += self.v_static[i] * self.dt[0]
 
-    @ti.kernel
-    def move_static_object(self):
-
-        center = ti.math.vec3(0.0)
-        for i in self.x_static:
-            center += self.x_static[i]
-
-        center /= self.max_num_verts_static
-
-        for i in self.x_static:
-            old = self.x_static[i]
-            ri = self.x_static[i] - center
-            v_4d = ti.Vector([ri[0], ri[1], ri[2], 1])
-            rot_rad = ti.math.radians(self.obs_ang_vel[0] * self.dt[0])
-            rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
-
-            center += self.obs_lin_vel[0] * self.dt[0]
-
-            self.x_static[i] = ti.math.vec3(rv[0], rv[1], rv[2]) + center
-            self.v_static[i] = (self.x_static[i] - old) / self.dt[0]
-
-        # for i in self.x_static:
-        #     x_cur = self.x_static[i]
-        #     offset = 30
-        #     if self.frame[0] >= 30:
-        #         self.v_static[i] = ti.math.vec3(0., 20.0 * ti.math.sin(30. * (self.frame[0] - offset) * self.dt[0]), 0.)
-        #         self.x_static[i] += self.v_static[i] * self.dt[0]
-
-    @ti.kernel
-    def move_each_static_object(self, start_idx: ti.template(), len: ti.template(), sid: ti.template()):
-
-        center = ti.math.vec3(0.0)
-        for i in ti.ndrange(len):
-            center += self.x_static[i + start_idx]
-
-        center /= len
-
-        for i in ti.ndrange(len):
-            old = self.x_static[i + start_idx]
-            ri = self.x_static[i + start_idx] - center
-            v_4d = ti.Vector([ri[0], ri[1], ri[2], 1])
-
-            rot_rad = ti.math.radians(self.manual_ang_vels[sid] * self.dt[0])
-            rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
-
-            center += self.obs_lin_vel[sid] * self.dt[0]
-
-            self.x_static[i + start_idx] = ti.math.vec3(rv[0], rv[1], rv[2]) + center
-            self.v_static[i + start_idx] = (self.x_static[i + start_idx] - old) / self.dt[0]
+    # @ti.kernel
+    # def move_each_static_object(self, start_idx: ti.template(), len: ti.template(), sid: ti.template()):
+    #
+    #     center = ti.math.vec3(0.0)
+    #     for i in ti.ndrange(len):
+    #         center += self.x_static[i + start_idx]
+    #
+    #     center /= len
+    #
+    #     for i in ti.ndrange(len):
+    #         old = self.x_static[i + start_idx]
+    #         ri = self.x_static[i + start_idx] - center
+    #         v_4d = ti.Vector([ri[0], ri[1], ri[2], 1])
+    #
+    #         rot_rad = ti.math.radians(self.manual_ang_vels[sid] * self.dt[0])
+    #         rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
+    #
+    #         center += self.obs_lin_vel[sid] * self.dt[0]
+    #
+    #         self.x_static[i + start_idx] = ti.math.vec3(rv[0], rv[1], rv[2]) + center
+    #         self.v_static[i + start_idx] = (self.x_static[i + start_idx] - old) / self.dt[0]
 
 
     def forward(self, n_substeps):
@@ -3148,69 +2738,48 @@ class Solver:
         dt = self.dt[0]
         self.dt[0] = dt / n_substeps
 
-        ti.profiler.clear_kernel_profiler_info()
+        # ti.profiler.clear_kernel_profiler_info()
         for _ in range(n_substeps):
-            self.compute_y()
+
             self.compute_y_test(dt)
-            # # self.determine_cell_size_and_num()
-            # # self.search_neighbours()
-            # # GUI static mesh animation
-            #
-            # # if self.enable_move_obstacle:
-            # #     self.move_static_object()
-            #
-            # # manually set static mesh animation.
-            # # self.manual_ang_vels and self.manual_lin_vels
-            # if self.enable_move_obstacle:
-            #     for sid in range(len(self.meshes_static)):
-            #         n_vert = 0
-            #         if sid == len(self.meshes_static) - 1:
-            #             n_vert = self.max_num_verts_static - self.offset_verts_static[sid]
-            #         else:
-            #             n_vert = self.offset_verts_static[sid + 1] - self.offset_verts_static[sid]
-            #         self.move_each_static_object(self.offset_verts_static[sid], n_vert, sid)
-            #
-            # else:
-            #     self.v_static.fill(0.0)
 
-            self.solve_constraints_x()
+            # self.solve_constraints_x()
 
-            self.compute_velocity()
             self.compute_velocity_test(dt)
             # self.solve_constraints_v()
-            self.update_x()
+
             self.update_x_test(dt)
 
-        compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
-        solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
-        compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity.__name__)
-        update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x.__name__)
+        # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
+        # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
+        # compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity.__name__)
+        # update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x.__name__)
+        #
+        # total_1 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
+        #
+        # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y_test.__name__)
+        # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x_test.__name__)
+        # compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity_test.__name__)
+        # update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x_test.__name__)
+        #
+        # total_2 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
+        #
+        # if self.frame[0] < 100:
+        #     print(round(total_1 / total_2, 4))
 
-        total_1 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
-
-        compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y_test.__name__)
-        solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x_test.__name__)
-        compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity_test.__name__)
-        update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x_test.__name__)
-
-        total_2 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
-
-        if self.frame[0] < 100:
-            print(round(total_1 / total_2, 4))
-
-        self.copy_to_meshes()
-        self.copy_to_particles()
+        # self.copy_to_meshes()
+        # self.copy_to_particles()
 
         self.dt[0] = dt
-        self.frame[0] = self.frame[0] + 1
-
-
-
-    @ti.kernel
-    def random_noise(self):
-        scale = 2.0
-        for vi in range(self.max_num_verts_dynamic):
-            v = ti.math.vec3(ti.random(dtype=float), ti.random(dtype=float), ti.random(dtype=float))
-            # v.normalized()
-            self.x[vi] += scale * v * self.dt[0]
-
+        # self.frame[0] = self.frame[0] + 1
+    #
+    #
+    #
+    # @ti.kernel
+    # def random_noise(self):
+    #     scale = 2.0
+    #     for vi in range(self.max_num_verts_dynamic):
+    #         v = ti.math.vec3(ti.random(dtype=float), ti.random(dtype=float), ti.random(dtype=float))
+    #         # v.normalized()
+    #         self.x[vi] += scale * v * self.dt[0]
+    #

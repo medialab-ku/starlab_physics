@@ -8,7 +8,7 @@ import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.meshes_dynamic, scene1.mesh_test, scene1.meshes_static, scene1.tet_meshes_dynamic, scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, particle_radius=0.02, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, particle_radius=0.02, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -31,7 +31,7 @@ MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 
 #selector
-g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
+# g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.x, window, camera)
 print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
 n_substep = 40
@@ -83,8 +83,8 @@ def show_options():
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         strain_limit_ui = w.slider_float("strain limit", strain_limit_ui, 0.0, 1.0)
         YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
-        if sim.max_num_tetra_dynamic > 0:
-            PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
+        # if sim.max_num_tetra_dynamic > 0:
+        #     PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
         MODE_WIREFRAME = w.checkbox("wireframe", MODE_WIREFRAME)
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
@@ -104,19 +104,19 @@ def show_options():
         w.text(verts_str)
         w.text(edges_str)
 
-        if sim.max_num_tetra_dynamic > 0:
-            tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
-            w.text(tetra_str)
-            rest_volume = sim.rest_volume[0]
-            current_volume = sim.current_volume[0]
-
-            volume_ratio = round(100.0 * current_volume / rest_volume, 2)
-            volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
-            w.text(volume_ratio_str)
-
-            num_inverted_tetrs = sim.num_inverted_elements[0]
-            num_inverted_tetrs_str = "# inverted tetrs: " + str(num_inverted_tetrs)
-            w.text(num_inverted_tetrs_str)
+        # if sim.max_num_tetra_dynamic > 0:
+        #     tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
+        #     w.text(tetra_str)
+        #     rest_volume = sim.rest_volume[0]
+        #     current_volume = sim.current_volume[0]
+        #
+        #     volume_ratio = round(100.0 * current_volume / rest_volume, 2)
+        #     volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
+        #     w.text(volume_ratio_str)
+        #
+        #     num_inverted_tetrs = sim.num_inverted_elements[0]
+        #     num_inverted_tetrs_str = "# inverted tetrs: " + str(num_inverted_tetrs)
+        #     w.text(num_inverted_tetrs_str)
 
     if not old_dt == dt_ui:
         sim.dt[0] = dt_ui
@@ -180,30 +180,30 @@ def show_options():
     if not old_lin_vel_z_ui == lin_vel_z_ui:
         sim.obs_lin_vel[0][2] = lin_vel_z_ui
 
-    with gui.sub_window("Debug", 0.8, 0.8, 0.3, 0.5) as w:
-
-        if sim.max_num_tetra_dynamic > 0:
-            # rest_volume = sim.rest_volume[0]
-            # current_volume = sim.current_volume[0]
-            #
-            # volume_ratio = round(100.0 * current_volume / rest_volume, 2)
-            # volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
-            # w.text(volume_ratio_str)
-
-            num_inverted_elements_str = "# inverted elements: " + str(sim.num_inverted_elements[0])
-            w.text(num_inverted_elements_str)
-
-        # num_vt_dynamic_str = "# vt_dynamic: " + str(sim.vt_active_set_num_dynamic[0])
-        # w.text(num_vt_dynamic_str)
-        #
-        # num_ee_static_str = "# ee_static: " + str(sim.ee_active_set_num[0])
-        # w.text(num_ee_static_str)
-        #
-        # num_vt_static_str = "# vt_static: " + str(sim.vt_active_set_num[0])
-        # w.text(num_vt_static_str)
-        #
-        # num_tv_static_str = "# tv_static: " + str(sim.tv_active_set_num[0])
-        # w.text(num_tv_static_str)
+    # with gui.sub_window("Debug", 0.8, 0.8, 0.3, 0.5) as w:
+    #
+    #     if sim.max_num_tetra_dynamic > 0:
+    #         # rest_volume = sim.rest_volume[0]
+    #         # current_volume = sim.current_volume[0]
+    #         #
+    #         # volume_ratio = round(100.0 * current_volume / rest_volume, 2)
+    #         # volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
+    #         # w.text(volume_ratio_str)
+    #
+    #         num_inverted_elements_str = "# inverted elements: " + str(sim.num_inverted_elements[0])
+    #         w.text(num_inverted_elements_str)
+    #
+    #     # num_vt_dynamic_str = "# vt_dynamic: " + str(sim.vt_active_set_num_dynamic[0])
+    #     # w.text(num_vt_dynamic_str)
+    #     #
+    #     # num_ee_static_str = "# ee_static: " + str(sim.ee_active_set_num[0])
+    #     # w.text(num_ee_static_str)
+    #     #
+    #     # num_vt_static_str = "# vt_static: " + str(sim.vt_active_set_num[0])
+    #     # w.text(num_vt_static_str)
+    #     #
+    #     # num_tv_static_str = "# tv_static: " + str(sim.tv_active_set_num[0])
+    #     # w.text(num_tv_static_str)
 
 def load_animation():
     global sim
@@ -230,7 +230,7 @@ def load_animation():
             animationDict[ic].append(animationFrag)
 
     # print(animationDict)
-    sim._set_animation(animationDict, g_selector.is_selected)
+    # sim._set_animation(animationDict, g_selector.is_selected)
 
 while window.running:
 
@@ -243,17 +243,17 @@ while window.running:
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
 
     if window.get_event(ti.ui.PRESS):
-        if window.event.key == 'c':
-            g_selector.selection_Count_Up()
-
-        if window.event.key == 'x':  # export selection
-            print("==== Vertex EXPORT!! ====")
-            g_selector.export_selection()
-
-        if window.event.key == 'i':
-            print("==== IMPORT!! ====")
-            g_selector.import_selection()
-            load_animation()
+        # if window.event.key == 'c':
+        #     g_selector.selection_Count_Up()
+        #
+        # if window.event.key == 'x':  # export selection
+        #     print("==== Vertex EXPORT!! ====")
+        #     g_selector.export_selection()
+        #
+        # if window.event.key == 'i':
+        #     print("==== IMPORT!! ====")
+        #     g_selector.import_selection()
+        #     load_animation()
 
         if window.event.key == ' ':
             run_sim = not run_sim
@@ -261,8 +261,8 @@ while window.running:
         if window.event.key == 'r':
             frame_cpu = 0
             sim.reset()
-            g_selector.is_selected.fill(0)
-            sim.set_fixed_vertices(g_selector.is_selected)
+            # g_selector.is_selected.fill(0)
+            # sim.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
 
         if window.event.key == 'v':
@@ -279,72 +279,76 @@ while window.running:
             else:
                 print("collision handling off")
 
-        if window.event.key == 'h':
-            sim.set_fixed_vertices(g_selector.is_selected)
-
-
-        if window.event.key == ti.ui.BACKSPACE:
-            g_selector.is_selected.fill(0)
-
-        if window.event.key == ti.ui.LMB:
-            g_selector.LMB_mouse_pressed = True
-            g_selector.mouse_click_pos[0], g_selector.mouse_click_pos[1] = window.get_cursor_pos()
-
-        if window.event.key == ti.ui.TAB:
-            g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
-
-    if window.get_event(ti.ui.RELEASE):
-        if window.event.key == ti.ui.LMB:
-            g_selector.LMB_mouse_pressed = False
-            g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
-            g_selector.Select()
-
-    if g_selector.LMB_mouse_pressed:
-        g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
-        g_selector.update_ti_rect_selection()
+    #     if window.event.key == 'h':
+    #         sim.set_fixed_vertices(g_selector.is_selected)
+    #
+    #
+    #     if window.event.key == ti.ui.BACKSPACE:
+    #         g_selector.is_selected.fill(0)
+    #
+    #     if window.event.key == ti.ui.LMB:
+    #         g_selector.LMB_mouse_pressed = True
+    #         g_selector.mouse_click_pos[0], g_selector.mouse_click_pos[1] = window.get_cursor_pos()
+    #
+    #     if window.event.key == ti.ui.TAB:
+    #         g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
+    #
+    # if window.get_event(ti.ui.RELEASE):
+    #     if window.event.key == ti.ui.LMB:
+    #         g_selector.LMB_mouse_pressed = False
+    #         g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
+    #         g_selector.Select()
+    #
+    # if g_selector.LMB_mouse_pressed:
+    #     g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
+    #     g_selector.update_ti_rect_selection()
 
     if run_sim:
-        sim.animate_handle(g_selector.is_selected)
+        # sim.animate_handle(g_selector.is_selected)
         sim.forward(n_substeps=n_substep)
         frame_cpu = frame_cpu+1
 
     show_options()
 
-    for mid in range(len(scene1.meshes_dynamic)):
-        scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=scene1.colors_tri_dynamic[mid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
-
-    for mid in range(len(scene1.meshes_static)):
-        scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid] if not MODE_WIREFRAME else (0, 0, 0), show_wireframe=MODE_WIREFRAME)
-
-    for tid in range(len(scene1.tet_meshes_dynamic)):
-        scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=scene1.colors_tet_dynamic[tid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
-
-    for pid in range(len(scene1.particles)):
-        scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
-
-    if mesh_export and run_sim and frame_cpu < frame_end:
-        sim.export_mesh = True
-        for mid in range(len(scene1.meshes_dynamic)):
-            sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
-
-        for tid in range(len(scene1.tet_meshes_dynamic)):
-            sim.tet_meshes_dynamic[tid].export(os.path.basename(scene1.__file__), tid, frame_cpu)
-
-        for pid in range(len(scene1.particles)):
-            sim.particles[pid].export(os.path.basename(scene1.__file__), pid, frame_cpu)
-
-        for sid in range(len(scene1.meshes_static)):
-            sim.meshes_static[sid].export(os.path.basename(scene1.__file__), sid, frame_cpu, is_static=True)
+    # for mid in range(len(scene1.meshes_dynamic)):
+    #     scene.mesh(sim.meshes_dynamic[mid].mesh.verts.x, indices=sim.meshes_dynamic[mid].face_indices, color=scene1.colors_tri_dynamic[mid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
+    #
+    # for mid in range(len(scene1.meshes_static)):
+    #     scene.mesh(sim.meshes_static[mid].mesh.verts.x, indices=sim.meshes_static[mid].face_indices, color=colors_static[mid] if not MODE_WIREFRAME else (0, 0, 0), show_wireframe=MODE_WIREFRAME)
+    #
+    # for tid in range(len(scene1.tet_meshes_dynamic)):
+    #     scene.mesh(sim.tet_meshes_dynamic[tid].verts.x, indices=sim.tet_meshes_dynamic[tid].face_indices, color=scene1.colors_tet_dynamic[tid] if not MODE_WIREFRAME else (0,0,0),show_wireframe=MODE_WIREFRAME)
+    #
+    # for pid in range(len(scene1.particles)):
+    #     scene.particles(sim.particles[pid].x, radius=sim.particle_radius, color=(1, 0, 0))
+    #
+    # if mesh_export and run_sim and frame_cpu < frame_end:
+    #     sim.export_mesh = True
+    #     for mid in range(len(scene1.meshes_dynamic)):
+    #         sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
+    #
+    #     for tid in range(len(scene1.tet_meshes_dynamic)):
+    #         sim.tet_meshes_dynamic[tid].export(os.path.basename(scene1.__file__), tid, frame_cpu)
+    #
+    #     for pid in range(len(scene1.particles)):
+    #         sim.particles[pid].export(os.path.basename(scene1.__file__), pid, frame_cpu)
+    #
+    #     for sid in range(len(scene1.meshes_static)):
+    #         sim.meshes_static[sid].export(os.path.basename(scene1.__file__), sid, frame_cpu, is_static=True)
 
     # scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
-    scene.lines(sim.aabb_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
-    scene.mesh(sim.x_static,  indices=sim.face_indices_static, color=(0, 0, 0), show_wireframe=True)
-    scene.mesh(sim.x,  indices=sim.face_indices_dynamic, color=(0, 0, 0), show_wireframe=True)
+    # scene.lines(sim.aabb_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
 
-    g_selector.renderTestPos()
-    scene.particles(g_selector.renderTestPosition,radius=0.01, color=(1, 0, 1))
+    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(0, 0, 0), show_wireframe=True)
+    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(1, 0.5, 0), show_wireframe=False)
 
-    canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
+    scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0, 0), show_wireframe=True)
+    scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0), show_wireframe=False)
+
+    # g_selector.renderTestPos()
+    # scene.particles(g_selector.renderTestPosition,radius=0.01, color=(1, 0, 1))
+
+    # canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
     canvas.scene(scene)

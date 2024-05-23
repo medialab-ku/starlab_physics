@@ -10,7 +10,6 @@ def concat_mesh(model_dir, model_names, translations, scales):
     accum = 0
     v_list = []
     f_list = []
-
     for i in range(num_models):
         vtx_id_offsets.append(accum)
         model_path = os.path.join(model_dir, model_names[i])
@@ -29,9 +28,10 @@ def concat_mesh(model_dir, model_names, translations, scales):
         translate = lambda x, trans: x + trans
         v_list[i] = np.apply_along_axis(lambda row: translate(row, translations[i]), 1, v)
 
-        add_offset = lambda vid, offset: vid + offset
-        f_list[i] = add_offset(f, vtx_id_offsets[i])
+        # add_offset = lambda vid, offset: vid + offset
+        # f_list[i] = add_offset(f, vtx_id_offsets[i])
 
+    # if num_models > 1:
     v_concat = np.concatenate(v_list, axis=0)
     f_concat = np.concatenate(f_list, axis=0)
 
@@ -40,4 +40,14 @@ def concat_mesh(model_dir, model_names, translations, scales):
 
     model_path_concat = os.path.join(model_directory_cat, model_name_concat)
     igl.write_obj(model_path_concat, v_concat, f_concat)
+
+    # else:
+    #     v_concat = v_list[0]
+    #     f_concat = f_list[0]
+    #
+    #     model_directory_cat = "../models/"
+    #     model_name_concat = "concat.obj"
+    #
+    #     model_path_concat = os.path.join(model_directory_cat, model_name_concat)
+    #     igl.write_obj(model_path_concat, v_concat, f_concat)
 
