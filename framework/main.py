@@ -36,9 +36,9 @@ print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
 
 n_substep = 40
 frame_end = 100
-dt_ui = sim.dt[0]
-dHat_ui = sim.dHat[0]
-strain_limit_ui = sim.strain_limit[0]
+dt_ui = sim.dt
+dHat_ui = sim.dHat
+strain_limit_ui = sim.strain_limit
 ang_vel_x_ui = sim.obs_ang_vel[0][0]
 ang_vel_y_ui = sim.obs_ang_vel[0][1]
 ang_vel_z_ui = sim.obs_ang_vel[0][2]
@@ -47,8 +47,8 @@ lin_vel_x_ui = sim.obs_lin_vel[0][0]
 lin_vel_y_ui = sim.obs_lin_vel[0][1]
 lin_vel_z_ui = sim.obs_lin_vel[0][2]
 
-PR_ui = sim.PR[0]
-YM_ui = sim.YM[0]
+PR_ui = sim.PR
+YM_ui = sim.YM
 friction_coeff_ui = sim.friction_coeff[0]
 mesh_export = False
 frame_cpu = 0
@@ -119,22 +119,22 @@ def show_options():
         #     w.text(num_inverted_tetrs_str)
 
     if not old_dt == dt_ui:
-        sim.dt[0] = dt_ui
+        sim.dt = dt_ui
 
     if not old_dHat == dHat_ui:
-        sim.dHat[0] = dHat_ui
+        sim.dHat = dHat_ui
 
     if not old_friction_coeff == friction_coeff_ui:
         sim.friction_coeff[0] = friction_coeff_ui
 
     if not YM_old == YM_ui:
-        sim.YM[0] = YM_ui
+        sim.YM = YM_ui
 
     if not PR_old == PR_ui:
-        sim.PR[0] = PR_ui
+        sim.PR = PR_ui
 
     if not old_strain_limit == strain_limit_ui:
-        sim.strain_limit[0] = strain_limit_ui
+        sim.strain_limit = strain_limit_ui
 
     global ang_vel_x_ui
     global ang_vel_y_ui
@@ -339,13 +339,12 @@ while window.running:
     # scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     # scene.lines(sim.aabb_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
 
-    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(0, 0, 0), show_wireframe=True)
-    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(1, 0.5, 0), show_wireframe=False)
-    # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=0.5, color=(0, 0, 0))
+    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(1, 0.5, 0))
+    scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
-        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, show_wireframe=True)
-        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0), show_wireframe=False)
+        scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
+        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
 
     # g_selector.renderTestPos()
     # scene.particles(g_selector.renderTestPosition,radius=0.01, color=(1, 0, 1))
