@@ -1,6 +1,7 @@
 import taichi as ti
 import numpy as np
 import solve_collision_constraints_x
+import solve_collision_constraints_v
 
 @ti.data_oriented
 class Solver:
@@ -9,7 +10,6 @@ class Solver:
                  mesh_dy,
                  mesh_st,
                  grid_size,
-                 particle_radius,
                  dHat,
                  YM,
                  PR,
@@ -38,7 +38,6 @@ class Solver:
         self.num_inverted_elements = ti.field(dtype=ti.i32, shape=1)
 
         self.grid_size = grid_size
-        self.particle_radius = particle_radius
         self.friction_coeff = ti.field(dtype=ti.f32, shape=1)
         self.friction_coeff[0] = 0
         self.grid_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
@@ -49,12 +48,10 @@ class Solver:
         self.padding = 0.2
         self.init_grid()
 
-        self.kernel_radius = 4 * particle_radius
-        self.cell_size = 5 * self.kernel_radius
         self.grid_origin = -self.grid_size
-        self.grid_num = np.ceil(2 * self.grid_size / self.cell_size).astype(int)
-        self.grid_num_dynamic = ti.Vector.field(n=3, dtype=ti.i32, shape=1)
-        print("grid dim:", self.grid_num)
+        # self.grid_num = np.ceil(2 * self.grid_size / self.cell_size).astype(int)
+        # self.grid_num_dynamic = ti.Vector.field(n=3, dtype=ti.i32, shape=1)
+        # print("grid dim:", self.grid_num)
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -116,7 +113,7 @@ class Solver:
         self.ee_dynamic_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size, 4))
         self.ee_dynamic_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size))
 
-        self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
+        # self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
         # self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.cache_size))
         # self.particle_neighbours_gradients = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
         # self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
@@ -427,7 +424,6 @@ class Solver:
     #
     #                 self.x[i] = self.anim_x[i]
 
-
     def init_grid(self):
 
         self.grid_vertices[0] = self.padding * ti.math.vec3(self.grid_size[0], self.grid_size[1], self.grid_size[2])
@@ -507,7 +503,7 @@ class Solver:
     @ti.kernel
     def compute_y(self, dt: ti.f32):
         for v in self.mesh_dy.verts:
-            v.y = v.x + v.v * dt + self.g * dt * dt
+            v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
 
     @ti.kernel
     def counting_sort(self):
@@ -702,82 +698,6 @@ class Solver:
             result = poly6_factor * x * x * x
         return result
 
-    @ti.kernel
-    def solve_pressure_constraints_x(self):
-
-        for vi in range(self.offset_particle, self.max_num_verts_dynamic):
-            self.c[vi] = - 1.0
-            nabla_C_ii = ti.math.vec3(0.0)
-            self.schur[vi] = 1e-4
-            xi = self.y[vi]
-            center_cell = self.pos_to_index(self.y[vi])
-            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index = self.flatten_cell_id(center_cell + offset)
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    vj = self.cur2org[p_j]
-                    xj = self.y[vj]
-                    xji = xj - xi
-
-                    if xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.cache_size:
-                        self.particle_neighbours[vi, self.num_particle_neighbours[vi]] = vj
-                        nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
-                        self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = nabla_C_ji
-                        self.c[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
-                        nabla_C_ii -= nabla_C_ji
-                        self.schur[vi] += nabla_C_ji.dot(nabla_C_ji)
-                        ti.atomic_add(self.num_particle_neighbours[vi], 1)
-
-            self.schur[vi] += nabla_C_ii.dot(nabla_C_ii)
-
-            if self.c[vi] > 0.0:
-                lambda_i = self.c[vi] / self.schur[vi]
-                for j in range(self.num_particle_neighbours[vi]):
-                # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                #     grid_index = self.flatten_grid_index(center_cell + offset)
-                #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                #         vj = self.cur2org[p_j]
-                    vj = self.particle_neighbours[vi, j]
-                    xj = self.y[vj]
-                    xji = xj - xi
-
-                    nabla_C_ji = self.particle_neighbours_gradients[vi, j]
-                    self.dx[vj] -= lambda_i * nabla_C_ji
-                    self.nc[vj] += 1
-
-            # self.dx[vi] -= lambda_i * nabla_C_ii
-            # self.nc[vi] += 1
-
-    @ti.kernel
-    def solve_pressure_constraints_v(self):
-
-        for vi in range(self.offset_particle, self.max_num_verts_dynamic):
-            Cv_i = 0.0
-            nabla_Cv_ii = ti.math.vec3(0.0)
-            for j in range(self.num_particle_neighbours[vi]):
-                # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                #     grid_index = self.flatten_grid_index(center_cell + offset)
-                #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                #         vj = self.cur2org[p_j]
-                vj = self.particle_neighbours[vi, j]
-
-                # if xji.norm() < self.kernel_radius:
-                nabla_Cv_ji = self.particle_neighbours_gradients[vi, j]
-                Cv_i += nabla_Cv_ji.dot(self.v[vj])
-                nabla_Cv_ii -= nabla_Cv_ji
-
-            lambda_i = Cv_i / self.schur[vi]
-
-            if self.c[vi] > 0.0 and Cv_i > 0:
-                for j in range(self.num_particle_neighbours[vi]):
-                    # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                    #     grid_index = self.flatten_grid_index(center_cell + offset)
-                    #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    #         vj = self.cur2org[p_j]
-                    vj = self.particle_neighbours[vi, j]
-                    # if xji.norm() < self.kernel_radius:
-                    nabla_Cv_ji = self.particle_neighbours_gradients[vi, j]
-                    self.dv[vj] -= lambda_i * nabla_Cv_ji
-                        # self.nc[vj] += 1
 
 
     @ti.func
@@ -810,7 +730,7 @@ class Solver:
         for fi_d in range(self.max_num_faces_dynamic):
             for vi_d in range(self.max_num_verts_dynamic):
                 if self.is_in_face(vi_d, fi_d) != True:
-                    solve_collision_constraints_x.__tv_dy(fi_d, vi_d, self.mesh_dy, self.mesh_st, d)
+                    solve_collision_constraints_x.__tv_dy(fi_d, vi_d, self.mesh_dy, d)
         # #
         for ei_d in range(self.max_num_edges_dynamic):
             for ei_s in range(self.max_num_edges_static):
@@ -1082,7 +1002,7 @@ class Solver:
     @ti.kernel
     def compute_velocity(self, dt: ti.f32):
         for v in self.mesh_dy.verts:
-            v.v = (v.y - v.x) / dt
+            v.v = v.fixed * (v.y - v.x) / dt
 
     def init_variables(self):
 
@@ -1149,15 +1069,16 @@ class Solver:
     @ti.kernel
     def update_dx(self):
         for v in self.mesh_dy.verts:
-            v.y += (v.dx / v.nc)
+            v.y += v.fixed * (v.dx / v.nc)
 
-    # @ti.kernel
-    # def set_fixed_vertices(self, fixed_vertices: ti.template()):
-    #     for vi in range(self.max_num_verts_dynamic):
-    #         if fixed_vertices[vi] >= 1:
-    #             self.fixed[vi] = 0.0
-    #         else:
-    #             self.fixed[vi] = 1.0
+    @ti.kernel
+    def set_fixed_vertices(self, fixed_vertices: ti.template()):
+        for v in self.mesh_dy.verts:
+            if fixed_vertices[v.id] >= 1:
+                v.fixed = 0.0
+            else:
+                v.fixed = 1.0
+
     # @ti.kernel
     # def update_dv(self):
     #     for vi in range(self.max_num_verts_dynamic):

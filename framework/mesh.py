@@ -53,6 +53,7 @@ class Mesh:
     def reset(self):
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
         self.mesh.verts.v.fill(0.)
+        self.mesh.verts.fixed.fill(0.0)
 
     @ti.kernel
     def initFaceIndices(self):

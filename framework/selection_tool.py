@@ -5,7 +5,7 @@ import json
 @ti.data_oriented
 class SelectionTool :
 
-    def __init__(self,max_num_verts_dynamic,simulation_x,window,camera):
+    def __init__(self,max_num_verts_dynamic, simulation_x, window, camera):
         # self.selected_indices = ti.field(dtype = ti.uint32,shape = (max_num_verts_dynamic,))
         self.num_selected = 0
 
@@ -18,7 +18,7 @@ class SelectionTool :
         self.MODE_SELECTION = True #True add, False sub
 
         self.selected_indices_cpu = {}
-        self.is_selected = ti.field(dtype=ti.uint32, shape=(max_num_verts_dynamic))
+        self.is_selected = ti.field(dtype=ti.f32, shape=max_num_verts_dynamic)
         self.window = window
         self.camera = camera
         self.max_numverts_dynamic = max_num_verts_dynamic
@@ -40,7 +40,7 @@ class SelectionTool :
         self.ti_mouse_click_pos = ti.Vector.field(2,ti.float32,shape=(4,))
         self.mouse_click_pos = [0,0,0,0]# press x,y release x,y
 
-        self.renderTestPosition = ti.Vector.field(n=3,dtype = ti.f32,shape = (max_num_verts_dynamic,))
+        self.renderTestPosition = ti.Vector.field(n=3, dtype=ti.f32, shape=(max_num_verts_dynamic,))
 
         self.Select()
     def Select(self):
@@ -166,9 +166,9 @@ class SelectionTool :
 
     @ti.kernel
     def renderTestPos(self):
-        for i in self.simulation_x :
-            if self.is_selected[i] == False :
-                self.renderTestPosition[i] = ti.Vector([-999,-999,-999])
+        for i in self.simulation_x:
+            if self.is_selected[i] < 1.0:
+                self.renderTestPosition[i] = ti.Vector([-999, -999, -999])
             else :
                 self.renderTestPosition[i] = self.simulation_x[i]
 
