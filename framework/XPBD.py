@@ -545,11 +545,40 @@ class Solver:
     def get_flatten_grid_index(self, pos: ti.math.vec3):
         return self.flatten_grid_index(self.pos_to_index(pos))
 
-    def broad_phase(self):
+    def broadphase(self):
+        self.update_aabb(ti.math.vec3(0.1))
         # self.grid_particles_num.fill(0)
-        self.update_grid_id()
-        self.prefix_sum_executor.run(self.grid_particles_num)
-        self.counting_sort()
+        # self.update_grid_id()
+        # self.prefix_sum_executor.run(self.grid_particles_num)
+        # self.counting_sort()
+    @ti.kernel
+    def update_aabb(self, padding: ti.math.vec3):
+
+        for f in self.mesh_st.faces:
+            x0, y0 = f.verts[0].x, f.verts[0].y
+            x1, y1 = f.verts[1].x, f.verts[1].y
+            x2, y2 = f.verts[2].x, f.verts[2].y
+            f.aabb_max = ti.math.max(x0, x1, x2, y0, y1, y2) + padding
+            f.aabb_min = ti.math.min(x0, x1, x2, y0, y1, y2) - padding
+
+        for f in self.mesh_st.faces:
+            x0, y0 = f.verts[0].x, f.verts[0].y
+            x1, y1 = f.verts[1].x, f.verts[1].y
+            x2, y2 = f.verts[2].x, f.verts[2].y
+            f.aabb_max = ti.math.max(x0, x1, x2, y0, y1, y2) + padding
+            f.aabb_min = ti.math.min(x0, x1, x2, y0, y1, y2) - padding
+
+    @ti.func
+    def overlap_aabb(self, aabb_min0: ti.math.vec3, aabb_max0: ti.math.vec3,
+                           aabb_min1: ti.math.vec3, aabb_max1: ti.math.vec3) -> bool:
+        is_overlap = False
+        (aabb_min0[0] <= aabb_max1[0]) & (aabb_max0[0] >= aabb_min1[0]) & \
+        (aabb_min0[1] <= aabb_max1[1]) & (aabb_max0[1] >= aabb_min1[1]) & \
+        (aabb_min0[2] <= aabb_max1[2]) & (aabb_max0[2] >= aabb_min1[2])
+        return is_overlap
+
+
+
 
     def broad_phase_static(self):
         self.update_grid_id_static()
@@ -718,9 +747,14 @@ class Solver:
     @ti.kernel
     def solve_collision_constraints_x(self):
         d = self.dHat
-
+        padding = ti.math.vec3(0.2)
         for vi_d in range(self.max_num_verts_dynamic):
+            aabb_min0 = self.mesh_dy.verts.y[vi_d] + padding
+            aabb_max0 = self.mesh_dy.verts.y[vi_d] - padding
             for fi_s in range(self.max_num_faces_static):
+                aabb_min1 = self.mesh_st.faces.aabb_min[fi_s]
+                aabb_max1 = self.mesh_st.faces.aabb_min[fi_s]
+                # if self.overlap_aabb(aabb_min0, aabb_max0, aabb_min1, aabb_max1):
                 solve_collision_constraints_x.__vt_st(vi_d, fi_s, self.mesh_dy, self.mesh_st, d)
 
         for fi_d in range(self.max_num_faces_dynamic):
@@ -1145,9 +1179,8 @@ class Solver:
 
         # ti.profiler.clear_kernel_profiler_info()
         for _ in range(n_substeps):
-
             self.compute_y(dt_sub)
-
+            # self.broadphase()
             self.solve_constraints_x()
 
             self.compute_velocity(dt_sub)

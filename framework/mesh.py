@@ -25,6 +25,8 @@ class Mesh:
                                'dx': ti.math.vec3,
                                'nc': ti.f32})
         self.mesh.edges.place({'l0': ti.f32})
+        self.mesh.faces.place({'aabb_min': ti.math.vec3,
+                               'aabb_max': ti.math.vec3})
         self.mesh.verts.fixed.fill(1.0)
         self.mesh.verts.m_inv.fill(0.0)
         self.mesh.verts.v.fill(0.0)
