@@ -547,19 +547,47 @@ class Solver:
 
     def broadphase(self):
         self.update_aabb(ti.math.vec3(0.1))
+        self.compute_morton_code()
+
+
         # self.grid_particles_num.fill(0)
         # self.update_grid_id()
         # self.prefix_sum_executor.run(self.grid_particles_num)
         # self.counting_sort()
+
+    @ti.kernel
+    def compute_morton_code(self):
+
+        aabb_min = ti.math.vec3(0.0)
+        aabb_max = ti.math.vec3(0.0)
+        for f in self.mesh_dy.faces:
+            ti.atomic_max(aabb_max, f.aabb_max)
+            ti.atomic_min(aabb_min, f.aabb_min)
+
+        for f in self.mesh_dy.faces:
+            morton_code = ti.cast(0, ti.uint32)
+            center = 0.5 * (f.aabb_min + f.aabb_max)
+
+            for dim in ti.static(range(3)):
+                center[dim] = 1024.0 * (center[dim] - aabb_min[dim]) / (aabb_max[dim] - aabb_min[dim])
+
+            for i in ti.static(range(10)):
+                morton_code = (morton_code | (ti.cast(center[0], ti.uint32) & (1 << i)) << (2 * i) |
+                              (ti.cast(center[1], ti.uint32) & (1 << i)) << (2 * i + 1) |
+                              (ti.cast(center[2], ti.uint32) & (1 << i)) << (2 * i + 2))
+
+            f.morton_code = morton_code
+
+
     @ti.kernel
     def update_aabb(self, padding: ti.math.vec3):
 
-        for f in self.mesh_st.faces:
+        for f in self.mesh_dy.faces:
             x0, y0 = f.verts[0].x, f.verts[0].y
             x1, y1 = f.verts[1].x, f.verts[1].y
             x2, y2 = f.verts[2].x, f.verts[2].y
-            f.aabb_max = ti.math.max(x0, x1, x2, y0, y1, y2) + padding
-            f.aabb_min = ti.math.min(x0, x1, x2, y0, y1, y2) - padding
+            f.aabb_max = ti.math.max(y0, y1, y2) + padding
+            f.aabb_min = ti.math.min(y0, y1, y2) - padding
 
         for f in self.mesh_st.faces:
             x0, y0 = f.verts[0].x, f.verts[0].y
@@ -571,10 +599,11 @@ class Solver:
     @ti.func
     def overlap_aabb(self, aabb_min0: ti.math.vec3, aabb_max0: ti.math.vec3,
                            aabb_min1: ti.math.vec3, aabb_max1: ti.math.vec3) -> bool:
-        is_overlap = False
-        (aabb_min0[0] <= aabb_max1[0]) & (aabb_max0[0] >= aabb_min1[0]) & \
-        (aabb_min0[1] <= aabb_max1[1]) & (aabb_max0[1] >= aabb_min1[1]) & \
-        (aabb_min0[2] <= aabb_max1[2]) & (aabb_max0[2] >= aabb_min1[2])
+
+        is_overlap = ((aabb_min0[0] <= aabb_max1[0]) & (aabb_max0[0] >= aabb_min1[0]) &
+                      (aabb_min0[1] <= aabb_max1[1]) & (aabb_max0[1] >= aabb_min1[1]) &
+                      (aabb_min0[2] <= aabb_max1[2]) & (aabb_max0[2] >= aabb_min1[2]))
+
         return is_overlap
 
 
@@ -747,33 +776,33 @@ class Solver:
     @ti.kernel
     def solve_collision_constraints_x(self):
         d = self.dHat
-        padding = ti.math.vec3(0.2)
+        padding = ti.math.vec3(0.5)
         for vi_d in range(self.max_num_verts_dynamic):
-            aabb_min0 = self.mesh_dy.verts.y[vi_d] + padding
-            aabb_max0 = self.mesh_dy.verts.y[vi_d] - padding
+            aabb_min0 = self.mesh_dy.verts.y[vi_d] - padding
+            aabb_max0 = self.mesh_dy.verts.y[vi_d] + padding
             for fi_s in range(self.max_num_faces_static):
                 aabb_min1 = self.mesh_st.faces.aabb_min[fi_s]
-                aabb_max1 = self.mesh_st.faces.aabb_min[fi_s]
-                # if self.overlap_aabb(aabb_min0, aabb_max0, aabb_min1, aabb_max1):
-                solve_collision_constraints_x.__vt_st(vi_d, fi_s, self.mesh_dy, self.mesh_st, d)
+                aabb_max1 = self.mesh_st.faces.aabb_max[fi_s]
+                if self.overlap_aabb(aabb_min0, aabb_max0, aabb_min1, aabb_max1):
+                    solve_collision_constraints_x.__vt_st(vi_d, fi_s, self.mesh_dy, self.mesh_st, d)
 
-        for fi_d in range(self.max_num_faces_dynamic):
-            for vi_s in range(self.max_num_verts_static):
-                solve_collision_constraints_x.__tv_st(fi_d, vi_s, self.mesh_dy, self.mesh_st, d)
-        #
-        for fi_d in range(self.max_num_faces_dynamic):
-            for vi_d in range(self.max_num_verts_dynamic):
-                if self.is_in_face(vi_d, fi_d) != True:
-                    solve_collision_constraints_x.__tv_dy(fi_d, vi_d, self.mesh_dy, d)
+        # for fi_d in range(self.max_num_faces_dynamic):
+        #     for vi_s in range(self.max_num_verts_static):
+        #         solve_collision_constraints_x.__tv_st(fi_d, vi_s, self.mesh_dy, self.mesh_st, d)
         # #
-        for ei_d in range(self.max_num_edges_dynamic):
-            for ei_s in range(self.max_num_edges_static):
-                solve_collision_constraints_x.__ee_st(ei_d, ei_s, self.mesh_dy, self.mesh_st, d)
-
-        for ei_d in range(self.max_num_edges_dynamic):
-            for ej_d in range(self.max_num_edges_dynamic):
-                if self.share_vertex(ei_d, ej_d) != True and ei_d != ej_d:
-                    solve_collision_constraints_x.__ee_dy(ei_d, ej_d, self.mesh_dy, d)
+        # for fi_d in range(self.max_num_faces_dynamic):
+        #     for vi_d in range(self.max_num_verts_dynamic):
+        #         if self.is_in_face(vi_d, fi_d) != True:
+        #             solve_collision_constraints_x.__tv_dy(fi_d, vi_d, self.mesh_dy, d)
+        # # #
+        # for ei_d in range(self.max_num_edges_dynamic):
+        #     for ei_s in range(self.max_num_edges_static):
+        #         solve_collision_constraints_x.__ee_st(ei_d, ei_s, self.mesh_dy, self.mesh_st, d)
+        #
+        # for ei_d in range(self.max_num_edges_dynamic):
+        #     for ej_d in range(self.max_num_edges_dynamic):
+        #         if self.share_vertex(ei_d, ej_d) != True and ei_d != ej_d:
+        #             solve_collision_constraints_x.__ee_dy(ei_d, ej_d, self.mesh_dy, d)
 
 
     @ti.kernel
@@ -1180,7 +1209,7 @@ class Solver:
         # ti.profiler.clear_kernel_profiler_info()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            # self.broadphase()
+            self.broadphase()
             self.solve_constraints_x()
 
             self.compute_velocity(dt_sub)
