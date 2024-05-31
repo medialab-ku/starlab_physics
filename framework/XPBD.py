@@ -3,6 +3,16 @@ import numpy as np
 import solve_collision_constraints_x
 import solve_collision_constraints_v
 
+
+@ti.dataclass
+class BVHNode:
+    key: ti.i32
+    parent: ti.i32
+    left: ti.i32
+    right: ti.i32
+    aabb_min: ti.math.vec3
+    aabb_max: ti.math.vec3
+
 @ti.data_oriented
 class Solver:
     def __init__(self,
@@ -75,55 +85,54 @@ class Solver:
         self.manual_ang_vels[3] = ti.Vector([0.0, 1.0, 0.0])
 
 
+        self.max_num_verts_dy = len(self.mesh_dy.verts)
+        self.max_num_edges_dy = len(self.mesh_dy.edges)
+        self.max_num_faces_dy = len(self.mesh_dy.faces)
 
-        self.max_num_verts_dynamic = len(self.mesh_dy.verts)
-        self.max_num_edges_dynamic = len(self.mesh_dy.edges)
-        self.max_num_faces_dynamic = len(self.mesh_dy.faces)
+        self.max_num_verts_st = len(self.mesh_st.verts)
+        self.max_num_edges_st = len(self.mesh_st.edges)
+        self.max_num_faces_st = len(self.mesh_st.faces)
 
+        self.lbvh = BVHNode.field(shape=(2 * self.max_num_faces_st - 1))
+        self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
 
-        print(self.max_num_verts_dynamic)
-
-        self.vt_static_pair_cache_size = 40
-        self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
-        self.vt_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
-        self.vt_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 4))
-        self.vt_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size))
-
-        self.tv_static_pair_cache_size = 40
-        self.tv_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 2))
-        self.tv_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dynamic)
-        self.tv_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 4))
-        self.tv_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size))
-
-        self.ee_static_pair_cache_size = 40
-        self.ee_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dynamic, self.ee_static_pair_cache_size, 2))
-        self.ee_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dynamic)
-        self.ee_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_static_pair_cache_size, 4))
-        self.ee_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_static_pair_cache_size))
-
-        self.tv_dynamic_pair_cache_size = 40
-        self.tv_dynamic_pair = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dynamic, self.tv_dynamic_pair_cache_size, 2))
-        self.tv_dynamic_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dynamic)
-        self.tv_dynamic_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_dynamic_pair_cache_size, 4))
-        self.tv_dynamic_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_dynamic_pair_cache_size))
-
-        self.ee_dynamic_pair_cache_size = 40
-        self.ee_dynamic_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size, 2))
-        self.ee_dynamic_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dynamic)
-        self.ee_dynamic_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size, 4))
-        self.ee_dynamic_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size))
+        # self.vt_static_pair_cache_size = 40
+        # self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
+        # self.vt_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
+        # self.vt_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 4))
+        # self.vt_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size))
+        #
+        # self.tv_static_pair_cache_size = 40
+        # self.tv_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 2))
+        # self.tv_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dynamic)
+        # self.tv_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 4))
+        # self.tv_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size))
+        #
+        # self.ee_static_pair_cache_size = 40
+        # self.ee_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dynamic, self.ee_static_pair_cache_size, 2))
+        # self.ee_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dynamic)
+        # self.ee_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_static_pair_cache_size, 4))
+        # self.ee_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_static_pair_cache_size))
+        #
+        # self.tv_dynamic_pair_cache_size = 40
+        # self.tv_dynamic_pair = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dynamic, self.tv_dynamic_pair_cache_size, 2))
+        # self.tv_dynamic_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dynamic)
+        # self.tv_dynamic_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_dynamic_pair_cache_size, 4))
+        # self.tv_dynamic_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_dynamic_pair_cache_size))
+        #
+        # self.ee_dynamic_pair_cache_size = 40
+        # self.ee_dynamic_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size, 2))
+        # self.ee_dynamic_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dynamic)
+        # self.ee_dynamic_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size, 4))
+        # self.ee_dynamic_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size))
 
         # self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
         # self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.cache_size))
         # self.particle_neighbours_gradients = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
         # self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
 
-        self.cache_size = 10
-        self.max_num_verts_static = len(self.mesh_st.verts)
-        self.max_num_edges_static = len(self.mesh_st.edges)
-        self.max_num_faces_static = len(self.mesh_st.faces)
+        # self.cache_size = 10
 
-        print(self.max_num_faces_static)
         # self.max_num_verts_static = len(self.mesh_st.verts)
         # self.max_num_faces_static = len(self.mesh_st.faces)
 
@@ -549,35 +558,13 @@ class Solver:
         self.update_aabb(ti.math.vec3(0.1))
         self.compute_morton_code()
 
+        ti.algorithms.parallel_sort(key=self.mesh_st.faces.morton_code, values=self.sorted_id_st)
+
 
         # self.grid_particles_num.fill(0)
         # self.update_grid_id()
         # self.prefix_sum_executor.run(self.grid_particles_num)
         # self.counting_sort()
-
-    @ti.kernel
-    def compute_morton_code(self):
-
-        aabb_min = ti.math.vec3(0.0)
-        aabb_max = ti.math.vec3(0.0)
-        for f in self.mesh_dy.faces:
-            ti.atomic_max(aabb_max, f.aabb_max)
-            ti.atomic_min(aabb_min, f.aabb_min)
-
-        for f in self.mesh_dy.faces:
-            morton_code = ti.cast(0, ti.uint32)
-            center = 0.5 * (f.aabb_min + f.aabb_max)
-
-            for dim in ti.static(range(3)):
-                center[dim] = 1024.0 * (center[dim] - aabb_min[dim]) / (aabb_max[dim] - aabb_min[dim])
-
-            for i in ti.static(range(10)):
-                morton_code = (morton_code | (ti.cast(center[0], ti.uint32) & (1 << i)) << (2 * i) |
-                              (ti.cast(center[1], ti.uint32) & (1 << i)) << (2 * i + 1) |
-                              (ti.cast(center[2], ti.uint32) & (1 << i)) << (2 * i + 2))
-
-            f.morton_code = morton_code
-
 
     @ti.kernel
     def update_aabb(self, padding: ti.math.vec3):
@@ -595,6 +582,53 @@ class Solver:
             x2, y2 = f.verts[2].x, f.verts[2].y
             f.aabb_max = ti.math.max(x0, x1, x2, y0, y1, y2) + padding
             f.aabb_min = ti.math.min(x0, x1, x2, y0, y1, y2) - padding
+
+    @ti.func
+    def expand_bits(self, v):
+        v = (v * 0x00010001) & 0xFF0000FF
+        v = (v * 0x00000101) & 0x0F00F00F
+        v = (v * 0x00000011) & 0xC30C30C3
+        v = (v * 0x00000005) & 0x49249249
+        return v
+
+    @ti.func
+    def morton3D(self, x, y, z):
+        xx = self.expand_bits(ti.cast(x * 1024, ti.u32))
+        yy = self.expand_bits(ti.cast(y * 1024, ti.u32))
+        zz = self.expand_bits(ti.cast(z * 1024, ti.u32))
+        return xx * 4 + yy * 2 + zz
+
+    @ti.kernel
+    def compute_morton_code(self):
+
+        aabb_min = ti.math.vec3(0.0)
+        aabb_max = ti.math.vec3(0.0)
+        for f in self.mesh_st.faces:
+            ti.atomic_max(aabb_max, f.aabb_max)
+            ti.atomic_min(aabb_min, f.aabb_min)
+
+        for f in self.mesh_st.faces:
+            center = 0.5 * (f.aabb_min + f.aabb_max)
+            for dim in ti.static(range(3)):
+                center[dim] = (center[dim] - aabb_min[dim]) / (aabb_max[dim] - aabb_min[dim])
+
+            f.morton_code = self.morton3D(center[0], center[1], center[2])
+            self.sorted_id_st[f.id] = f.id
+
+
+
+
+    @ti.kernel
+    def build_bvh(self):
+
+        for fid in range(self.max_num_faces_st):
+            fid_sorted = self.sorted_id_st[fid]
+            self.lbvh[fid].key = fid_sorted
+            self.lbvh[fid].aabb_min = self.mesh_st.faces.aabb_min[fid_sorted]
+            self.lbvh[fid].aabb_max = self.mesh_st.faces.aabb_max[fid_sorted]
+
+        for fid in range(self.max_num_faces_st):
+
 
     @ti.func
     def overlap_aabb(self, aabb_min0: ti.math.vec3, aabb_max0: ti.math.vec3,
