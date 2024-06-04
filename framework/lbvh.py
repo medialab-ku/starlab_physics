@@ -1,12 +1,11 @@
 import taichi as ti
 
-
 @ti.dataclass
 class Node:
     object_id: ti.i32
-    parent: ti.i32
-    child_a: ti.i32
-    child_a: ti.i32
+    parent: ti.template()
+    child_a: ti.template()
+    child_a: ti.template()
     visited: ti.i32
     aabb_min: ti.math.vec3
     aabb_max: ti.math.vec3
@@ -67,16 +66,17 @@ class LBVH:
             self.object_ids[i] = i
 
     @ti.kernel
-    def leaf_nodes(self):
+    def assign_leaf_nodes(self):
         for i in range(self.num_objects):
             # // no need to set parent to nullptr, each child will have a parent
             self.leaf_nodes[i].object_id = self.sorted_object_ids[i]
             # // needed to recognize that this node is a leaf
             self.leaf_nodes[i].child_a = None
+            self.leaf_nodes[i].child_b = None
 
             # // need to set for internal node parent to nullptr, for testing later
             # // there is one less internal node than leaf node, test for that
-            self.internal_nodes[i].parent = None
+            # self.internal_nodes[i].parent = None
 
     @ti.func
     def delta(self, a, b, n, ka):
@@ -167,10 +167,10 @@ class LBVH:
         return ret
 
     @ti.kernel
-    def internal_nodes(self):
+    def assign_internal_nodes(self):
         for i in range(self.num_objects - 1):
             # find out which range of objects the node corresponds to
-            range1 = self.determine_range(self.sorted_morton_codes, self.num_objects, i)
+            range1 = self.determine_range(self.num_objects, i)
             # // determine where to split the range
             split = self.find_split(range1.x, range1.y, self.num_objects)
 
@@ -192,8 +192,8 @@ class LBVH:
             self.internal_nodes[i].child_a = child_a
             self.internal_nodes[i].child_b = child_b
             self.internal_nodes[i].visited = 0
-            child_a.parent = self.internal_nodes[i]
-            child_b.parent = self.internal_nodes[i]
+            self.internal_nodes[child_a].parent = i
+            self.internal_nodes[child_b].parent = i
 
     @ti.kernel
     def set_aabb(self, mesh: ti.template()):
@@ -232,7 +232,7 @@ class LBVH:
                 child_b = self.internal_nodes[current_node].child_b
                 self.internal_nodes[current_node].aabb_min = ti.min(self.internal_nodes[child_a].aabb_min, self.internal_nodes[child_b].aabb_min)
                 self.internal_nodes[current_node].aabb_max = ti.max(self.internal_nodes[child_a].aabb_max, self.internal_nodes[child_b].aabb_max)
-            #  continue traversal
+                #  continue traversal
                 current_node = self.internal_nodes[current_node].parent
 
     @ti.kernel
@@ -240,8 +240,8 @@ class LBVH:
 
         self.internal_nodes.parent.fill(-1)
         self.assign_morton(mesh, aabb_min, aabb_max)
-        ti.algorithms.parallel_sort(self.morton_codes, self.object_ids)
+        ti.algorithms.parallel_sort(key=self.morton_codes, values=self.object_ids)
 
-        self.leaf_nodes()
-        self.internal_nodes()
-        self.set_aabb()
+        self.assign_leaf_nodes()
+        self.assign_internal_nodes()
+        self.set_aabb(mesh)
