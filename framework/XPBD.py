@@ -2,17 +2,6 @@ import taichi as ti
 import numpy as np
 import solve_collision_constraints_x
 import solve_collision_constraints_v
-
-
-@ti.dataclass
-class BVHNode:
-    key: ti.i32
-    parent: ti.i32
-    left: ti.i32
-    right: ti.i32
-    aabb_min: ti.math.vec3
-    aabb_max: ti.math.vec3
-
 @ti.data_oriented
 class Solver:
     def __init__(self,
@@ -93,7 +82,6 @@ class Solver:
         self.max_num_edges_st = len(self.mesh_st.edges)
         self.max_num_faces_st = len(self.mesh_st.faces)
 
-        self.lbvh = BVHNode.field(shape=(2 * self.max_num_faces_st - 1))
         self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
 
         # self.vt_static_pair_cache_size = 40
@@ -618,16 +606,16 @@ class Solver:
 
 
 
-    @ti.kernel
-    def build_bvh(self):
-
-        for fid in range(self.max_num_faces_st):
-            fid_sorted = self.sorted_id_st[fid]
-            self.lbvh[fid].key = fid_sorted
-            self.lbvh[fid].aabb_min = self.mesh_st.faces.aabb_min[fid_sorted]
-            self.lbvh[fid].aabb_max = self.mesh_st.faces.aabb_max[fid_sorted]
-
-        for fid in range(self.max_num_faces_st):
+    # @ti.kernel
+    # def build_bvh(self):
+    #
+    #     for fid in range(self.max_num_faces_st):
+    #         fid_sorted = self.sorted_id_st[fid]
+    #         self.lbvh[fid].key = fid_sorted
+    #         self.lbvh[fid].aabb_min = self.mesh_st.faces.aabb_min[fid_sorted]
+    #         self.lbvh[fid].aabb_max = self.mesh_st.faces.aabb_max[fid_sorted]
+    #
+    #     for fid in range(self.max_num_faces_st):
 
 
     @ti.func
@@ -640,78 +628,6 @@ class Solver:
 
         return is_overlap
 
-
-
-
-    def broad_phase_static(self):
-        self.update_grid_id_static()
-        self.prefix_sum_executor_static.run(self.grid_particles_num_static)
-        self.counting_sort_static()
-
-
-    @ti.kernel
-    def update_grid_id(self):
-
-        for I in ti.grouped(self.grid_particles_num):
-            self.grid_particles_num[I] = 0
-
-            # TODO: update the following two for-loops into a single one
-        for i in range(self.max_num_verts_dynamic):
-            if i < self.max_num_verts_dynamic:
-                vi = i
-                grid_index = self.get_flatten_grid_index(self.x[vi])
-                self.grid_ids[vi] = grid_index
-                ti.atomic_add(self.grid_particles_num[grid_index], 1)
-
-            else:
-                ei = i - self.max_num_verts_dynamic
-
-                v0, v1 = self.edge_indices_dynamic[2 * ei + 0], self.edge_indices_dynamic[2 * ei + 1]
-                x0, x1 = self.x[v0], self.x[v1]
-
-                center = 0.5 * (x0 + x1)
-
-                grid_index = self.get_flatten_grid_index(center)
-                self.grid_ids[ei + self.max_num_edges_dynamic] = grid_index
-                ti.atomic_add(self.grid_particles_num[grid_index], 1)
-
-        for I in ti.grouped(self.grid_particles_num):
-            self.grid_particles_num_temp[I] = self.grid_particles_num[I]
-
-    @ti.kernel
-    def update_grid_id_static(self):
-
-        for I in ti.grouped(self.grid_particles_num_static):
-            self.grid_particles_num_static[I] = 0
-
-        # TODO: update the following two for-loops into a single one
-
-        for vi in range(self.max_num_verts_static):
-            xi = self.x_static[vi]
-            gi0 = self.get_flatten_grid_index(xi)
-            self.grid_ids_static[vi] = gi0
-            ti.atomic_add(self.grid_particles_num_static[gi0], 1)
-
-        for fi in range(self.max_num_faces_static):
-
-            v0, v1, v2 = self.face_indices_static[3 * fi + 0], self.face_indices_static[3 * fi + 1], self.face_indices_static[3 * fi + 2]
-            x0, x1, x2 = self.x_static[v0], self.x_static[v1], self.x_static[v2]
-
-            gi0 = self.get_flatten_grid_index(x0)
-            self.grid_ids_static[self.max_num_verts_static + 3 * fi + 0] = gi0
-
-            gi1 = self.get_flatten_grid_index(x1)
-            self.grid_ids_static[self.max_num_verts_static + 3 * fi + 1] = gi1
-
-            gi2 = self.get_flatten_grid_index(x2)
-            self.grid_ids_static[self.max_num_verts_static + 3 * fi + 2] = gi2
-
-            ti.atomic_add(self.grid_particles_num_static[gi0], 1)
-            ti.atomic_add(self.grid_particles_num_static[gi1], 1)
-            ti.atomic_add(self.grid_particles_num_static[gi2], 1)
-
-        for I in ti.grouped(self.grid_particles_num_static):
-            self.grid_particles_num_temp_static[I] = self.grid_particles_num_static[I]
 
     @ti.func
     def is_in_face(self, vid, fid):

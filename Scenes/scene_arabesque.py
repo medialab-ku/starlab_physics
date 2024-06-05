@@ -1,5 +1,5 @@
 import random
-from framework.mesh import Mesh
+from framework.meshtaichiwrapper import MeshTaichiWrapper
 import taichi as ti
 from framework.TetMesh import TetMesh
 
@@ -18,20 +18,20 @@ dHat = 1e-3
 scalef = 3.0
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/clubbing_dress.obj", scalef=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90.0, 0.0, 0.0))
+mesh_dynamic_1 = MeshTaichiWrapper("../models/OBJ/clubbing_dress.obj", scalef=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90.0, 0.0, 0.0))
 
 meshes_dynamic.append(mesh_dynamic_1)
 
 tet_meshes_dynamic = []
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/Arabesque/Kyra_DVStandClubbing_0000.obj", scalef=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90,0,0), is_static=True)
+mesh_static_1 = MeshTaichiWrapper("../models/Arabesque/Kyra_DVStandClubbing_0000.obj", scalef=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90, 0, 0), is_static=True)
 meshes_static.append(mesh_static_1)
 
 
 mesh_seq = []
 for mid in range(350) :
-    mm = Mesh("../models/Arabesque/Kyra_DVStandClubbing_" + (str(mid)).zfill(4) +".obj", scalef=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90,0,0), is_static=True)
+    mm = MeshTaichiWrapper("../models/Arabesque/Kyra_DVStandClubbing_" + (str(mid)).zfill(4) + ".obj", scalef=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90, 0, 0), is_static=True)
     mesh_seq.append(mm)
 
 

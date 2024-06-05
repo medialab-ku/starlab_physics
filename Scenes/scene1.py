@@ -1,5 +1,5 @@
 import random
-from framework.mesh import Mesh
+from framework.meshtaichiwrapper import MeshTaichiWrapper
 import taichi as ti
 
 ti.init(arch=ti.cuda, device_memory_GB=3)
@@ -9,9 +9,9 @@ meshes_dynamic = []
 # mesh_static_1 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.6, 0.0), rot=ti.math.vec3(0.0, 10.0, 0.0), is_static=True)
 # mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 45.0))
 # mesh_dynamic_2 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 45.0))
-mesh_dynamic_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dynamic_4 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 15.0))
-mesh_dynamic_5 = Mesh("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.7, 0.0), rot=ti.math.vec3(0.0, 0.0, 30.0))
+mesh_dynamic_3 = MeshTaichiWrapper("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_4 = MeshTaichiWrapper("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 15.0))
+mesh_dynamic_5 = MeshTaichiWrapper("../models/OBJ/square_huge.obj", scale=0.2, trans=ti.math.vec3(0.0, 1.7, 0.0), rot=ti.math.vec3(0.0, 0.0, 30.0))
 # mesh_dynamic_4 = Mesh("../models/OBJ/tet.obj", scale=1.0, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh_dynamic_5 = Mesh("../models/OBJ/tet.obj", scale=1.0, trans=ti.math.vec3(0.0, 1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
@@ -34,7 +34,7 @@ tet_meshes_dynamic = []
 # tet_meshes_dynamic.append(tet_mesh_dynamic_4)
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/sphere1K.obj", scale=2.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_static_1 = MeshTaichiWrapper("../models/OBJ/sphere1K.obj", scale=2.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # mesh_static_2 = Mesh("../models/OBJ/square_big.obj", scale=0.15, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # mesh_static_3 = Mesh("../models/OBJ/square_huge.obj", scale=0.25, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 15.0, 0.0), is_static=True)
 # mesh_static_4 = Mesh("../models/OBJ/tet.obj", scale=0.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

@@ -1,6 +1,6 @@
 import random
 from framework.particle import Particle
-from framework.mesh import Mesh
+from framework.meshtaichiwrapper import MeshTaichiWrapper
 import taichi as ti
 from framework.TetMesh import TetMesh
 
@@ -22,7 +22,7 @@ tet_meshes_dynamic.append(tet_mesh_dynamic_1)
 
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/cuboid112.obj", scale=5.0, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)         # 1. blender 기준 x,y,z (1,1,2) 정도로 하고 여기처럼 scale 5로 하면 이정도.
+mesh_static_1 = MeshTaichiWrapper("../models/OBJ/cuboid112.obj", scale=5.0, trans=ti.math.vec3(0.0, -0.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)         # 1. blender 기준 x,y,z (1,1,2) 정도로 하고 여기처럼 scale 5로 하면 이정도.
 # mesh_static_2 = Mesh("../models/OBJ/hollow_box2.obj", scale=2.0, trans=ti.math.vec3(0.0, -1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # mesh_static_3 = Mesh("../models/OBJ/hollow_box3.obj", scale=2.0, trans=ti.math.vec3(0.0, -1.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 meshes_static.append(mesh_static_1)

@@ -4,8 +4,9 @@ import meshtaichi_patcher as patcher
 import igl
 import os
 import numpy as np
+from lbvh import LBVH
 @ti.data_oriented
-class Mesh:
+class MeshTaichiWrapper:
 
     def __init__(self,
                  model_path,
@@ -51,6 +52,8 @@ class Mesh:
 
         self.applyTransform()
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
+
+        self.lbvh = LBVH(self.mesh)
 
 
     def reset(self):

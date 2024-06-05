@@ -3,17 +3,18 @@ import taichi as ti
 @ti.dataclass
 class Node:
     object_id: ti.i32
-    parent: ti.template()
-    child_a: ti.template()
-    child_a: ti.template()
+    parent: ti.i32
+    child_a: ti.i32
+    child_b: ti.i32
     visited: ti.i32
     aabb_min: ti.math.vec3
     aabb_max: ti.math.vec3
 
 @ti.data_oriented
 class LBVH:
-    def __init__(self, num_objects):
-        self.num_objects = num_objects
+    def __init__(self, mesh):
+        self.mesh = mesh
+        self.num_objects = len(self.mesh.faces)
         self.leaf_nodes = Node.field(shape=self.num_objects)
         self.internal_nodes = Node.field(shape=(self.num_objects - 1))
 
@@ -43,13 +44,13 @@ class LBVH:
         return xx * 4 + yy * 2 + zz
 
     @ti.kernel
-    def assign_morton(self, mesh: ti.template(), aabb_min, aabb_max):
+    def assign_morton(self, aabb_min, aabb_max):
 
         for i in range(self.num_objects):
         # // obtain center of triangle
-            u = mesh.faces.verts[0]
-            v = mesh.faces.verts[1]
-            w = mesh.faces.verts[2]
+            u = self.mesh.faces.verts[0]
+            v = self.mesh.faces.verts[1]
+            w = self.mesh.faces.verts[2]
             pos = (1. / 3.) * (u.x + v.x + w.x)
 
         # // normalize position
@@ -71,8 +72,8 @@ class LBVH:
             # // no need to set parent to nullptr, each child will have a parent
             self.leaf_nodes[i].object_id = self.sorted_object_ids[i]
             # // needed to recognize that this node is a leaf
-            self.leaf_nodes[i].child_a = None
-            self.leaf_nodes[i].child_b = None
+            self.leaf_nodes[i].child_a = -1
+            self.leaf_nodes[i].child_b = -1
 
             # // need to set for internal node parent to nullptr, for testing later
             # // there is one less internal node than leaf node, test for that
@@ -196,13 +197,13 @@ class LBVH:
             self.internal_nodes[child_b].parent = i
 
     @ti.kernel
-    def set_aabb(self, mesh: ti.template()):
+    def set_aabb(self):
 
         for i in range(self.num_objects):
             object_id = self.leaf_nodes[i].object_id
-            u = mesh.faces.verts[0]
-            v = mesh.faces.verts[1]
-            w = mesh.faces.verts[2]
+            u = self.mesh.faces.verts[0]
+            v = self.mesh.faces.verts[1]
+            w = self.mesh.faces.verts[2]
 
             # set bounding box of leaf node
             self.leaf_nodes[i].aabb_min = ti.min(u.x, v.x, w.x)
@@ -236,12 +237,11 @@ class LBVH:
                 current_node = self.internal_nodes[current_node].parent
 
     @ti.kernel
-    def build(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
-
-        self.internal_nodes.parent.fill(-1)
-        self.assign_morton(mesh, aabb_min, aabb_max)
-        ti.algorithms.parallel_sort(key=self.morton_codes, values=self.object_ids)
+    def build(self, aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
+        # self.internal_nodes.parent.fill(-1)
+        self.assign_morton(aabb_min, aabb_max)
+        ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
         self.assign_leaf_nodes()
         self.assign_internal_nodes()
-        self.set_aabb(mesh)
+        self.set_aabb()

@@ -1,14 +1,14 @@
 import random
-from framework.mesh import Mesh
+from framework.meshtaichiwrapper import MeshTaichiWrapper
 import taichi as ti
 
 enable_profiler = True
 ti.init(arch=ti.cuda, device_memory_GB=3, kernel_profiler=enable_profiler)
 
 meshes_dynamic = []
-mesh_dynamic_1 = Mesh("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dynamic_2 = Mesh("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dynamic_3 = Mesh("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 1.6, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_1 = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_2 = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 1.3, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dynamic_3 = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 1.6, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 meshes_dynamic.append(mesh_dynamic_1)
 meshes_dynamic.append(mesh_dynamic_2)
@@ -19,7 +19,7 @@ meshes_dynamic.append(mesh_dynamic_3)
 tet_meshes_dynamic = []
 
 meshes_static = []
-mesh_static_1 = Mesh("../models/OBJ/circle3K.obj", scale=6, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_static_1 = MeshTaichiWrapper("../models/OBJ/circle3K.obj", scale=6, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 meshes_static.append(mesh_static_1)
 
 particles = []

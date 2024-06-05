@@ -1,7 +1,7 @@
 import random
 import numpy as np
 import framework.concat as concat
-from framework.mesh import Mesh
+from framework.meshtaichiwrapper import MeshTaichiWrapper
 import taichi as ti
 
 enable_profiler = True
@@ -22,5 +22,5 @@ scale_list.append(5.)
 
 concat.concat_mesh(model_dir, model_names, trans_list, scale_list)
 
-mesh_dy = Mesh("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_st = Mesh("../models/OBJ/circle3K.obj", scale=5.0, trans=ti.math.vec3(0.0, -1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_dy = MeshTaichiWrapper("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_st = MeshTaichiWrapper("../models/OBJ/square.obj", scale=5.0, trans=ti.math.vec3(0.0, -1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

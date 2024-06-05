@@ -31,8 +31,8 @@ MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 
 #selector
-g_selector = st.SelectionTool(sim.max_num_verts_dynamic, sim.mesh_dy.verts.x, window, camera)
-print("sim.max_num_verts_dynamic", sim.max_num_verts_dynamic)
+g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
+print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
 
 n_substep = 40
 frame_end = 100
@@ -97,8 +97,8 @@ def show_options():
             frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
         frame_str = "# frame: " + str(frame_cpu)
-        verts_str = "# verts: " + str(sim.max_num_verts_dynamic)
-        edges_str = "# edges: " + str(sim.max_num_edges_dynamic)
+        verts_str = "# verts: " + str(sim.max_num_verts_dy)
+        edges_str = "# edges: " + str(sim.max_num_edges_dy)
 
         w.text(frame_str)
         w.text(verts_str)
