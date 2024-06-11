@@ -12,17 +12,22 @@ class Node:
 
 @ti.data_oriented
 class LBVH:
-    def __init__(self, mesh):
-        self.mesh = mesh
-        self.num_objects = len(self.mesh.faces)
-        self.leaf_nodes = Node.field(shape=self.num_objects)
-        self.internal_nodes = Node.field(shape=(self.num_objects - 1))
+    def __init__(self, num_leafs):
+        self.num_leafs = num_leafs
+        self.leaf_nodes = Node.field(shape=self.num_leafs)
+        self.internal_nodes = Node.field(shape=(self.num_leafs - 1))
 
-        self.sorted_object_ids = ti.field(dtype=ti.i32, shape=self.num_objects)
-        self.object_ids = ti.field(dtype=ti.i32, shape=self.num_objects)
+        self.sorted_object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
-        self.sorted_morton_codes = ti.field(dtype=ti.i32, shape=self.num_objects)
-        self.morton_codes = ti.field(dtype=ti.i32, shape=self.num_objects)
+        self.sorted_morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
+
+        self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * (2 * self.num_leafs - 1))
+        self.aabb_indices = ti.field(dtype=ti.uint32, shape=12 * (2 * self.num_leafs - 1))
+
+        self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+        self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=2 * self.num_leafs)
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
@@ -44,13 +49,13 @@ class LBVH:
         return xx * 4 + yy * 2 + zz
 
     @ti.kernel
-    def assign_morton(self, aabb_min, aabb_max):
+    def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
 
-        for i in range(self.num_objects):
+        for i in range(self.num_leafs):
         # // obtain center of triangle
-            u = self.mesh.faces.verts[0]
-            v = self.mesh.faces.verts[1]
-            w = self.mesh.faces.verts[2]
+            u = mesh.faces.verts[0]
+            v = mesh.faces.verts[1]
+            w = mesh.faces.verts[2]
             pos = (1. / 3.) * (u.x + v.x + w.x)
 
         # // normalize position
@@ -68,7 +73,7 @@ class LBVH:
 
     @ti.kernel
     def assign_leaf_nodes(self):
-        for i in range(self.num_objects):
+        for i in range(self.num_leafs):
             # // no need to set parent to nullptr, each child will have a parent
             self.leaf_nodes[i].object_id = self.sorted_object_ids[i]
             # // needed to recognize that this node is a leaf
@@ -169,11 +174,11 @@ class LBVH:
 
     @ti.kernel
     def assign_internal_nodes(self):
-        for i in range(self.num_objects - 1):
+        for i in range(self.num_leafs - 1):
             # find out which range of objects the node corresponds to
-            range1 = self.determine_range(self.num_objects, i)
+            range1 = self.determine_range(self.num_leafs, i)
             # // determine where to split the range
-            split = self.find_split(range1.x, range1.y, self.num_objects)
+            split = self.find_split(range1.x, range1.y, self.num_leafs)
 
             # // select child a
             child_a = None
@@ -199,7 +204,7 @@ class LBVH:
     @ti.kernel
     def set_aabb(self):
 
-        for i in range(self.num_objects):
+        for i in range(self.num_leafs):
             object_id = self.leaf_nodes[i].object_id
             u = self.mesh.faces.verts[0]
             v = self.mesh.faces.verts[1]
@@ -236,12 +241,17 @@ class LBVH:
                 #  continue traversal
                 current_node = self.internal_nodes[current_node].parent
 
-    @ti.kernel
-    def build(self, aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
+    def build(self, mesh, aabb_min_g, aabb_max_g):
         # self.internal_nodes.parent.fill(-1)
-        self.assign_morton(aabb_min, aabb_max)
+        self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
-        self.assign_leaf_nodes()
-        self.assign_internal_nodes()
-        self.set_aabb()
+        # self.assign_leaf_nodes()
+        # self.assign_internal_nodes()
+        # self.set_aabb()
+
+    def draw_zSort(self, scene):
+        scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
+    #
+    # def draw_bvh_aabb(self, scene):
+    #     scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(0, 0, 0))

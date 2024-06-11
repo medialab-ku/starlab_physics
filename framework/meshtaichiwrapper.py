@@ -4,7 +4,6 @@ import meshtaichi_patcher as patcher
 import igl
 import os
 import numpy as np
-from lbvh import LBVH
 @ti.data_oriented
 class MeshTaichiWrapper:
 
@@ -52,9 +51,6 @@ class MeshTaichiWrapper:
 
         self.applyTransform()
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
-
-        self.lbvh = LBVH(self.mesh)
-
 
     def reset(self):
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
@@ -113,6 +109,17 @@ class MeshTaichiWrapper:
         for v in self.mesh.verts:
             v.x += self.trans
 
+    @ti.kernel
+    def computeAABB(self) -> (ti.math.vec3, ti.math.vec3):
+        aabb_min = ti.math.vec3(1e5)
+        aabb_max = ti.math.vec3(-1e5)
+
+        for v in self.mesh.verts:
+            temp = v.x
+            ti.atomic_max(aabb_max, temp)
+            ti.atomic_min(aabb_min, temp)
+
+        return aabb_min, aabb_max
     def export(self, scene_name, mesh_id, frame,is_static = False):
 
         if is_static:
@@ -120,7 +127,7 @@ class MeshTaichiWrapper:
         else:
             directory = os.path.join("results/", scene_name, "Mesh_ID_" + str(mesh_id))
 
-        try :
+        try:
             if not os.path.exists(directory):
                 os.makedirs(directory)
         except OSError:

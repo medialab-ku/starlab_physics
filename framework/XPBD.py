@@ -2,6 +2,9 @@ import taichi as ti
 import numpy as np
 import solve_collision_constraints_x
 import solve_collision_constraints_v
+
+from lbvh import LBVH
+
 @ti.data_oriented
 class Solver:
     def __init__(self,
@@ -83,6 +86,13 @@ class Solver:
         self.max_num_faces_st = len(self.mesh_st.faces)
 
         self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
+
+        aabb_min, aabb_max = self.mesh_st.computeAABB()
+
+        self.lbvh = LBVH(len(self.mesh_st.faces))
+        self.lbvh.build(aabb_min, aabb_max)
+
+        # print(aabb_min, aabb_max)
 
         # self.vt_static_pair_cache_size = 40
         # self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
