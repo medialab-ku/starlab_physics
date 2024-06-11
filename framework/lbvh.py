@@ -4,8 +4,8 @@ import taichi as ti
 class Node:
     object_id: ti.i32
     parent: ti.i32
-    child_a: ti.i32
-    child_b: ti.i32
+    left: ti.i32
+    right: ti.i32
     visited: ti.i32
     aabb_min: ti.math.vec3
     aabb_max: ti.math.vec3
@@ -14,8 +14,12 @@ class Node:
 class LBVH:
     def __init__(self, num_leafs):
         self.num_leafs = num_leafs
-        self.leaf_nodes = Node.field(shape=self.num_leafs)
-        self.internal_nodes = Node.field(shape=(self.num_leafs - 1))
+        self.num_nodes = 2 * self.num_leafs - 1
+        # self.leaf_nodes = Node.field(shape=self.num_leafs)
+        # self.internal_nodes = Node.field(shape=(self.num_leafs - 1))
+
+
+        self.nodes = Node.field(shape=self.num_nodes)
 
         self.sorted_object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
@@ -23,11 +27,11 @@ class LBVH:
         self.sorted_morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.morton_codes = ti.field(dtype=ti.uint64, shape=self.num_leafs)
 
-        self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * (2 * self.num_leafs - 1))
-        self.aabb_indices = ti.field(dtype=ti.uint32, shape=12 * (2 * self.num_leafs - 1))
+        self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
+        self.aabb_indices = ti.field(dtype=ti.uint32, shape=12 * self.num_nodes)
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
-        self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=2 * (self.num_leafs - 1))
+        self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
@@ -73,13 +77,15 @@ class LBVH:
             self.object_ids[f.id] = f.id
 
     @ti.kernel
-    def assign_leaf_nodes(self):
-        for i in range(self.num_leafs):
+    def assign_leaf_nodes(self, mesh: ti.template()):
+        for f in mesh.faces:
             # // no need to set parent to nullptr, each child will have a parent
-            self.leaf_nodes[i].object_id = self.sorted_object_ids[i]
+            self.nodes[f.id + self.num_leafs].object_id = self.object_ids[f.id]
             # // needed to recognize that this node is a leaf
-            self.leaf_nodes[i].child_a = -1
-            self.leaf_nodes[i].child_b = -1
+            self.nodes[f.id + self.num_leafs].left = -1
+            self.nodes[f.id + self.num_leafs].right = -1
+            self.nodes[f.id + self.num_leafs].aabb_min = f.aabb_min
+            self.nodes[f.id + self.num_leafs].aabb_max = f.aabb_max
 
             # // need to set for internal node parent to nullptr, for testing later
             # // there is one less internal node than leaf node, test for that
@@ -90,7 +96,7 @@ class LBVH:
         # // this guard is for leaf nodes, not internal nodes (hence [0, n-1])
         if (b < 0) or (b > n - 1):
             return -1
-        kb = self.sorted_morton_codes[b]
+        kb = self.morton_codes[self.object_ids[b]]
         if ka == kb:
             # // if keys are equal, use id as fallback
             # // (+32 because they have the same morton code)
@@ -132,7 +138,7 @@ class LBVH:
 
     @ti.func
     def determine_range(self, n, i) -> ti.math.ivec2:
-        ki = self.sorted_morton_codes[i]  # key of i
+        ki = self.morton_codes[i]  # key of i
 
         # determine direction of the range(+1 or -1)
 
@@ -174,80 +180,29 @@ class LBVH:
         return ret
 
     @ti.kernel
+    def assign_internal_nodes_at_lev(self, num_lev: ti.int32):
+        for i in range(num_lev):
+            left = 2 * i + self.num_leafs
+            right = left + 1
+            parent = i + num_lev
+            self.nodes[parent].left = left
+            self.nodes[parent].right = right
+            self.nodes[parent].aabb_min = ti.min(self.nodes[left].aabb_min, self.nodes[right].aabb_min)
+            self.nodes[parent].aabb_max = ti.max(self.nodes[left].aabb_max, self.nodes[right].aabb_max)
+
     def assign_internal_nodes(self):
-        for i in range(self.num_leafs - 1):
-            # find out which range of objects the node corresponds to
-            range1 = self.determine_range(self.num_leafs, i)
-            # // determine where to split the range
-            split = self.find_split(range1.x, range1.y, self.num_leafs)
-
-            # // select child a
-            child_a = None
-            if split == range1[0]:
-                child_a = self.leaf_nodes[split]
-            else:
-                child_a = self.internal_nodes[split]
-
-            # select child b
-            child_b = None
-            if split + 1 == range1[1]:
-                child_b = self.leaf_nodes[split + 1]
-            else:
-                child_b = self.internal_nodes[split + 1]
-
-            # record parent-child relationships
-            self.internal_nodes[i].child_a = child_a
-            self.internal_nodes[i].child_b = child_b
-            self.internal_nodes[i].visited = 0
-            self.internal_nodes[child_a].parent = i
-            self.internal_nodes[child_b].parent = i
-
-    @ti.kernel
-    def set_aabb(self):
-
-        for i in range(self.num_leafs):
-            object_id = self.leaf_nodes[i].object_id
-            u = self.mesh.faces.verts[0]
-            v = self.mesh.faces.verts[1]
-            w = self.mesh.faces.verts[2]
-
-            # set bounding box of leaf node
-            self.leaf_nodes[i].aabb_min = ti.min(u.x, v.x, w.x)
-            self.leaf_nodes[i].aabb_max = ti.max(u.x, v.x, w.x)
-
-            #recursively set tree bounding boxes
-            #{current_node} is always an internal node(since it is parent of another)
-            current_node = self.leaf_nodes[i].parent
-            while True:
-                # // we have reached the parent of the root node: terminate
-                if current_node == -1:
-                    break
-
-                # // we have reached an inner node: check whether the node was visited
-                visited = ti.atomic_add(self.internal_nodes[current_node].visited, 1)
-
-                # // this is the first thread entering: terminate
-                if visited == 0:
-                    break
-
-                # this is the second thread entering, we know that our sibling has
-                # reached the current node and terminated,
-                # and hence the sibling bounding box is correct
-
-                # set running bounding box to be the union of bounding boxes
-                child_a = self.internal_nodes[current_node].child_a
-                child_b = self.internal_nodes[current_node].child_b
-                self.internal_nodes[current_node].aabb_min = ti.min(self.internal_nodes[child_a].aabb_min, self.internal_nodes[child_b].aabb_min)
-                self.internal_nodes[current_node].aabb_max = ti.max(self.internal_nodes[child_a].aabb_max, self.internal_nodes[child_b].aabb_max)
-                #  continue traversal
-                current_node = self.internal_nodes[current_node].parent
+        level_size = self.num_leafs
+        while level_size > 1:
+            half_level = level_size // 2
+            self.assign_internal_nodes_at_lev(half_level)
+            level_size = half_level
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
         # self.internal_nodes.parent.fill(-1)
         self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
-        # self.assign_leaf_nodes()
-        # self.assign_internal_nodes()
+        self.assign_leaf_nodes(mesh)
+        self.assign_internal_nodes()
         # self.set_aabb()
 
 
@@ -262,5 +217,46 @@ class LBVH:
         self.update_zSort_face_centers_and_line()
         scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
     #
-    # def draw_bvh_aabb(self, scene):
-    #     scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(0, 0, 0))
+    @ti.kernel
+    def update_aabb_x_and_lines(self):
+        for n in range(self.num_nodes):
+            aabb_min = self.nodes[n].aabb_min
+            aabb_max = self.nodes[n].aabb_max
+            self.aabb_x[8 * n + 0] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
+            self.aabb_x[8 * n + 1] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
+            self.aabb_x[8 * n + 2] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
+            self.aabb_x[8 * n + 3] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
+
+            self.aabb_x[8 * n + 4] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
+            self.aabb_x[8 * n + 5] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
+            self.aabb_x[8 * n + 6] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
+            self.aabb_x[8 * n + 7] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
+
+            self.aabb_indices[12 * n + 0] = 8 * n + 0
+            self.aabb_indices[12 * n + 1] = 8 * n + 1
+            self.aabb_indices[12 * n + 2] = 8 * n + 1
+            self.aabb_indices[12 * n + 3] = 8 * n + 2
+            self.aabb_indices[12 * n + 4] = 8 * n + 2
+            self.aabb_indices[12 * n + 5] = 8 * n + 3
+            self.aabb_indices[12 * n + 6] = 8 * n + 3
+            self.aabb_indices[12 * n + 7] = 8 * n + 0
+            self.aabb_indices[12 * n + 8] = 8 * n + 4
+            self.aabb_indices[12 * n + 9] = 8 * n + 5
+            self.aabb_indices[12 * n + 10] = 8 * n + 5
+            self.aabb_indices[12 * n + 11] = 8 * n + 6
+            self.aabb_indices[12 * n + 12] = 8 * n + 6
+            self.aabb_indices[12 * n + 13] = 8 * n + 7
+            self.aabb_indices[12 * n + 14] = 8 * n + 7
+            self.aabb_indices[12 * n + 15] = 8 * n + 4
+            self.aabb_indices[12 * n + 16] = 8 * n + 0
+            self.aabb_indices[12 * n + 17] = 8 * n + 4
+            self.aabb_indices[12 * n + 18] = 8 * n + 1
+            self.aabb_indices[12 * n + 19] = 8 * n + 5
+            self.aabb_indices[12 * n + 20] = 8 * n + 2
+            self.aabb_indices[12 * n + 21] = 8 * n + 6
+            self.aabb_indices[12 * n + 22] = 8 * n + 3
+            self.aabb_indices[12 * n + 23] = 8 * n + 7
+
+    def draw_bvh_aabb(self, scene):
+        self.update_aabb_x_and_lines()
+        scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(1, 1, 1))
