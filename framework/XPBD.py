@@ -87,8 +87,8 @@ class Solver:
 
         self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
 
+        self.mesh_st.computeAABB_faces(padding=ti.math.vec3(0.5))
         aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-
         self.lbvh_st = LBVH(len(self.mesh_st.faces))
         self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         # print(aabb_min, aabb_max)

@@ -80,12 +80,13 @@ class LBVH:
     def assign_leaf_nodes(self, mesh: ti.template()):
         for f in mesh.faces:
             # // no need to set parent to nullptr, each child will have a parent
-            self.nodes[f.id + self.num_leafs].object_id = self.object_ids[f.id]
+            id = self.object_ids[f.id]
+            self.nodes[id + self.num_leafs].object_id = f.id
             # // needed to recognize that this node is a leaf
-            self.nodes[f.id + self.num_leafs].left = -1
-            self.nodes[f.id + self.num_leafs].right = -1
-            self.nodes[f.id + self.num_leafs].aabb_min = f.aabb_min
-            self.nodes[f.id + self.num_leafs].aabb_max = f.aabb_max
+            self.nodes[id + self.num_leafs].left = -1
+            self.nodes[id + self.num_leafs].right = -1
+            self.nodes[id + self.num_leafs].aabb_min = f.aabb_min
+            self.nodes[id + self.num_leafs].aabb_max = f.aabb_max
 
             # // need to set for internal node parent to nullptr, for testing later
             # // there is one less internal node than leaf node, test for that
@@ -259,4 +260,4 @@ class LBVH:
 
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
-        scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(1, 1, 1))
+        scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(0, 0, 0))
