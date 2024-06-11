@@ -21,21 +21,21 @@ class LBVH:
         self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
         self.sorted_morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
-        self.morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.morton_codes = ti.field(dtype=ti.uint64, shape=self.num_leafs)
 
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * (2 * self.num_leafs - 1))
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=12 * (2 * self.num_leafs - 1))
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
-        self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=2 * self.num_leafs)
+        self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=2 * (self.num_leafs - 1))
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
     def expand_bits(self, v):
-        v = (v * 0x00010001) & 0xFF0000FF
-        v = (v * 0x00000101) & 0x0F00F00F
-        v = (v * 0x00000011) & 0xC30C30C3
-        v = (v * 0x00000005) & 0x49249249
+        v = (v * ti.uint64(0x00010001)) & ti.uint64(0xFF0000FF)
+        v = (v * ti.uint64(0x00000101)) & ti.uint64(0x0F00F00F)
+        v = (v * ti.uint64(0x00000011)) & ti.uint64(0xC30C30C3)
+        v = (v * ti.uint64(0x00000005)) & ti.uint64(0x49249249)
         return v
 
     @ti.func
@@ -43,20 +43,21 @@ class LBVH:
         x = ti.math.clamp(x * 1024., 0., 1023.)
         y = ti.math.clamp(y * 1024., 0., 1023.)
         z = ti.math.clamp(z * 1024., 0., 1023.)
-        xx = self.expand_bits(ti.cast(x, ti.uint32))
-        yy = self.expand_bits(ti.cast(y, ti.uint32))
-        zz = self.expand_bits(ti.cast(z, ti.uint32))
+        xx = self.expand_bits(ti.cast(x, ti.uint64))
+        yy = self.expand_bits(ti.cast(y, ti.uint64))
+        zz = self.expand_bits(ti.cast(z, ti.uint64))
         return xx * 4 + yy * 2 + zz
 
     @ti.kernel
     def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
 
-        for i in range(self.num_leafs):
+        for f in mesh.faces:
         # // obtain center of triangle
-            u = mesh.faces.verts[0]
-            v = mesh.faces.verts[1]
-            w = mesh.faces.verts[2]
+            u = f.verts[0]
+            v = f.verts[1]
+            w = f.verts[2]
             pos = (1. / 3.) * (u.x + v.x + w.x)
+            self.face_centers[f.id] = pos
 
         # // normalize position
             x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
@@ -68,8 +69,8 @@ class LBVH:
             z = ti.math.clamp(z, 0., 1.)
 
     # // obtain and set morton code based on normalized position
-            self.morton_codes[i] = self.morton_3d(x, y, z)
-            self.object_ids[i] = i
+            self.morton_codes[f.id] = self.morton_3d(x, y, z)
+            self.object_ids[f.id] = f.id
 
     @ti.kernel
     def assign_leaf_nodes(self):
@@ -245,12 +246,20 @@ class LBVH:
         # self.internal_nodes.parent.fill(-1)
         self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
-
         # self.assign_leaf_nodes()
         # self.assign_internal_nodes()
         # self.set_aabb()
 
+
+    @ti.kernel
+    def update_zSort_face_centers_and_line(self):
+
+        for i in range(self.num_leafs - 1):
+            self.zSort_line_idx[2 * i + 0] = self.object_ids[i]
+            self.zSort_line_idx[2 * i + 1] = self.object_ids[i + 1]
+
     def draw_zSort(self, scene):
+        self.update_zSort_face_centers_and_line()
         scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
     #
     # def draw_bvh_aabb(self, scene):

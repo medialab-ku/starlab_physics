@@ -15,6 +15,7 @@ def d_type_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.
 
     v10_proj = ti.math.vec2([v12.dot(v10), v13n.dot(v10)])
     param0 = A.inverse() @ v10_proj
+
     dtype = -1
     if param0[0]>0.0 and param0[0]<1.0 and param0[1]>=0: dtype = 3
     else:

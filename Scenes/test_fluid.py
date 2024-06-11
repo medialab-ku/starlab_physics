@@ -1,6 +1,6 @@
 import random
 from framework.particle import Particle
-from framework.meshtaichiwrapper import MeshTaichiWrapper
+from framework.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
 
 

@@ -1,5 +1,5 @@
 import random
-from framework.meshtaichiwrapper import MeshTaichiWrapper
+from framework.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
 
 ti.init(arch=ti.cuda, device_memory_GB=3)

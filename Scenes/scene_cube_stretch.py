@@ -1,5 +1,5 @@
 import random
-from framework.meshtaichiwrapper import MeshTaichiWrapper
+from framework.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
 from framework.TetMesh import TetMesh
 
