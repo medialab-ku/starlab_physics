@@ -93,9 +93,12 @@ class Solver:
         self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         # print(aabb_min, aabb_max)
 
-        # self.vt_static_pair_cache_size = 40
-        # self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 2))
-        # self.vt_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dynamic)
+        self.vt_static_pair_cache_size = 40
+        self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_static_pair_cache_size, 2))
+        self.vt_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+
+        self.vt_static_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_static_pair_cache_size))
+        self.vt_static_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
         # self.vt_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 4))
         # self.vt_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size))
         #
@@ -551,17 +554,13 @@ class Solver:
     def get_flatten_grid_index(self, pos: ti.math.vec3):
         return self.flatten_grid_index(self.pos_to_index(pos))
 
+    @ti.kernel
     def broadphase(self):
-        self.update_aabb(ti.math.vec3(0.1))
-        self.compute_morton_code()
 
-        ti.algorithms.parallel_sort(key=self.mesh_st.faces.morton_code, values=self.sorted_id_st)
-
-
-        # self.grid_particles_num.fill(0)
-        # self.update_grid_id()
-        # self.prefix_sum_executor.run(self.grid_particles_num)
-        # self.counting_sort()
+       for v in self.mesh_dy.verts:
+           aabb_min = v.y - self.padding
+           aabb_max = v.y + self.padding
+           self.vt_static_candidates_num[v.id] = self.lbvh_st.search_overlapping_primitives(v.id, aabb_min, aabb_max, self.vt_static_candidates, self.vt_static_pair_cache_size)
 
     @ti.kernel
     def update_aabb(self, padding: ti.math.vec3):
@@ -735,15 +734,10 @@ class Solver:
     @ti.kernel
     def solve_collision_constraints_x(self):
         d = self.dHat
-        padding = ti.math.vec3(0.5)
-        for vi_d in range(self.max_num_verts_dynamic):
-            aabb_min0 = self.mesh_dy.verts.y[vi_d] - padding
-            aabb_max0 = self.mesh_dy.verts.y[vi_d] + padding
-            for fi_s in range(self.max_num_faces_static):
-                aabb_min1 = self.mesh_st.faces.aabb_min[fi_s]
-                aabb_max1 = self.mesh_st.faces.aabb_max[fi_s]
-                if self.overlap_aabb(aabb_min0, aabb_max0, aabb_min1, aabb_max1):
-                    solve_collision_constraints_x.__vt_st(vi_d, fi_s, self.mesh_dy, self.mesh_st, d)
+        for v in self.mesh_dy.verts:
+            for i in range(self.vt_static_candidates_num[v.id]):
+                fi_s = self.vt_static_candidates[v.id, i]
+                solve_collision_constraints_x.__vt_st(v.id, fi_s, self.mesh_dy, self.mesh_st, d)
 
         # for fi_d in range(self.max_num_faces_dynamic):
         #     for vi_s in range(self.max_num_verts_static):

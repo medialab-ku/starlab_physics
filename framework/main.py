@@ -13,7 +13,7 @@ window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
-scene = ti.ui.Scene()
+scene = window.get_scene()
 camera = ti.ui.Camera()
 camera.position(2., 4.0, 7.0)
 camera.fov(40)
@@ -329,13 +329,13 @@ while window.running:
     # scene.lines(sim.aabb_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
 
     scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(1, 0.5, 0))
-    # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
+    scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
-        # scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
+        scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
         # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
-        sim.lbvh_st.draw_bvh_aabb(scene)
+        # sim.lbvh_st.draw_bvh_aabb(scene)
         # sim.lbvh_st.draw_zSort(scene)
         # sim.mesh_st.draw_bvh_aabb(scene)
 
@@ -343,6 +343,6 @@ while window.running:
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
-    camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
+    camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()

@@ -206,6 +206,33 @@ class LBVH:
         self.assign_internal_nodes()
         # self.set_aabb()
 
+    @ti.func
+    def aabb_overlap(self, min1, max1, min2, max2):
+        return (min1[0] <= max2[0] and max1[0] >= min2[0] and
+                min1[1] <= max2[1] and max1[1] >= min2[1] and
+                min1[2] <= max2[2] and max1[2] >= min2[2])
+
+
+    @ti.func
+    def search_overlapping_primitives(self, query_index: ti.i32, query_min: ti.math.vec3, query_max: ti.math.vec3,
+                                            node_index: ti.i32, results: ti.template(), max_num_results: ti.uint32):
+
+        num_collisions = 0
+        node_min = self.nodes[node_index].aabb_min
+        node_max = self.nodes[node_index].aabb_max
+        if self.aabb_overlap(query_min, query_max, node_min, node_max):
+            if node_index >= self.num_leafs:
+                    # Leaf node, check for actual collision
+                    primitive_index = self.nodes[node_index].object_id
+                    if primitive_index != query_index:
+                        # Store the overlapping primitive index in results
+                        results[query_index, num_collisions] = primitive_index
+                        num_collisions += 1
+                        return num_collisions
+            else:
+                # Internal node, traverse children
+                self.search_overlapping_primitives(query_min, query_max, nodes[node_index].left, results, num_collisions, query_index)
+                self.search_overlapping_primitives(query_min, query_max, nodes[node_index].right, results, num_collisions, query_index)
 
     @ti.kernel
     def update_zSort_face_centers_and_line(self):
