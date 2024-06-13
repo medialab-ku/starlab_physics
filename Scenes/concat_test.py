@@ -9,7 +9,7 @@ ti.init(arch=ti.cuda, device_memory_GB=3, kernel_profiler=enable_profiler)
 
 model_dir = "../models/OBJ/"
 model_names = []
-model_names.append("square_big.obj")
+model_names.append("curved_plane.obj")
 # model_names.append("plane.obj")
 
 trans_list = []

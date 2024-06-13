@@ -28,7 +28,7 @@ class LBVH:
         self.morton_codes = ti.field(dtype=ti.uint64, shape=self.num_leafs)
 
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
-        self.aabb_indices = ti.field(dtype=ti.uint32, shape=12 * self.num_nodes)
+        self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.num_nodes)
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
@@ -233,30 +233,30 @@ class LBVH:
             self.aabb_x[8 * n + 6] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
             self.aabb_x[8 * n + 7] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
 
-            self.aabb_indices[12 * n + 0] = 8 * n + 0
-            self.aabb_indices[12 * n + 1] = 8 * n + 1
-            self.aabb_indices[12 * n + 2] = 8 * n + 1
-            self.aabb_indices[12 * n + 3] = 8 * n + 2
-            self.aabb_indices[12 * n + 4] = 8 * n + 2
-            self.aabb_indices[12 * n + 5] = 8 * n + 3
-            self.aabb_indices[12 * n + 6] = 8 * n + 3
-            self.aabb_indices[12 * n + 7] = 8 * n + 0
-            self.aabb_indices[12 * n + 8] = 8 * n + 4
-            self.aabb_indices[12 * n + 9] = 8 * n + 5
-            self.aabb_indices[12 * n + 10] = 8 * n + 5
-            self.aabb_indices[12 * n + 11] = 8 * n + 6
-            self.aabb_indices[12 * n + 12] = 8 * n + 6
-            self.aabb_indices[12 * n + 13] = 8 * n + 7
-            self.aabb_indices[12 * n + 14] = 8 * n + 7
-            self.aabb_indices[12 * n + 15] = 8 * n + 4
-            self.aabb_indices[12 * n + 16] = 8 * n + 0
-            self.aabb_indices[12 * n + 17] = 8 * n + 4
-            self.aabb_indices[12 * n + 18] = 8 * n + 1
-            self.aabb_indices[12 * n + 19] = 8 * n + 5
-            self.aabb_indices[12 * n + 20] = 8 * n + 2
-            self.aabb_indices[12 * n + 21] = 8 * n + 6
-            self.aabb_indices[12 * n + 22] = 8 * n + 3
-            self.aabb_indices[12 * n + 23] = 8 * n + 7
+            self.aabb_indices[24 * n + 0] = 8 * n + 0
+            self.aabb_indices[24 * n + 1] = 8 * n + 1
+            self.aabb_indices[24 * n + 2] = 8 * n + 1
+            self.aabb_indices[24 * n + 3] = 8 * n + 2
+            self.aabb_indices[24 * n + 4] = 8 * n + 2
+            self.aabb_indices[24 * n + 5] = 8 * n + 3
+            self.aabb_indices[24 * n + 6] = 8 * n + 3
+            self.aabb_indices[24 * n + 7] = 8 * n + 0
+            self.aabb_indices[24 * n + 8] = 8 * n + 4
+            self.aabb_indices[24 * n + 9] = 8 * n + 5
+            self.aabb_indices[24 * n + 10] = 8 * n + 5
+            self.aabb_indices[24 * n + 11] = 8 * n + 6
+            self.aabb_indices[24 * n + 12] = 8 * n + 6
+            self.aabb_indices[24 * n + 13] = 8 * n + 7
+            self.aabb_indices[24 * n + 14] = 8 * n + 7
+            self.aabb_indices[24 * n + 15] = 8 * n + 4
+            self.aabb_indices[24 * n + 16] = 8 * n + 0
+            self.aabb_indices[24 * n + 17] = 8 * n + 4
+            self.aabb_indices[24 * n + 18] = 8 * n + 1
+            self.aabb_indices[24 * n + 19] = 8 * n + 5
+            self.aabb_indices[24 * n + 20] = 8 * n + 2
+            self.aabb_indices[24 * n + 21] = 8 * n + 6
+            self.aabb_indices[24 * n + 22] = 8 * n + 3
+            self.aabb_indices[24 * n + 23] = 8 * n + 7
 
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
