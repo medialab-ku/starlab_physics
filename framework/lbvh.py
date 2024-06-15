@@ -25,7 +25,7 @@ class LBVH:
         self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
         self.sorted_morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
-        self.morton_codes = ti.field(dtype=ti.uint64, shape=self.num_leafs)
+        self.morton_codes = ti.field(dtype=ti.int64, shape=self.num_leafs)
 
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.num_nodes)
@@ -36,10 +36,10 @@ class LBVH:
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
     def expand_bits(self, v):
-        v = (v * ti.uint64(0x00010001)) & ti.uint64(0xFF0000FF)
-        v = (v * ti.uint64(0x00000101)) & ti.uint64(0x0F00F00F)
-        v = (v * ti.uint64(0x00000011)) & ti.uint64(0xC30C30C3)
-        v = (v * ti.uint64(0x00000005)) & ti.uint64(0x49249249)
+        v = (v * ti.int64(0x00010001)) & ti.int64(0xFF0000FF)
+        v = (v * ti.int64(0x00000101)) & ti.int64(0x0F00F00F)
+        v = (v * ti.int64(0x00000011)) & ti.int64(0xC30C30C3)
+        v = (v * ti.int64(0x00000005)) & ti.int64(0x49249249)
         return v
 
     @ti.func
@@ -93,117 +93,139 @@ class LBVH:
             # self.internal_nodes[i].parent = None
 
     @ti.func
-    def delta(self, a, b, n, ka):
-        # // this guard is for leaf nodes, not internal nodes (hence [0, n-1])
-        if (b < 0) or (b > n - 1):
-            return -1
-        kb = self.morton_codes[self.object_ids[b]]
-        if ka == kb:
-            # // if keys are equal, use id as fallback
-            # // (+32 because they have the same morton code)
-            return 32 + ti.math.clz(ti.cast(a, ti.uint32) ^ ti.cast(b, ti.uint32))
-        # // clz = count leading zeros
-        return ti.math.clz(ka ^ kb)
-
-    @ti.func
-    def find_split(self, first, last, n):
-        first_code = self.sorted_morton_codes[first]
-
-        # calculate the number of highest bits that are the same
-        # for all objects, using the count-leading-zeros intrinsic
-
-        common_prefix = self.delta(first, last, n, first_code)
-
-        # use binary search to find where the next bit differs
-        # specifically, we are looking for the highest object that
-        # shares more than commonPrefix bits with the first one
-
-        # initial guess
-        split = first
-
-        step = last - first
-
-        while step > 1:
-            # exponential decrease
-            step = (step + 1) >> 1
-            # proposed new position
-            new_split = split + step
-
-            if new_split < last:
-                split_prefix = self.delta(first, new_split, n, first_code)
-                if split_prefix > common_prefix:
-                    # accept proposal
-                    split = new_split
-
-        return split
-
-    @ti.func
-    def determine_range(self, n, i) -> ti.math.ivec2:
-        ki = self.morton_codes[i]  # key of i
-
-        # determine direction of the range(+1 or -1)
-
-        delta_l = self.delta(i, i - 1, n, ki)
-        delta_r = self.delta(i, i + 1, n, ki)
-
-        d = 0  # direction
-
-        # min of delta_r and delta_l
-        delta_min = 0
-        if delta_r < delta_l:
-            d = -1
-            delta_min = delta_r
-        else:
-            d = 1
-            delta_min = delta_l
-
-        # compute upper bound of the length of the range
-        l_max = 2
-        while self.delta(i, i + l_max * d, n, ki) > delta_min:
-            l_max <<= 1
-
-        # find other end using binary search
-        l = 0
-        t = l_max >> 1
-        while t > 0:
-            if self.delta(i, i + (l + t) * d, n, ki) > delta_min:
-                l += t
-            t >>= 1
-
-        j = i + l * d
-
-        # // ensure i <= j
-        ret = ti.math.ivec2(0)
-        if i < j:
-            ret = ti.math.ivec2([i, j])
-        else:
-            ret = ti.math.ivec2([j, i])
+    def delta(self, i, j):
+        ret = -1
+        if j <= (self.num_leafs - 1) and j >= 0:
+            i_ = self.object_ids[i]
+            j_ = self.object_ids[j]
+            ret = ti.math.clz(self.morton_codes[i_] ^ self.morton_codes[j_])
         return ret
 
-    @ti.kernel
-    def assign_internal_nodes_at_lev(self, num_lev: ti.int32):
-        for i in range(num_lev):
-            left = 2 * i + self.num_leafs
-            right = left + 1
-            parent = i + num_lev
-            self.nodes[parent].left = left
-            self.nodes[parent].right = right
-            self.nodes[parent].aabb_min = ti.min(self.nodes[left].aabb_min, self.nodes[right].aabb_min)
-            self.nodes[parent].aabb_max = ti.max(self.nodes[left].aabb_max, self.nodes[right].aabb_max)
+    @ti.func
+    def find_split(self, l, r):
+        first_code = self.morton_codes[self.object_ids[l]]
+        last_code = self.morton_codes[self.object_ids[r]]
 
+        ret = -1
+        if first_code == last_code:
+            ret = (l + r) // 2
+
+        else:
+            common_prefix = ti.math.clz(first_code ^ last_code)
+
+            split = l
+            step = r - l
+
+            while step > 1:
+                step = (step + 1) // 2
+                new_split = split + step
+
+                if new_split < r:
+                    split_code = self.morton_codes[new_split]
+                    split_prefix = ti.math.clz(first_code ^ split_code)
+                    if split_prefix > common_prefix:
+                        split = new_split
+
+            ret = split
+        return ret
+
+    # @ti.func
+    # def delta(self, a, b):
+    #     return ti.math.clz(self.morton_codes[a] ^ self.morton_codes[b])
+
+    @ti.func
+    def determine_range(self, i, N):
+
+        l = 0
+        r = 0
+
+        d = self.delta(i, i + 1) - self.delta(i, i - 1)
+
+        delta_min = self.delta(i, i - d)
+
+        l_max = 2
+        while i + l_max * d >= 0 and i + l_max * d < N and self.delta(i, i + l_max * d) > delta_min:
+            l_max *= 2
+
+        l = 0
+        t = l_max // 2
+        while t >= 1:
+            if i + (l + t) * d >= 0 and i + (l + t) * d < N and self.delta(i, i + (l + t) * d) > delta_min:
+                l += t
+            t //= 2
+
+        if d == 1:
+            l = i
+            r = i + l * d
+        else:
+            r = i
+            l = i + l * d
+
+        return l, r
+
+    # @ti.kernel
+    # def assign_internal_nodes_at_lev(self, num_lev: ti.int32):
+    #     for i in range(num_lev):
+    #         left = 2 * i + self.num_leafs
+    #         right = left + 1
+    #         parent = i + num_lev
+    #         self.nodes[parent].left = left
+    #         self.nodes[parent].right = right
+    #         self.nodes[parent].aabb_min = ti.min(self.nodes[left].aabb_min, self.nodes[right].aabb_min)
+    #         self.nodes[parent].aabb_max = ti.max(self.nodes[left].aabb_max, self.nodes[right].aabb_max)
+
+
+    @ti.kernel
     def assign_internal_nodes(self):
-        level_size = self.num_leafs
-        while level_size > 1:
-            half_level = level_size // 2
-            self.assign_internal_nodes_at_lev(half_level)
-            level_size = half_level
+        l, r = self.determine_range(0, self.num_leafs)
+        print(l, r)
+        split = self.find_split(l, r)
+        print(split)
+        # for i in range(self.num_leafs - 1):
+        #     l, r = self.determine_range(i, self.num_leafs)
+        #     split = self.find_split(l, r, self.num_leafs)
+        #     left = -1
+        #     if split == first:
+        #         left = split
+        #     else:
+        #         left = split + self.num_leafs
+        #
+        #     right = -1
+        #     if split + 1 == last:
+        #         right = split + 1
+        #     else:
+        #         right = split + 1 + self.num_leafs
+        #
+        #     self.nodes[i].left = left
+        #     self.nodes[i].right = right
+        #     self.nodes[left].parent = self.num_leafs
+        #     self.nodes[right].parent = self.num_leafs
+
+    def compute_node_aabbs(self):
+
+        size = self.nodes
+        while size < 1:
+            self.compute_node_aabbs_at_lev(size, size)
+    @ti.kernel
+    def compute_node_aabbs_at_lev(self, offset: ti.uint32, size: ti.uint32):
+
+        for i in range(offset, offset + size):
+            left, right = self.nodes[i].left, self.nodes[i].right
+            min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
+            max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
+
+            self.nodes[i].aabb_min = ti.min(min0, min1)
+            self.nodes[i].aabb_max = ti.max(max0, max1)
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
-        # self.internal_nodes.parent.fill(-1)
         self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
+
+        # original_index = self.object_ids[sorted_index]
+
         self.assign_leaf_nodes(mesh)
         self.assign_internal_nodes()
+        # self.compute_node_aabbs()
         # self.set_aabb()
 
     @ti.func
@@ -211,28 +233,6 @@ class LBVH:
         return (min1[0] <= max2[0] and max1[0] >= min2[0] and
                 min1[1] <= max2[1] and max1[1] >= min2[1] and
                 min1[2] <= max2[2] and max1[2] >= min2[2])
-
-
-    @ti.func
-    def search_overlapping_primitives(self, query_index: ti.i32, query_min: ti.math.vec3, query_max: ti.math.vec3,
-                                            node_index: ti.i32, results: ti.template(), max_num_results: ti.uint32):
-
-        num_collisions = 0
-        node_min = self.nodes[node_index].aabb_min
-        node_max = self.nodes[node_index].aabb_max
-        if self.aabb_overlap(query_min, query_max, node_min, node_max):
-            if node_index >= self.num_leafs:
-                    # Leaf node, check for actual collision
-                    primitive_index = self.nodes[node_index].object_id
-                    if primitive_index != query_index:
-                        # Store the overlapping primitive index in results
-                        results[query_index, num_collisions] = primitive_index
-                        num_collisions += 1
-                        return num_collisions
-            else:
-                # Internal node, traverse children
-                self.search_overlapping_primitives(query_min, query_max, nodes[node_index].left, results, num_collisions, query_index)
-                self.search_overlapping_primitives(query_min, query_max, nodes[node_index].right, results, num_collisions, query_index)
 
     @ti.kernel
     def update_zSort_face_centers_and_line(self):

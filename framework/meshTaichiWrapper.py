@@ -125,6 +125,7 @@ class MeshTaichiWrapper:
 
         return aabb_min, aabb_max
 
+
     @ti.kernel
     def computeAABB_faces(self, padding: ti.math.vec3):
 
