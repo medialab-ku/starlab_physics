@@ -38,6 +38,8 @@ class MeshTaichiWrapper:
         self.faces = self.mesh.faces
         self.verts = self.mesh.verts
 
+        print(len(self.mesh.faces))
+
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.uint32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.uint32, shape=len(self.mesh.edges) * 2)

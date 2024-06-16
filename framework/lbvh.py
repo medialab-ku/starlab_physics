@@ -9,6 +9,8 @@ class Node:
     visited: ti.i32
     aabb_min: ti.math.vec3
     aabb_max: ti.math.vec3
+    start: ti.i32
+    end: ti.i32
 
 @ti.data_oriented
 class LBVH:
@@ -25,7 +27,7 @@ class LBVH:
         self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
         self.sorted_morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
-        self.morton_codes = ti.field(dtype=ti.int64, shape=self.num_leafs)
+        self.morton_codes = ti.field(dtype=ti.int32, shape=self.num_leafs)
 
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.num_nodes)
@@ -78,15 +80,15 @@ class LBVH:
 
     @ti.kernel
     def assign_leaf_nodes(self, mesh: ti.template()):
+        # print(self.num_leafs)
         for f in mesh.faces:
             # // no need to set parent to nullptr, each child will have a parent
             id = self.object_ids[f.id]
-            self.nodes[id + self.num_leafs].object_id = f.id
-            # // needed to recognize that this node is a leaf
-            self.nodes[id + self.num_leafs].left = -1
-            self.nodes[id + self.num_leafs].right = -1
-            self.nodes[id + self.num_leafs].aabb_min = f.aabb_min
-            self.nodes[id + self.num_leafs].aabb_max = f.aabb_max
+            self.nodes[id + self.num_leafs - 1].object_id = f.id
+            self.nodes[id + self.num_leafs - 1].left = -1
+            self.nodes[id + self.num_leafs - 1].right = -1
+            self.nodes[id + self.num_leafs - 1].aabb_min = f.aabb_min
+            self.nodes[id + self.num_leafs - 1].aabb_max = f.aabb_max
 
             # // need to set for internal node parent to nullptr, for testing later
             # // there is one less internal node than leaf node, test for that
@@ -98,7 +100,10 @@ class LBVH:
         if j <= (self.num_leafs - 1) and j >= 0:
             i_ = self.object_ids[i]
             j_ = self.object_ids[j]
-            ret = ti.math.clz(self.morton_codes[i_] ^ self.morton_codes[j_])
+            if i_ == j_:
+                ret = 32 + ti.math.clz(self.morton_codes[i_] ^ self.morton_codes[j_])
+            else:
+                ret = ti.math.clz(self.morton_codes[i_] ^ self.morton_codes[j_])
         return ret
 
     @ti.func
@@ -121,7 +126,7 @@ class LBVH:
                 new_split = split + step
 
                 if new_split < r:
-                    split_code = self.morton_codes[new_split]
+                    split_code = self.morton_codes[self.object_ids[new_split]]
                     split_prefix = ti.math.clz(first_code ^ split_code)
                     if split_prefix > common_prefix:
                         split = new_split
@@ -134,34 +139,38 @@ class LBVH:
     #     return ti.math.clz(self.morton_codes[a] ^ self.morton_codes[b])
 
     @ti.func
-    def determine_range(self, i, N):
+    def determine_range(self, i, n):
 
-        l = 0
-        r = 0
+        delta_l = self.delta(i, i - 1)
+        delta_r = self.delta(i, i + 1)
 
-        d = self.delta(i, i + 1) - self.delta(i, i - 1)
+        print(delta_l, delta_r)
+        d = 1
+        delta_min = delta_l
+        if delta_r < delta_l:
+            d = - 1
+            delta_min = delta_r
 
-        delta_min = self.delta(i, i - d)
-
+        print(d)
         l_max = 2
-        while i + l_max * d >= 0 and i + l_max * d < N and self.delta(i, i + l_max * d) > delta_min:
-            l_max *= 2
+        while self.delta(i, i + l_max * d) > delta_min:
+            l_max <<= 2
+
 
         l = 0
         t = l_max // 2
         while t >= 1:
-            if i + (l + t) * d >= 0 and i + (l + t) * d < N and self.delta(i, i + (l + t) * d) > delta_min:
+            if i + (l + t) * d >= 0 and i + (l + t) * d < n and self.delta(i, i + (l + t) * d) > delta_min:
                 l += t
             t //= 2
 
-        if d == 1:
-            l = i
-            r = i + l * d
-        else:
-            r = i
-            l = i + l * d
+        start = i
+        end = i + l * d
+        if d == -1:
+            start = i + l * d
+            end = i
 
-        return l, r
+        return start, end
 
     # @ti.kernel
     # def assign_internal_nodes_at_lev(self, num_lev: ti.int32):
@@ -177,56 +186,71 @@ class LBVH:
 
     @ti.kernel
     def assign_internal_nodes(self):
-        l, r = self.determine_range(0, self.num_leafs)
-        print(l, r)
-        split = self.find_split(l, r)
-        print(split)
+        start, end = self.determine_range(7, self.num_leafs)
+        print(start, end)
+        # split = self.find_split(start, end)
+        # left = split + self.num_leafs if split == start else split
+        # right = split + 1 + self.num_leafs if split + 1 == end else split + 1
+        # print(left, right)
         # for i in range(self.num_leafs - 1):
-        #     l, r = self.determine_range(i, self.num_leafs)
-        #     split = self.find_split(l, r, self.num_leafs)
-        #     left = -1
-        #     if split == first:
-        #         left = split
-        #     else:
-        #         left = split + self.num_leafs
-        #
-        #     right = -1
-        #     if split + 1 == last:
-        #         right = split + 1
-        #     else:
-        #         right = split + 1 + self.num_leafs
+        #     start, end = self.determine_range(i, self.num_leafs)
+        #     # print(i, start, end)
+        #     split = self.find_split(start, end)
+        #     left = split + self.num_leafs - 1 if split == start else split
+        #     right = split + 1 + self.num_leafs - 1 if split + 1 == end else split + 1
         #
         #     self.nodes[i].left = left
         #     self.nodes[i].right = right
-        #     self.nodes[left].parent = self.num_leafs
-        #     self.nodes[right].parent = self.num_leafs
+        #     self.nodes[left].parent = i
+        #     self.nodes[right].parent = i
+        #     self.nodes[i].start = start
+        #     self.nodes[i].end = end
+
+
 
     def compute_node_aabbs(self):
+        n = 2 * self.num_leafs - 1
+        total = 0
+        # for level in range(n.bit_length()):
+        #     level_size = self.num_leafs >> level
+        #     offset = (self.num_leafs >> (level + 1))
+        #     total += level_size
+        #     print(offset, level_size)
+        #     # self.compute_node_aabbs_at_lev(offset, level_size)
+        # print(total)
 
-        size = self.nodes
-        while size < 1:
-            self.compute_node_aabbs_at_lev(size, size)
+        for i in range(self.num_leafs - 1):
+            start, end = self.nodes[i].start, self.nodes[i].end
+            aabb_min = self.nodes[start + self.num_leafs - 1].aabb_min
+            aabb_max = self.nodes[start + self.num_leafs - 1].aabb_max
+
+            for j in ti.static(range(end - start)):
+                aabb_min = ti.min(aabb_min, self.nodes[start + j].aabb_min)
+                aabb_max = ti.max(aabb_max, self.nodes[start + j].aabb_max)
+
+            self.nodes[i].aabb_min = aabb_min
+            self.nodes[i].aabb_max = aabb_max
+        print(self.nodes[0].aabb_min, self.nodes[0].aabb_max)
+
     @ti.kernel
-    def compute_node_aabbs_at_lev(self, offset: ti.uint32, size: ti.uint32):
+    def compute_node_aabbs_at_lev(self, offset: ti.int32, size: ti.int32):
 
-        for i in range(offset, offset + size):
-            left, right = self.nodes[i].left, self.nodes[i].right
+        for i in range(size):
+            id = size + offset
+            left, right = self.nodes[id].left, self.nodes[id].right
             min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
             max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
 
-            self.nodes[i].aabb_min = ti.min(min0, min1)
-            self.nodes[i].aabb_max = ti.max(max0, max1)
+            self.nodes[id].aabb_min = ti.min(min0, min1)
+            self.nodes[id].aabb_max = ti.max(max0, max1)
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
         self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
-        # original_index = self.object_ids[sorted_index]
-
         self.assign_leaf_nodes(mesh)
         self.assign_internal_nodes()
         # self.compute_node_aabbs()
-        # self.set_aabb()
 
     @ti.func
     def aabb_overlap(self, min1, max1, min2, max2):
@@ -248,8 +272,10 @@ class LBVH:
     @ti.kernel
     def update_aabb_x_and_lines(self):
         for n in range(self.num_nodes):
+            # i = n + self.num_leafs - 1
             aabb_min = self.nodes[n].aabb_min
             aabb_max = self.nodes[n].aabb_max
+
             self.aabb_x[8 * n + 0] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
             self.aabb_x[8 * n + 1] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
             self.aabb_x[8 * n + 2] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
@@ -288,3 +314,4 @@ class LBVH:
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
         scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(0, 0, 0))
+        # scene.particles(self.aabb_x, radius=0.5, color=(0, 0, 0))
