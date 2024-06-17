@@ -144,14 +144,15 @@ class LBVH:
         delta_l = self.delta(i, i - 1)
         delta_r = self.delta(i, i + 1)
 
-        print(delta_l, delta_r)
+        # print(delta_l, delta_r)
         d = 1
+
         delta_min = delta_l
         if delta_r < delta_l:
             d = - 1
             delta_min = delta_r
 
-        print(d)
+        # print(d)
         l_max = 2
         while self.delta(i, i + l_max * d) > delta_min:
             l_max <<= 2
@@ -186,25 +187,25 @@ class LBVH:
 
     @ti.kernel
     def assign_internal_nodes(self):
-        start, end = self.determine_range(7, self.num_leafs)
-        print(start, end)
+        # start, end = self.determine_range(7, self.num_leafs)
+        # print(start, end)
         # split = self.find_split(start, end)
         # left = split + self.num_leafs if split == start else split
         # right = split + 1 + self.num_leafs if split + 1 == end else split + 1
         # print(left, right)
-        # for i in range(self.num_leafs - 1):
-        #     start, end = self.determine_range(i, self.num_leafs)
-        #     # print(i, start, end)
-        #     split = self.find_split(start, end)
-        #     left = split + self.num_leafs - 1 if split == start else split
-        #     right = split + 1 + self.num_leafs - 1 if split + 1 == end else split + 1
-        #
-        #     self.nodes[i].left = left
-        #     self.nodes[i].right = right
-        #     self.nodes[left].parent = i
-        #     self.nodes[right].parent = i
-        #     self.nodes[i].start = start
-        #     self.nodes[i].end = end
+        for i in range(self.num_leafs - 1):
+            start, end = self.determine_range(i, self.num_leafs)
+            split = self.find_split(start, end)
+            # print(i, end - start, split)
+            left = split + self.num_leafs - 1 if split == start else split
+            right = split + 1 + self.num_leafs - 1 if split + 1 == end else split + 1
+
+            self.nodes[i].left = left
+            self.nodes[i].right = right
+            self.nodes[left].parent = i
+            self.nodes[right].parent = i
+            self.nodes[i].start = start
+            self.nodes[i].end = end
 
 
 
@@ -250,7 +251,7 @@ class LBVH:
 
         self.assign_leaf_nodes(mesh)
         self.assign_internal_nodes()
-        # self.compute_node_aabbs()
+        self.compute_node_aabbs()
 
     @ti.func
     def aabb_overlap(self, min1, max1, min2, max2):
