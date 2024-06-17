@@ -34,6 +34,7 @@ class LBVH:
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
+        self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
@@ -202,36 +203,35 @@ class LBVH:
 
             self.nodes[i].left = left
             self.nodes[i].right = right
+            self.nodes[i].visited = 0
             self.nodes[left].parent = i
             self.nodes[right].parent = i
             self.nodes[i].start = start
             self.nodes[i].end = end
 
-
-
+    @ti.kernel
     def compute_node_aabbs(self):
-        n = 2 * self.num_leafs - 1
-        total = 0
-        # for level in range(n.bit_length()):
-        #     level_size = self.num_leafs >> level
-        #     offset = (self.num_leafs >> (level + 1))
-        #     total += level_size
-        #     print(offset, level_size)
-        #     # self.compute_node_aabbs_at_lev(offset, level_size)
-        # print(total)
 
-        for i in range(self.num_leafs - 1):
-            start, end = self.nodes[i].start, self.nodes[i].end
-            aabb_min = self.nodes[start + self.num_leafs - 1].aabb_min
-            aabb_max = self.nodes[start + self.num_leafs - 1].aabb_max
+        for i in range(self.num_leafs):
 
-            for j in ti.static(range(end - start)):
-                aabb_min = ti.min(aabb_min, self.nodes[start + j].aabb_min)
-                aabb_max = ti.max(aabb_max, self.nodes[start + j].aabb_max)
+            pid = self.nodes[i + self.num_leafs - 1].parent
 
-            self.nodes[i].aabb_min = aabb_min
-            self.nodes[i].aabb_max = aabb_max
-        print(self.nodes[0].aabb_min, self.nodes[0].aabb_max)
+            while True:
+                if pid <= -1:
+                    break
+
+                visited = self.nodes[pid].visited
+                ti.atomic_add(self.nodes[pid].visited, 1)
+
+                if visited == 0:
+                    break
+
+                left, right = self.nodes[pid].left, self.nodes[pid].right
+                min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
+                max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
+                self.nodes[pid].aabb_min = ti.min(min0, min1)
+                self.nodes[pid].aabb_max = ti.max(max0, max1)
+                pid = self.nodes[pid].parent
 
     @ti.kernel
     def compute_node_aabbs_at_lev(self, offset: ti.int32, size: ti.int32):
@@ -246,6 +246,7 @@ class LBVH:
             self.nodes[id].aabb_max = ti.max(max0, max1)
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
+        self.nodes.parent.fill(-1)
         self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
