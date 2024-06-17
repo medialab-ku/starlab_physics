@@ -203,8 +203,6 @@ class LBVH:
         for i in range(self.num_leafs - 1):
             start, end = self.determine_range(i, self.num_leafs)
             split = self.find_split(start, end)
-            # print(start, end, split)
-
             left = split + self.num_leafs - 1 if split == start else split
             right = split + 1 + self.num_leafs - 1 if split + 1 == end else split + 1
             self.nodes[i].left = left
@@ -215,14 +213,11 @@ class LBVH:
             self.nodes[i].start = start
             self.nodes[i].end = end
 
-            print(i, left, right)
-
-
+            # print(i, left, right)
     @ti.kernel
     def compute_node_aabbs(self):
 
         for i in range(self.num_leafs):
-
             pid = self.nodes[i + self.num_leafs - 1].parent
             while True:
                 if pid == -1:
@@ -249,12 +244,24 @@ class LBVH:
         self.assign_leaf_nodes(mesh)
         self.assign_internal_nodes()
         self.compute_node_aabbs()
+        self.traverse_bvh_all()
 
     @ti.func
     def aabb_overlap(self, min1, max1, min2, max2):
         return (min1[0] <= max2[0] and max1[0] >= min2[0] and
                 min1[1] <= max2[1] and max1[1] >= min2[1] and
                 min1[2] <= max2[2] and max1[2] >= min2[2])
+
+    @ti.kernel
+    def traverse_bvh_all(self):
+
+        for i in range(self.num_leafs):
+            self.traverse_bvh()
+    @ti.func
+    def traverse_bvh(self):
+
+        stack = ti.Vector([i for i in range(64)])
+
 
     @ti.kernel
     def update_zSort_face_centers_and_line(self):
@@ -312,4 +319,3 @@ class LBVH:
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
         scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(0, 0, 0))
-        # scene.particles(self.aabb_x, radius=0.5, color=(0, 0, 0))
