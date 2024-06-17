@@ -99,18 +99,17 @@ class LBVH:
     def delta(self, i, j):
         ret = -1
         if j <= (self.num_leafs - 1) and j >= 0:
-            i_ = self.object_ids[i]
-            j_ = self.object_ids[j]
-            if i_ == j_:
-                ret = 32 + ti.math.clz(self.morton_codes[i_] ^ self.morton_codes[j_])
+            xor = self.morton_codes[i] ^ self.morton_codes[j]
+            if xor == 0:
+                ret = 32
             else:
-                ret = ti.math.clz(self.morton_codes[i_] ^ self.morton_codes[j_])
+                ret = ti.math.clz(xor)
         return ret
 
     @ti.func
     def find_split(self, l, r):
-        first_code = self.morton_codes[self.object_ids[l]]
-        last_code = self.morton_codes[self.object_ids[r]]
+        first_code = self.morton_codes[l]
+        last_code = self.morton_codes[r]
 
         ret = -1
         if first_code == last_code:
@@ -127,7 +126,7 @@ class LBVH:
                 new_split = split + step
 
                 if new_split < r:
-                    split_code = self.morton_codes[self.object_ids[new_split]]
+                    split_code = self.morton_codes[new_split]
                     split_prefix = ti.math.clz(first_code ^ split_code)
                     if split_prefix > common_prefix:
                         split = new_split
@@ -146,6 +145,7 @@ class LBVH:
         delta_r = self.delta(i, i + 1)
 
         # print(delta_l, delta_r)
+
         d = 1
 
         delta_min = delta_l
@@ -154,6 +154,7 @@ class LBVH:
             delta_min = delta_r
 
         # print(d)
+
         l_max = 2
         while self.delta(i, i + l_max * d) > delta_min:
             l_max <<= 2
@@ -171,6 +172,11 @@ class LBVH:
         if d == -1:
             start = i + l * d
             end = i
+
+        # if start > end:
+        #     temp = end
+        #     end = start
+        #     start = temp
 
         return start, end
 
@@ -197,10 +203,10 @@ class LBVH:
         for i in range(self.num_leafs - 1):
             start, end = self.determine_range(i, self.num_leafs)
             split = self.find_split(start, end)
-            # print(i, end - start, split)
+            # print(start, end, split)
+
             left = split + self.num_leafs - 1 if split == start else split
             right = split + 1 + self.num_leafs - 1 if split + 1 == end else split + 1
-
             self.nodes[i].left = left
             self.nodes[i].right = right
             self.nodes[i].visited = 0
@@ -209,41 +215,31 @@ class LBVH:
             self.nodes[i].start = start
             self.nodes[i].end = end
 
+            print(i, left, right)
+
+
     @ti.kernel
     def compute_node_aabbs(self):
 
         for i in range(self.num_leafs):
 
             pid = self.nodes[i + self.num_leafs - 1].parent
-
             while True:
-                if pid <= -1:
+                if pid == -1:
                     break
 
                 visited = self.nodes[pid].visited
-                ti.atomic_add(self.nodes[pid].visited, 1)
 
-                if visited == 0:
+                if visited == 1:
                     break
 
+                ti.atomic_add(self.nodes[pid].visited, 1)
                 left, right = self.nodes[pid].left, self.nodes[pid].right
                 min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
                 max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
                 self.nodes[pid].aabb_min = ti.min(min0, min1)
                 self.nodes[pid].aabb_max = ti.max(max0, max1)
                 pid = self.nodes[pid].parent
-
-    @ti.kernel
-    def compute_node_aabbs_at_lev(self, offset: ti.int32, size: ti.int32):
-
-        for i in range(size):
-            id = size + offset
-            left, right = self.nodes[id].left, self.nodes[id].right
-            min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
-            max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
-
-            self.nodes[id].aabb_min = ti.min(min0, min1)
-            self.nodes[id].aabb_max = ti.max(max0, max1)
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
         self.nodes.parent.fill(-1)
