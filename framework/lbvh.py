@@ -254,9 +254,9 @@ class LBVH:
     @ti.func
     def traverse_bvh(self, aabb_min, aabb_max, i, cache, nums):
 
-        stack = ti.Vector([0 for j in range(64)])
+        stack = ti.Vector([-1 for j in range(64)])
         stack[0] = -1
-        stack_counter = 1
+        stack_counter = 0
         idx = 0
         while True:
             left = self.nodes[idx].left
@@ -267,23 +267,24 @@ class LBVH:
             overlap_l = self.aabb_overlap(aabb_min, aabb_max, min_l, max_l)
             if overlap_l and left >= self.num_leafs - 1:
                 cache[i, nums[i]] = self.nodes[left].object_id
+                nums[i] += 1
 
             overlap_r = self.aabb_overlap(aabb_min, aabb_max, min_r, max_r)
             if overlap_r and right >= self.num_leafs - 1:
                 cache[i, nums[i]] = self.nodes[right].object_id
-                nums[i]+= 1
+                nums[i] += 1
 
             traverse_l = overlap_l and left < self.num_leafs - 1
             traverse_r = overlap_r and right < self.num_leafs - 1
 
             if (not traverse_l) and (not traverse_r):
-                stack_counter -= 1
                 idx = stack[stack_counter]
+                stack_counter -= 1
             else:
                 idx = left if traverse_l else right
                 if traverse_l and traverse_r:
-                    stack[stack_counter] = right
                     stack_counter += 1
+                    stack[stack_counter] = right
 
             if idx == -1:
                 break

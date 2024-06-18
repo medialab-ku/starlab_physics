@@ -33,5 +33,5 @@ for i in range(1):
 
 concat.concat_mesh(model_dir, model_names, trans_list, scale_list)
 
-mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 3.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/square.obj", scale=2.5, trans=ti.math.vec3(0.0, 3.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = MeshTaichiWrapper("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

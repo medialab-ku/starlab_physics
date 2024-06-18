@@ -580,62 +580,6 @@ class Solver:
             f.aabb_max = ti.math.max(x0, x1, x2, y0, y1, y2) + padding
             f.aabb_min = ti.math.min(x0, x1, x2, y0, y1, y2) - padding
 
-    @ti.func
-    def expand_bits(self, v):
-        v = (v * 0x00010001) & 0xFF0000FF
-        v = (v * 0x00000101) & 0x0F00F00F
-        v = (v * 0x00000011) & 0xC30C30C3
-        v = (v * 0x00000005) & 0x49249249
-        return v
-
-    @ti.func
-    def morton3D(self, x, y, z):
-        xx = self.expand_bits(ti.cast(x * 1024, ti.u32))
-        yy = self.expand_bits(ti.cast(y * 1024, ti.u32))
-        zz = self.expand_bits(ti.cast(z * 1024, ti.u32))
-        return xx * 4 + yy * 2 + zz
-
-    @ti.kernel
-    def compute_morton_code(self):
-
-        aabb_min = ti.math.vec3(0.0)
-        aabb_max = ti.math.vec3(0.0)
-        for f in self.mesh_st.faces:
-            ti.atomic_max(aabb_max, f.aabb_max)
-            ti.atomic_min(aabb_min, f.aabb_min)
-
-        for f in self.mesh_st.faces:
-            center = 0.5 * (f.aabb_min + f.aabb_max)
-            for dim in ti.static(range(3)):
-                center[dim] = (center[dim] - aabb_min[dim]) / (aabb_max[dim] - aabb_min[dim])
-
-            f.morton_code = self.morton3D(center[0], center[1], center[2])
-            self.sorted_id_st[f.id] = f.id
-
-
-
-
-    # @ti.kernel
-    # def build_bvh(self):
-    #
-    #     for fid in range(self.max_num_faces_st):
-    #         fid_sorted = self.sorted_id_st[fid]
-    #         self.lbvh[fid].key = fid_sorted
-    #         self.lbvh[fid].aabb_min = self.mesh_st.faces.aabb_min[fid_sorted]
-    #         self.lbvh[fid].aabb_max = self.mesh_st.faces.aabb_max[fid_sorted]
-    #
-    #     for fid in range(self.max_num_faces_st):
-
-
-    @ti.func
-    def overlap_aabb(self, aabb_min0: ti.math.vec3, aabb_max0: ti.math.vec3,
-                           aabb_min1: ti.math.vec3, aabb_max1: ti.math.vec3) -> bool:
-
-        is_overlap = ((aabb_min0[0] <= aabb_max1[0]) & (aabb_max0[0] >= aabb_min1[0]) &
-                      (aabb_min0[1] <= aabb_max1[1]) & (aabb_max0[1] >= aabb_min1[1]) &
-                      (aabb_min0[2] <= aabb_max1[2]) & (aabb_max0[2] >= aabb_min1[2]))
-
-        return is_overlap
 
 
     @ti.func
@@ -736,6 +680,7 @@ class Solver:
     def solve_collision_constraints_x(self):
         d = self.dHat
         for v in self.mesh_dy.verts:
+            # for fi_s in range(self.max_num_faces_st):
             for i in range(self.vt_static_candidates_num[v.id]):
                 fi_s = self.vt_static_candidates[v.id, i]
                 solve_collision_constraints_x.__vt_st(v.id, fi_s, self.mesh_dy, self.mesh_st, d)
@@ -1060,8 +1005,8 @@ class Solver:
         self.init_variables()
         self.solve_spring_constraints_x(self.YM, self.strain_limit)
 
-        if self.enable_collision_handling:
-            self.solve_collision_constraints_x()
+        # if self.enable_collision_handling:
+        self.solve_collision_constraints_x()
         #
         # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
@@ -1161,9 +1106,9 @@ class Solver:
         dt_sub = self.dt / n_substeps
 
         # ti.profiler.clear_kernel_profiler_info()
-        self.broadphase()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
+            self.broadphase()
             self.solve_constraints_x()
 
             self.compute_velocity(dt_sub)
