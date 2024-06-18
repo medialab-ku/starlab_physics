@@ -244,7 +244,6 @@ class LBVH:
         self.assign_leaf_nodes(mesh)
         self.assign_internal_nodes()
         self.compute_node_aabbs()
-        self.traverse_bvh_all()
 
     @ti.func
     def aabb_overlap(self, min1, max1, min2, max2):
@@ -252,15 +251,42 @@ class LBVH:
                 min1[1] <= max2[1] and max1[1] >= min2[1] and
                 min1[2] <= max2[2] and max1[2] >= min2[2])
 
-    @ti.kernel
-    def traverse_bvh_all(self):
-
-        for i in range(self.num_leafs):
-            self.traverse_bvh()
     @ti.func
-    def traverse_bvh(self):
+    def traverse_bvh(self, aabb_min, aabb_max, i, cache, nums):
 
-        stack = ti.Vector([i for i in range(64)])
+        stack = ti.Vector([0 for j in range(64)])
+        stack[0] = -1
+        stack_counter = 1
+        idx = 0
+        while True:
+            left = self.nodes[idx].left
+            right = self.nodes[idx].right
+            min_l, max_l = self.nodes[left].aabb_min, self.nodes[left].aabb_max
+            min_r, max_r = self.nodes[right].aabb_min, self.nodes[right].aabb_max
+
+            overlap_l = self.aabb_overlap(aabb_min, aabb_max, min_l, max_l)
+            if overlap_l and left >= self.num_leafs - 1:
+                cache[i, nums[i]] = self.nodes[left].object_id
+
+            overlap_r = self.aabb_overlap(aabb_min, aabb_max, min_r, max_r)
+            if overlap_r and right >= self.num_leafs - 1:
+                cache[i, nums[i]] = self.nodes[right].object_id
+                nums[i]+= 1
+
+            traverse_l = overlap_l and left < self.num_leafs - 1
+            traverse_r = overlap_r and right < self.num_leafs - 1
+
+            if (not traverse_l) and (not traverse_r):
+                stack_counter -= 1
+                idx = stack[stack_counter]
+            else:
+                idx = left if traverse_l else right
+                if traverse_l and traverse_r:
+                    stack[stack_counter] = right
+                    stack_counter += 1
+
+            if idx == -1:
+                break
 
 
     @ti.kernel

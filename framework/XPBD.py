@@ -47,7 +47,7 @@ class Solver:
         self.grid_edge_indices = ti.field(dtype=ti.u32, shape=12 * 2)
 
 
-        self.padding = 0.2
+        self.padding = 0.1
         self.init_grid()
 
         self.grid_origin = -self.grid_size
@@ -87,7 +87,7 @@ class Solver:
 
         self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
 
-        self.mesh_st.computeAABB_faces(padding=ti.math.vec3(0.8))
+        self.mesh_st.computeAABB_faces(padding=self.padding)
         aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
         self.lbvh_st = LBVH(len(self.mesh_st.faces))
         self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
@@ -557,10 +557,11 @@ class Solver:
     @ti.kernel
     def broadphase(self):
 
-       for v in self.mesh_dy.verts:
-           aabb_min = v.y - self.padding
-           aabb_max = v.y + self.padding
-           self.vt_static_candidates_num[v.id] = self.lbvh_st.search_overlapping_primitives(v.id, aabb_min, aabb_max, self.vt_static_candidates, self.vt_static_pair_cache_size)
+        self.vt_static_candidates_num.fill(0)
+        for v in self.mesh_dy.verts:
+            aabb_min = v.y - self.padding * ti.math.vec3(1.0)
+            aabb_max = v.y + self.padding * ti.math.vec3(1.0)
+            self.lbvh_st.traverse_bvh(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
 
     @ti.kernel
     def update_aabb(self, padding: ti.math.vec3):
@@ -662,7 +663,7 @@ class Solver:
 
         for e in self.mesh_dy.edges:
             l0 = e.l0
-            x10 = e.verts[0].x - e.verts[1].x
+            x10 = e.verts[0].y - e.verts[1].y
             lij = x10.norm()
 
             C = (lij - l0)
@@ -1160,9 +1161,9 @@ class Solver:
         dt_sub = self.dt / n_substeps
 
         # ti.profiler.clear_kernel_profiler_info()
+        self.broadphase()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            self.broadphase()
             self.solve_constraints_x()
 
             self.compute_velocity(dt_sub)

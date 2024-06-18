@@ -43,8 +43,6 @@ class MeshTaichiWrapper:
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.uint32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.uint32, shape=len(self.mesh.edges) * 2)
-        self.initFaceIndices()
-        self.initEdgeIndices()
         self.fid_np = self.face_indices.to_numpy()
         self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
         self.verts = self.mesh.verts
@@ -56,6 +54,8 @@ class MeshTaichiWrapper:
         self.scale = scale
 
         self.applyTransform()
+        self.initFaceIndices()
+        self.initEdgeIndices()
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
     def reset(self):
@@ -129,18 +129,17 @@ class MeshTaichiWrapper:
 
 
     @ti.kernel
-    def computeAABB_faces(self, padding: ti.math.vec3):
+    def computeAABB_faces(self, padding: ti.f32):
 
         for f in self.mesh.faces:
             f.aabb_min = ti.math.min(f.verts[0].x, f.verts[1].x, f.verts[2].x)
             f.aabb_max = ti.math.max(f.verts[0].x, f.verts[1].x, f.verts[2].x)
 
-            f.aabb_min -= padding
-            f.aabb_max += padding
+            f.aabb_min -= padding * ti.math.vec3(1.0)
+            f.aabb_max += padding * ti.math.vec3(1.0)
 
 
     def export(self, scene_name, mesh_id, frame,is_static = False):
-
         if is_static:
             directory = os.path.join("results/", scene_name, "StaticMesh_ID_" + str(mesh_id))
         else:
