@@ -86,11 +86,10 @@ class Solver:
         self.max_num_faces_st = len(self.mesh_st.faces)
 
         self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
-
         self.mesh_st.computeAABB_faces(padding=self.padding)
-        aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+        # aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
         self.lbvh_st = LBVH(len(self.mesh_st.faces))
-        self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+        # self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         # print(aabb_min, aabb_max)
 
         self.vt_static_pair_cache_size = 40
@@ -491,6 +490,10 @@ class Solver:
         self.mesh_dy.reset()
         if self.mesh_st != None:
             self.mesh_st.reset()
+            self.mesh_st.computeAABB_faces(padding=self.padding)
+            aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+            self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+
         # for mid in range(len(self.meshes_dynamic)):
         #     self.meshes_dynamic[mid].reset()
         #
@@ -1106,11 +1109,13 @@ class Solver:
         dt_sub = self.dt / n_substeps
 
         # ti.profiler.clear_kernel_profiler_info()
+        self.mesh_st.computeAABB_faces(padding=self.padding)
+        aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+        self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             self.broadphase()
             self.solve_constraints_x()
-
             self.compute_velocity(dt_sub)
             # self.solve_constraints_v()
 

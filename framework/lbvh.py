@@ -134,9 +134,6 @@ class LBVH:
             ret = split
         return ret
 
-    # @ti.func
-    # def delta(self, a, b):
-    #     return ti.math.clz(self.morton_codes[a] ^ self.morton_codes[b])
 
     @ti.func
     def determine_range(self, i, n):
@@ -173,33 +170,14 @@ class LBVH:
             start = i + l * d
             end = i
 
-        # if start > end:
-        #     temp = end
-        #     end = start
-        #     start = temp
 
         return start, end
 
-    # @ti.kernel
-    # def assign_internal_nodes_at_lev(self, num_lev: ti.int32):
-    #     for i in range(num_lev):
-    #         left = 2 * i + self.num_leafs
-    #         right = left + 1
-    #         parent = i + num_lev
-    #         self.nodes[parent].left = left
-    #         self.nodes[parent].right = right
-    #         self.nodes[parent].aabb_min = ti.min(self.nodes[left].aabb_min, self.nodes[right].aabb_min)
-    #         self.nodes[parent].aabb_max = ti.max(self.nodes[left].aabb_max, self.nodes[right].aabb_max)
 
 
     @ti.kernel
     def assign_internal_nodes(self):
-        # start, end = self.determine_range(7, self.num_leafs)
-        # print(start, end)
-        # split = self.find_split(start, end)
-        # left = split + self.num_leafs if split == start else split
-        # right = split + 1 + self.num_leafs if split + 1 == end else split + 1
-        # print(left, right)
+
         for i in range(self.num_leafs - 1):
             start, end = self.determine_range(i, self.num_leafs)
             split = self.find_split(start, end)
