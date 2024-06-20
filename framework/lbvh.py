@@ -36,6 +36,16 @@ class LBVH:
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
+        self.prefix_sum = ti.field(int, shape=self.num_leafs)
+        self.prefix_sum_temp = ti.field(int, shape=self.num_leafs)
+        self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.prefix_sum.shape[0])
+
+        self.grid_ids = ti.field(int, shape=self.num_leafs)
+        self.grid_ids_buffer = ti.field(int, shape=self.num_leafs)
+        self.grid_ids_new = ti.field(int, shape=self.num_leafs)
+        self.cur2org = ti.field(int, shape=self.num_leafs)
+
+
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
     def expand_bits(self, v):
@@ -144,6 +154,7 @@ class LBVH:
         # print(delta_l, delta_r)
 
         d = 1
+
 
         delta_min = delta_l
         if delta_r < delta_l:
