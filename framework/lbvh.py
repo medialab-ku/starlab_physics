@@ -249,7 +249,7 @@ class LBVH:
     def radix_sort(self, max_value):
 
         passes = (max_value.bit_length() + self.BITS_PER_PASS - 1) // self.BITS_PER_PASS
-        print(passes)
+        # print(passes)
         for pi in range(passes):
             self.prefix_sum.fill(0)
             self.count_frequency(pi)

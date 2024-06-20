@@ -125,42 +125,6 @@ class Solver:
         # self.ee_dynamic_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size, 4))
         # self.ee_dynamic_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dynamic, self.ee_dynamic_pair_cache_size))
 
-        # self.num_cells = int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2])
-        # self.particle_neighbours = ti.field(dtype=int, shape=(self.max_num_verts_dynamic, self.cache_size))
-        # self.particle_neighbours_gradients = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.cache_size))
-        # self.num_particle_neighbours = ti.field(int, shape=self.max_num_verts_dynamic)
-
-        # self.cache_size = 10
-
-        # self.max_num_verts_static = len(self.mesh_st.verts)
-        # self.max_num_faces_static = len(self.mesh_st.faces)
-
-        # self.face_indices_static = ti.field(dtype=ti.i32, shape=3 * self.max_num_faces_static)
-        # self.edge_indices_static = ti.field(dtype=ti.i32, shape=2 * self.max_num_edges_static)
-
-        # self.grid_particles_num = ti.field(int, shape=self.num_cells)
-        # self.grid_particles_num_temp = ti.field(int, shape= self.num_cells)
-        # self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
-        #
-        # self.grid_ids = ti.field(int, shape=self.max_num_verts_dynamic)
-        # self.grid_ids_buffer = ti.field(int, shape=self.max_num_verts_dynamic)
-        # self.grid_ids_new = ti.field(int, shape=self.max_num_verts_dynamic)
-        # self.cur2org = ti.field(int, shape=self.max_num_verts_dynamic)
-        #
-        # self.grid_particles_num_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
-        # self.grid_particles_num_temp_static = ti.field(int, shape=int(self.grid_num[0] * self.grid_num[1] * self.grid_num[2]))
-        # self.prefix_sum_executor_static = ti.algorithms.PrefixSumExecutor(self.grid_particles_num_static.shape[0])
-        #
-        # num_grid_ids = self.max_num_verts_static + 3 * self.max_num_faces_static
-        #
-        # if num_grid_ids < 1:
-        #     num_grid_ids = 1
-        #
-        # self.grid_ids_static = ti.field(int, shape=num_grid_ids)
-        # self.grid_ids_buffer_static = ti.field(int, shape=num_grid_ids)
-        # self.grid_ids_new_static = ti.field(int, shape=num_grid_ids)
-        # self.cur2org_static = ti.field(int, shape=num_grid_ids)
-
         # self.frame = ti.field(dtype=ti.i32, shape=1)
         # self.frame[0] = 0
         #
@@ -173,105 +137,7 @@ class Solver:
         # self.active_anim_frame = ti.field(dtype=ti.i32, shape=(4, self.max_num_anim)) # maximum number of animation
         # self.action_anim = ti.Vector.field(6, dtype=ti.f32, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
         # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        #
-        # self.broad_phase_static()
-        # self.test_var = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
-        # self.test()
 
-    # @ti.kernel
-    # def test(self):
-    #
-    #     for i in range(self.max_num_verts_dynamic):
-    #         self.test_var[i] = ti.math.vec3(i, self.max_num_verts_dynamic - i, 0)
-    #
-    #     max = ti.math.vec3(0.0)
-    #     for i in range(self.max_num_verts_dynamic):
-    #         ti.atomic_max(max, self.test_var[i])
-    #
-    #     print(max[0], max[1], max[2])
-    #
-    # @ti.kernel
-    # def compute_aabb(self):
-    #     aabb_min = ti.math.vec3(0.0)
-    #     aabb_max = ti.math.vec3(0.0)
-    #
-    #     for i in range(self.max_num_verts_dynamic):
-    #         temp = self.y[i]
-    #         ti.atomic_max(aabb_max, temp)
-    #         ti.atomic_min(aabb_min, temp)
-    #     # print(aabb_min)
-    #     # print(aabb_max)
-    #
-    #     self.grid_max[0] = aabb_max
-    #     self.grid_min[0] = aabb_min
-    #
-    #     self.aabb_vertices[0] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
-    #     self.aabb_vertices[1] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
-    #     self.aabb_vertices[2] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
-    #     self.aabb_vertices[3] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
-    #
-    #     self.aabb_vertices[4] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
-    #     self.aabb_vertices[5] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
-    #     self.aabb_vertices[6] = (1.0 + self.padding) * ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
-    #     self.aabb_vertices[7] = (1.0 + self.padding) * ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
-    #
-    # @ti.kernel
-    # def compute_aabb_static(self):
-    #     aabb_min = ti.math.vec3(0.0)
-    #     aabb_max = ti.math.vec3(0.0)
-    #
-    #     for i in range(self.max_num_verts_static):
-    #         temp = self.x_static[i]
-    #         ti.atomic_max(aabb_max, temp)
-    #         ti.atomic_min(aabb_min, temp)
-    #
-    #     ones = ti.math.vec3(1.0)
-    #     aabb_max += self.padding * ones
-    #     aabb_min -= self.padding * ones
-    #     self.grid_max_static[0] = aabb_max
-    #     self.grid_min_static[0] = aabb_min
-    #
-    #     self.aabb_vertices[0] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
-    #     self.aabb_vertices[1] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
-    #     self.aabb_vertices[2] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
-    #     self.aabb_vertices[3] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
-    #
-    #     self.aabb_vertices[4] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
-    #     self.aabb_vertices[5] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
-    #     self.aabb_vertices[6] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
-    #     self.aabb_vertices[7] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
-    #
-    #     #determine cell size
-    #     r_padding = self.padding * ti.math.vec3(1.0)
-    #     for fi in range(self.max_num_verts_static):
-    #         v0, v1, v2 = self.face_indices_static[3 * fi + 0], self.face_indices_static[3 * fi + 1], self.face_indices_static[3 * fi + 2]
-    #         x0, x1, x2 = self.x_static[v0], self.x_static[v1], self.x_static[v2]
-    #
-    #         self.aabb_face[fi, 0] = ti.min(x0, x1, x2)
-    #         self.aabb_face[fi, 1] = ti.max(x0, x1, x2)
-    #         r = (self.aabb_face[fi, 1] - self.aabb_face[fi, 0]) + r_padding
-    #         ti.atomic_max(self.dynamic_cell_size[0], r)
-    #
-    #
-    #
-    # @ti.kernel
-    # def determine_cell_size_and_num(self):
-    #
-    #     #0: min
-    #     #1: max
-    #
-    #     self.dynamic_cell_size[0] = ti.math.vec3(0.0)
-    #     r_padding = self.padding * ti.math.vec3(1.0)
-    #     for fi in range(self.max_num_faces_dynamic):
-    #         v0, v1, v2 = self.face_indices_dynamic[3 * fi + 0], self.face_indices_dynamic[3 * fi + 1], self.face_indices_dynamic[3 * fi + 2]
-    #         x0, x1, x2 = self.x[v0], self.x[v1], self.x[v2]
-    #
-    #         self.aabb_face[fi, 0] = ti.min(x0, x1, x2)
-    #         self.aabb_face[fi, 1] = ti.max(x0, x1, x2)
-    #         r = (self.aabb_face[fi, 1] - self.aabb_face[fi, 0]) + r_padding
-    #         ti.atomic_max(self.dynamic_cell_size[0], r)
-    #
-    #
     # @ti.kernel
     # def __init_animation_pos(self, is_selected: ti.template()):
     #     for i in is_selected:
@@ -517,54 +383,27 @@ class Solver:
         for v in self.mesh_dy.verts:
             v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
 
-    @ti.kernel
-    def counting_sort(self):
-        # FIXME: make it the actual particle num
-        for i in range(self.max_num_verts_dynamic):
-            I = self.max_num_verts_dynamic - 1 - i
-            base_offset = 0
-            if self.grid_ids[I] - 1 >= 0:
-                base_offset = self.grid_particles_num[self.grid_ids[I] - 1]
-            self.grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[I]], 1) - 1 + base_offset
-
-        for i in self.grid_ids:
-            new_index = self.grid_ids_new[i]
-            self.cur2org[new_index] = i
 
     @ti.kernel
-    def counting_sort_static(self):
-        # FIXME: make it the actual particle num
-        for i in range(self.max_num_verts_static + 3 * self.max_num_faces_static):
-            I = self.max_num_verts_static + 3 * self.max_num_faces_static - 1 - i
-            base_offset_static = 0
-            if self.grid_ids_static[I] - 1 >= 0:
-                base_offset_static = self.grid_particles_num_static[self.grid_ids_static[I] - 1]
-            self.grid_ids_new_static[I] = ti.atomic_sub(self.grid_particles_num_temp_static[self.grid_ids_static[I]], 1) - 1 + base_offset_static
-
-        for i in self.grid_ids_static:
-            new_index = self.grid_ids_new_static[i]
-            self.cur2org_static[new_index] = i
-
-    @ti.func
-    def flatten_grid_index(self, grid_index):
-        return grid_index[0] * self.grid_num[1] * self.grid_num[2] + grid_index[1] * self.grid_num[2] + grid_index[2]
-
-    @ti.func
-    def pos_to_index(self, pos):
-        return ((pos - self.grid_origin) / self.cell_size).cast(int)
-
-    @ti.func
-    def get_flatten_grid_index(self, pos: ti.math.vec3):
-        return self.flatten_grid_index(self.pos_to_index(pos))
-
-    @ti.kernel
-    def broadphase(self):
+    def broadphase_lbvh(self):
 
         self.vt_static_candidates_num.fill(0)
         for v in self.mesh_dy.verts:
             aabb_min = v.y - self.padding * ti.math.vec3(1.0)
             aabb_max = v.y + self.padding * ti.math.vec3(1.0)
             self.lbvh_st.traverse_bvh(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
+
+    @ti.kernel
+    def broadphase_brute(self):
+        self.vt_static_candidates_num.fill(0)
+        for v in self.mesh_dy.verts:
+            aabb_min = v.y - self.padding * ti.math.vec3(1.0)
+            aabb_max = v.y + self.padding * ti.math.vec3(1.0)
+            for fi in range(self.max_num_faces_st):
+                min1, max1 = self.mesh_st.faces.aabb_min[fi], self.mesh_st.faces.aabb_max[fi]
+                if self.lbvh_st.aabb_overlap(aabb_min, aabb_max, min1, max1):
+                    self.vt_static_candidates[v.id,  self.vt_static_candidates_num[v.id]] = fi
+                    self.vt_static_candidates_num[v.id] += 1
 
     @ti.kernel
     def update_aabb(self, padding: ti.math.vec3):
@@ -683,9 +522,9 @@ class Solver:
     def solve_collision_constraints_x(self):
         d = self.dHat
         for v in self.mesh_dy.verts:
-            # for fi_s in range(self.max_num_faces_st):
-            for i in range(self.vt_static_candidates_num[v.id]):
-                fi_s = self.vt_static_candidates[v.id, i]
+            for fi_s in range(self.max_num_faces_st):
+            # for i in range(self.vt_static_candidates_num[v.id]):
+            #     fi_s = self.vt_static_candidates[v.id, i]
                 solve_collision_constraints_x.__vt_st(v.id, fi_s, self.mesh_dy, self.mesh_st, d)
 
         # for fi_d in range(self.max_num_faces_dynamic):
@@ -940,28 +779,7 @@ class Solver:
         for v in self.mesh_dy.verts:
             # if v.id != 0:
             v.x += dt * v.v
-    # @ti.kernel
-    # def confine_to_boundary(self):
-    #
-    #     for vi in range(self.max_num_verts_dynamic):
-    #
-    #         if self.y[vi][0] > self.padding * self.grid_size[0]:
-    #             self.y[vi][0] = self.padding * self.grid_size[0]
-    #
-    #         if self.y[vi][0] < -self.padding * self.grid_size[0]:
-    #             self.y[vi][0] = -self.padding * self.grid_size[0]
-    #
-    #         if self.y[vi][1] > self.padding * self.grid_size[1]:
-    #             self.y[vi][1] = self.padding * self.grid_size[1]
-    #
-    #         if self.y[vi][1] < -self.padding * self.grid_size[1]:
-    #             self.y[vi][1] = -self.padding * self.grid_size[1]
-    #
-    #         if self.y[vi][2] > self.padding * self.grid_size[2]:
-    #             self.y[vi][2] = self.padding * self.grid_size[2]
-    #
-    #         if self.y[vi][2] < -self.padding * self.grid_size[2]:
-    #             self.y[vi][2] = -self.padding * self.grid_size[2]
+
 
 
     @ti.kernel
@@ -1125,12 +943,17 @@ class Solver:
 
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            self.broadphase()
+            self.broadphase_brute()
+            self.broadphase_lbvh()
             self.solve_constraints_x()
             self.compute_velocity(dt_sub)
             # self.solve_constraints_v()
 
             self.update_x(dt_sub)
+
+        brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
+        bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
+        print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
 
         # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
         # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
