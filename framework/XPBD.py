@@ -1108,10 +1108,21 @@ class Solver:
 
         dt_sub = self.dt / n_substeps
 
-        # ti.profiler.clear_kernel_profiler_info()
+        ti.profiler.clear_kernel_profiler_info()
         self.mesh_st.computeAABB_faces(padding=self.padding)
         aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
         self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+
+        # radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
+        # radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.prefix_sum_executer.run.__name__)
+        # radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
+        # print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
+        # sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
+        # print("sort: ", round(sort.avg, 5))
+        #
+        # build = ti.profiler.query_kernel_profiler_info(self.lbvh_st.build.__name__)
+        # print(build.avg)
+
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             self.broadphase()

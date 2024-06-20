@@ -25,9 +25,12 @@ class LBVH:
 
         self.sorted_object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.object_ids_temp = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
         self.sorted_morton_codes = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.morton_codes = ti.field(dtype=ti.int32, shape=self.num_leafs)
+        self.morton_codes_temp = ti.field(dtype=ti.int32, shape=self.num_leafs)
+
 
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.num_nodes)
@@ -36,14 +39,10 @@ class LBVH:
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
-        self.prefix_sum = ti.field(int, shape=self.num_leafs)
-        self.prefix_sum_temp = ti.field(int, shape=self.num_leafs)
-        self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.prefix_sum.shape[0])
-
-        self.grid_ids = ti.field(int, shape=self.num_leafs)
-        self.grid_ids_buffer = ti.field(int, shape=self.num_leafs)
-        self.grid_ids_new = ti.field(int, shape=self.num_leafs)
-        self.cur2org = ti.field(int, shape=self.num_leafs)
+        self.BITS_PER_PASS = 16
+        self.RADIX = pow(2, self.BITS_PER_PASS)
+        self.prefix_sum_executer = ti.algorithms.PrefixSumExecutor(self.RADIX)
+        self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
 
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
@@ -66,8 +65,9 @@ class LBVH:
         return xx * 4 + yy * 2 + zz
 
     @ti.kernel
-    def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
+    def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
 
+        max_value = -1
         for f in mesh.faces:
         # // obtain center of triangle
             u = f.verts[0]
@@ -86,8 +86,12 @@ class LBVH:
             z = ti.math.clamp(z, 0., 1.)
 
     # // obtain and set morton code based on normalized position
-            self.morton_codes[f.id] = self.morton_3d(x, y, z)
+            morton3d = self.morton_3d(x, y, z)
+            self.morton_codes[f.id] = morton3d
+            ti.atomic_max(max_value, morton3d)
             self.object_ids[f.id] = f.id
+
+        return max_value
 
     @ti.kernel
     def assign_leaf_nodes(self, mesh: ti.template()):
@@ -225,10 +229,49 @@ class LBVH:
                 self.nodes[pid].aabb_max = ti.max(max0, max1)
                 pid = self.nodes[pid].parent
 
+    @ti.kernel
+    def count_frequency(self, pass_num: ti.i32):
+        for i in range(self.num_leafs):
+            digit = (self.morton_codes[i] >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
+            ti.atomic_add(self.prefix_sum[digit], 1)
+
+    @ti.kernel
+    def sort_by_digit(self, pass_num: ti.i32):
+
+        for i in range(self.num_leafs):
+            I = self.num_leafs - 1 - i
+            digit = (self.morton_codes[I] >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
+            idx = ti.atomic_sub(self.prefix_sum[digit], 1) - 1
+            if idx >= 0:
+                self.sorted_object_ids[idx] = self.object_ids[I]
+                self.sorted_morton_codes[idx] = self.morton_codes[I]
+
+    def radix_sort(self, max_value):
+
+        passes = (max_value.bit_length() + self.BITS_PER_PASS - 1) // self.BITS_PER_PASS
+        print(passes)
+        for pi in range(passes):
+            self.prefix_sum.fill(0)
+            self.count_frequency(pi)
+            self.prefix_sum_executer.run(self.prefix_sum)
+            self.sort_by_digit(pi)
+            self.morton_codes.copy_from(self.sorted_morton_codes)
+            self.object_ids.copy_from(self.sorted_object_ids)
+
+    def sort(self):
+        ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
+
     def build(self, mesh, aabb_min_g, aabb_max_g):
         self.nodes.parent.fill(-1)
-        self.assign_morton(mesh, aabb_min_g, aabb_max_g)
-        ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
+        max_value = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
+        # self.morton_codes_temp.copy_from(self.morton_codes)
+        # self.object_ids_temp.copy_from(self.object_ids)
+        # self.radix_sort(max_value)
+        #
+        # self.morton_codes.copy_from(self.morton_codes_temp)
+        # self.object_ids.copy_from(self.object_ids_temp)
+        self.sort()
+        # ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
         self.assign_leaf_nodes(mesh)
         self.assign_internal_nodes()
