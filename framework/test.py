@@ -1,5 +1,5 @@
 import taichi as ti
-
+import numpy as np
 ti.init(arch=ti.cuda)  # or ti.cuda
 #
 
@@ -17,9 +17,19 @@ count = ti.field(dtype=ti.i32, shape=RADIX)
 @ti.kernel
 def test():
     for i in range(num_leaf):
-        morton_codes[i] = num_leaf - i
+        # morton_codes[i] = num_leaf - i
         indices[i] = i
 
+    morton_codes[0] = 7
+    morton_codes[1] = 8
+    morton_codes[2] = 4
+    morton_codes[3] = 3
+    morton_codes[4] = 2
+    morton_codes[5] = 5
+    morton_codes[6] = 9
+    morton_codes[7] = 0
+    morton_codes[8] = 1
+    morton_codes[9] = 6
 
 @ti.kernel
 def get_max_value() -> ti.i32:
@@ -42,28 +52,30 @@ def sort_by_digit(pass_num: ti.i32):
     for i in range(num_leaf):
         I = num_leaf - 1 - i
         digit = (morton_codes[I] >> (pass_num * BITS_PER_PASS)) & (RADIX - 1)
-        idx = ti.atomic_sub(prefix_sum[digit], 1) - 1
+        idx = ti.atomic_sub(count[digit], 1) - 1
         if idx >= 0:
+            sorted_indices[idx] = indices[I]
             sorted_morton_codes[idx] = morton_codes[I]
 
 def radix_sort():
     test()
     print(morton_codes)
+    print(indices)
     max_value = get_max_value()
     passes = (max_value.bit_length() + BITS_PER_PASS - 1) // BITS_PER_PASS
 
-    print(passes)
     for pi in range(passes):
         count.fill(0)
         count_frequency(pi)
-        prefix_sum.copy_from(count)
-        prefix_sum_executer.run(prefix_sum)
+        prefix_sum_executer.run(count)
         sort_by_digit(pi)
         morton_codes.copy_from(sorted_morton_codes)
+        indices.copy_from(sorted_indices)
 
 
 radix_sort()
-print(sorted_morton_codes)
+print(morton_codes)
+print(indices)
 
 
 #
