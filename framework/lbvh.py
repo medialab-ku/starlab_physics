@@ -266,11 +266,11 @@ class LBVH:
         max_value = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         # self.morton_codes_temp.copy_from(self.morton_codes)
         # self.object_ids_temp.copy_from(self.object_ids)
-        # self.radix_sort(max_value)
+        self.radix_sort(max_value)
         #
         # self.morton_codes.copy_from(self.morton_codes_temp)
         # self.object_ids.copy_from(self.object_ids_temp)
-        self.sort()
+        # self.sort()
         # ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
         self.assign_leaf_nodes(mesh)
