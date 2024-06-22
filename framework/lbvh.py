@@ -43,6 +43,7 @@ class LBVH:
         self.RADIX = pow(2, self.BITS_PER_PASS)
         self.prefix_sum_executer = ti.algorithms.PrefixSumExecutor(self.RADIX)
         self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
+        self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
 
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
@@ -235,6 +236,7 @@ class LBVH:
             digit = (self.morton_codes[i] >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
             ti.atomic_add(self.prefix_sum[digit], 1)
 
+
     @ti.kernel
     def sort_by_digit(self, pass_num: ti.i32):
 
@@ -246,14 +248,63 @@ class LBVH:
                 self.sorted_object_ids[idx] = self.object_ids[I]
                 self.sorted_morton_codes[idx] = self.morton_codes[I]
 
-    def radix_sort(self, max_value):
+    @ti.kernel
+    def upsweep(self, step: ti.int32, size: ti.int32):
+        offset = step - 1
+        for i in range(size):
+            id = offset + step * i
+            self.prefix_sum[id] += self.prefix_sum[id - (step >> 1)]
 
+    @ti.kernel
+    def downsweep(self, step: ti.int32, size: ti.int32):
+        offset = step - 1
+        offset_rev = (step >> 1)
+        for i in range(size):
+            id = offset + step * i
+            temp = self.prefix_sum[id - offset_rev]
+            self.prefix_sum[id - offset_rev] = self.prefix_sum[id]
+            self.prefix_sum[id] += temp
+
+
+    @ti.kernel
+    def add_count(self):
+
+        for i in range(self.RADIX):
+            self.prefix_sum[i] += self.prefix_sum_temp[i]
+
+    def blelloch_scan(self):
+
+        self.prefix_sum_temp.copy_from(self.prefix_sum)
+
+        d = 0
+        test = self.RADIX
+        while test > 1:
+            step = 1 << (d + 1)
+            size = self.RADIX // step
+            self.upsweep(step, size)
+
+            d += 1
+            test //= 2
+
+        self.prefix_sum[self.RADIX - 1] = 0
+        d = self.BITS_PER_PASS - 1
+
+        while d >= 0:
+            step = 1 << (d + 1)
+            size = self.RADIX // step
+            self.downsweep(step, size)
+            d -= 1
+
+        self.add_count()
+
+    def radix_sort(self, max_value):
         passes = (max_value.bit_length() + self.BITS_PER_PASS - 1) // self.BITS_PER_PASS
         # print(passes)
         for pi in range(passes):
             self.prefix_sum.fill(0)
             self.count_frequency(pi)
-            self.prefix_sum_executer.run(self.prefix_sum)
+            # self.prefix_sum_executer.run(self.prefix_sum)
+            self.blelloch_scan()
             self.sort_by_digit(pi)
             self.morton_codes.copy_from(self.sorted_morton_codes)
             self.object_ids.copy_from(self.sorted_object_ids)

@@ -931,18 +931,19 @@ class Solver:
         aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
         self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
-        # radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
-        # radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.prefix_sum_executer.run.__name__)
-        # radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
-        # print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
 
         print("------------------------------------------------------")
 
         assign_morton = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_morton.__name__)
         print("assign_morton: ", round(assign_morton.avg, 5))
 
-        sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
-        print("sort: ", round(sort.avg, 5))
+        radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
+        radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.blelloch_scan.__name__)
+        radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
+        print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
+
+        # sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
+        # print("sort: ", round(sort.avg, 5))
 
         assign_leaf_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_leaf_nodes.__name__)
         print("assign_leaf_nodes: ", round(assign_leaf_nodes.avg, 5))

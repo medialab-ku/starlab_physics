@@ -8,11 +8,15 @@ morton_codes = ti.field(dtype=ti.i32, shape=num_leaf)
 sorted_morton_codes = ti.field(dtype=ti.i32, shape=num_leaf)
 indices = ti.field(dtype=ti.i32, shape=num_leaf)
 sorted_indices = ti.field(dtype=ti.i32, shape=num_leaf)
-BITS_PER_PASS = 1
+BITS_PER_PASS = 4
 RADIX = pow(2, BITS_PER_PASS)
 prefix_sum_executer = ti.algorithms.PrefixSumExecutor(RADIX)
 prefix_sum = ti.field(dtype=ti.i32, shape=RADIX)
 count = ti.field(dtype=ti.i32, shape=RADIX)
+count_temp = ti.field(dtype=ti.i32, shape=RADIX)
+
+a = ti.field(dtype=ti.int32, shape=num_leaf)
+temp = ti.field(dtype=ti.int32, shape=num_leaf)
 
 @ti.kernel
 def test():
@@ -72,11 +76,65 @@ def radix_sort():
         morton_codes.copy_from(sorted_morton_codes)
         indices.copy_from(sorted_indices)
 
+@ti.kernel
+def upsweep(step: ti.int32, size: ti.int32):
+    offset = step - 1
+    for i in range(size):
+        id = offset + step * i
+        count[id] += count[id - (step >> 1)]
 
-radix_sort()
-print(morton_codes)
-print(indices)
+@ti.kernel
+def downsweep(step: ti.int32, size: ti.int32):
+    offset = step - 1
+    offset_rev = (step >> 1)
+    for i in range(size):
+        id = offset + step * i
+        temp = count[id - offset_rev]
+        count[id - offset_rev] = count[id]
+        count[id] += temp
 
+
+@ti.kernel
+def add_count():
+
+    for i in range(RADIX):
+        count[i] += count_temp[i]
+
+def blelloch_scan():
+
+    count_temp.copy_from(count)
+
+    d = 0
+    test = RADIX
+    while test > 1:
+        step = 1 << (d + 1)
+        size = RADIX // step
+        upsweep(step, size)
+
+        d += 1
+        test //= 2
+
+    count[RADIX - 1] = 0
+    d = BITS_PER_PASS - 1
+
+    while d >= 0:
+        step = 1 << (d + 1)
+        size = RADIX // step
+        downsweep(step, size)
+        d -= 1
+
+    add_count()
+
+
+count.fill(1)
+print(count)
+blelloch_scan()
+
+print(count)
+
+# radix_sort()
+# print(morton_codes)
+# print(indices)
 
 #
 # prefix_sum_executer = ti.algorithms.PrefixSumExecutor(10)
