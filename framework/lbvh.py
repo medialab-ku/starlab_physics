@@ -9,8 +9,6 @@ class Node:
     visited: ti.i32
     aabb_min: ti.math.vec3
     aabb_max: ti.math.vec3
-    start: ti.i32
-    end: ti.i32
 
 @ti.data_oriented
 class LBVH:
@@ -35,12 +33,13 @@ class LBVH:
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.num_nodes)
 
-        self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+        # self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
-        self.BITS_PER_PASS = 16
+        self.BITS_PER_PASS = 8
         self.RADIX = pow(2, self.BITS_PER_PASS)
+        self.passes = (30 + self.BITS_PER_PASS - 1) // self.BITS_PER_PASS
         self.prefix_sum_executer = ti.algorithms.PrefixSumExecutor(self.RADIX)
         self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
         self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
@@ -66,33 +65,32 @@ class LBVH:
         return xx * 4 + yy * 2 + zz
 
     @ti.kernel
-    def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
+    def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
 
-        max_value = -1
+        # max_value = -1
         for f in mesh.faces:
         # // obtain center of triangle
-            u = f.verts[0]
-            v = f.verts[1]
-            w = f.verts[2]
-            pos = (1. / 3.) * (u.x + v.x + w.x)
-            self.face_centers[f.id] = pos
-
+        #     u = f.verts[0]
+        #     v = f.verts[1]
+        #     w = f.verts[2]
+        #     pos = (1. / 3.) * (u.x + v.x + w.x)
+            pos = 0.5 * (f.aabb_min + f.aabb_max)
         # // normalize position
             x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
             y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
             z = (pos[2] - aabb_min[2]) / (aabb_max[2] - aabb_min[2])
         # // clamp to deal with numeric issues
-            x = ti.math.clamp(x, 0., 1.)
-            y = ti.math.clamp(y, 0., 1.)
-            z = ti.math.clamp(z, 0., 1.)
+        #     x = ti.math.clamp(x, 0., 1.)
+        #     y = ti.math.clamp(y, 0., 1.)
+        #     z = ti.math.clamp(z, 0., 1.)
 
     # // obtain and set morton code based on normalized position
             morton3d = self.morton_3d(x, y, z)
             self.morton_codes[f.id] = morton3d
-            ti.atomic_max(max_value, morton3d)
+            # ti.atomic_max(max_value, morton3d)
             self.object_ids[f.id] = f.id
 
-        return max_value
+        # return max_value
 
     @ti.kernel
     def assign_leaf_nodes(self, mesh: ti.template()):
@@ -156,10 +154,7 @@ class LBVH:
         delta_l = self.delta(i, i - 1)
         delta_r = self.delta(i, i + 1)
 
-        # print(delta_l, delta_r)
-
         d = 1
-
 
         delta_min = delta_l
         if delta_r < delta_l:
@@ -171,7 +166,6 @@ class LBVH:
         l_max = 2
         while self.delta(i, i + l_max * d) > delta_min:
             l_max <<= 2
-
 
         l = 0
         t = l_max // 2
@@ -194,6 +188,7 @@ class LBVH:
     @ti.kernel
     def assign_internal_nodes(self):
 
+        ti.loop_config(block_dim=64)
         for i in range(self.num_leafs - 1):
             start, end = self.determine_range(i, self.num_leafs)
             split = self.find_split(start, end)
@@ -204,13 +199,14 @@ class LBVH:
             self.nodes[i].visited = 0
             self.nodes[left].parent = i
             self.nodes[right].parent = i
-            self.nodes[i].start = start
-            self.nodes[i].end = end
+            # self.nodes[i].start = start
+            # self.nodes[i].end = end
 
             # print(i, left, right)
     @ti.kernel
     def compute_node_aabbs(self):
 
+        ti.loop_config(block_dim=64)
         for i in range(self.num_leafs):
             pid = self.nodes[i + self.num_leafs - 1].parent
             while True:
@@ -297,14 +293,13 @@ class LBVH:
 
         self.add_count()
 
-    def radix_sort(self, max_value):
-        passes = (max_value.bit_length() + self.BITS_PER_PASS - 1) // self.BITS_PER_PASS
+    def radix_sort(self):
         # print(passes)
-        for pi in range(passes):
+        for pi in range(self.passes):
             self.prefix_sum.fill(0)
             self.count_frequency(pi)
-            # self.prefix_sum_executer.run(self.prefix_sum)
-            self.blelloch_scan()
+            self.prefix_sum_executer.run(self.prefix_sum)
+            # self.blelloch_scan()
             self.sort_by_digit(pi)
             self.morton_codes.copy_from(self.sorted_morton_codes)
             self.object_ids.copy_from(self.sorted_object_ids)
@@ -314,14 +309,10 @@ class LBVH:
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
         self.nodes.parent.fill(-1)
-        max_value = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
-        # self.morton_codes_temp.copy_from(self.morton_codes)
-        # self.object_ids_temp.copy_from(self.object_ids)
-        self.radix_sort(max_value)
-        #
-        # self.morton_codes.copy_from(self.morton_codes_temp)
-        # self.object_ids.copy_from(self.object_ids_temp)
-        # self.sort()
+        self.assign_morton(mesh, aabb_min_g, aabb_max_g)
+        # self.radix_sort()
+
+        self.sort()
         # ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
         self.assign_leaf_nodes(mesh)
@@ -380,9 +371,9 @@ class LBVH:
             self.zSort_line_idx[2 * i + 0] = self.object_ids[i]
             self.zSort_line_idx[2 * i + 1] = self.object_ids[i + 1]
 
-    def draw_zSort(self, scene):
-        self.update_zSort_face_centers_and_line()
-        scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
+    # def draw_zSort(self, scene):
+    #     self.update_zSort_face_centers_and_line()
+    #     scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
     #
     @ti.kernel
     def update_aabb_x_and_lines(self):

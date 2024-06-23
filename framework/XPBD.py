@@ -926,39 +926,39 @@ class Solver:
 
         dt_sub = self.dt / n_substeps
 
-        ti.profiler.clear_kernel_profiler_info()
-        self.mesh_st.computeAABB_faces(padding=self.padding)
-        aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-        self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
-
-
-        print("------------------------------------------------------")
-
-        assign_morton = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_morton.__name__)
-        print("assign_morton: ", round(assign_morton.avg, 5))
-
-        radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
-        radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.blelloch_scan.__name__)
-        radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
-        print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
-
-        # sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
-        # print("sort: ", round(sort.avg, 5))
-
-        assign_leaf_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_leaf_nodes.__name__)
-        print("assign_leaf_nodes: ", round(assign_leaf_nodes.avg, 5))
-
-        assign_internal_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_internal_nodes.__name__)
-        print("assign_internal_nodes: ", round(assign_internal_nodes.avg, 5))
-
-        compute_node_aabbs = ti.profiler.query_kernel_profiler_info(self.lbvh_st.compute_node_aabbs.__name__)
-        print("compute_node_aabbs: ", round(compute_node_aabbs.avg, 5))
-
-        # build = ti.profiler.query_kernel_profiler_info(self.lbvh_st.build.__name__)
-        # print(build.avg)
-
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
+            ti.profiler.clear_kernel_profiler_info()
+            self.mesh_st.computeAABB_faces(padding=self.padding)
+            aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+            self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+
+            print("------------------------------------------------------")
+            #
+            assign_morton = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_morton.__name__)
+            print("assign_morton: ", round(assign_morton.avg, 5))
+            # #
+            # # radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
+            # # radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.blelloch_scan.__name__)
+            # # radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
+            # # print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
+            # #
+            # # # sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
+            # # # print("sort: ", round(sort.avg, 5))
+            # #
+            # assign_leaf_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_leaf_nodes.__name__)
+            # print("assign_leaf_nodes: ", round(assign_leaf_nodes.avg, 5))
+            # #
+            assign_internal_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_internal_nodes.__name__)
+            print("assign_internal_nodes: ", round(assign_internal_nodes.avg, 5))
+            # #
+            compute_node_aabbs = ti.profiler.query_kernel_profiler_info(self.lbvh_st.compute_node_aabbs.__name__)
+            print("compute_node_aabbs: ", round(compute_node_aabbs.avg, 5))
+
+            # build = ti.profiler.query_kernel_profiler_info(self.lbvh_st.build.__name__)
+            # print(build.avg)
+
+            # build = (assign_morton.avg + assign_leaf_nodes.avg + assign_internal_nodes.avg + compute_node_aabbs.avg)
             # self.broadphase_brute()
             self.broadphase_lbvh()
             self.solve_constraints_x()
@@ -967,9 +967,9 @@ class Solver:
 
             self.update_x(dt_sub)
 
-        # brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
-        # bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
-        # print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
+            # brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
+            # bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
+            # print("brute / bvh ratio: ", round(brute.avg / (build + bvh.avg), 5))
 
         # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
         # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
