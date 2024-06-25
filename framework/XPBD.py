@@ -385,17 +385,22 @@ class Solver:
         for v in self.mesh_dy.verts:
             v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
 
-
     @ti.kernel
-    def broadphase_lbvh(self)->ti.int32:
+    def broadphase_lbvh(self) -> ti.int32:
 
         self.vt_static_candidates_num.fill(0)
         # print(len(self.mesh_dy.verts))
+        id = 1
+        aabb_min, aabb_max = self.mesh_st.faces.aabb_min[id], self.mesh_st.faces.aabb_max[id]
+        a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, id, self.vt_static_candidates,self.vt_static_candidates_num)
+        print(a)
+
+        self.vt_static_candidates_num.fill(0)
         cnt = 0
         for v in self.mesh_dy.verts:
             aabb_min = v.y - self.padding * ti.math.vec3(1.0)
             aabb_max = v.y + self.padding * ti.math.vec3(1.0)
-            a = self.lbvh_st.traverse_bvh(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
+            a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
             ti.atomic_add(cnt, a)
 
         return cnt
@@ -838,8 +843,8 @@ class Solver:
         self.init_variables()
         self.solve_spring_constraints_x(self.YM, self.strain_limit)
 
-        # if self.enable_collision_handling:
-        self.solve_collision_constraints_x()
+        if self.enable_collision_handling:
+            self.solve_collision_constraints_x()
         #
         # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
@@ -853,8 +858,8 @@ class Solver:
         self.mesh_dy.verts.nc.fill(0.0)
         # self.solve_spring_constraints_v()
 
-        # if self.enable_collision_handling:
-        self.solve_collision_constraints_v()
+        if self.enable_collision_handling:
+            self.solve_collision_constraints_v()
 
         # self.solve_fem_constraints_v(self.YM[0], self.PR[0])
         # self.solve_pressure_constraints_v()
@@ -971,17 +976,19 @@ class Solver:
             self.compute_y(dt_sub)
 
             cnt_brute = self.broadphase_brute()
-            # cnt_lbvh = self.broadphase_lbvh()
+            cnt_lbvh = self.broadphase_lbvh()
             self.solve_constraints_x()
+
             self.compute_velocity(dt_sub)
 
-            self.solve_constraints_v()
+            if self.enable_velocity_update:
+                self.solve_constraints_v()
+
             self.update_x(dt_sub)
 
         brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
         bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
-        print(cnt_brute)
-        # print(cnt_lbvh)
+        # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
 
         # print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
         # print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))

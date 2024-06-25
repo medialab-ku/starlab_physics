@@ -33,7 +33,7 @@ class LBVH:
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.num_nodes)
 
-        # self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+        self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
@@ -74,7 +74,7 @@ class LBVH:
         #     v = f.verts[1]
         #     w = f.verts[2]
         #     pos = (1. / 3.) * (u.x + v.x + w.x)
-            pos = 0.5 * (f.aabb_min + f.aabb_max)
+            self.face_centers[f.id] = pos = 0.5 * (f.aabb_min + f.aabb_max)
         # // normalize position
             x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
             y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
@@ -199,8 +199,6 @@ class LBVH:
             self.nodes[i].visited = 0
             self.nodes[left].parent = i
             self.nodes[right].parent = i
-            # self.nodes[i].start = start
-            # self.nodes[i].end = end
 
             # print(i, left, right)
     @ti.kernel
@@ -325,71 +323,84 @@ class LBVH:
                 min1[1] <= max2[1] and max1[1] >= min2[1] and
                 min1[2] <= max2[2] and max1[2] >= min2[2])
 
+    @ti.kernel
+    def traverse_bvh(self, mesh_dy:ti.template(), cache:ti.template(), nums:ti.template()) -> ti.int32:
+
+        cnt = 0
+        padding = ti.math.vec3(0.1)
+        for v in mesh_dy.verts:
+            aabb_min = v.y - padding * ti.math.vec3(1.0)
+            aabb_max = v.y + padding * ti.math.vec3(1.0)
+            a = self.traverse_bvh_single(aabb_min, aabb_max, v.id, cache, nums)
+            ti.atomic_add(cnt, a)
+
+        return cnt
+
     @ti.func
-    def traverse_bvh(self, min0, max0, i, cache, nums):
+    def traverse_bvh_single(self, min0, max0, i, cache, nums):
 
         stack = ti.Vector([-1 for j in range(64)])
         stack[0] = 0
         stack_counter = 1
-        idx = 0
+        # idx = 0
         cnt = 0
-        # while stack_counter > 0:
-        #     stack_counter -= 1
-        #     idx = stack[stack_counter]
-        #
-        #     min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
-        #
-        #     cnt += 1
-        #     if not self.aabb_overlap(min0, max0, min1, max1):
-        #         continue
-        #
-        #     if idx >= self.num_leafs - 1:
-        #         cache[i, nums[i]] = self.nodes[idx].object_id
-        #         nums[i] += 1
-        #
-        #     else:
-        #         left, right = self.nodes[idx].left, self.nodes[idx].right
-        #         stack[stack_counter] = left
-        #         stack_counter += 1
-        #         stack[stack_counter] = right
-        #         stack_counter += 1
-        #
-        # return cnt
+        while stack_counter > 0:
+            stack_counter -= 1
+            idx = stack[stack_counter]
 
-        while True:
-            left = self.nodes[idx].left
-            right = self.nodes[idx].right
-            min_l, max_l = self.nodes[left].aabb_min, self.nodes[left].aabb_max
-            min_r, max_r = self.nodes[right].aabb_min, self.nodes[right].aabb_max
+            min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
 
             cnt += 1
-            overlap_l = self.aabb_overlap(min0, max0, min_l, max_l)
-            if overlap_l and left >= self.num_leafs - 1:
-                cache[i, nums[i]] = self.nodes[left].object_id
+            if not self.aabb_overlap(min0, max0, min1, max1):
+                continue
+
+            if idx >= self.num_leafs - 1:
+                cache[i, nums[i]] = self.nodes[idx].object_id
                 nums[i] += 1
 
-            cnt += 1
-            overlap_r = self.aabb_overlap(min0, max0, min_r, max_r)
-            if overlap_r and right >= self.num_leafs - 1:
-                cache[i, nums[i]] = self.nodes[right].object_id
-                nums[i] += 1
-
-            traverse_l = overlap_l and left < self.num_leafs - 1
-            traverse_r = overlap_r and right < self.num_leafs - 1
-
-            if (not traverse_l) and (not traverse_r):
-                idx = stack[stack_counter]
-                stack_counter -= 1
             else:
-                idx = left if traverse_l else right
-                if traverse_l and traverse_r:
-                    stack_counter += 1
-                    stack[stack_counter] = right
-
-            if idx == -1:
-                break
+                left, right = self.nodes[idx].left, self.nodes[idx].right
+                stack[stack_counter] = left
+                stack_counter += 1
+                stack[stack_counter] = right
+                stack_counter += 1
 
         return cnt
+
+        # while True:
+        #     left = self.nodes[idx].left
+        #     right = self.nodes[idx].right
+        #     min_l, max_l = self.nodes[left].aabb_min, self.nodes[left].aabb_max
+        #     min_r, max_r = self.nodes[right].aabb_min, self.nodes[right].aabb_max
+        #
+        #     cnt += 1
+        #     overlap_l = self.aabb_overlap(min0, max0, min_l, max_l)
+        #     if overlap_l and left >= self.num_leafs - 1:
+        #         cache[i, nums[i]] = self.nodes[left].object_id
+        #         nums[i] += 1
+        #
+        #     cnt += 1
+        #     overlap_r = self.aabb_overlap(min0, max0, min_r, max_r)
+        #     if overlap_r and right >= self.num_leafs - 1:
+        #         cache[i, nums[i]] = self.nodes[right].object_id
+        #         nums[i] += 1
+        #
+        #     traverse_l = overlap_l and left < self.num_leafs - 1
+        #     traverse_r = overlap_r and right < self.num_leafs - 1
+        #
+        #     if (not traverse_l) and (not traverse_r):
+        #         idx = stack[stack_counter]
+        #         stack_counter -= 1
+        #     else:
+        #         idx = left if traverse_l else right
+        #         if traverse_l and traverse_r:
+        #             stack_counter += 1
+        #             stack[stack_counter] = right
+        #
+        #     if idx == -1:
+        #         break
+        #
+        # return cnt
 
     @ti.kernel
     def update_zSort_face_centers_and_line(self):
@@ -398,9 +409,9 @@ class LBVH:
             self.zSort_line_idx[2 * i + 0] = self.object_ids[i]
             self.zSort_line_idx[2 * i + 1] = self.object_ids[i + 1]
 
-    # def draw_zSort(self, scene):
-    #     self.update_zSort_face_centers_and_line()
-    #     scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
+    def draw_zSort(self, scene):
+        self.update_zSort_face_centers_and_line()
+        scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
     #
     @ti.kernel
     def update_aabb_x_and_lines(self):
@@ -446,4 +457,4 @@ class LBVH:
 
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
-        scene.lines(self.aabb_x, indices=self.aabb_indices, width=1.0, color=(0, 0, 0))
+        scene.lines(self.aabb_x, indices=self.aabb_indices, width=2.0, color=(0, 0, 0))

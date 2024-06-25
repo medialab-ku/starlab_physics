@@ -15,13 +15,12 @@ scale_list = []
 for i in range(1):
     for j in range(1):
         for k in range(1):
-            model_names.append("plane.obj")
-            trans_list.append(np.array([3.5 * i, 3.5 * j, 3.5 * k]))
-            scale_list.append(6.0)
+            model_names.append("square_big.obj")
+            trans_list.append(np.array([2.5 * i, 2.5 * j, 2.5 * k]))
+            scale_list.append(3.0)
 # model_names.append("square.obj")
 # model_names.append("square.obj")
 # model_names.append("plane.obj")
-
 # trans_list = []
 # trans_list.append(np.array([0.0, 0.5, 0.0]))
 # trans_list.append(np.array([10., 10.5, 10.5]))
@@ -33,5 +32,5 @@ for i in range(1):
 
 concat.concat_mesh(model_dir, model_names, trans_list, scale_list)
 
-mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=5, trans=ti.math.vec3(0.0, 2.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/square_big.obj", scale=2.0, trans=ti.math.vec3(0.0, 1.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = MeshTaichiWrapper("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
