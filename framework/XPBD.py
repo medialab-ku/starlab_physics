@@ -92,11 +92,13 @@ class Solver:
         # self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         # print(aabb_min, aabb_max)
 
-        self.vt_static_pair_cache_size = 40
-        self.vt_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_static_pair_cache_size, 2))
-        self.vt_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        self.vt_st_pair_cache_size = 40
+        self.vt_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
+        self.vt_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        self.vt_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
+        self.vt_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
 
-        self.vt_static_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_static_pair_cache_size))
+        self.vt_static_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
         self.vt_static_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
         # self.vt_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 4))
         # self.vt_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size))
@@ -385,25 +387,33 @@ class Solver:
 
 
     @ti.kernel
-    def broadphase_lbvh(self):
+    def broadphase_lbvh(self)->ti.int32:
 
         self.vt_static_candidates_num.fill(0)
+        # print(len(self.mesh_dy.verts))
+        cnt = 0
         for v in self.mesh_dy.verts:
             aabb_min = v.y - self.padding * ti.math.vec3(1.0)
             aabb_max = v.y + self.padding * ti.math.vec3(1.0)
-            self.lbvh_st.traverse_bvh(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
+            a = self.lbvh_st.traverse_bvh(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
+            ti.atomic_add(cnt, a)
 
+        return cnt
     @ti.kernel
-    def broadphase_brute(self):
+    def broadphase_brute(self)->ti.int32:
         self.vt_static_candidates_num.fill(0)
+        cnt = 0
         for v in self.mesh_dy.verts:
             aabb_min = v.y - self.padding * ti.math.vec3(1.0)
             aabb_max = v.y + self.padding * ti.math.vec3(1.0)
             for fi in range(self.max_num_faces_st):
                 min1, max1 = self.mesh_st.faces.aabb_min[fi], self.mesh_st.faces.aabb_max[fi]
+                ti.atomic_add(cnt, 1)
                 if self.lbvh_st.aabb_overlap(aabb_min, aabb_max, min1, max1):
                     self.vt_static_candidates[v.id,  self.vt_static_candidates_num[v.id]] = fi
                     self.vt_static_candidates_num[v.id] += 1
+
+        return cnt
 
     @ti.kernel
     def update_aabb(self, padding: ti.math.vec3):
@@ -480,26 +490,26 @@ class Solver:
 
         # print(s / self.offset_spring)
 
-    @ti.func
-    def spiky_gradient(self, r, h):
-        result = ti.math.vec3(0.0)
-
-        spiky_grad_factor = -45.0 / ti.math.pi
-        r_len = r.norm()
-        if 0 < r_len and r_len < h:
-            x = (h - r_len) / (h * h * h)
-            g_factor = spiky_grad_factor * x * x
-            result = r * g_factor / r_len
-        return result
-
-    @ti.func
-    def poly6_value(self, s, h):
-        result = 0.0
-        poly6_factor = 315.0 / 64.0 / ti.math.pi
-        if 0 < s and s < h:
-            x = (h * h - s * s) / (h * h * h)
-            result = poly6_factor * x * x * x
-        return result
+    # @ti.func
+    # def spiky_gradient(self, r, h):
+    #     result = ti.math.vec3(0.0)
+    #
+    #     spiky_grad_factor = -45.0 / ti.math.pi
+    #     r_len = r.norm()
+    #     if 0 < r_len and r_len < h:
+    #         x = (h - r_len) / (h * h * h)
+    #         g_factor = spiky_grad_factor * x * x
+    #         result = r * g_factor / r_len
+    #     return result
+    #
+    # @ti.func
+    # def poly6_value(self, s, h):
+    #     result = 0.0
+    #     poly6_factor = 315.0 / 64.0 / ti.math.pi
+    #     if 0 < s and s < h:
+    #         x = (h * h - s * s) / (h * h * h)
+    #         result = poly6_factor * x * x * x
+    #     return result
 
 
 
@@ -520,12 +530,14 @@ class Solver:
 
     @ti.kernel
     def solve_collision_constraints_x(self):
+
+        self.vt_st_pair_num.fill(0)
         d = self.dHat
         for v in self.mesh_dy.verts:
-            for fi_s in range(self.max_num_faces_st):
-            # for i in range(self.vt_static_candidates_num[v.id]):
-            #     fi_s = self.vt_static_candidates[v.id, i]
-                solve_collision_constraints_x.__vt_st(v.id, fi_s, self.mesh_dy, self.mesh_st, d)
+            # for fi_s in range(self.max_num_faces_st):
+            for i in range(self.vt_static_candidates_num[v.id]):
+                fi_s = self.vt_static_candidates[v.id, i]
+                solve_collision_constraints_x.__vt_st(v.id, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
 
         # for fi_d in range(self.max_num_faces_dynamic):
         #     for vi_s in range(self.max_num_verts_static):
@@ -550,40 +562,40 @@ class Solver:
     def solve_collision_constraints_v(self):
 
         mu = self.friction_coeff[0]
-        d = self.dHat[0]
+        # d = self.dHat[0]
 
-        for vi_d in range(self.max_num_verts_dynamic):
-            for j in range(self.vt_static_pair_num[vi_d]):
-                fi_s, dtype = self.vt_static_pair[vi_d, j, 0], self.vt_static_pair[vi_d, j, 1]
-                g0, g1, g2, g3 = self.vt_static_pair_g[vi_d, j, 0],  self.vt_static_pair_g[vi_d, j, 1],  self.vt_static_pair_g[vi_d, j, 2],  self.vt_static_pair_g[vi_d, j, 3]
-                schur = self.vt_static_pair_schur[vi_d, j]
-                self.solve_collision_vt_static_v(vi_d, fi_s, dtype, g0, g1, g2, g3, schur, mu)
+        for v in self.mesh_dy.verts:
+            for j in range(self.vt_st_pair_num[v.id]):
+                fi_s, dtype = self.vt_st_pair[v.id, j, 0], self.vt_st_pair[v.id, j, 1]
+                g0, g1, g2, g3 = self.vt_st_pair_g[v.id, j, 0],  self.vt_st_pair_g[v.id, j, 1],  self.vt_st_pair_g[v.id, j, 2],  self.vt_st_pair_g[v.id, j, 3]
+                schur = self.vt_st_pair_schur[v.id, j]
+                solve_collision_constraints_v.__vt_st(v.id, fi_s, dtype, self.mesh_dy, self.mesh_st, g0, g1, g2, g3, schur, mu)
 
-        for fi_d in range(self.max_num_faces_dynamic):
-            for j in range(self.tv_static_pair_num[fi_d]):
-                vi_s, dtype = self.tv_static_pair[fi_d, j, 0], self.tv_static_pair[fi_d, j, 1]
-                g0, g1, g2, g3 = self.tv_static_pair_g[fi_d, j, 0],  self.tv_static_pair_g[fi_d, j, 1],  self.tv_static_pair_g[fi_d, j, 2],  self.tv_static_pair_g[fi_d, j, 3]
-                schur = self.tv_static_pair_schur[fi_d, j]
-                self.solve_collision_tv_static_v(fi_d, vi_s, dtype, g0, g1, g2, g3, schur, mu)
-
-            for j in range(self.tv_dynamic_pair_num[fi_d]):
-                vi_s, dtype = self.tv_dynamic_pair[fi_d, j, 0], self.tv_dynamic_pair[fi_d, j, 1]
-                g0, g1, g2, g3 = self.tv_dynamic_pair_g[fi_d, j, 0], self.tv_dynamic_pair_g[fi_d, j, 1], self.tv_dynamic_pair_g[fi_d, j, 2], self.tv_dynamic_pair_g[fi_d, j, 3]
-                schur = self.tv_dynamic_pair_schur[fi_d, j]
-                self.solve_collision_tv_dynamic_v(fi_d, vi_s, dtype, g0, g1, g2, g3, schur, mu)
-
-        for ei_d in range(self.max_num_edges_dynamic):
-            for j in range(self.ee_static_pair_num[ei_d]):
-                ei_s, dtype = self.ee_static_pair[ei_d, j, 0], self.ee_static_pair[ei_d, j, 1]
-                g0, g1, g2, g3 = self.ee_static_pair_g[ei_d, j, 0], self.ee_static_pair_g[ei_d, j, 1], self.ee_static_pair_g[ei_d, j, 2], self.ee_static_pair_g[ei_d, j, 3]
-                schur = self.ee_static_pair_schur[ei_d, j]
-                self.solve_collision_ee_static_v(ei_d, ei_s, d, mu)
-
-            for j in range(self.ee_dynamic_pair_num[ei_d]):
-                ej_d, dtype = self.ee_dynamic_pair[ei_d, j, 0], self.ee_dynamic_pair[ei_d, j, 1]
-                g0, g1, g2, g3 = self.ee_dynamic_pair_g[ei_d, j, 0], self.ee_dynamic_pair_g[ei_d, j, 1], self.ee_dynamic_pair_g[ei_d, j, 2], self.ee_dynamic_pair_g[ei_d, j, 3]
-                schur = self.ee_dynamic_pair_schur[ei_d, j]
-                self.solve_collision_ee_dynamic_v(ei_d, ej_d, dtype, g0, g1, g2, g3, schur, mu)
+        # for fi_d in range(self.max_num_faces_dynamic):
+        #     for j in range(self.tv_static_pair_num[fi_d]):
+        #         vi_s, dtype = self.tv_static_pair[fi_d, j, 0], self.tv_static_pair[fi_d, j, 1]
+        #         g0, g1, g2, g3 = self.tv_static_pair_g[fi_d, j, 0],  self.tv_static_pair_g[fi_d, j, 1],  self.tv_static_pair_g[fi_d, j, 2],  self.tv_static_pair_g[fi_d, j, 3]
+        #         schur = self.tv_static_pair_schur[fi_d, j]
+        #         self.solve_collision_tv_static_v(fi_d, vi_s, dtype, g0, g1, g2, g3, schur, mu)
+        #
+        #     for j in range(self.tv_dynamic_pair_num[fi_d]):
+        #         vi_s, dtype = self.tv_dynamic_pair[fi_d, j, 0], self.tv_dynamic_pair[fi_d, j, 1]
+        #         g0, g1, g2, g3 = self.tv_dynamic_pair_g[fi_d, j, 0], self.tv_dynamic_pair_g[fi_d, j, 1], self.tv_dynamic_pair_g[fi_d, j, 2], self.tv_dynamic_pair_g[fi_d, j, 3]
+        #         schur = self.tv_dynamic_pair_schur[fi_d, j]
+        #         self.solve_collision_tv_dynamic_v(fi_d, vi_s, dtype, g0, g1, g2, g3, schur, mu)
+        #
+        # for ei_d in range(self.max_num_edges_dynamic):
+        #     for j in range(self.ee_static_pair_num[ei_d]):
+        #         ei_s, dtype = self.ee_static_pair[ei_d, j, 0], self.ee_static_pair[ei_d, j, 1]
+        #         g0, g1, g2, g3 = self.ee_static_pair_g[ei_d, j, 0], self.ee_static_pair_g[ei_d, j, 1], self.ee_static_pair_g[ei_d, j, 2], self.ee_static_pair_g[ei_d, j, 3]
+        #         schur = self.ee_static_pair_schur[ei_d, j]
+        #         self.solve_collision_ee_static_v(ei_d, ei_s, d, mu)
+        #
+        #     for j in range(self.ee_dynamic_pair_num[ei_d]):
+        #         ej_d, dtype = self.ee_dynamic_pair[ei_d, j, 0], self.ee_dynamic_pair[ei_d, j, 1]
+        #         g0, g1, g2, g3 = self.ee_dynamic_pair_g[ei_d, j, 0], self.ee_dynamic_pair_g[ei_d, j, 1], self.ee_dynamic_pair_g[ei_d, j, 2], self.ee_dynamic_pair_g[ei_d, j, 3]
+        #         schur = self.ee_dynamic_pair_schur[ei_d, j]
+        #         self.solve_collision_ee_dynamic_v(ei_d, ej_d, dtype, g0, g1, g2, g3, schur, mu)
 
 
     # @ti.kernel
@@ -836,18 +848,17 @@ class Solver:
 
         # print(self.num_springs[0])
     #
-    # def solve_constraints_v(self):
-    #     self.dv.fill(0.0)
-    #     self.nc.fill(0)
-    #
-    #     # self.solve_spring_constraints_v()
-    #
-    #     if self.enable_collision_handling:
-    #         self.solve_collision_constraints_v()
-    #
-    #     self.solve_fem_constraints_v(self.YM[0], self.PR[0])
-    #     # self.solve_pressure_constraints_v()
-    #     self.update_dv()
+    def solve_constraints_v(self):
+        self.mesh_dy.verts.dv.fill(0.0)
+        self.mesh_dy.verts.nc.fill(0.0)
+        # self.solve_spring_constraints_v()
+
+        # if self.enable_collision_handling:
+        self.solve_collision_constraints_v()
+
+        # self.solve_fem_constraints_v(self.YM[0], self.PR[0])
+        # self.solve_pressure_constraints_v()
+        self.update_dv()
 
     @ti.kernel
     def update_dx(self):
@@ -862,14 +873,14 @@ class Solver:
             else:
                 v.fixed = 1.0
 
-    # @ti.kernel
-    # def update_dv(self):
-    #     for vi in range(self.max_num_verts_dynamic):
-    #         if self.nc[vi] > 0.0:
-    #             self.dv[vi] = self.dv[vi] / self.nc[vi]
-    #
-    #         if self.m_inv[vi] > 0.0:
-    #             self.v[vi] += self.fixed[vi] * self.dv[vi]
+    @ti.kernel
+    def update_dv(self):
+        for v in self.mesh_dy.verts:
+            if v.nc > 0.0:
+                v.dv = v.dv / v.nc
+
+            if v.m_inv > 0.0:
+                v.v += v.fixed * v.dv
 
     # @ti.kernel
     # def move_static_object(self):
@@ -925,51 +936,55 @@ class Solver:
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
+        ti.profiler.clear_kernel_profiler_info()
+        self.mesh_st.computeAABB_faces(padding=self.padding)
+        aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+        self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
+        # print("------------------------------------------------------")
+        # #
+        # assign_morton = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_morton.__name__)
+        # print("assign_morton: ", round(assign_morton.avg, 5))
+        # # #
+        # # # radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
+        # # # radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.blelloch_scan.__name__)
+        # # # radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
+        # # # print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
+        # # #
+        # # # # sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
+        # # # # print("sort: ", round(sort.avg, 5))
+        # # #
+        # # assign_leaf_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_leaf_nodes.__name__)
+        # # print("assign_leaf_nodes: ", round(assign_leaf_nodes.avg, 5))
+        # # #
+        # assign_internal_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_internal_nodes.__name__)
+        # print("assign_internal_nodes: ", round(assign_internal_nodes.avg, 5))
+        # # #
+        # compute_node_aabbs = ti.profiler.query_kernel_profiler_info(self.lbvh_st.compute_node_aabbs.__name__)
+        # print("compute_node_aabbs: ", round(compute_node_aabbs.avg, 5))
+
+        # build = ti.profiler.query_kernel_profiler_info(self.lbvh_st.build.__name__)
+        # print(build.avg)
+
+        # build = (assign_morton.avg + assign_leaf_nodes.avg + assign_internal_nodes.avg + compute_node_aabbs.avg)
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            ti.profiler.clear_kernel_profiler_info()
-            self.mesh_st.computeAABB_faces(padding=self.padding)
-            aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-            self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
-            print("------------------------------------------------------")
-            #
-            assign_morton = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_morton.__name__)
-            print("assign_morton: ", round(assign_morton.avg, 5))
-            # #
-            # # radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
-            # # radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.blelloch_scan.__name__)
-            # # radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
-            # # print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
-            # #
-            # # # sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
-            # # # print("sort: ", round(sort.avg, 5))
-            # #
-            # assign_leaf_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_leaf_nodes.__name__)
-            # print("assign_leaf_nodes: ", round(assign_leaf_nodes.avg, 5))
-            # #
-            assign_internal_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_internal_nodes.__name__)
-            print("assign_internal_nodes: ", round(assign_internal_nodes.avg, 5))
-            # #
-            compute_node_aabbs = ti.profiler.query_kernel_profiler_info(self.lbvh_st.compute_node_aabbs.__name__)
-            print("compute_node_aabbs: ", round(compute_node_aabbs.avg, 5))
-
-            # build = ti.profiler.query_kernel_profiler_info(self.lbvh_st.build.__name__)
-            # print(build.avg)
-
-            # build = (assign_morton.avg + assign_leaf_nodes.avg + assign_internal_nodes.avg + compute_node_aabbs.avg)
-            # self.broadphase_brute()
-            self.broadphase_lbvh()
+            cnt_brute = self.broadphase_brute()
+            # cnt_lbvh = self.broadphase_lbvh()
             self.solve_constraints_x()
             self.compute_velocity(dt_sub)
-            # self.solve_constraints_v()
 
+            self.solve_constraints_v()
             self.update_x(dt_sub)
 
-            # brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
-            # bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
-            # print("brute / bvh ratio: ", round(brute.avg / (build + bvh.avg), 5))
+        brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
+        bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
+        print(cnt_brute)
+        # print(cnt_lbvh)
+
+        # print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
+        # print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
 
         # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
         # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)

@@ -326,24 +326,50 @@ class LBVH:
                 min1[2] <= max2[2] and max1[2] >= min2[2])
 
     @ti.func
-    def traverse_bvh(self, aabb_min, aabb_max, i, cache, nums):
+    def traverse_bvh(self, min0, max0, i, cache, nums):
 
         stack = ti.Vector([-1 for j in range(64)])
-        stack[0] = -1
-        stack_counter = 0
+        stack[0] = 0
+        stack_counter = 1
         idx = 0
+        cnt = 0
+        # while stack_counter > 0:
+        #     stack_counter -= 1
+        #     idx = stack[stack_counter]
+        #
+        #     min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
+        #
+        #     cnt += 1
+        #     if not self.aabb_overlap(min0, max0, min1, max1):
+        #         continue
+        #
+        #     if idx >= self.num_leafs - 1:
+        #         cache[i, nums[i]] = self.nodes[idx].object_id
+        #         nums[i] += 1
+        #
+        #     else:
+        #         left, right = self.nodes[idx].left, self.nodes[idx].right
+        #         stack[stack_counter] = left
+        #         stack_counter += 1
+        #         stack[stack_counter] = right
+        #         stack_counter += 1
+        #
+        # return cnt
+
         while True:
             left = self.nodes[idx].left
             right = self.nodes[idx].right
             min_l, max_l = self.nodes[left].aabb_min, self.nodes[left].aabb_max
             min_r, max_r = self.nodes[right].aabb_min, self.nodes[right].aabb_max
 
-            overlap_l = self.aabb_overlap(aabb_min, aabb_max, min_l, max_l)
+            cnt += 1
+            overlap_l = self.aabb_overlap(min0, max0, min_l, max_l)
             if overlap_l and left >= self.num_leafs - 1:
                 cache[i, nums[i]] = self.nodes[left].object_id
                 nums[i] += 1
 
-            overlap_r = self.aabb_overlap(aabb_min, aabb_max, min_r, max_r)
+            cnt += 1
+            overlap_r = self.aabb_overlap(min0, max0, min_r, max_r)
             if overlap_r and right >= self.num_leafs - 1:
                 cache[i, nums[i]] = self.nodes[right].object_id
                 nums[i] += 1
@@ -363,6 +389,7 @@ class LBVH:
             if idx == -1:
                 break
 
+        return cnt
 
     @ti.kernel
     def update_zSort_face_centers_and_line(self):

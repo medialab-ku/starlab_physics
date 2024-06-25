@@ -23,6 +23,7 @@ class MeshTaichiWrapper:
                                'y': ti.math.vec3,
                                'v': ti.math.vec3,
                                'dx': ti.math.vec3,
+                               'dv': ti.math.vec3,
                                'nc': ti.f32})
         self.mesh.edges.place({'l0': ti.f32})
         self.mesh.faces.place({'aabb_min': ti.math.vec3,
@@ -38,7 +39,7 @@ class MeshTaichiWrapper:
         self.faces = self.mesh.faces
         self.verts = self.mesh.verts
 
-        print(len(self.mesh.faces))
+        # print(len(self.mesh.faces))
 
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.uint32, shape=len(self.mesh.faces) * 3)
