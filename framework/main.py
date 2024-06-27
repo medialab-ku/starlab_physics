@@ -332,7 +332,7 @@ while window.running:
     # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
-        # scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
+        scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
         # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)

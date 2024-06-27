@@ -9,6 +9,8 @@ class Node:
     visited: ti.i32
     aabb_min: ti.math.vec3
     aabb_max: ti.math.vec3
+    start: ti.i32
+    end: ti.i32
 
 @ti.data_oriented
 class LBVH:
@@ -70,11 +72,12 @@ class LBVH:
         # max_value = -1
         for f in mesh.faces:
         # // obtain center of triangle
-        #     u = f.verts[0]
-        #     v = f.verts[1]
-        #     w = f.verts[2]
-        #     pos = (1. / 3.) * (u.x + v.x + w.x)
-            self.face_centers[f.id] = pos = 0.5 * (f.aabb_min + f.aabb_max)
+            u = f.verts[0]
+            v = f.verts[1]
+            w = f.verts[2]
+            pos = (1. / 3.) * (u.x + v.x + w.x)
+            self.face_centers[f.id] = pos
+                # = 0.5 * (f.aabb_min + f.aabb_max)
         # // normalize position
             x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
             y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
@@ -96,7 +99,7 @@ class LBVH:
     def assign_leaf_nodes(self, mesh: ti.template()):
         # print(self.num_leafs)
         for f in mesh.faces:
-            # // no need to set parent to nullptr, each child will have a parent
+            # // no need to set parent to nullptr, each child will have a parents
             id = self.object_ids[f.id]
             self.nodes[id + self.num_leafs - 1].object_id = f.id
             self.nodes[id + self.num_leafs - 1].left = -1
@@ -205,24 +208,52 @@ class LBVH:
     def compute_node_aabbs(self):
 
         ti.loop_config(block_dim=64)
-        for i in range(self.num_leafs):
-            pid = self.nodes[i + self.num_leafs - 1].parent
-            while True:
-                if pid == -1:
-                    break
+        for i in range(self.num_leafs - 1):
 
-                visited = self.nodes[pid].visited
+            start, end = self.nodes[i].start, self.nodes[i].end
+            size = end - start + 1
 
-                if visited == 1:
-                    break
+            aabb_min = ti.math.vec3(1e4)
+            aabb_max = ti.math.vec3(-1e4)
+            offset = start + self.num_leafs - 1
+            for j in range(size):
+                min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
+                aabb_min = ti.math.min(aabb_min, min0)
+                aabb_max = ti.math.max(aabb_max, max0)
 
-                ti.atomic_add(self.nodes[pid].visited, 1)
-                left, right = self.nodes[pid].left, self.nodes[pid].right
-                min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
-                max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
-                self.nodes[pid].aabb_min = ti.min(min0, min1)
-                self.nodes[pid].aabb_max = ti.max(max0, max1)
-                pid = self.nodes[pid].parent
+
+            self.nodes[i].aabb_min = aabb_min
+            self.nodes[i].aabb_max = aabb_max
+
+
+            # pid = self.nodes[i + self.num_leafs - 1].parent
+            # while True:
+            #     if pid == -1:
+            #         break
+            #
+            #     visited = self.nodes[pid].visited
+            #
+            #     if visited >= 1:
+            #         break
+            #
+            #     ti.atomic_add(self.nodes[pid].visited, 1)
+            #     left, right = self.nodes[pid].left, self.nodes[pid].right
+            #     min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
+            #     max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
+            #     self.nodes[pid].aabb_min = ti.min(min0, min1)
+            #     self.nodes[pid].aabb_max = ti.max(max0, max1)
+            #     pid = self.nodes[pid].parent
+
+
+        id0 = 0 + self.num_leafs - 1
+        # for i in range(self.num_nodes):
+        i = 0
+        min0, max0 = self.nodes[id0].aabb_min, self.nodes[id0].aabb_max
+        min1, max1 = self.nodes[i].aabb_max, self.nodes[i].aabb_max
+
+        if self.aabb_overlap(min0, max0, min1, max1):
+            print(i)
+
 
     @ti.kernel
     def count_frequency(self, pass_num: ti.i32):
