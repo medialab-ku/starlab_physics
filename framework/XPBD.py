@@ -89,31 +89,32 @@ class Solver:
         self.mesh_st.computeAABB_faces(padding=self.padding)
         # aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
         self.lbvh_st = LBVH(len(self.mesh_st.faces))
-
-        self.mesh_st.computeAABB_faces(padding=self.padding)
-        aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-        self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
-
+        # self.lbvh_st_v = LBVH(len(self.mesh_st.verts))
         # self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         # print(aabb_min, aabb_max)
 
         self.vt_st_pair_cache_size = 40
+        self.vt_static_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dy, self.vt_st_pair_cache_size))
+        self.vt_static_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dy)
+        self.vt_static_candidates_num_temp = ti.field(dtype=ti.int32, shape=self.max_num_faces_dy)
+        self.prefixSum = ti.algorithms.PrefixSumExecutor(self.max_num_faces_dy)
+        # self.vt_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 4))
+        # self.vt_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size))
+        #
+        #
+
         self.vt_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
         self.vt_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
         self.vt_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
         self.vt_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
+        self.tv_st_pair_cache_size = 40
+        self.tv_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dy, self.tv_st_pair_cache_size, 2))
+        self.tv_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dy)
+        self.tv_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dy, self.tv_st_pair_cache_size, 4))
+        self.tv_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dy, self.tv_st_pair_cache_size))
 
-        self.vt_static_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
-        self.vt_static_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        # self.vt_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size, 4))
-        # self.vt_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dynamic, self.vt_static_pair_cache_size))
-        #
-        # self.tv_static_pair_cache_size = 40
-        # self.tv_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 2))
-        # self.tv_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_faces_dynamic)
-        # self.tv_static_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size, 4))
-        # self.tv_static_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_faces_dynamic, self.tv_static_pair_cache_size))
-        #
+
+
         # self.ee_static_pair_cache_size = 40
         # self.ee_static_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dynamic, self.ee_static_pair_cache_size, 2))
         # self.ee_static_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dynamic)
@@ -402,11 +403,19 @@ class Solver:
 
         self.vt_static_candidates_num.fill(0)
         cnt = 0
-        for v in self.mesh_dy.verts:
-            aabb_min = v.y - self.padding * ti.math.vec3(1.0)
-            aabb_max = v.y + self.padding * ti.math.vec3(1.0)
-            a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
+        for f in self.mesh_dy.faces:
+            aabb_min = ti.min(f.verts[0].x, f.verts[0].y, f.verts[1].x, f.verts[1].y, f.verts[2].x, f.verts[2].y) - self.padding * ti.math.vec3(1.0)
+            aabb_max = ti.max(f.verts[0].x, f.verts[0].y, f.verts[1].x, f.verts[1].y, f.verts[2].x, f.verts[2].y) + self.padding * ti.math.vec3(1.0)
+            a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, f.id, self.vt_static_candidates, self.vt_static_candidates_num)
             ti.atomic_add(cnt, a)
+
+        # self.vt_static_candidates_num.fill(0)
+        # cnt = 0
+        # for v in self.mesh_dy.verts:
+        #     aabb_min = v.y - self.padding * ti.math.vec3(1.0)
+        #     aabb_max = v.y + self.padding * ti.math.vec3(1.0)
+        #     a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, v.id, self.vt_static_candidates, self.vt_static_candidates_num)
+        #     ti.atomic_add(cnt, a)
 
         return cnt
     @ti.kernel
@@ -543,11 +552,20 @@ class Solver:
 
         self.vt_st_pair_num.fill(0)
         d = self.dHat
-        for v in self.mesh_dy.verts:
+        # size = self.vt_static_candidates_num_temp[self.max_num_faces_dy - 1]
+        # for i in range(size):
+        #
+
+        for f in self.mesh_dy.faces:
             # for fi_s in range(self.max_num_faces_st):
-            for i in range(self.vt_static_candidates_num[v.id]):
-                fi_s = self.vt_static_candidates[v.id, i]
-                solve_collision_constraints_x.__vt_st(v.id, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
+            for i in range(self.vt_static_candidates_num[f.id]):
+                fi_s = self.vt_static_candidates[f.id, i]
+                for k in range(3):
+                    solve_collision_constraints_x.__vt_st(f.verts[k].id, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
+
+                # for k in range(3):
+                #     solve_collision_constraints_x.__tv_st(f.id, self.mesh_st.face_indices[3 * fi_s + k], self.mesh_dy, self.mesh_st, d,
+                #                                           self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
 
         # for fi_d in range(self.max_num_faces_dynamic):
         #     for vi_s in range(self.max_num_verts_static):
@@ -849,6 +867,8 @@ class Solver:
         self.solve_spring_constraints_x(self.YM, self.strain_limit)
 
         if self.enable_collision_handling:
+            self.vt_static_candidates_num_temp.copy_from(self.vt_static_candidates_num)
+            # self.prefixSum.run(self.vt_static_candidates_num_temp)
             self.solve_collision_constraints_x()
         #
         # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
@@ -974,11 +994,17 @@ class Solver:
         # print(build.avg)
 
         # build = (assign_morton.avg + assign_leaf_nodes.avg + assign_internal_nodes.avg + compute_node_aabbs.avg)
+
+        # bounding volume hierarchy construction
+        self.mesh_st.computeAABB_faces(padding=self.padding)
+        aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+        self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
 
             # cnt_lbvh = self.broadphase_lbvh()
-            cnt_brute = self.broadphase_brute()
+            # cnt_brute = self.broadphase_brute()
             cnt_lbvh = self.broadphase_lbvh()
             self.solve_constraints_x()
 
@@ -989,12 +1015,16 @@ class Solver:
 
             self.update_x(dt_sub)
 
-        brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
-        bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
+        col_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
+        col_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
+        print("v / x ratio: ", round(col_v.avg / col_x.avg, 5))
+        # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
+        # brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
+        # bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
         # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
 
         # print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
-        print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
+        # print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
         # print("bvh cnt: ", cnt_lbvh)
 
         # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)

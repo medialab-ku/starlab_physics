@@ -229,88 +229,88 @@ class LBVH:
 
         # ti.loop_config(block_dim=64)
         for i in range(self.num_leafs - 1):
-
-            start, end = self.nodes[i].start, self.nodes[i].end
-            size = end - start + 1
-            # if i < 1:
-            #     print(start, end)
-
-            aabb_min = ti.math.vec3(1e4)
-            aabb_max = ti.math.vec3(-1e4)
-            offset = start + self.num_leafs - 1
-            for j in range(size):
-                min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
-                aabb_min = ti.min(aabb_min, min0)
-                aabb_max = ti.max(aabb_max, max0)
-
-
-            self.nodes[i].aabb_min = aabb_min
-            self.nodes[i].aabb_max = aabb_max
-
-
-            # pid = self.nodes[i + self.num_leafs - 1].parent
-            # while True:
-            #     if pid == -1:
-            #         break
             #
-            #     visited = self.nodes[pid].visited
+            # start, end = self.nodes[i].start, self.nodes[i].end
+            # size = end - start + 1
+            # # if i < 1:
+            # #     print(start, end)
             #
-            #     if visited >= 1:
-            #         break
+            # aabb_min = ti.math.vec3(1e4)
+            # aabb_max = ti.math.vec3(-1e4)
+            # offset = start + self.num_leafs - 1
+            # for j in range(size):
+            #     min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
+            #     aabb_min = ti.min(aabb_min, min0)
+            #     aabb_max = ti.max(aabb_max, max0)
             #
-            #     ti.atomic_add(self.nodes[pid].visited, 1)
-            #     left, right = self.nodes[pid].left, self.nodes[pid].right
-            #     min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
-            #     max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
-            #     self.nodes[pid].aabb_min = ti.min(min0, min1)
-            #     self.nodes[pid].aabb_max = ti.max(max0, max1)
-            #     pid = self.nodes[pid].parent
+            #
+            # self.nodes[i].aabb_min = aabb_min
+            # self.nodes[i].aabb_max = aabb_max
 
 
-        # id0 = 0 + self.num_leafs - 1
-        cnt = 0
-        cnt_total = 0
-        for i in range(self.num_leafs):
-            min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
-            for j in range(self.num_leafs):
-                min1, max1 = self.nodes[j + self.num_leafs - 1].aabb_min, self.nodes[j + self.num_leafs - 1].aabb_max
-                ti.atomic_add(cnt_total, 1)
-                if self.aabb_overlap(min0, max0, min1, max1):
-                    ti.atomic_add(cnt, 1)
-        print(cnt_total / self.num_leafs)
+            pid = self.nodes[i + self.num_leafs - 1].parent
+            while True:
+                if pid == -1:
+                    break
+
+                visited = self.nodes[pid].visited
+
+                if visited >= 1:
+                    break
+
+                ti.atomic_add(self.nodes[pid].visited, 1)
+                left, right = self.nodes[pid].left, self.nodes[pid].right
+                min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
+                max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
+                self.nodes[pid].aabb_min = ti.min(min0, min1)
+                self.nodes[pid].aabb_max = ti.max(max0, max1)
+                pid = self.nodes[pid].parent
+
+
+        # # id0 = 0 + self.num_leafs - 1
+        # cnt = 0
+        # cnt_total = 0
+        # for i in range(self.num_leafs):
+        #     min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
+        #     for j in range(self.num_leafs):
+        #         min1, max1 = self.nodes[j + self.num_leafs - 1].aabb_min, self.nodes[j + self.num_leafs - 1].aabb_max
+        #         ti.atomic_add(cnt_total, 1)
+        #         if self.aabb_overlap(min0, max0, min1, max1):
+        #             ti.atomic_add(cnt, 1)
+        # print(cnt_total / self.num_leafs)
+        # #
+        # cnt = 0
+        # # # for i in range(self.num_leafs):
+        # # i = 0 + self.num_leafs - 1
+        # cnt_total = 0
+        # for i in range(self.num_leafs):
+        #     min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
+        #     # # print(min0, max0)
+        #     #
+        #     stack = ti.Vector([-1 for j in range(10)])
+        #     stack[0] = 0
+        #     stack_counter = 1
         #
-        cnt = 0
-        # # for i in range(self.num_leafs):
-        # i = 0 + self.num_leafs - 1
-        cnt_total = 0
-        for i in range(self.num_leafs):
-            min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
-            # # print(min0, max0)
-            #
-            stack = ti.Vector([-1 for j in range(10)])
-            stack[0] = 0
-            stack_counter = 1
-
-            while stack_counter > 0:
-                stack_counter -= 1
-                idx = stack[stack_counter]
-                # print(idx)
-                stack[stack_counter] = -1
-                min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
-                ti.atomic_add(cnt_total, 1)
-                if self.aabb_overlap(min0, max0, min1, max1):
-                    if idx >= self.num_leafs - 1:
-                        ti.atomic_add(cnt, 1)
-
-                    else:
-                        left, right = self.nodes[idx].left, self.nodes[idx].right
-                        stack[stack_counter] = left
-                        stack_counter += 1
-                        stack[stack_counter] = right
-                        stack_counter += 1
-
-            # print(stack)
-        print(cnt_total / self.num_leafs)
+        #     while stack_counter > 0:
+        #         stack_counter -= 1
+        #         idx = stack[stack_counter]
+        #         # print(idx)
+        #         stack[stack_counter] = -1
+        #         min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
+        #         ti.atomic_add(cnt_total, 1)
+        #         if self.aabb_overlap(min0, max0, min1, max1):
+        #             if idx >= self.num_leafs - 1:
+        #                 ti.atomic_add(cnt, 1)
+        #
+        #             else:
+        #                 left, right = self.nodes[idx].left, self.nodes[idx].right
+        #                 stack[stack_counter] = left
+        #                 stack_counter += 1
+        #                 stack[stack_counter] = right
+        #                 stack_counter += 1
+        #
+        #     # print(stack)
+        # print(cnt_total / self.num_leafs)
 
 
 

@@ -65,7 +65,7 @@ def __vt_st(vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_pair, vt_st_pair_num, vt_s
         mesh_dy.verts.dx[v0] += mesh_st.verts.m_inv[v0] * ld * g0
         mesh_dy.verts.nc[v0] += 1
 @ti.func
-def __tv_st(fi_d, vi_s, mesh_dy, mesh_st, dHat):
+def __tv_st(fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_pair, tv_st_pair_num, tv_st_pair_g, tv_st_pair_schur):
 
     v0 = vi_s
     v1 = mesh_dy.face_indices[3 * fi_d + 0]
@@ -158,15 +158,15 @@ def __tv_st(fi_d, vi_s, mesh_dy, mesh_st, dHat):
             mesh_dy.verts.nc[v2] += 1
             mesh_dy.verts.nc[v3] += 1
 
-        # if d < dHat and tv_static_pair_num[fid_d] < tv_static_pair_cache_size:
-        #     tv_static_pair[fid_d, tv_static_pair_num[fid_d], 0] = vid_s
-        #     tv_static_pair[fid_d, tv_static_pair_num[fid_d], 1] = dtype
-        #     tv_static_pair_g[fid_d, tv_static_pair_num[fid_d], 0] = g0
-        #     tv_static_pair_g[fid_d, tv_static_pair_num[fid_d], 1] = g1
-        #     tv_static_pair_g[fid_d, tv_static_pair_num[fid_d], 2] = g2
-        #     tv_static_pair_g[fid_d, tv_static_pair_num[fid_d], 3] = g3
-        #     tv_static_pair_schur[fid_d, tv_static_pair_num[fid_d]] = schur
-        #     tv_static_pair_num[fid_d] += 1
+    if d < dHat:
+        tv_st_pair[fi_d, tv_st_pair_num[fi_d], 0] = vi_s
+        tv_st_pair[fi_d, tv_st_pair_num[fi_d], 1] = dtype
+        tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 0] = g0
+        tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 1] = g1
+        tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 2] = g2
+        tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 3] = g3
+        tv_st_pair_schur[fi_d, tv_st_pair_num[fi_d]] = schur
+        tv_st_pair_num[fi_d] += 1
 
 @ti.func
 def __tv_dy(fi_d, vi_d, mesh_dy, dHat):
