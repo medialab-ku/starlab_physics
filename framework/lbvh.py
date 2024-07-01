@@ -31,9 +31,11 @@ class LBVH:
         self.morton_codes = ti.field(dtype=ti.int32, shape=self.num_leafs)
         self.morton_codes_temp = ti.field(dtype=ti.int32, shape=self.num_leafs)
 
+        self.test = 1
+        self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.test)
 
-        self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.num_nodes)
-        self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.num_nodes)
+
+        self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.test)
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
@@ -50,10 +52,10 @@ class LBVH:
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
     def expand_bits(self, v):
-        v = (v * ti.int64(0x00010001)) & ti.int64(0xFF0000FF)
-        v = (v * ti.int64(0x00000101)) & ti.int64(0x0F00F00F)
-        v = (v * ti.int64(0x00000011)) & ti.int64(0xC30C30C3)
-        v = (v * ti.int64(0x00000005)) & ti.int64(0x49249249)
+        v = (v | (v << 16)) & 0x030000FF
+        v = (v | (v << 8)) & 0x0300F00F
+        v = (v | (v << 4)) & 0x030C30C3
+        v = (v | (v << 2)) & 0x09249249
         return v
 
     @ti.func
@@ -64,28 +66,44 @@ class LBVH:
         xx = self.expand_bits(ti.cast(x, ti.uint64))
         yy = self.expand_bits(ti.cast(y, ti.uint64))
         zz = self.expand_bits(ti.cast(z, ti.uint64))
-        return xx * 4 + yy * 2 + zz
+        return xx | (yy << 1) | (zz << 2)
 
     @ti.kernel
     def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
 
         # max_value = -1
+        min0 = ti.math.vec3(1e4)
+        max0 = ti.math.vec3(-1e4)
+
         for f in mesh.faces:
         # // obtain center of triangle
             u = f.verts[0]
             v = f.verts[1]
             w = f.verts[2]
             pos = (1. / 3.) * (u.x + v.x + w.x)
+
+            pos = 0.5 * (f.aabb_max + f.aabb_min)
+
+            # if f.id < 10:
+            #     print(pos[1])
+            # pos[1] = 0.0
+            # pos = ti.math.vec3(x, y, z)
             self.face_centers[f.id] = pos
+
+            ti.atomic_max(max0, pos)
+            ti.atomic_min(min0, pos)
+
+        for f in mesh.faces:
+            pos = self.face_centers[f.id]
                 # = 0.5 * (f.aabb_min + f.aabb_max)
         # // normalize position
-            x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
-            y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
-            z = (pos[2] - aabb_min[2]) / (aabb_max[2] - aabb_min[2])
+            x = (pos[0] - min0[0]) / (max0[0] - min0[0])
+            y = (pos[1] - min0[1]) / (max0[1] - min0[1])
+            z = (pos[2] - min0[2]) / (max0[2] - min0[2])
         # // clamp to deal with numeric issues
-        #     x = ti.math.clamp(x, 0., 1.)
-        #     y = ti.math.clamp(y, 0., 1.)
-        #     z = ti.math.clamp(z, 0., 1.)
+            x = ti.math.clamp(x, 0., 1.)
+            y = ti.math.clamp(y, 0., 1.)
+            z = ti.math.clamp(z, 0., 1.)
 
     # // obtain and set morton code based on normalized position
             morton3d = self.morton_3d(x, y, z)
@@ -191,7 +209,7 @@ class LBVH:
     @ti.kernel
     def assign_internal_nodes(self):
 
-        ti.loop_config(block_dim=64)
+        # ti.loop_config(block_dim=64)
         for i in range(self.num_leafs - 1):
             start, end = self.determine_range(i, self.num_leafs)
             split = self.find_split(start, end)
@@ -202,24 +220,28 @@ class LBVH:
             self.nodes[i].visited = 0
             self.nodes[left].parent = i
             self.nodes[right].parent = i
+            self.nodes[i].start = start
+            self.nodes[i].end = end
 
             # print(i, left, right)
     @ti.kernel
     def compute_node_aabbs(self):
 
-        ti.loop_config(block_dim=64)
+        # ti.loop_config(block_dim=64)
         for i in range(self.num_leafs - 1):
 
             start, end = self.nodes[i].start, self.nodes[i].end
             size = end - start + 1
+            # if i < 1:
+            #     print(start, end)
 
             aabb_min = ti.math.vec3(1e4)
             aabb_max = ti.math.vec3(-1e4)
             offset = start + self.num_leafs - 1
             for j in range(size):
                 min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
-                aabb_min = ti.math.min(aabb_min, min0)
-                aabb_max = ti.math.max(aabb_max, max0)
+                aabb_min = ti.min(aabb_min, min0)
+                aabb_max = ti.max(aabb_max, max0)
 
 
             self.nodes[i].aabb_min = aabb_min
@@ -245,14 +267,52 @@ class LBVH:
             #     pid = self.nodes[pid].parent
 
 
-        id0 = 0 + self.num_leafs - 1
-        # for i in range(self.num_nodes):
-        i = 0
-        min0, max0 = self.nodes[id0].aabb_min, self.nodes[id0].aabb_max
-        min1, max1 = self.nodes[i].aabb_max, self.nodes[i].aabb_max
+        # id0 = 0 + self.num_leafs - 1
+        cnt = 0
+        cnt_total = 0
+        for i in range(self.num_leafs):
+            min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
+            for j in range(self.num_leafs):
+                min1, max1 = self.nodes[j + self.num_leafs - 1].aabb_min, self.nodes[j + self.num_leafs - 1].aabb_max
+                ti.atomic_add(cnt_total, 1)
+                if self.aabb_overlap(min0, max0, min1, max1):
+                    ti.atomic_add(cnt, 1)
+        print(cnt_total / self.num_leafs)
+        #
+        cnt = 0
+        # # for i in range(self.num_leafs):
+        # i = 0 + self.num_leafs - 1
+        cnt_total = 0
+        for i in range(self.num_leafs):
+            min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
+            # # print(min0, max0)
+            #
+            stack = ti.Vector([-1 for j in range(10)])
+            stack[0] = 0
+            stack_counter = 1
 
-        if self.aabb_overlap(min0, max0, min1, max1):
-            print(i)
+            while stack_counter > 0:
+                stack_counter -= 1
+                idx = stack[stack_counter]
+                # print(idx)
+                stack[stack_counter] = -1
+                min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
+                ti.atomic_add(cnt_total, 1)
+                if self.aabb_overlap(min0, max0, min1, max1):
+                    if idx >= self.num_leafs - 1:
+                        ti.atomic_add(cnt, 1)
+
+                    else:
+                        left, right = self.nodes[idx].left, self.nodes[idx].right
+                        stack[stack_counter] = left
+                        stack_counter += 1
+                        stack[stack_counter] = right
+                        stack_counter += 1
+
+            # print(stack)
+        print(cnt_total / self.num_leafs)
+
+
 
 
     @ti.kernel
@@ -370,31 +430,28 @@ class LBVH:
     @ti.func
     def traverse_bvh_single(self, min0, max0, i, cache, nums):
 
-        stack = ti.Vector([-1 for j in range(64)])
+        stack = ti.Vector([-1 for j in range(16)])
         stack[0] = 0
         stack_counter = 1
-        # idx = 0
+        idx = 0
         cnt = 0
         while stack_counter > 0:
             stack_counter -= 1
             idx = stack[stack_counter]
-
             min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
-
             cnt += 1
-            if not self.aabb_overlap(min0, max0, min1, max1):
-                continue
+            if self.aabb_overlap(min0, max0, min1, max1):
+                if idx >= self.num_leafs - 1:
+                    cache[i, nums[i]] = self.nodes[idx].object_id
+                    nums[i] += 1
+                    ti.atomic_add(cnt, 1)
 
-            if idx >= self.num_leafs - 1:
-                cache[i, nums[i]] = self.nodes[idx].object_id
-                nums[i] += 1
-
-            else:
-                left, right = self.nodes[idx].left, self.nodes[idx].right
-                stack[stack_counter] = left
-                stack_counter += 1
-                stack[stack_counter] = right
-                stack_counter += 1
+                else:
+                    left, right = self.nodes[idx].left, self.nodes[idx].right
+                    stack[stack_counter] = left
+                    stack_counter += 1
+                    stack[stack_counter] = right
+                    stack_counter += 1
 
         return cnt
 
@@ -404,20 +461,20 @@ class LBVH:
         #     min_l, max_l = self.nodes[left].aabb_min, self.nodes[left].aabb_max
         #     min_r, max_r = self.nodes[right].aabb_min, self.nodes[right].aabb_max
         #
-        #     cnt += 1
         #     overlap_l = self.aabb_overlap(min0, max0, min_l, max_l)
-        #     if overlap_l and left >= self.num_leafs - 1:
+        #     if overlap_l and left >= (self.num_leafs - 1):
+        #         cnt += 1
         #         cache[i, nums[i]] = self.nodes[left].object_id
         #         nums[i] += 1
         #
-        #     cnt += 1
         #     overlap_r = self.aabb_overlap(min0, max0, min_r, max_r)
-        #     if overlap_r and right >= self.num_leafs - 1:
+        #     if overlap_r and right >= (self.num_leafs - 1):
+        #         cnt += 1
         #         cache[i, nums[i]] = self.nodes[right].object_id
         #         nums[i] += 1
         #
-        #     traverse_l = overlap_l and left < self.num_leafs - 1
-        #     traverse_r = overlap_r and right < self.num_leafs - 1
+        #     traverse_l = overlap_l and left < (self.num_leafs - 1)
+        #     traverse_r = overlap_r and right < (self.num_leafs - 1)
         #
         #     if (not traverse_l) and (not traverse_r):
         #         idx = stack[stack_counter]
@@ -446,7 +503,7 @@ class LBVH:
     #
     @ti.kernel
     def update_aabb_x_and_lines(self):
-        for n in range(self.num_nodes):
+        for n in range(self.test):
             # i = n + self.num_leafs - 1
             aabb_min = self.nodes[n].aabb_min
             aabb_max = self.nodes[n].aabb_max

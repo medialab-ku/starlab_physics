@@ -395,10 +395,10 @@ class Solver:
 
         # self.vt_static_candidates_num.fill(0)
         # print(len(self.mesh_dy.verts))
-        id = 17
-        aabb_min, aabb_max = self.mesh_st.faces.aabb_min[id], self.mesh_st.faces.aabb_max[id]
-        a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, id, self.vt_static_candidates,self.vt_static_candidates_num)
-        print(a)
+        # id = 17
+        # aabb_min, aabb_max = self.mesh_st.faces.aabb_min[id], self.mesh_st.faces.aabb_max[id]
+        # a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, id, self.vt_static_candidates,self.vt_static_candidates_num)
+        # print(a)
 
         self.vt_static_candidates_num.fill(0)
         cnt = 0
@@ -977,6 +977,7 @@ class Solver:
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
 
+            # cnt_lbvh = self.broadphase_lbvh()
             cnt_brute = self.broadphase_brute()
             cnt_lbvh = self.broadphase_lbvh()
             self.solve_constraints_x()
@@ -993,7 +994,8 @@ class Solver:
         # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
 
         # print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
-        # print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
+        print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
+        # print("bvh cnt: ", cnt_lbvh)
 
         # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
         # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
