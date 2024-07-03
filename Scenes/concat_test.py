@@ -4,7 +4,7 @@ import framework.concat as concat
 from framework.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
 
-enable_profiler = True
+enable_profiler = False
 ti.init(arch=ti.cuda, device_memory_GB=6, kernel_profiler=enable_profiler)
 
 model_dir = "../models/OBJ/"
@@ -22,9 +22,9 @@ for i in range(64):
 # for i in range(1):
 #     for j in range(1):
 #         for k in range(1):
-#             model_names.append("plane_small.obj")
+#             model_names.append("square_huge.obj")
 #             trans_list.append(np.array([1.0 * i, 2.0 * j, 1.0 * k]))
-#             scale_list.append(0.5)
+#             scale_list.append(10.0)
 
 # model_names.append("square.obj")
 # model_names.append("square.obj")
@@ -40,5 +40,6 @@ for i in range(64):
 
 concat.concat_mesh(model_dir, model_names, trans_list, scale_list)
 
-mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=30.0, trans=ti.math.vec3(0, 10.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=30.0, trans=ti.math.vec3(0, 12.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_st = None
 mesh_st = MeshTaichiWrapper("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

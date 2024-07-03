@@ -81,14 +81,17 @@ class Solver:
         self.max_num_edges_dy = len(self.mesh_dy.edges)
         self.max_num_faces_dy = len(self.mesh_dy.faces)
 
-        self.max_num_verts_st = len(self.mesh_st.verts)
-        self.max_num_edges_st = len(self.mesh_st.edges)
-        self.max_num_faces_st = len(self.mesh_st.faces)
+        #
+        # self.max_num_verts_st = len(self.mesh_st.verts)
+        # self.max_num_edges_st = len(self.mesh_st.edges)
+        # self.max_num_faces_st = len(self.mesh_st.faces)
 
-        self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
-        self.mesh_st.computeAABB_faces(padding=self.padding)
+        # self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
+        # self.mesh_st.computeAABB_faces(padding=self.padding)
         # aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-        self.lbvh_st = LBVH(len(self.mesh_st.faces))
+        self.lbvh_st = None
+        if self.mesh_st != None:
+            self.lbvh_st = LBVH(len(self.mesh_st.faces))
         # self.lbvh_st_v = LBVH(len(self.mesh_st.verts))
         # self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         # print(aabb_min, aabb_max)
@@ -563,9 +566,9 @@ class Solver:
                 for k in range(3):
                     solve_collision_constraints_x.__vt_st(f.verts[k].id, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
 
-                # for k in range(3):
-                #     solve_collision_constraints_x.__tv_st(f.id, self.mesh_st.face_indices[3 * fi_s + k], self.mesh_dy, self.mesh_st, d,
-                #                                           self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
+                for k in range(3):
+                    solve_collision_constraints_x.__tv_st(f.id, self.mesh_st.face_indices[3 * fi_s + k], self.mesh_dy, self.mesh_st, d,
+                                                          self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
 
         # for fi_d in range(self.max_num_faces_dynamic):
         #     for vi_s in range(self.max_num_verts_static):
@@ -861,15 +864,16 @@ class Solver:
         self.mesh_dy.verts.nc.fill(0.0)
 
 
-    def solve_constraints_x(self):
+    def solve_constraints_jacobi_x(self):
 
         self.init_variables()
         self.solve_spring_constraints_x(self.YM, self.strain_limit)
 
         if self.enable_collision_handling:
-            self.vt_static_candidates_num_temp.copy_from(self.vt_static_candidates_num)
+            # self.vt_static_candidates_num_temp.copy_from(self.vt_static_candidates_num)
             # self.prefixSum.run(self.vt_static_candidates_num_temp)
-            self.solve_collision_constraints_x()
+            if self.mesh_st != None:
+                self.solve_collision_constraints_x()
         #
         # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
@@ -966,7 +970,7 @@ class Solver:
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
-        ti.profiler.clear_kernel_profiler_info()
+        # ti.profiler.clear_kernel_profiler_info()
 
         # print("------------------------------------------------------")
         # #
@@ -996,18 +1000,18 @@ class Solver:
         # build = (assign_morton.avg + assign_leaf_nodes.avg + assign_internal_nodes.avg + compute_node_aabbs.avg)
 
         # bounding volume hierarchy construction
-        self.mesh_st.computeAABB_faces(padding=self.padding)
-        aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-        self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
+        if self.mesh_st != None:
+            self.mesh_st.computeAABB_faces(padding=self.padding)
+            aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+            self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+            cnt_lbvh = self.broadphase_lbvh()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-
             # cnt_lbvh = self.broadphase_lbvh()
             # cnt_brute = self.broadphase_brute()
-            cnt_lbvh = self.broadphase_lbvh()
-            self.solve_constraints_x()
-
+            # cnt_lbvh = self.broadphase_lbvh()
+            self.solve_constraints_jacobi_x()
             self.compute_velocity(dt_sub)
 
             if self.enable_velocity_update:
@@ -1015,9 +1019,9 @@ class Solver:
 
             self.update_x(dt_sub)
 
-        col_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
-        col_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
-        print("v / x ratio: ", round(col_v.avg / col_x.avg, 5))
+        # col_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
+        # col_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
+        # print("v / x ratio: ", round(col_v.avg / col_x.avg, 5))
         # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
         # brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
         # bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
