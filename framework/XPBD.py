@@ -82,9 +82,9 @@ class Solver:
         self.max_num_faces_dy = len(self.mesh_dy.faces)
 
         #
-        # self.max_num_verts_st = len(self.mesh_st.verts)
-        # self.max_num_edges_st = len(self.mesh_st.edges)
-        # self.max_num_faces_st = len(self.mesh_st.faces)
+        self.max_num_verts_st = len(self.mesh_st.verts)
+        self.max_num_edges_st = len(self.mesh_st.edges)
+        self.max_num_faces_st = len(self.mesh_st.faces)
 
         # self.sorted_id_st = ti.field(dtype=ti.i32, shape=self.max_num_faces_st)
         # self.mesh_st.computeAABB_faces(padding=self.padding)
@@ -1005,12 +1005,12 @@ class Solver:
             self.mesh_st.computeAABB_faces(padding=self.padding)
             aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
             self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
-            cnt_lbvh = self.broadphase_lbvh()
+            # cnt_lbvh = self.broadphase_lbvh()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             # cnt_lbvh = self.broadphase_lbvh()
-            # cnt_brute = self.broadphase_brute()
-            # cnt_lbvh = self.broadphase_lbvh()
+            cnt_brute = self.broadphase_brute()
+            cnt_lbvh = self.broadphase_lbvh()
             self.solve_constraints_jacobi_x()
             self.compute_velocity(dt_sub)
 
@@ -1028,7 +1028,7 @@ class Solver:
         # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
 
         # print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
-        # print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
+            print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
         # print("bvh cnt: ", cnt_lbvh)
 
         # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)

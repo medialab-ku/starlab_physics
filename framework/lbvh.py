@@ -103,6 +103,7 @@ class LBVH:
         # // clamp to deal with numeric issues
             x = ti.math.clamp(x, 0., 1.)
             y = ti.math.clamp(y, 0., 1.)
+            y = 0
             z = ti.math.clamp(z, 0., 1.)
 
     # // obtain and set morton code based on normalized position
