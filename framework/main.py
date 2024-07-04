@@ -53,8 +53,15 @@ friction_coeff_ui = sim.friction_coeff[0]
 mesh_export = False
 frame_cpu = 0
 
+n_leaf = 0
+n_internal = 0
+
 def show_options():
     global n_substep
+
+    global n_leaf
+    global n_internal
+
     global dt_ui
     global strain_limit_ui
     global YM_ui
@@ -73,6 +80,9 @@ def show_options():
     old_strain_limit = strain_limit_ui
     YM_old = YM_ui
     PR_old = PR_ui
+
+    n_leaf_old = n_leaf
+    n_internal_old = n_internal
 
     with gui.sub_window("Time Step", 0., 0., 0.3, 0.5) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
@@ -104,6 +114,8 @@ def show_options():
         w.text(verts_str)
         w.text(edges_str)
 
+        n_leaf = w.slider_int("leaf id", n_leaf, 0, sim.lbvh_st.num_leafs - 1)
+        n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_leafs - 2)
         # if sim.max_num_tetra_dynamic > 0:
         #     tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
         #     w.text(tetra_str)
@@ -338,7 +350,7 @@ while window.running:
         # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
         sim.lbvh_st.draw_zSort(scene)
-        # sim.mesh_st.draw_bvh_aabb(scene)
+        sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))

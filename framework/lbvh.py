@@ -33,9 +33,13 @@ class LBVH:
 
         self.test = 1
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.test)
+        self.aabb_x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
 
 
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.test)
+
+        self.aabb_index0 = ti.field(dtype=ti.uint32, shape=24)
+        # self.aabb_index1 = ti.field(dtype=ti.uint32, shape=24)
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
@@ -544,6 +548,55 @@ class LBVH:
             self.aabb_indices[24 * n + 22] = 8 * n + 3
             self.aabb_indices[24 * n + 23] = 8 * n + 7
 
+    @ti.kernel
+    def update_aabb_x_and_line0(self, n: ti.i32):
+
+        aabb_min = self.nodes[n].aabb_min
+        aabb_max = self.nodes[n].aabb_max
+
+        self.aabb_x0[0] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
+        self.aabb_x0[1] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
+        self.aabb_x0[2] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
+        self.aabb_x0[3] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
+
+        self.aabb_x0[4] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
+        self.aabb_x0[5] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
+        self.aabb_x0[6] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
+        self.aabb_x0[7] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
+
+        self.aabb_index0[0] = 0
+        self.aabb_index0[1] = 1
+        self.aabb_index0[2] = 1
+        self.aabb_index0[3] = 2
+        self.aabb_index0[4] = 2
+        self.aabb_index0[5] = 3
+        self.aabb_index0[6] = 3
+        self.aabb_index0[7] = 0
+        self.aabb_index0[8] = 4
+        self.aabb_index0[9] = 5
+        self.aabb_index0[10] = 5
+        self.aabb_index0[11] = 6
+        self.aabb_index0[12] = 6
+        self.aabb_index0[13] = 7
+        self.aabb_index0[14] = 7
+        self.aabb_index0[15] = 4
+        self.aabb_index0[16] = 0
+        self.aabb_index0[17] = 4
+        self.aabb_index0[18] = 1
+        self.aabb_index0[19] = 5
+        self.aabb_index0[20] = 2
+        self.aabb_index0[21] = 6
+        self.aabb_index0[22] = 3
+        self.aabb_index0[23] = 7
+
+
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
         scene.lines(self.aabb_x, indices=self.aabb_indices, width=2.0, color=(0, 0, 0))
+
+    def draw_bvh_aabb_test(self, scene, n_leaf, n_internal):
+        n_leaf += (self.num_leafs - 1)
+        self.update_aabb_x_and_line0(n_leaf)
+        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
+        self.update_aabb_x_and_line0(n_internal)
+        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 0, 1))

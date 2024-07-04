@@ -22,7 +22,7 @@ scale_list = []
 for i in range(1):
     for j in range(1):
         for k in range(1):
-            model_names.append("plane_8.obj")
+            model_names.append("plane_3.obj")
             trans_list.append(np.array([1.0 * i, 2.0 * j, 1.0 * k]))
             scale_list.append(5.0)
 
