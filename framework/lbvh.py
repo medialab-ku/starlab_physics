@@ -42,6 +42,7 @@ class LBVH:
         # self.aabb_index1 = ti.field(dtype=ti.uint32, shape=24)
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+        self.face_center = ti.Vector.field(n=3, dtype=ti.f32, shape=1)
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
@@ -86,7 +87,7 @@ class LBVH:
             w = f.verts[2]
             pos = (1. / 3.) * (u.x + v.x + w.x)
 
-            pos = 0.5 * (f.aabb_max + f.aabb_min)
+            # pos = 0.5 * (f.aabb_max + f.aabb_min)
 
             # if f.id < 10:
             #     print(pos[1])
@@ -124,11 +125,14 @@ class LBVH:
         for f in mesh.faces:
             # // no need to set parent to nullptr, each child will have a parents
             id = self.object_ids[f.id]
-            self.nodes[id + self.num_leafs - 1].object_id = f.id
-            self.nodes[id + self.num_leafs - 1].left = -1
-            self.nodes[id + self.num_leafs - 1].right = -1
-            self.nodes[id + self.num_leafs - 1].aabb_min = f.aabb_min
-            self.nodes[id + self.num_leafs - 1].aabb_max = f.aabb_max
+            self.nodes[f.id + self.num_leafs - 1].object_id = id
+            self.nodes[f.id + self.num_leafs - 1].left = -1
+            self.nodes[f.id + self.num_leafs - 1].right = -1
+            self.nodes[f.id + self.num_leafs - 1].aabb_min = mesh.faces.aabb_min[id]
+            self.nodes[f.id + self.num_leafs - 1].aabb_max = mesh.faces.aabb_max[id]
+
+            # self.nodes[f.id + self.num_leafs - 1].aabb_min = f.aabb_min
+            # self.nodes[f.id + self.num_leafs - 1].aabb_max = f.aabb_max
 
             # // need to set for internal node parent to nullptr, for testing later
             # // there is one less internal node than leaf node, test for that
@@ -551,6 +555,7 @@ class LBVH:
     @ti.kernel
     def update_aabb_x_and_line0(self, n: ti.i32):
 
+
         aabb_min = self.nodes[n].aabb_min
         aabb_max = self.nodes[n].aabb_max
 
@@ -593,10 +598,14 @@ class LBVH:
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
         scene.lines(self.aabb_x, indices=self.aabb_indices, width=2.0, color=(0, 0, 0))
+        scene.lines(self.aabb_x, indices=self.aabb_indices, width=2.0, color=(0, 0, 0))
 
     def draw_bvh_aabb_test(self, scene, n_leaf, n_internal):
+        self.face_center[0] = self.face_centers[self.object_ids[n_leaf]]
+        scene.particles(centers=self.face_center, radius=0.1, color=(0, 1, 1))
         n_leaf += (self.num_leafs - 1)
         self.update_aabb_x_and_line0(n_leaf)
         scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
+
         self.update_aabb_x_and_line0(n_internal)
         scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 0, 1))

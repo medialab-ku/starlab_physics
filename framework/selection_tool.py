@@ -21,10 +21,10 @@ class SelectionTool :
         self.is_selected = ti.field(dtype=ti.f32, shape=max_num_verts_dynamic)
         self.window = window
         self.camera = camera
-        self.max_numverts_dynamic = max_num_verts_dynamic
+        self.max_num_verts_dynamic = max_num_verts_dynamic
 
-        self.ti_viewTrnasform = ti.Matrix.field(n=4,m=4,dtype = ti.float32,shape = ())
-        self.ti_projTrnasform = ti.Matrix.field(n=4,m=4,dtype = ti.float32,shape = ())
+        self.ti_viewTransform = ti.Matrix.field(n=4, m=4, dtype = ti.float32, shape = ())
+        self.ti_projTransform = ti.Matrix.field(n=4, m=4, dtype = ti.float32, shape = ())
         self.simulation_x = simulation_x
 
         self.ti_mouse_click_index = ti.Vector.field(2, ti.int32,shape = (4,))
@@ -53,8 +53,8 @@ class SelectionTool :
         projMatrix = self.camera.get_projection_matrix(aspect).T
         viewTransform = self.camera.get_view_matrix().T
 
-        self.ti_viewTrnasform[None] = viewTransform.tolist()
-        self.ti_projTrnasform[None] = projMatrix.tolist()
+        self.ti_viewTransform[None] = viewTransform.tolist()
+        self.ti_projTransform[None] = projMatrix.tolist()
 
         self._check_inside_selection_box(xmin,xmax,ymin,ymax,self.MODE_SELECTION)
         ti.sync()
@@ -72,7 +72,7 @@ class SelectionTool :
 
             pos = self.simulation_x[i]
             pos_h = ti.Vector([pos[0], pos[1], pos[2], 1])
-            pos_h_in_clipSpace = self.ti_projTrnasform[None]@self.ti_viewTrnasform[None]@pos_h
+            pos_h_in_clipSpace = self.ti_projTransform[None] @ self.ti_viewTransform[None] @ pos_h
             pos_h_in_clipSpace = pos_h_in_clipSpace/pos_h_in_clipSpace[3]
 
             x_c,y_c = pos_h_in_clipSpace[0] * 0.5 + 0.5,pos_h_in_clipSpace[1] * 0.5 + 0.5 # viewport transform
