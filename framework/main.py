@@ -32,9 +32,9 @@ LOOKAt_ORIGIN = True
 
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
-print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
+# print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
 
-n_substep = 5
+n_substep = 20
 frame_end = 100
 dt_ui = sim.dt
 dHat_ui = sim.dHat
@@ -349,8 +349,8 @@ while window.running:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
-        sim.lbvh_st.draw_zSort(scene)
-        sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
+        # sim.lbvh_st.draw_zSort(scene)
+        # sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))

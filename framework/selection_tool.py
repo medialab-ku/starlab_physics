@@ -38,7 +38,7 @@ class SelectionTool :
         self.ti_mouse_click_index[4][1] = 0
 
         self.ti_mouse_click_pos = ti.Vector.field(2,ti.float32,shape=(4,))
-        self.mouse_click_pos = [0,0,0,0]# press x,y release x,y
+        self.mouse_click_pos = [0, 0, 0, 0]# press x,y release x,y
 
         self.renderTestPosition = ti.Vector.field(n=3, dtype=ti.f32, shape=(max_num_verts_dynamic,))
 

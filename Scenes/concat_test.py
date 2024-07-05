@@ -5,26 +5,26 @@ from framework.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
 
 enable_profiler = False
-ti.init(arch=ti.cuda, device_memory_GB=6, kernel_profiler=enable_profiler)
+ti.init(arch=ti.cuda, device_memory_GB=12, kernel_profiler=enable_profiler)
 
 model_dir = "../models/OBJ/"
 model_names = []
 trans_list = []
 scale_list = []
 
-for i in range(8):
-    for j in range(1):
-        for k in range(8):
-            model_names.append("square.obj")
-            trans_list.append(np.array([1.0 * i - 4, 1.0 * j, 1.0 * k - 4]))
-            scale_list.append(0.5)
-
-# for i in range(1):
+# for i in range(8):
 #     for j in range(1):
-#         for k in range(1):
-#             model_names.append("plane_3.obj")
-#             trans_list.append(np.array([1.0 * i, 2.0 * j, 1.0 * k]))
-#             scale_list.append(5.0)
+#         for k in range(8):
+#             model_names.append("square.obj")
+#             trans_list.append(np.array([1.0 * i - 4, 1.0 * j, 1.0 * k - 4]))
+#             scale_list.append(0.5)
+
+for i in range(1):
+    for j in range(1):
+        for k in range(1):
+            model_names.append("sphere1K.obj")
+            trans_list.append(np.array([1.0 * i, 2.0 * j, 1.0 * k]))
+            scale_list.append(1.0)
 
 # model_names.append("square.obj")
 # model_names.append("square.obj")
@@ -40,6 +40,6 @@ for i in range(8):
 
 concat.concat_mesh(model_dir, model_names, trans_list, scale_list)
 
-mesh_dy = MeshTaichiWrapper("../models/OBJ/plane_8.obj", scale=5.0, trans=ti.math.vec3(0, 12.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=2.0, trans=ti.math.vec3(0, 3.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
-mesh_st = MeshTaichiWrapper("../models/concat.obj", scale=1, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/concat.obj", scale=5.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(90.0, 0.0, 0.0), is_static=True)

@@ -42,8 +42,8 @@ class MeshTaichiWrapper:
         print(len(self.mesh.faces))
 
         # self.setCenterToOrigin()
-        self.face_indices = ti.field(dtype=ti.uint32, shape=len(self.mesh.faces) * 3)
-        self.edge_indices = ti.field(dtype=ti.uint32, shape=len(self.mesh.edges) * 2)
+        self.face_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.faces) * 3)
+        self.edge_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.edges) * 2)
         self.fid_np = self.face_indices.to_numpy()
         self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
         self.verts = self.mesh.verts
@@ -80,8 +80,8 @@ class MeshTaichiWrapper:
             e.verts[0].m_inv += 0.5 * l0
             e.verts[1].m_inv += 0.5 * l0
 
-            self.edge_indices[e.id * 2 + 0] = ti.uint32(e.verts[0].id)
-            self.edge_indices[e.id * 2 + 1] = ti.uint32(e.verts[1].id)
+            self.edge_indices[e.id * 2 + 0] = e.verts[0].id
+            self.edge_indices[e.id * 2 + 1] = e.verts[1].id
 
         for v in self.mesh.verts:
             v.m_inv = 1.0 / v.m_inv
