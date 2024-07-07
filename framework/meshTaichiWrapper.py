@@ -4,18 +4,21 @@ import meshtaichi_patcher as patcher
 import igl
 import os
 import numpy as np
+import random
+
 @ti.data_oriented
 class MeshTaichiWrapper:
 
     def __init__(self,
                  model_path,
+                 offsets,
                  trans=ti.math.vec3(0, 0, 0),
                  rot=ti.math.vec3(0, 0, 0),
                  scale=1.0,
                  is_static=False):
 
         self.is_static = is_static
-        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "VV", "VE"])
+        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "FE", "VE"])
         self.mesh.verts.place({'fixed': ti.f32,
                                'm_inv': ti.f32,
                                'x0': ti.math.vec3,
@@ -29,6 +32,8 @@ class MeshTaichiWrapper:
         self.mesh.faces.place({'aabb_min': ti.math.vec3,
                                'aabb_max': ti.math.vec3,
                                'morton_code': ti.uint32})
+
+        self.offsets = offsets
         self.mesh.verts.fixed.fill(1.0)
         self.mesh.verts.m_inv.fill(0.0)
         self.mesh.verts.v.fill(0.0)
@@ -44,8 +49,10 @@ class MeshTaichiWrapper:
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.edges) * 2)
-        self.fid_np = self.face_indices.to_numpy()
-        self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
+        self.colors = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.mesh.verts))
+        self.init_color()
+        # self.colors.fill(0.1)
+
         self.verts = self.mesh.verts
         self.faces = self.mesh.faces
         self.edges = self.mesh.edges
@@ -57,6 +64,8 @@ class MeshTaichiWrapper:
         self.applyTransform()
         self.initFaceIndices()
         self.initEdgeIndices()
+        self.fid_np = self.face_indices.to_numpy()
+        self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
     def reset(self):
@@ -85,6 +94,29 @@ class MeshTaichiWrapper:
 
         for v in self.mesh.verts:
             v.m_inv = 1.0 / v.m_inv
+
+
+    def init_color(self):
+        # print(self.offsets)
+        for i in range(len(self.offsets)):
+
+            r = random.randrange(0, 255) / 256
+            g = random.randrange(0, 255) / 256
+            b = random.randrange(0, 255) / 256
+            size = 0
+            if i < len(self.offsets) - 1:
+                size = self.offsets[i + 1] - self.offsets[i]
+
+            else:
+                size = len(self.verts) - self.offsets[i]
+            #
+            self.init_colors(self.offsets[i], size, color=ti.math.vec3(r, g, b))
+
+    @ti.kernel
+    def init_colors(self, offset: ti.i32, size: ti.i32, color: ti.math.vec3):
+
+        for i in range(size):
+            self.colors[i + offset] = color
 
     @ti.kernel
     def setCenterToOrigin(self):
@@ -140,11 +172,11 @@ class MeshTaichiWrapper:
             f.aabb_max += padding * ti.math.vec3(1.0)
 
 
-    def export(self, scene_name, mesh_id, frame,is_static = False):
+    def export(self, scene_name, frame, is_static = False):
         if is_static:
-            directory = os.path.join("results/", scene_name, "StaticMesh_ID_" + str(mesh_id))
+            directory = os.path.join("results/", scene_name, "StaticMesh_ID_")
         else:
-            directory = os.path.join("results/", scene_name, "Mesh_ID_" + str(mesh_id))
+            directory = os.path.join("results/", scene_name, "Mesh_ID_")
 
         try:
             if not os.path.exists(directory):

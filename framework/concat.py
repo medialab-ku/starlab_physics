@@ -4,7 +4,7 @@ import igl
 import os
 import numpy as np
 
-def concat_mesh(model_dir, model_names, translations, scales):
+def concat_mesh(concat_model_name, model_dir, model_names, translations, scales):
     vtx_id_offsets = []
     num_models = len(model_names)
     accum = 0
@@ -36,11 +36,12 @@ def concat_mesh(model_dir, model_names, translations, scales):
     f_concat = np.concatenate(f_list, axis=0)
 
     model_directory_cat = "../models/"
-    model_name_concat = "concat.obj"
+    # model_name_concat = "concat.obj"
 
-    model_path_concat = os.path.join(model_directory_cat, model_name_concat)
+    model_path_concat = os.path.join(model_directory_cat, concat_model_name)
     igl.write_obj(model_path_concat, v_concat, f_concat)
 
+    return vtx_id_offsets
     # else:
     #     v_concat = v_list[0]
     #     f_concat = f_list[0]

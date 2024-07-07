@@ -102,13 +102,12 @@ class LBVH:
             pos = self.face_centers[f.id]
                 # = 0.5 * (f.aabb_min + f.aabb_max)
         # // normalize position
-            x = (pos[0] - min0[0]) / (max0[0] - min0[0])
-            y = (pos[1] - min0[1]) / (max0[1] - min0[1])
-            z = (pos[2] - min0[2]) / (max0[2] - min0[2])
+            x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
+            y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
+            z = (pos[2] - aabb_min[2]) / (aabb_max[2] - aabb_min[2])
         # // clamp to deal with numeric issues
             x = ti.math.clamp(x, 0., 1.)
             y = ti.math.clamp(y, 0., 1.)
-            y = 0
             z = ti.math.clamp(z, 0., 1.)
 
     # // obtain and set morton code based on normalized position
@@ -482,8 +481,8 @@ class LBVH:
         cnt = 0
         while stack_counter > 0:
             # stack_counter = ti.math.clamp(stack_counter, 0, 127)
-            if stack_counter >= 127:
-                break
+            # if stack_counter >= 127:
+            #     break
             stack_counter -= 1
             idx = stack[stack_counter]
             min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
