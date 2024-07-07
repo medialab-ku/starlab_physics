@@ -32,9 +32,9 @@ LOOKAt_ORIGIN = True
 
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
-# print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
+print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
 
-n_substep = 20
+n_substep = 5
 frame_end = 100
 dt_ui = sim.dt
 dHat_ui = sim.dHat
@@ -49,7 +49,7 @@ lin_vel_z_ui = sim.obs_lin_vel[0][2]
 
 PR_ui = sim.PR
 YM_ui = sim.YM
-friction_coeff_ui = sim.mu
+friction_coeff_ui = sim.friction_coeff[0]
 mesh_export = False
 frame_cpu = 0
 
@@ -137,7 +137,7 @@ def show_options():
         sim.dHat = dHat_ui
 
     if not old_friction_coeff == friction_coeff_ui:
-        sim.mu = friction_coeff_ui
+        sim.friction_coeff[0] = friction_coeff_ui
 
     if not YM_old == YM_ui:
         sim.YM = YM_ui
@@ -323,9 +323,10 @@ while window.running:
 
     show_options()
     #
-    if mesh_export and run_sim and frame_cpu < frame_end:
-        sim.export_mesh = True
-        sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
+    # if mesh_export and run_sim and frame_cpu < frame_end:
+    #     sim.export_mesh = True
+    #     for mid in range(len(scene1.meshes_dynamic)):
+    #         sim.meshes_dynamic[mid].export(os.path.basename(scene1.__file__), mid, frame_cpu)
     #
     #     for tid in range(len(scene1.tet_meshes_dynamic)):
     #         sim.tet_meshes_dynamic[tid].export(os.path.basename(scene1.__file__), tid, frame_cpu)
@@ -339,17 +340,17 @@ while window.running:
     # scene.lines(sim.grid_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
     # scene.lines(sim.aabb_vertices, indices=sim.grid_edge_indices, width=1.0, color=(0, 0, 0))
 
-    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
+    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, color=(1, 0.5, 0))
     scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
-    # sim.lbvh_dy.draw_zSort(scene)
     # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
         # scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
-        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
-        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
+        # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+        # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
-        # sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
+        sim.lbvh_st.draw_zSort(scene)
+        sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
