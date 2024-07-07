@@ -28,11 +28,11 @@ scale_list = []
 
 model_names.append("plane.obj")
 trans_list.append(np.array([0.0, 0.6, 0.0]))
-scale_list.append(1.)
+scale_list.append(1.5)
 
 model_names.append("plane.obj")
 trans_list.append(np.array([0.0, 0.8, 0.0]))
-scale_list.append(1.)
+scale_list.append(1)
 
 # model_names.append("plane.obj")
 # trans_list.append(np.array([0.0, 1.2, 0.0]))
@@ -51,6 +51,6 @@ offsets = concat.concat_mesh(concat_model_name, model_dir, model_names, trans_li
 # scale_list.append(1.)
 # scale_list.append(5.)
 
-mesh_dy = MeshTaichiWrapper("../models/plane_stack.obj", offsets=offsets, scale=5.0, trans=ti.math.vec3(0, 1.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/plane_stack.obj", offsets=offsets, scale=5.0, trans=ti.math.vec3(0, 1.5, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
-mesh_st = MeshTaichiWrapper("../models/OBJ/sphere1K.obj", offsets=[0], scale=5.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/OBJ/sphere1K.obj", offsets=[0], scale=8.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

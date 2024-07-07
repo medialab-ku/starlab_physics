@@ -165,8 +165,8 @@ class MeshTaichiWrapper:
     def computeAABB_faces(self, padding: ti.f32):
 
         for f in self.mesh.faces:
-            f.aabb_min = ti.math.min(f.verts[0].x, f.verts[1].x, f.verts[2].x)
-            f.aabb_max = ti.math.max(f.verts[0].x, f.verts[1].x, f.verts[2].x)
+            f.aabb_min = ti.math.min(f.verts[0].x, f.verts[1].x, f.verts[2].x, f.verts[0].y, f.verts[1].y, f.verts[2].y)
+            f.aabb_max = ti.math.max(f.verts[0].x, f.verts[1].x, f.verts[2].x, f.verts[0].y, f.verts[1].y, f.verts[2].y)
 
             f.aabb_min -= padding * ti.math.vec3(1.0)
             f.aabb_max += padding * ti.math.vec3(1.0)
