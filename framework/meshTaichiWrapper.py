@@ -40,15 +40,15 @@ class MeshTaichiWrapper:
         self.mesh.verts.x.from_numpy(self.mesh.get_position_as_numpy())
         self.num_verts = len(self.mesh.verts)
 
-
         self.faces = self.mesh.faces
         self.verts = self.mesh.verts
 
-        print(len(self.mesh.faces))
+        # print(len(self.mesh.faces))
 
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.faces) * 3)
         self.edge_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.edges) * 2)
+
         self.colors = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.mesh.verts))
         self.init_color()
         # self.colors.fill(0.1)
@@ -68,6 +68,99 @@ class MeshTaichiWrapper:
         self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
+        self.bending_indices = None
+        # self.initBendingIndices()
+
+
+###########################
+
+    def initBendingIndices(self):
+        # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
+        bend_count, neighbor_set = self.findTriNeighbors()
+        bending_vid_set = self.getBendingPair(bend_count,neighbor_set)
+    def findTriNeighbors(self):
+        # print("initBend")
+        # print(self.fid_np)
+        # print(self.fid_np.shape)
+
+        num_f = np.rint(self.fid_np.shape[0]).astype(int)
+        edgeTable = np.zeros((num_f * 3, self.fid_np.shape[1]), dtype=int)
+        # print(edgeTable.shape)
+
+        for f in range(self.fid_np.shape[0]):
+            eT = np.zeros((3, 3))
+            v1, v2, v3 = np.sort(self.fid_np[f])
+            e1, e2, e3 = 3 * f, 3 * f + 1, 3 * f + 2
+            eT[0, :] = [v1, v2, e1]
+            eT[1, :] = [v1, v3, e2]
+            eT[2, :] = [v2, v3, e3]
+
+            edgeTable[3 * f:3 * f + 3, :] = eT
+
+        ind = np.lexsort((edgeTable[:, 1], edgeTable[:, 0]))
+        edgeTable = edgeTable[ind]
+        # print(edgeTable)
+
+        neighbors = np.zeros((num_f * 3), dtype=int)
+        neighbors.fill(-1)
+
+        ii = 0
+        bending_constraint_count = 0
+        while (ii < 3 * num_f):
+            e0 = edgeTable[ii, :]
+            e1 = edgeTable[ii + 1, :]
+
+            if (e0[0] == e1[0] and e0[1] == e1[1]):
+                neighbors[e0[2]] = e1[2]
+                neighbors[e1[2]] = e0[2]
+
+                bending_constraint_count = bending_constraint_count + 1
+                ii = ii + 2
+            else:
+                ii = ii + 1
+
+        # print(bending_constraint_count, "asdf!!")
+
+        return bending_constraint_count, neighbors
+
+    def getBendingPair(self,bend_count,neighbors):
+
+        num_f = np.rint(self.fid_np.shape[0]).astype(int)
+        pairs = np.zeros((bend_count,2),dtype = int )
+
+        count = 0
+
+        # print(neighbors)
+
+        for f in range(num_f):
+            for i in range(3):
+                eid = 3 * f + i
+                neighbor_edge = neighbors[eid]
+
+                if neighbor_edge >= 0 :
+                    # print(eid,neighbor_edge,neighbors[neighbor_edge])
+                    neighbors[neighbor_edge]=-1
+                    # find not shared vertex in common edge of adjacent triangles
+                    v = np.sort(self.fid_np[f])
+
+                    neighbor_fid = int(np.floor(neighbor_edge / 3.0 + 1e-4)+ 1e-4)
+                    neighbor_eid_local = neighbor_fid % 3
+
+                    w = np.sort(self.fid_np[neighbor_fid])
+
+                    pairs[count, 0] = v[~np.isin(v,w)]
+                    pairs[count, 1] = w[~np.isin(w,v)]
+
+                    count = count + 1
+
+        # print("검산!!!",count == bend_count)
+
+        # if count == 40:
+        #     print(pairs)
+
+
+
+###########################
     def reset(self):
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
         self.mesh.verts.v.fill(0.)
@@ -79,6 +172,7 @@ class MeshTaichiWrapper:
             self.face_indices[f.id * 3 + 0] = f.verts[0].id
             self.face_indices[f.id * 3 + 1] = f.verts[1].id
             self.face_indices[f.id * 3 + 2] = f.verts[2].id
+
 
     @ti.kernel
     def initEdgeIndices(self):

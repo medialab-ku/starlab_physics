@@ -489,14 +489,20 @@ class Solver:
         self.vt_st_candidates_num.fill(0)
         self.vt_dy_candidates_num.fill(0)
         cnt = 0
-        for v in self.mesh_dy.verts:
-            id = 1
-            x = self.mesh_dy.verts.x[v.id]
-            aabb_min = ti.min(v.x) - self.padding * ti.math.vec3(1.0)
-            aabb_max = ti.max(v.x) + self.padding * ti.math.vec3(1.0)
-            a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, v.id, self.vt_st_candidates, self.vt_st_candidates_num)
-            a = self.lbvh_dy.traverse_bvh_single(aabb_min, aabb_max, v.id, self.vt_dy_candidates, self.vt_dy_candidates_num)
-            ti.atomic_add(cnt, a)
+        for i in range(2 * self.max_num_verts_dy):
+            if i < self.max_num_verts_dy:
+                vid = i
+                x = self.mesh_dy.verts.x[vid]
+                aabb_min = x - self.padding * ti.math.vec3(1.0)
+                aabb_max = x + self.padding * ti.math.vec3(1.0)
+                a = self.lbvh_st.traverse_bvh_single(aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
+            else:
+                vid = i - self.max_num_verts_dy
+                x = self.mesh_dy.verts.x[vid]
+                aabb_min = x - self.padding * ti.math.vec3(1.0)
+                aabb_max = x + self.padding * ti.math.vec3(1.0)
+                a = self.lbvh_dy.traverse_bvh_single(aabb_min, aabb_max, vid, self.vt_dy_candidates, self.vt_dy_candidates_num)
+                ti.atomic_add(cnt, a)
 
         # print("cnt:", cnt)
         # cnt = 0
@@ -542,16 +548,20 @@ class Solver:
         self.tv_st_pair_num.fill(0)
         d = self.dHat
 
-        for v in self.mesh_dy.verts:
+        for i in range(2 * self.max_num_verts_dy):
+            if i < self.max_num_verts_dy:
+                vid = i
             # for fi_s in range(self.max_num_faces_st):
-            for j in range(self.vt_st_candidates_num[v.id]):
-                fi_s = self.vt_st_candidates[v.id, j]
-                solve_collision_constraints_x.__vt_st(v.id, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
-
-            for j in range(self.vt_dy_candidates_num[v.id]):
-                fi_d = self.vt_dy_candidates[v.id, j]
-                if self.is_in_face(v.id, fi_d) != True:
-                    solve_collision_constraints_x.__vt_dy(v.id, fi_d, self.mesh_dy, d, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
+                for j in range(self.vt_st_candidates_num[vid]):
+                    fi_s = self.vt_st_candidates[vid, j]
+                    solve_collision_constraints_x.__vt_st(vid, fi_s, self.mesh_dy, self.mesh_st, d,
+                                                          self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
+            else:
+                vid = i - self.max_num_verts_dy
+                for j in range(self.vt_dy_candidates_num[vid]):
+                    fi_d = self.vt_dy_candidates[vid, j]
+                    if self.is_in_face(vid, fi_d) != True:
+                        solve_collision_constraints_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
 
             # else:
             #     vid = i - self.max_num_verts_dy
@@ -981,8 +991,6 @@ class Solver:
         # print(aabb_min_dy, aabb_max_dy)
         self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
 
-        # for i in range(5):
-        #     self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)s
 
             # cnt_lbvh = self.broadphase_lbvh()
         for _ in range(n_substeps):
