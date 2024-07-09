@@ -507,10 +507,13 @@ class LBVH:
 
                 else:
                     left, right = self.nodes[idx].left, self.nodes[idx].right
-                    stack[stack_counter] = left
-                    stack_counter += 1
-                    stack[stack_counter] = right
-                    stack_counter += 1
+                    if stack_counter < 126:
+                        stack[stack_counter] = left
+                        stack_counter += 1
+
+                    if stack_counter < 126:
+                        stack[stack_counter] = left
+                        stack_counter += 1
         #
         return cnt
 
