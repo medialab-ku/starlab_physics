@@ -554,8 +554,7 @@ class Solver:
             # for fi_s in range(self.max_num_faces_st):
                 for j in range(self.vt_st_candidates_num[vid]):
                     fi_s = self.vt_st_candidates[vid, j]
-                    solve_collision_constraints_x.__vt_st(vid, fi_s, self.mesh_dy, self.mesh_st, d,
-                                                          self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
+                    solve_collision_constraints_x.__vt_st(vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
             else:
                 vid = i - self.max_num_verts_dy
                 for j in range(self.vt_dy_candidates_num[vid]):
@@ -571,9 +570,6 @@ class Solver:
 
     @ti.kernel
     def solve_collision_constraints_v(self, mu: ti.f32):
-
-        # mu = self.friction_coeff
-        # d = self.dHat[0]
 
         for v in self.mesh_dy.verts:
             for j in range(self.vt_st_pair_num[v.id]):

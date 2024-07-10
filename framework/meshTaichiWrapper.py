@@ -68,8 +68,9 @@ class MeshTaichiWrapper:
         self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
-        self.bending_indices = None
-        # self.initBendingIndices()
+        self.bending_indices_np = self.initBendingIndices()
+        # self.bending_indices = ti.Vector.field(n=2, shape=self.bending_indices_np.shape[0])
+        # self.bending_indices.copy_from(self.bending_indices_np)
 
 
 ###########################
@@ -77,7 +78,8 @@ class MeshTaichiWrapper:
     def initBendingIndices(self):
         # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
         bend_count, neighbor_set = self.findTriNeighbors()
-        bending_vid_set = self.getBendingPair(bend_count,neighbor_set)
+        return self.getBendingPair(bend_count,neighbor_set)
+
     def findTriNeighbors(self):
         # print("initBend")
         # print(self.fid_np)

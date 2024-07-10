@@ -10,121 +10,125 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
     v2 = mesh_st.face_indices[3 * fid_s + 1]
     v3 = mesh_st.face_indices[3 * fid_s + 2]
 
-    Cv = g0.dot(mesh_dy.verts.v[v0]) + g1.dot(mesh_st.verts.v[v1]) + g2.dot(mesh_st.verts.v[v2]) + g3.dot(mesh_st.verts.v[v3])
-    if dtype == 0:
-        if Cv < 0.:
-            ld_v = -Cv / schur
-            mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
-            mesh_dy.verts.nc[v0] += 1
-            # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
-            # g0Tan = mesh_st.verts.v[v1] - vTan0
-            # cTan = 0.5 * g0Tan.dot(g0Tan)
-            # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-            # ldTan = cTan / schur
-            # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
-            #
-            # if mu * abs(Cv) > cTan:
-            #     mu = 1.0
-            # mesh_dy.verts.dv[v0] += mu * dvTan
-
-    elif dtype == 1:
-        if Cv < 0.:
-            ld_v = -Cv / schur
-            mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
-            mesh_dy.verts.nc[v0] += 1
-            # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
-            # g0Tan = mesh_st.verts.v[v2] - vTan0
-            # cTan = 0.5 * g0Tan.dot(g0Tan)
-            # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-            # ldTan = cTan / schur
-            # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
-            # if mu * abs(Cv) > cTan:
-            #     mu = 1.0
-            # mesh_dy.verts.dv[v0] += mu * dvTan
-
-    elif dtype == 2:
-        if Cv < 0.:
-            ld_v = -Cv / schur
-            mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
-            mesh_dy.verts.nc[v0] += 1
-            # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
-            # g0Tan = mesh_st.verts.v[v3] - vTan0
-            # cTan = 0.5 * g0Tan.dot(g0Tan)
-            # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-            # ldTan = cTan / schur
-            # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
-            # if mu * abs(Cv) > cTan:
-            #     mu = 1.0
-            # mesh_dy.verts.dv[v0] += mu * dvTan
-
-
-    elif dtype == 3:
-        if Cv < 0.:
-            ld_v = -Cv / schur
-            mesh_dy.verts.dv[v0] += mesh_st.verts.m_inv[v0] * ld_v * g0
-            mesh_dy.verts.nc[v0] += 1
-            # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
-            # a, b = g1.norm(), g2.norm()
-            # p = (a * mesh_st.verts.v[v1] + b * mesh_st.verts.v[v2]) / (a + b)
-            # g0Tan = p - vTan0
-            # cTan = 0.5 * g0Tan.dot(g0Tan)
-            # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-            # ldTan = cTan / schur
-            # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
-            # if mu * abs(Cv) > cTan:
-            #     mu = 1.0
-            # mesh_dy.verts.dv[v0] += mu * dvTan
-
-    elif dtype == 4:
-        if Cv < 0.:
-            ld_v = -Cv / schur
-            mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
-            mesh_dy.verts.nc[v0] += 1
-            # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
-            # a, b = g2.norm(), g3.norm()
-            # p = (a * mesh_st.verts.v[v2] + b * mesh_st.verts.v[v3]) / (a + b)
-            # g0Tan = p - vTan0
-            # cTan = 0.5 * g0Tan.dot(g0Tan)
-            # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-            # ldTan = cTan / schur
-            # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
-            # if mu * abs(Cv) > cTan:
-            #     mu = 1.0
-            # mesh_dy.verts.dv[v0] += mu * dvTan
-
-    elif dtype == 5:
-        if Cv < 0.:
-            ld_v = -Cv / schur
-            mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
-            mesh_dy.verts.nc[v0] += 1
-            # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
-            # a, b = g1.norm(), g3.norm()
-            # p = (a * mesh_st.verts.v[v1] + b * mesh_st.verts.v[v3]) / (a + b)
-            # g0Tan = vTan0 - p
-            # cTan = 0.5 * g0Tan.dot(g0Tan)
-            # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-            # ldTan = cTan / schur
-            # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
-            # if mu * abs(Cv) > cTan:
-            #     mu = 1.0
-            # mesh_dy.verts.dv[v0] += mu * dvTan
-
-    elif dtype == 6:
-        if Cv < 0.:
-            ld_v = -Cv / schur
-            mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
-            mesh_dy.verts.nc[v0] += 1
-            # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
-            # a, b, c = g1.norm(), g2.norm(), g3.norm()
-            # p = (a * mesh_st.verts.v[v1] + b * mesh_st.verts.v[v2] + c * mesh_st.verts.v[v3]) / (a + b + c)
-            # g0Tan = p - vTan0
-            # cTan = 0.5 * g0Tan.dot(g0Tan)
-            # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
-            # ldTan = cTan / schur
-            # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
-            # if mu * abs(Cv) > cTan:
-            #     mu = 1.0
-            # mesh_dy.verts.dv[v0] += mu * dvTan
+    Cv = g0.dot(mesh_dy.verts.v[v0])
+    if Cv < 0.:
+        ld_v = -Cv / schur
+        mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
+        mesh_dy.verts.nc[v0] += 1
+    # if dtype == 0:
+    #     if Cv < 0.:
+    #         ld_v = -Cv / schur
+    #         mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         mesh_dy.verts.nc[v0] += 1
+    #         # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         # g0Tan = mesh_st.verts.v[v1] - vTan0
+    #         # cTan = 0.5 * g0Tan.dot(g0Tan)
+    #         # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+    #         # ldTan = cTan / schur
+    #         # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
+    #         #
+    #         # if mu * abs(Cv) > cTan:
+    #         #     mu = 1.0
+    #         # mesh_dy.verts.dv[v0] += mu * dvTan
+    #
+    # elif dtype == 1:
+    #     if Cv < 0.:
+    #         ld_v = -Cv / schur
+    #         mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         mesh_dy.verts.nc[v0] += 1
+    #         # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         # g0Tan = mesh_st.verts.v[v2] - vTan0
+    #         # cTan = 0.5 * g0Tan.dot(g0Tan)
+    #         # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+    #         # ldTan = cTan / schur
+    #         # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
+    #         # if mu * abs(Cv) > cTan:
+    #         #     mu = 1.0
+    #         # mesh_dy.verts.dv[v0] += mu * dvTan
+    #
+    # elif dtype == 2:
+    #     if Cv < 0.:
+    #         ld_v = -Cv / schur
+    #         mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         mesh_dy.verts.nc[v0] += 1
+    #         # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         # g0Tan = mesh_st.verts.v[v3] - vTan0
+    #         # cTan = 0.5 * g0Tan.dot(g0Tan)
+    #         # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+    #         # ldTan = cTan / schur
+    #         # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
+    #         # if mu * abs(Cv) > cTan:
+    #         #     mu = 1.0
+    #         # mesh_dy.verts.dv[v0] += mu * dvTan
+    #
+    #
+    # elif dtype == 3:
+    #     if Cv < 0.:
+    #         ld_v = -Cv / schur
+    #         mesh_dy.verts.dv[v0] += mesh_st.verts.m_inv[v0] * ld_v * g0
+    #         mesh_dy.verts.nc[v0] += 1
+    #         # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         # a, b = g1.norm(), g2.norm()
+    #         # p = (a * mesh_st.verts.v[v1] + b * mesh_st.verts.v[v2]) / (a + b)
+    #         # g0Tan = p - vTan0
+    #         # cTan = 0.5 * g0Tan.dot(g0Tan)
+    #         # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+    #         # ldTan = cTan / schur
+    #         # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
+    #         # if mu * abs(Cv) > cTan:
+    #         #     mu = 1.0
+    #         # mesh_dy.verts.dv[v0] += mu * dvTan
+    #
+    # elif dtype == 4:
+    #     if Cv < 0.:
+    #         ld_v = -Cv / schur
+    #         mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         mesh_dy.verts.nc[v0] += 1
+    #         # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         # a, b = g2.norm(), g3.norm()
+    #         # p = (a * mesh_st.verts.v[v2] + b * mesh_st.verts.v[v3]) / (a + b)
+    #         # g0Tan = p - vTan0
+    #         # cTan = 0.5 * g0Tan.dot(g0Tan)
+    #         # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+    #         # ldTan = cTan / schur
+    #         # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
+    #         # if mu * abs(Cv) > cTan:
+    #         #     mu = 1.0
+    #         # mesh_dy.verts.dv[v0] += mu * dvTan
+    #
+    # elif dtype == 5:
+    #     if Cv < 0.:
+    #         ld_v = -Cv / schur
+    #         mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         mesh_dy.verts.nc[v0] += 1
+    #         # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         # a, b = g1.norm(), g3.norm()
+    #         # p = (a * mesh_st.verts.v[v1] + b * mesh_st.verts.v[v3]) / (a + b)
+    #         # g0Tan = vTan0 - p
+    #         # cTan = 0.5 * g0Tan.dot(g0Tan)
+    #         # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+    #         # ldTan = cTan / schur
+    #         # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
+    #         # if mu * abs(Cv) > cTan:
+    #         #     mu = 1.0
+    #         # mesh_dy.verts.dv[v0] += mu * dvTan
+    #
+    # elif dtype == 6:
+    #     if Cv < 0.:
+    #         ld_v = -Cv / schur
+    #         mesh_dy.verts.dv[v0] += mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         mesh_dy.verts.nc[v0] += 1
+    #         # vTan0 = mesh_dy.verts.v[v0] + mesh_dy.verts.m_inv[v0] * ld_v * g0
+    #         # a, b, c = g1.norm(), g2.norm(), g3.norm()
+    #         # p = (a * mesh_st.verts.v[v1] + b * mesh_st.verts.v[v2] + c * mesh_st.verts.v[v3]) / (a + b + c)
+    #         # g0Tan = p - vTan0
+    #         # cTan = 0.5 * g0Tan.dot(g0Tan)
+    #         # schur = mesh_dy.verts.m_inv[v0] * g0Tan.dot(g0Tan) + 1e-4
+    #         # ldTan = cTan / schur
+    #         # dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
+    #         # if mu * abs(Cv) > cTan:
+    #         #     mu = 1.0
+    #         # mesh_dy.verts.dv[v0] += mu * dvTan
 
 @ti.func
 def __tv_st(self, fid_d, vid_s, dtype, g0, g1, g2, g3, schur, mu):

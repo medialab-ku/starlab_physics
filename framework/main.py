@@ -36,9 +36,12 @@ g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window,
 
 n_substep = 20
 frame_end = 100
+
 dt_ui = sim.dt
 dHat_ui = sim.dHat
+
 strain_limit_ui = sim.strain_limit
+
 ang_vel_x_ui = sim.obs_ang_vel[0][0]
 ang_vel_y_ui = sim.obs_ang_vel[0][1]
 ang_vel_z_ui = sim.obs_ang_vel[0][2]
@@ -49,7 +52,9 @@ lin_vel_z_ui = sim.obs_lin_vel[0][2]
 
 PR_ui = sim.PR
 YM_ui = sim.YM
+
 friction_coeff_ui = sim.mu
+
 mesh_export = False
 frame_cpu = 0
 
@@ -57,11 +62,10 @@ n_leaf = 0
 n_internal = 0
 
 def show_options():
-    global n_substep
 
+    global n_substep
     global n_leaf
     global n_internal
-
     global dt_ui
     global strain_limit_ui
     global YM_ui
