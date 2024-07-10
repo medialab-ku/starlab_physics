@@ -32,7 +32,7 @@ scale_list.append(1.0)
 
 # model_names.append("plane.obj")
 # trans_list.append(np.array([0.0, 0.2, 0.0]))
-# scale_list.append(0.5)
+# scale_list.append(0.8)
 
 # model_names.append("square.obj")
 # model_names.append("plane.obj")

@@ -3,7 +3,7 @@ import distance as di
 
 
 @ti.func
-def __vt_st(vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_pair_size, vt_st_pair, vt_st_pair_num, vt_st_pair_g, vt_st_pair_schur):
+def __vt_st(vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_cache_size, vt_st_pair, vt_st_pair_num, vt_st_pair_g, vt_st_pair_schur):
     v0 = vi_d
     v1 = mesh_st.face_indices[3 * fi_s + 0]
     v2 = mesh_st.face_indices[3 * fi_s + 1]
@@ -55,7 +55,7 @@ def __vt_st(vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_pair_size, vt_st_pair, vt_
         ld = (dHat - d) / schur
         mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
         mesh_dy.verts.nc[v0] += 1
-        if vt_st_pair_num[vi_d] < vt_st_pair_size:
+        if vt_st_pair_num[vi_d] < vt_st_cache_size:
             vt_st_pair[vi_d, vt_st_pair_num[vi_d], 0] = fi_s
             vt_st_pair[vi_d, vt_st_pair_num[vi_d], 1] = dtype
             vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 0] = g0
@@ -66,7 +66,7 @@ def __vt_st(vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_pair_size, vt_st_pair, vt_
             ti.atomic_add(vt_st_pair_num[vi_d], 1)
 
 @ti.func
-def __tv_st(fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_pair, tv_st_pair_num, tv_st_pair_g, tv_st_pair_schur):
+def __tv_st(fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv_st_pair, tv_st_pair_num, tv_st_pair_g, tv_st_pair_schur):
 
     v0 = vi_s
     v1 = mesh_dy.face_indices[3 * fi_d + 0]
@@ -159,18 +159,18 @@ def __tv_st(fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_pair, tv_st_pair_num, tv_s
             mesh_dy.verts.nc[v2] += 1
             mesh_dy.verts.nc[v3] += 1
 
-    # if d < dHat:
-    #     tv_st_pair[fi_d, tv_st_pair_num[fi_d], 0] = vi_s
-    #     tv_st_pair[fi_d, tv_st_pair_num[fi_d], 1] = dtype
-    #     tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 0] = g0
-    #     tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 1] = g1
-    #     tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 2] = g2
-    #     tv_st_pair_g[fi_d, tv_st_pair_num[fi_d], 3] = g3
-    #     tv_st_pair_schur[fi_d, tv_st_pair_num[fi_d]] = schur
-    #     tv_st_pair_num[fi_d] += 1
+    if tv_st_pair_num[vi_s] < tv_st_cache_size:
+        tv_st_pair[vi_s, tv_st_pair_num[vi_s], 0] = fi_d
+        tv_st_pair[vi_s, tv_st_pair_num[vi_s], 1] = dtype
+        tv_st_pair_g[vi_s, tv_st_pair_num[vi_s], 0] = g0
+        tv_st_pair_g[vi_s, tv_st_pair_num[vi_s], 1] = g1
+        tv_st_pair_g[vi_s, tv_st_pair_num[vi_s], 2] = g2
+        tv_st_pair_g[vi_s, tv_st_pair_num[vi_s], 3] = g3
+        tv_st_pair_schur[vi_s, tv_st_pair_num[vi_s]] = schur
+        tv_st_pair_num[vi_s] += 1
 
 @ti.func
-def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_pair, vt_dy_pair_num, vt_dy_pair_g, vt_dy_pair_schur):
+def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_num, vt_dy_pair_g, vt_dy_pair_schur):
 
     v0 = vi_d
     v1 = mesh_dy.face_indices[3 * fi_d + 0]
@@ -296,15 +296,15 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_pair, vt_dy_pair_num, vt_dy_pair_g,
             mesh_dy.verts.nc[v2] += 1
             mesh_dy.verts.nc[v3] += 1
     #
-    # if d < dHat and tv_dynamic_pair_num[fid] < tv_dynamic_pair_cache_size:
-    #     tv_dynamic_pair[fid, tv_dynamic_pair_num[fid], 0] = vid
-    #     tv_dynamic_pair[fid, tv_dynamic_pair_num[fid], 1] = dtype
-    #     tv_dynamic_pair_g[fid, tv_dynamic_pair_num[fid], 0] = g0
-    #     tv_dynamic_pair_g[fid, tv_dynamic_pair_num[fid], 1] = g1
-    #     tv_dynamic_pair_g[fid, tv_dynamic_pair_num[fid], 2] = g2
-    #     tv_dynamic_pair_g[fid, tv_dynamic_pair_num[fid], 3] = g3
-    #     tv_dynamic_pair_schur[fid, tv_dynamic_pair_num[fid]] = schur
-    #     tv_dynamic_pair_num[fid] += 1
+    if vt_dy_pair_num[vi_d] < vt_dy_cache_size:
+        vt_dy_pair[vi_d, vt_dy_pair_num[vi_d], 0] = fi_d
+        vt_dy_pair[vi_d, vt_dy_pair_num[vi_d], 1] = dtype
+        vt_dy_pair_g[vi_d, vt_dy_pair_num[vi_d], 0] = g0
+        vt_dy_pair_g[vi_d, vt_dy_pair_num[vi_d], 1] = g1
+        vt_dy_pair_g[vi_d, vt_dy_pair_num[vi_d], 2] = g2
+        vt_dy_pair_g[vi_d, vt_dy_pair_num[vi_d], 3] = g3
+        vt_dy_pair_schur[vi_d, vt_dy_pair_num[vi_d]] = schur
+        vt_dy_pair_num[vi_d] += 1
 
 @ti.func
 def __ee_dy(ei0, ei1, mesh_dy, dHat):

@@ -435,7 +435,7 @@ class LBVH:
     @ti.func
     def traverse_bvh_single(self, min0, max0, i, cache, nums):
 
-        stack = ti.Vector([-1 for j in range(8)])
+        stack = ti.Vector([-1 for j in range(128)])
         stack[0] = 0
         stack_counter = 1
         idx = 0
@@ -461,40 +461,40 @@ class LBVH:
                     stack_counter += 1
 
         return cnt
-
-    @ti.func
-    def traverse_bvh_single_dy(self, min0, max0, i, cache, nums):
-
-        stack = ti.Vector([-1 for j in range(128)])
-        stack[0] = 0
-        stack_counter = 1
-        idx = 0
-        cnt = 0
-        while stack_counter > 0:
-            # stack_counter = ti.math.clamp(stack_counter, 0, 127)
-            # if stack_counter >= 127:
-            #     break
-            stack_counter -= 1
-            idx = stack[stack_counter]
-            min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
-            cnt += 1
-            if self.aabb_overlap(min0, max0, min1, max1):
-                if idx >= self.num_leafs - 1:
-                    cache[i, nums[i]] = self.nodes[idx].object_id
-                    nums[i] += 1
-                    ti.atomic_add(cnt, 1)
-
-                else:
-                    left, right = self.nodes[idx].left, self.nodes[idx].right
-                    if stack_counter < 126:
-                        stack[stack_counter] = left
-                        stack_counter += 1
-
-                    if stack_counter < 126:
-                        stack[stack_counter] = left
-                        stack_counter += 1
-        #
-        return cnt
+    #
+    # @ti.func
+    # def traverse_bvh_single_dy(self, min0, max0, i, cache, nums):
+    #
+    #     stack = ti.Vector([-1 for j in range(128)])
+    #     stack[0] = 0
+    #     stack_counter = 1
+    #     idx = 0
+    #     cnt = 0
+    #     while stack_counter > 0:
+    #         # stack_counter = ti.math.clamp(stack_counter, 0, 127)
+    #         # if stack_counter >= 127:
+    #         #     break
+    #         stack_counter -= 1
+    #         idx = stack[stack_counter]
+    #         min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
+    #         cnt += 1
+    #         if self.aabb_overlap(min0, max0, min1, max1):
+    #             if idx >= self.num_leafs - 1:
+    #                 cache[i, nums[i]] = self.nodes[idx].object_id
+    #                 nums[i] += 1
+    #                 ti.atomic_add(cnt, 1)
+    #
+    #             else:
+    #                 left, right = self.nodes[idx].left, self.nodes[idx].right
+    #                 if stack_counter < 126:
+    #                     stack[stack_counter] = left
+    #                     stack_counter += 1
+    #
+    #                 if stack_counter < 126:
+    #                     stack[stack_counter] = left
+    #                     stack_counter += 1
+    #     #
+    #     return cnt
 
     @ti.kernel
     def update_zSort_face_centers_and_line(self):
