@@ -447,7 +447,7 @@ class Solver:
             C = (lij - l0)
             nabla_C = x10.normalized()
             schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
-            ld = C / (schur + compliance)
+            ld = compliance * C / (compliance * schur + 1.0)
 
             e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * ld * nabla_C
             e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * ld * nabla_C
@@ -455,22 +455,25 @@ class Solver:
             e.verts[1].nc += 1.0
 
     @ti.kernel
-    def solve_spring_constraints_x_test(self, coeff: ti.f32):
+    def solve_spring_constraints_x_test(self, compliance: ti.f32):
 
+        # print(compliance)
         for e in self.mesh_dy.edges:
             l0 = e.l0
             x10 = e.verts[0].y - e.verts[1].y
             lij = x10.norm()
 
-            C = (lij - l0)
-            grad = coeff * (lij - l0) * x10.normalized()
+            C = 0.5 * (lij - l0) * (lij - l0)
+            coef0 = compliance * e.verts[0].fixed * e.verts[0].m_inv
+            coef1 = compliance * e.verts[1].fixed * e.verts[1].m_inv
+            nabla_C = x10.normalized() * (lij - l0)
+            schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
+            ld = C / (compliance * schur + 1.0)
 
-            e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * grad
-            e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * grad
-
-            e.verts[0].nc += e.verts[0].fixed * e.verts[0].m_inv * coeff
-            e.verts[1].nc += e.verts[1].fixed * e.verts[1].m_inv * coeff
-
+            e.verts[0].dx -= coef0 * nabla_C / (1.0 + coef0)
+            e.verts[1].dx += coef1 * nabla_C / (1.0 + coef1)
+            e.verts[0].nc += 1.0
+            e.verts[1].nc += 1.0
 
     @ti.kernel
     def solve_spring_constraints_v(self):
@@ -825,7 +828,7 @@ class Solver:
 
         self.init_variables()
         # print(self.YM)
-        compliance = 1.0 / (self.YM * dt * dt)
+        compliance = self.YM * dt * dt
         # print(compliance)
         self.solve_spring_constraints_x(compliance)
         # self.solve_spring_constraints_x_test(compliance)
