@@ -56,7 +56,7 @@ class Solver:
         # print("grid dim:", self.grid_num)
 
         self.enable_velocity_update = False
-        self.enable_collision_handling = True
+        self.enable_collision_handling = False
         self.enable_move_obstacle = False
         self.enable_profiler = enable_profiler
         self.export_mesh = False
@@ -818,18 +818,19 @@ class Solver:
     def init_variables(self):
 
         self.mesh_dy.verts.dx.fill(0.0)
-        self.mesh_dy.verts.nc.fill(1.0)
+        self.mesh_dy.verts.nc.fill(0.0)
 
 
     def solve_constraints_jacobi_x(self, dt):
 
         self.init_variables()
         # print(self.YM)
-        compliance = (dt * dt) * self.YM
+        compliance = 1.0 / (self.YM * dt * dt)
         # print(compliance)
-        # self.solve_spring_constraints_x(compliance)
-        self.solve_spring_constraints_x_test(compliance)
+        self.solve_spring_constraints_x(compliance)
+        # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
+            cnt_lbvh = self.broadphase_lbvh()
             self.solve_collision_constraints_x()
 
         self.update_dx()
@@ -923,14 +924,14 @@ class Solver:
         #     aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
         #     self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
-        self.mesh_dy.computeAABB_faces(padding=self.padding)
-        aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB()
-        self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
+        if self.enable_collision_handling:
+            self.mesh_dy.computeAABB_faces(padding=self.padding)
+            aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB()
+            self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
 
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             # cnt_brute = self.broadphase_brute()
-            cnt_lbvh = self.broadphase_lbvh()
             self.solve_constraints_jacobi_x(dt_sub)
             self.compute_velocity(dt_sub)
 

@@ -34,7 +34,7 @@ LOOKAt_ORIGIN = True
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
 # print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
 
-n_substep = 20
+n_substep = 5
 frame_end = 100
 
 dt_ui = sim.dt

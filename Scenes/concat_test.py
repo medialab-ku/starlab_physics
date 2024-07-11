@@ -49,4 +49,4 @@ concat_model_name = "plane_stack.obj"
 offsets = concat.concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
 mesh_dy = MeshTaichiWrapper("../models/plane_stack.obj", offsets=offsets, scale=5.0, trans=ti.math.vec3(0, 4.5, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
-mesh_st = MeshTaichiWrapper("../models/OBJ/plane.obj", offsets=[0], scale=6, trans=ti.math.vec3(0.0, -9.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/OBJ/plane.obj", offsets=[0], scale=6, trans=ti.math.vec3(0.0, -20.5, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
