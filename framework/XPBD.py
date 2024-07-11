@@ -463,12 +463,9 @@ class Solver:
             x10 = e.verts[0].y - e.verts[1].y
             lij = x10.norm()
 
-            C = 0.5 * (lij - l0) * (lij - l0)
             coef0 = compliance * e.verts[0].fixed * e.verts[0].m_inv
             coef1 = compliance * e.verts[1].fixed * e.verts[1].m_inv
             nabla_C = x10.normalized() * (lij - l0)
-            schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
-            ld = C / (compliance * schur + 1.0)
 
             e.verts[0].dx -= coef0 * nabla_C / (1.0 + coef0)
             e.verts[1].dx += coef1 * nabla_C / (1.0 + coef1)
@@ -830,8 +827,8 @@ class Solver:
         # print(self.YM)
         compliance = self.YM * dt * dt
         # print(compliance)
-        self.solve_spring_constraints_x(compliance)
-        # self.solve_spring_constraints_x_test(compliance)
+        # self.solve_spring_constraints_x(compliance)
+        self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
             cnt_lbvh = self.broadphase_lbvh()
             self.solve_collision_constraints_x()
