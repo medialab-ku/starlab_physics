@@ -463,12 +463,18 @@ class Solver:
             x10 = e.verts[0].y - e.verts[1].y
             lij = x10.norm()
 
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            # ld = C / (compliance * schur + 1.0)
             coef0 = compliance * e.verts[0].fixed * e.verts[0].m_inv
             coef1 = compliance * e.verts[1].fixed * e.verts[1].m_inv
-            nabla_C = x10.normalized() * (lij - l0)
-
-            e.verts[0].dx -= coef0 * nabla_C / (1.0 + coef0)
-            e.verts[1].dx += coef1 * nabla_C / (1.0 + coef1)
+            a, b = coef0 + 1.0, -coef0
+            c, d = -coef1, coef1 + 1.0
+            det = coef0 + coef1
+            g0 = -coef0 * C * nabla_C
+            g1 =  coef1 * C * nabla_C
+            e.verts[0].dx += (d * g0 - b * g1) / det
+            e.verts[1].dx += (-c * g0 + a * g1) / det
             e.verts[0].nc += 1.0
             e.verts[1].nc += 1.0
 
