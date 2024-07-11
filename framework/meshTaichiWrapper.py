@@ -8,7 +8,6 @@ import random
 
 @ti.data_oriented
 class MeshTaichiWrapper:
-
     def __init__(self,
                  model_path,
                  offsets,
@@ -18,7 +17,7 @@ class MeshTaichiWrapper:
                  is_static=False):
 
         self.is_static = is_static
-        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "FE", "VE"])
+        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV"])
         self.mesh.verts.place({'fixed': ti.f32,
                                'm_inv': ti.f32,
                                'x0': ti.math.vec3,
@@ -68,7 +67,7 @@ class MeshTaichiWrapper:
         self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
-        self.bending_indices_np = self.initBendingIndices()
+        # self.bending_indices_np = self.initBendingIndices()
         # self.bending_indices = ti.Vector.field(n=2, shape=self.bending_indices_np.shape[0])
         # self.bending_indices.copy_from(self.bending_indices_np)
 

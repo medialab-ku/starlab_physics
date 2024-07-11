@@ -333,7 +333,7 @@ while window.running:
     scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
     scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
     # sim.lbvh_dy.draw_zSort(scene)
-    # sim.lbvh_dy.draw_bvh_aabb_test(scene, n_leaf, n_internal)
+    sim.lbvh_dy.draw_bvh_aabb_test(scene, n_leaf, n_internal)
     # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
