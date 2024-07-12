@@ -27,11 +27,11 @@ scale_list = []
 #             scale_list.append(5.0)
 
 model_names.append("BasicTShirt.obj")
-model_names.append("JinhoOBJ.obj")
+# model_names.append("JinhoOBJ.obj")
 trans_list.append(np.array([0.0, 0.0, 0.0]))
-trans_list.append(np.array([0.0, 0.0, 0.0]))
+# trans_list.append(np.array([0.0, 0.0, 0.0]))
 scale_list.append(1.)
-scale_list.append(1.)
+# scale_list.append(1.)
 
 # model_names.append("square.obj")
 # model_names.append("plane.obj")
@@ -51,4 +51,4 @@ mesh_dy = MeshTaichiWrapper("../models/concat.obj", scale=0.005, trans=ti.math.v
 mesh_st = None
 
 #static mesh
-mesh_st = MeshTaichiWrapper("../models/OBJ/plane.obj", scale=5.0, trans=ti.math.vec3(0.0, -2.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/OBJ/JinhoOBJ.obj", scale=0.005, trans=ti.math.vec3(0.0, -6.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
