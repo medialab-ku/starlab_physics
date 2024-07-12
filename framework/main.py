@@ -8,7 +8,7 @@ import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, 0.0, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -256,6 +256,16 @@ while window.running:
             sim.set_fixed_vertices(g_selector.is_selected)
             # load_animation()
 
+        if window.event.key == 't':
+            g_selector.sewing_selection()
+
+        if window.event.key == 'y':
+            g_selector.pop_sewing()
+
+        # if window.event.key == 'u':
+        #     g_selector.remove_all_sewing()
+
+
         if window.event.key == ' ':
             run_sim = not run_sim
 
@@ -307,6 +317,7 @@ while window.running:
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
         sim.forward(n_substeps=n_substep)
+        sim.forward(n_substeps=n_substep)
         frame_cpu += 1
 
     show_options()
@@ -334,13 +345,15 @@ while window.running:
 
     if sim.mesh_st != None:
         # scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
-        # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
-        sim.lbvh_st.draw_zSort(scene)
+        # sim.lbvh_st.draw_zSort(scene)
         # sim.mesh_st.draw_bvh_aabb(scene)
 
     g_selector.renderTestPos()
+
+    #draw selected particles
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 

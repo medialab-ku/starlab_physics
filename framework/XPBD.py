@@ -1,3 +1,5 @@
+import csv
+
 import taichi as ti
 import numpy as np
 import solve_collision_constraints_x
@@ -148,6 +150,10 @@ class Solver:
         # self.active_anim_frame = ti.field(dtype=ti.i32, shape=(4, self.max_num_anim)) # maximum number of animation
         # self.action_anim = ti.Vector.field(6, dtype=ti.f32, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
         # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
+
+        self.sewing_pairs = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dy))
+        self.sewing_pairs_num = ti.field(dtype=ti.int32, shape=())
+        self.sewing_pairs_num[None] = 0
 
     # @ti.kernel
     # def __init_animation_pos(self, is_selected: ti.template()):
@@ -486,7 +492,7 @@ class Solver:
 
             C = (lij - l0)
             nabla_C = x10.normalized()
-            schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
+            schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C) + 1e-4
             ld = C / schur
 
             e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * ld * nabla_C
@@ -877,6 +883,7 @@ class Solver:
         #
         # self.solve_fem_constraints_x(self.YM[0], self.PR[0])
 
+        self.solve_sewing_constraints_x()
         # self.solve_pressure_constraints_x()
         self.update_dx()
 
@@ -966,99 +973,60 @@ class Solver:
     #         self.x_static[i + start_idx] = ti.math.vec3(rv[0], rv[1], rv[2]) + center
     #         self.v_static[i + start_idx] = (self.x_static[i + start_idx] - old) / self.dt[0]
 
+    def load_sewing_pairs(self):
+        data = []
+
+        with open('animation/sewing.csv', 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            data = list(reader)
+
+        data_np = np.array(data, dtype=np.int32)
+        self.copy_sewing_pairs_to_taichi_field(data_np, len(data_np))
+        self.sewing_pairs_num[None] = len(data_np)
+        # print(self.sewing_pairs)
+
+    @ti.kernel
+    def copy_sewing_pairs_to_taichi_field(self, data_np: ti.types.ndarray(), length: ti.i32):
+        for i in range(length):
+            self.sewing_pairs[i] = ti.Vector([data_np[i, 0], data_np[i, 1]])
+
+    @ti.kernel
+    def solve_sewing_constraints_x(self):
+        for i in range(self.sewing_pairs_num[None]):
+            v1_id = self.sewing_pairs[i][0]
+            v2_id = self.sewing_pairs[i][1]
+            v1_y = self.mesh_dy.verts.y[v1_id]
+            v2_y = self.mesh_dy.verts.y[v2_id]
+
+            C = (v2_y - v1_y).norm()
+            nabla_C = (v1_y - v2_y).normalized()
+            schur = (self.mesh_dy.verts.fixed[v1_id] * self.mesh_dy.verts.m_inv[v1_id] +
+                     self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id]) + 1e-1
+            ld = C / schur
+            # print(C)
+
+            self.mesh_dy.verts.dx[v1_id] -= self.mesh_dy.verts.fixed[v1_id] * self.mesh_dy.verts.m_inv[v1_id] * ld * nabla_C
+            self.mesh_dy.verts.dx[v2_id] += self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id] * ld * nabla_C
+            self.mesh_dy.verts.nc[v1_id] += 1.0
+            self.mesh_dy.verts.nc[v2_id] += 1.0
 
     def forward(self, n_substeps):
+        self.load_sewing_pairs()
 
         dt_sub = self.dt / n_substeps
-        # ti.profiler.clear_kernel_profiler_info()
-
-        # print("------------------------------------------------------")
-        # #
-        # assign_morton = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_morton.__name__)
-        # print("assign_morton: ", round(assign_morton.avg, 5))
-        # # #
-        # # # radix_1 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.count_frequency.__name__)
-        # # # radix_2 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.blelloch_scan.__name__)
-        # # # radix_3 = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort_by_digit.__name__)
-        # # # print("radix_sort: ", round(4 * (radix_1.avg + radix_2.avg + radix_3.avg), 5))
-        # # #
-        # # # # sort = ti.profiler.query_kernel_profiler_info(self.lbvh_st.sort.__name__)
-        # # # # print("sort: ", round(sort.avg, 5))
-        # # #
-        # # assign_leaf_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_leaf_nodes.__name__)
-        # # print("assign_leaf_nodes: ", round(assign_leaf_nodes.avg, 5))
-        # # #
-        # assign_internal_nodes = ti.profiler.query_kernel_profiler_info(self.lbvh_st.assign_internal_nodes.__name__)
-        # print("assign_internal_nodes: ", round(assign_internal_nodes.avg, 5))
-        # # #
-        # compute_node_aabbs = ti.profiler.query_kernel_profiler_info(self.lbvh_st.compute_node_aabbs.__name__)
-        # print("compute_node_aabbs: ", round(compute_node_aabbs.avg, 5))
-
-        # build = ti.profiler.query_kernel_profiler_info(self.lbvh_st.build.__name__)
-        # print(build.avg)
-
-        # build = (assign_morton.avg + assign_leaf_nodes.avg + assign_internal_nodes.avg + compute_node_aabbs.avg)
-
-        # bounding volume hierarchy construction
-
-        if self.mesh_st != None:
-            self.mesh_st.computeAABB_faces(padding=self.padding)
-            aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-            self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
-            # cnt_lbvh = self.broadphase_lbvh()
+        # if self.mesh_st != None:
+        #     self.mesh_st.computeAABB_faces(padding=self.padding)
+        #     aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+        #     self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+        #     # cnt_lbvh = self.broadphase_lbvh()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            # cnt_lbvh = self.broadphase_lbvh()
             cnt_brute = self.broadphase_brute()
-            cnt_lbvh = self.broadphase_lbvh()
             self.solve_constraints_jacobi_x()
             self.compute_velocity(dt_sub)
 
-            if self.enable_velocity_update:
-                self.solve_constraints_v()
+            # if self.enable_velocity_update:
+            #     self.solve_constraints_v()
 
             self.update_x(dt_sub)
 
-        # col_x = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_x.__name__)
-        # col_v = ti.profiler.query_kernel_profiler_info(self.solve_collision_constraints_v.__name__)
-        # print("v / x ratio: ", round(col_v.avg / col_x.avg, 5))
-        # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
-        # brute = ti.profiler.query_kernel_profiler_info(self.broadphase_brute.__name__)
-        # bvh = ti.profiler.query_kernel_profiler_info(self.broadphase_lbvh.__name__)
-        # print(cnt_brute / self.max_num_verts_dy, " ", cnt_lbvh / self.max_num_verts_dy)
-
-        # print("brute / bvh ratio: ", round(brute.avg / bvh.avg, 5))
-            print("brute / bvh cnt ratio: ", round(cnt_brute / cnt_lbvh, 5))
-        # print("bvh cnt: ", cnt_lbvh)
-
-        # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y.__name__)
-        # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x.__name__)
-        # compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity.__name__)
-        # update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x.__name__)
-        #
-        # total_1 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
-        #
-        # compute_y_result = ti.profiler.query_kernel_profiler_info(self.compute_y_test.__name__)
-        # solve_spring_constraints_x_result = ti.profiler.query_kernel_profiler_info(self.solve_spring_constraints_x_test.__name__)
-        # compute_velocity_result = ti.profiler.query_kernel_profiler_info(self.compute_velocity_test.__name__)
-        # update_x_result = ti.profiler.query_kernel_profiler_info(self.update_x_test.__name__)
-        #
-        # total_2 = compute_y_result.avg + solve_spring_constraints_x_result.avg + compute_velocity_result.avg + update_x_result.avg
-        #
-        # if self.frame[0] < 100:
-        #     print(round(total_1 / total_2, 4))
-
-        # self.copy_to_meshes()
-        # self.copy_to_particles()
-        # self.frame[0] = self.frame[0] + 1
-    #
-    #
-    #
-    # @ti.kernel
-    # def random_noise(self):
-    #     scale = 2.0
-    #     for vi in range(self.max_num_verts_dynamic):
-    #         v = ti.math.vec3(ti.random(dtype=float), ti.random(dtype=float), ti.random(dtype=float))
-    #         # v.normalized()
-    #         self.x[vi] += scale * v * self.dt[0]
-    #
