@@ -62,9 +62,11 @@ class MeshTaichiWrapper:
 
         self.applyTransform()
         self.initFaceIndices()
-        self.initEdgeIndices()
         self.fid_np = self.face_indices.to_numpy()
         self.fid_np = np.reshape(self.fid_np, (len(self.mesh.faces), 3))
+        self.initEdgeIndices()
+        self.eid_np = self.edge_indices.to_numpy()
+        self.eid_np = np.reshape(self.eid_np, (len(self.mesh.edges), 2))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
         # self.bending_indices_np = self.initBendingIndices()
@@ -190,6 +192,29 @@ class MeshTaichiWrapper:
         for v in self.mesh.verts:
             v.m_inv = 1.0 / v.m_inv
 
+
+    @ti.kernel
+    def Hierholzer(self):
+
+        edges = []
+        first = 0
+        stack = []
+        stack.append(first)
+        ret = []
+        while len(stack) > 0:
+            v = stack.top()
+
+        if !edges[v].size():
+            ret.append(v)
+            stack.pop()
+        else:
+            i = edges[v][edges[v].size() - 1]
+            edges[v].pop_back()
+            std::vector < int >::iterator it = std::find(edges[i].begin(), edges[i].end(), v);
+            edges[i].erase(it);
+            stack.push(i)
+
+        return ret
 
     def init_color(self):
         # print(self.offsets)
