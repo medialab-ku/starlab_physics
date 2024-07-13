@@ -1,6 +1,7 @@
 import taichi as ti
 import numpy as np
 import json
+import csv
 
 @ti.data_oriented
 class SelectionTool :
@@ -35,7 +36,7 @@ class SelectionTool :
         self.ti_mouse_click_index[2][0] = 2
         self.ti_mouse_click_index[2][1] = 3
         self.ti_mouse_click_index[3][0] = 3
-        self.ti_mouse_click_index[4][1] = 0
+        self.ti_mouse_click_index[3][1] = 0
 
         self.ti_mouse_click_pos = ti.Vector.field(2,ti.float32,shape=(4,))
         self.mouse_click_pos = [0, 0, 0, 0]# press x,y release x,y
@@ -109,7 +110,68 @@ class SelectionTool :
         print("selection_tool.get_selection_array()::"," num_selected : ",self.num_selected," :: idx : ",self.selected_indices_cpu)
 
 
+    def sewing_selection(self):
+        is_selected_np = self.is_selected.to_numpy()
+        i_selected = np.argwhere(is_selected_np == True)
+        i_selected = i_selected[:, 0]
+        self.num_selected = i_selected.shape[0]
 
+        if self.num_selected == 2:
+            sewing_pair = i_selected.tolist()
+
+            # read existing JSON sewing file
+            with open('animation/sewing.csv', 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                data = list(reader)
+
+            # linear search whether the duplicated pair exists
+            is_duplicated = False
+            for pair in data:
+                pair_int = [int(pair[0]), int(pair[1])]
+                if pair_int == sewing_pair:
+                    print("The pair already exists.")
+                    is_duplicated = True
+                    break
+
+            if not is_duplicated:
+                data.append(sewing_pair)
+                # write a new sewing pair to the JSON file
+                with open('animation/sewing.csv', 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(data)
+
+                print("Sewing is successfully done. :", sewing_pair)
+
+        else:
+            print("You have to select only two vertices!")
+
+    def pop_sewing(self):
+        with open('animation/sewing.csv', 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            data = list(reader)
+
+        if len(data) > 0:
+            popped_pair = data.pop()
+            print("The last pair is popped :", popped_pair)
+
+            with open('animation/sewing.csv', 'w', encoding='utf-8', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(data)
+
+        else:
+            print("There are no sewing pairs in the CSV file!")
+
+    def remove_all_sewing(self):
+        with open('animation/sewing.csv', 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            data = list(reader)
+
+        data = []
+        print("All sewing data is removed.")
+
+        with open('animation/sewing.csv', 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(data)
 
     def export_selection(self):
         is_selected_np = self.is_selected.to_numpy()
@@ -131,7 +193,7 @@ class SelectionTool :
         # print("total selection count : ", count_sum)
         # print("==========================")
 
-        # print(self.selected_indices_cpu)
+        print(self.selected_indices_cpu)
 
         with open('animation/handle.json', 'w', encoding='utf-8') as f:
             json.dump(self.selected_indices_cpu, f, ensure_ascii=False, indent=4)
