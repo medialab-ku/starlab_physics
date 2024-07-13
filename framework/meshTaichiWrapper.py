@@ -193,28 +193,28 @@ class MeshTaichiWrapper:
             v.m_inv = 1.0 / v.m_inv
 
 
-    @ti.kernel
-    def Hierholzer(self):
-
-        edges = []
-        first = 0
-        stack = []
-        stack.append(first)
-        ret = []
-        while len(stack) > 0:
-            v = stack.top()
-
-        if !edges[v].size():
-            ret.append(v)
-            stack.pop()
-        else:
-            i = edges[v][edges[v].size() - 1]
-            edges[v].pop_back()
-            std::vector < int >::iterator it = std::find(edges[i].begin(), edges[i].end(), v);
-            edges[i].erase(it);
-            stack.push(i)
-
-        return ret
+    # @ti.kernel
+    # def Hierholzer(self):
+    #
+    #     edges = []
+    #     first = 0
+    #     stack = []
+    #     stack.append(first)
+    #     ret = []
+    #     while len(stack) > 0:
+    #         v = stack.top()
+    #
+    #     if !edges[v].size():
+    #         ret.append(v)
+    #         stack.pop()
+    #     else:
+    #         i = edges[v][edges[v].size() - 1]
+    #         edges[v].pop_back()
+    #         std::vector < int >::iterator it = std::find(edges[i].begin(), edges[i].end(), v);
+    #         edges[i].erase(it);
+    #         stack.push(i)
+    #
+    #     return ret
 
     def init_color(self):
         # print(self.offsets)

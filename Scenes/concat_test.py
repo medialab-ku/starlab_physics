@@ -43,12 +43,12 @@ scale_list.append(1.)
 # scale_list.append(1.)
 # scale_list.append(1.)
 # scale_list.append(5.)
-
-concat.concat_mesh(model_dir, model_names, trans_list, scale_list)
+concat_model_name="concat.obj"
+offsets = concat.concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
 
 #dynamic mesh
-mesh_dy = MeshTaichiWrapper("../models/concat.obj", scale=0.005, trans=ti.math.vec3(0, -6.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/concat.obj", offsets=offsets, scale=0.005, trans=ti.math.vec3(0, -6.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
 
 #static mesh
-mesh_st = MeshTaichiWrapper("../models/OBJ/JinhoOBJ.obj", scale=0.005, trans=ti.math.vec3(0.0, -6.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/OBJ/JinhoOBJ.obj",  offsets=[0], scale=0.005, trans=ti.math.vec3(0.0, -6.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

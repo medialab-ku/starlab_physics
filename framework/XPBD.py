@@ -1,8 +1,8 @@
+import csv
 import taichi as ti
 import numpy as np
 import solve_collision_constraints_x
 import solve_collision_constraints_v
-
 from lbvh import LBVH
 
 @ti.data_oriented
