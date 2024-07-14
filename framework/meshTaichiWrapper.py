@@ -42,7 +42,7 @@ class MeshTaichiWrapper:
         self.faces = self.mesh.faces
         self.verts = self.mesh.verts
 
-        # print(len(self.mesh.faces))
+        print(model_path, "# faces:", len(self.mesh.faces))
 
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.faces) * 3)
@@ -288,8 +288,8 @@ class MeshTaichiWrapper:
             f.aabb_min = ti.math.min(f.verts[0].x, f.verts[1].x, f.verts[2].x)
             f.aabb_max = ti.math.max(f.verts[0].x, f.verts[1].x, f.verts[2].x)
 
-            f.aabb_min -= padding * ti.math.vec3(1.0)
-            f.aabb_max += padding * ti.math.vec3(1.0)
+            # f.aabb_min -= padding * ti.math.vec3(1.0)
+            # f.aabb_max += padding * ti.math.vec3(1.0)
 
 
     def export(self, scene_name, frame, is_static = False):

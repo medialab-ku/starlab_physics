@@ -253,10 +253,10 @@ class LBVH:
         self.init_flag()
         # while True:
         #     cnt = self.compute_node_aabbs()
-        #     print("cnt: ", cnt)
+        #     # print("cnt: ", cnt)
         #     if cnt == 0:
         #         break
-        #
+
         # print(self.nodes[0].aabb_min, self.nodes[0].aabb_max)
         cnt = self.compute_node_aabbs()
     @ti.kernel
@@ -275,17 +275,17 @@ class LBVH:
 
             self.nodes[i].aabb_min = aabb_min
             self.nodes[i].aabb_max = aabb_max
-            # if self.nodes[i].visited == 2:
-            #     left, right = self.nodes[i].left, self.nodes[i].right
-            #     min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
-            #     max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
-            #     self.nodes[i].aabb_min = ti.min(min0, min1)
-            #     self.nodes[i].aabb_max = ti.max(max0, max1)
-            #     parent = self.nodes[i].parent
-            #     self.nodes[i].visited += 1
-            #     self.nodes[parent].visited += 1
-            #     ti.atomic_add(cnt, 1)
-
+        #     if self.nodes[i].visited == 2:
+        #         left, right = self.nodes[i].left, self.nodes[i].right
+        #         min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
+        #         max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
+        #         self.nodes[i].aabb_min = ti.min(min0, min1)
+        #         self.nodes[i].aabb_max = ti.max(max0, max1)
+        #         parent = self.nodes[i].parent
+        #         self.nodes[i].visited += 1
+        #         self.nodes[parent].visited += 1
+        #         ti.atomic_add(cnt, 1)
+        # return cnt
         # # id0 = 0 + self.num_leafs - 1
         # cnt = 0
         # cnt_total = 0
@@ -298,9 +298,9 @@ class LBVH:
         #             ti.atomic_add(cnt, 1)
         # print(cnt_total / self.num_leafs)
         # #
-        cnt = 0
-        # # # for i in range(self.num_leafs):
-        # # i = 0 + self.num_leafs - 1
+        # cnt = 0
+        # # # # for i in range(self.num_leafs):
+        # # # i = 0 + self.num_leafs - 1
         cnt_total = 0
         for i in range(self.num_leafs):
 
@@ -327,10 +327,18 @@ class LBVH:
 
                     else:
                         left, right = self.nodes[idx].left, self.nodes[idx].right
-                        stack[stack_counter] = left
-                        stack_counter += 1
-                        stack[stack_counter] = right
-                        stack_counter += 1
+                        if stack_counter < 127:
+                            stack[stack_counter] = left
+                            stack_counter += 1
+                        else:
+                            # print(i)
+                            break
+                        if stack_counter < 127:
+                            stack[stack_counter] = right
+                            stack_counter += 1
+                        else:
+                            # print(i)
+                            break
 
             # print(stack)
         print(cnt_total /self.num_leafs)
@@ -580,4 +588,11 @@ class LBVH:
         # scene.particles(, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
 
         self.update_aabb_x_and_line0(n_internal)
+        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
+
+        left, right = self.nodes[n_internal].left, self.nodes[n_internal].right
+        self.update_aabb_x_and_line0(left)
+        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(1, 0, 0))
+
+        self.update_aabb_x_and_line0(right)
         scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 0, 1))

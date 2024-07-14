@@ -120,6 +120,10 @@ def show_options():
 
         n_leaf = w.slider_int("leaf id", n_leaf, 0, sim.lbvh_st.num_leafs - 1)
         n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_leafs - 2)
+        if not n_internal_old == n_internal:
+            print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
+            print("left: ", sim.lbvh_st.nodes[n_internal].left, "right: ", sim.lbvh_st.nodes[n_internal].right)
+
         # if sim.max_num_tetra_dynamic > 0:
         #     tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
         #     w.text(tetra_str)
@@ -319,6 +323,22 @@ while window.running:
 
         if window.event.key == ti.ui.TAB:
             g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
+
+        if window.event.key == ti.ui.LEFT:
+            n_internal = sim.lbvh_st.nodes[n_internal].left
+            if n_internal < 0:
+                n_internal = 0
+
+        if window.event.key == ti.ui.RIGHT:
+            n_internal = sim.lbvh_st.nodes[n_internal].right
+            if n_internal < 0:
+                n_internal = 0
+
+        if window.event.key == ti.ui.UP:
+
+            n_internal = sim.lbvh_st.nodes[n_internal].parent
+            if n_internal < 0:
+                n_internal = 0
 
     if window.get_event(ti.ui.RELEASE):
         if window.event.key == ti.ui.LMB:

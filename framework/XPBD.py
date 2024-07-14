@@ -47,7 +47,7 @@ class Solver:
         # self.grid_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         # self.aabb_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         # self.grid_edge_indices = ti.field(dtype=ti.u32, shape=12 * 2)
-        self.padding = 0.05
+        self.padding = 0.1
         # self.init_grid()
 
         # self.grid_origin = -self.grid_size
@@ -95,7 +95,7 @@ class Solver:
             self.max_num_verts_st = len(self.mesh_st.verts)
             self.max_num_edges_st = len(self.mesh_st.edges)
             self.max_num_faces_st = len(self.mesh_st.faces)
-            self.mesh_st.computeAABB_faces(padding=self.padding)
+            self.mesh_st.computeAABB_faces(padding=0.0)
             aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
             # print(aabb_min_st, aabb_max_st)
             self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)

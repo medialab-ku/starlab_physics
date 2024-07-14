@@ -12,12 +12,12 @@ model_names = []
 trans_list = []
 scale_list = []
 
-# for i in range(8):
-#     for j in range(1):
-#         for k in range(8):
-#             model_names.append("square.obj")
-#             trans_list.append(np.array([1.0 * i - 4, 1.0 * j, 1.0 * k - 4]))
-#             scale_list.append(0.5)
+for i in range(3):
+    for j in range(3):
+        for k in range(3):
+            model_names.append("sphere1K.obj")
+            trans_list.append(np.array([0.5 * i, 1.0 * j, 0.5 * k]))
+            scale_list.append(5.0)
 
 # for i in range(1):
 #     for j in range(1):
@@ -26,11 +26,11 @@ scale_list = []
 #             trans_list.append(np.array([1.0 * i, 2.0 * j, 1.0 * k]))
 #             scale_list.append(5.0)
 
-model_names.append("BasicTShirt.obj")
-# model_names.append("JinhoOBJ.obj")
-trans_list.append(np.array([0.0, 0.0, 0.0]))
+# model_names.append("BasicTShirt.obj")
+# # model_names.append("JinhoOBJ.obj")
 # trans_list.append(np.array([0.0, 0.0, 0.0]))
-scale_list.append(1.)
+# trans_list.append(np.array([0.0, 0.0, 0.0]))
+# scale_list.append(1.)
 # scale_list.append(1.)
 
 # model_names.append("square.obj")
