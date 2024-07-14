@@ -16,10 +16,11 @@ class Node:
 class LBVH:
     def __init__(self, num_leafs):
         self.num_leafs = num_leafs
+        self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
         # self.leaf_nodes = Node.field(shape=self.num_leafs)
         # self.internal_nodes = Node.field(shape=(self.num_leafs - 1))
-
+        self.stack_test = ti.field(dtype=ti.int32, shape=self.num_nodes)
 
         self.nodes = Node.field(shape=self.num_nodes)
 
@@ -303,42 +304,74 @@ class LBVH:
         # # # i = 0 + self.num_leafs - 1
         cnt_total = 0
         for i in range(self.num_leafs):
-
+            node_id = i + self.num_leafs - 1
             min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
 
-            stack = ti.Vector([-1 for j in range(128)])
-            stack[0] = 0
+            stack = ti.Vector([-1 for j in range(256)])
+            # stack[0] = 0
+            # stack_counter = 1
+            #
+            # while stack_counter > 0:
+            #
+            #     # if stack_counter >= 1024 - 1:
+            #     #     # print(i, "fuck\n")
+            #     #     break
+            #
+            #     stack_counter -= 1
+            #     idx = stack[stack_counter]
+            #     stack[stack_counter] = -1
+            #     min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
+            #     if self.aabb_overlap(min0, max0, min1, max1):
+            #         ti.atomic_add(cnt_total, 1)
+            #         if idx >= self.num_leafs - 1:
+            #             ti.atomic_add(cnt, 1)
+            #
+            #         else:
+            #             left, right = self.nodes[idx].left, self.nodes[idx].right
+            #             if stack_counter < 127:
+            #                 stack[stack_counter] = left
+            #                 stack_counter += 1
+            #             else:
+            #                 print("fuck")
+            #                 break
+            #             if stack_counter < 127:
+            #                 stack[stack_counter] = right
+            #                 stack_counter += 1
+            #             else:
+            #                 print("fuck")
+            #                 break
+            stack[0] = -1
             stack_counter = 1
-
-            while stack_counter > 0:
-
-                # if stack_counter >= 1024 - 1:
-                #     # print(i, "fuck\n")
-                #     break
-
-                stack_counter -= 1
-                idx = stack[stack_counter]
-                stack[stack_counter] = -1
-                min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
-                if self.aabb_overlap(min0, max0, min1, max1):
-                    ti.atomic_add(cnt_total, 1)
-                    if idx >= self.num_leafs - 1:
-                        ti.atomic_add(cnt, 1)
-
-                    else:
-                        left, right = self.nodes[idx].left, self.nodes[idx].right
-                        if stack_counter < 127:
-                            stack[stack_counter] = left
-                            stack_counter += 1
-                        else:
-                            # print(i)
-                            break
-                        if stack_counter < 127:
-                            stack[stack_counter] = right
-                            stack_counter += 1
-                        else:
-                            # print(i)
-                            break
+            idx = 0
+            # while True:
+            #     left, right = self.nodes[idx].left, self.nodes[idx].right
+            #     overlapL = self.node_overlap(node_id, left)
+            #     overlapR = self.node_overlap(node_id, right)
+            #
+            #     if overlapL and left >= self.leaf_offset:
+            #         ti.atomic_add(cnt, 1)
+            #
+            #     if overlapR and right >= self.leaf_offset:
+            #         ti.atomic_add(cnt, 1)
+            #
+            #     traverseL = overlapL and left < self.leaf_offset
+            #     traverseR = overlapR and right < self.leaf_offset
+            #
+            #     if traverseL == 0 and traverseR == 0:
+            #         stack_counter -= 1
+            #         idx = stack[stack_counter]
+            #
+            #     else:
+            #         idx = left if traverseL else right
+            #         if traverseL and traverseR:
+            #             if stack_counter < 255:
+            #                 stack[stack_counter] = right
+            #                 stack_counter += 1
+            #             else:
+            #                 print("fuck")
+            #                 break
+            #     if idx < 0:
+            #         break
 
             # print(stack)
         print(cnt_total /self.num_leafs)
@@ -442,12 +475,46 @@ class LBVH:
         self.assign_internal_nodes()
         self.compute_bvh_aabbs()
 
+
+    @ti.func
+    def node_overlap(self, node0, node1):
+        min0, max0 = self.nodes[node0].aabb_min, self.nodes[node0].aabb_min
+        min1, max1 = self.nodes[node1].aabb_min, self.nodes[node1].aabb_max
+
+        return self.aabb_overlap(min0, max0, min1, max1)
+
     @ti.func
     def aabb_overlap(self, min1, max1, min2, max2):
         return (min1[0] <= max2[0] and max1[0] >= min2[0] and
                 min1[1] <= max2[1] and max1[1] >= min2[1] and
                 min1[2] <= max2[2] and max1[2] >= min2[2])
 
+    @ti.kernel
+    def traverse_bvh_single_test(self, nid: ti.i32) -> ti.int32:
+
+        stack = ti.Vector([-1 for j in range(128)])
+        stack[0] = 0
+        stack_counter = 1
+        idx = 0
+        cnt = 0
+        while stack_counter > 0:
+            # print(stack)
+            stack_counter -= 1
+            idx = stack[stack_counter]
+            if self.node_overlap(nid, idx):
+                if idx >= self.leaf_offset:
+                    ti.atomic_add(cnt, 1)
+                elif stack_counter < 127:
+                    left, right = self.nodes[idx].left, self.nodes[idx].right
+                    stack[stack_counter] = left
+                    stack_counter += 1
+                    stack[stack_counter] = right
+                    stack_counter += 1
+                else:
+                    print(nid, "fuck")
+                    break
+
+        return cnt
 
     @ti.func
     def traverse_bvh_single(self, min0, max0, i, cache, nums):
