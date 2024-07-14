@@ -8,7 +8,7 @@ import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, 0.0, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -34,7 +34,7 @@ LOOKAt_ORIGIN = True
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
 # print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
 
-n_substep = 5
+n_substep = 20
 frame_end = 100
 
 dt_ui = sim.dt
@@ -343,7 +343,7 @@ while window.running:
     scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
     scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
     # sim.lbvh_dy.draw_zSort(scene)
-    sim.lbvh_dy.draw_bvh_aabb_test(scene, n_leaf, n_internal)
+    # sim.lbvh_dy.draw_bvh_aabb_test(scene, n_leaf, n_internal)
     # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
@@ -352,7 +352,7 @@ while window.running:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
         # sim.lbvh_st.draw_zSort(scene)
-        # sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
+        sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
 
