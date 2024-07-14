@@ -230,6 +230,13 @@ class LBVH:
             self.nodes[i].start = start
             self.nodes[i].end = end
 
+        cnt = 0
+        for i in range(self.num_leafs - 1):
+            if self.nodes[i].left == self.nodes[i].parent:
+                cnt += 1
+                # print(i, "loop!")
+
+        print("# loop: ", cnt)
         # for i in range(self.num_leafs - 1):
         #     print(i, self.nodes[i].parent)
 
@@ -475,6 +482,10 @@ class LBVH:
         self.assign_internal_nodes()
         self.compute_bvh_aabbs()
 
+        print(self.nodes[17423].parent, self.nodes[17423].left, self.nodes[17423].right)
+        print(self.nodes[196503].parent, self.nodes[196503].left, self.nodes[196503].right)
+        print(self.nodes[17424].parent, self.nodes[17424].left, self.nodes[17424].right)
+
 
     @ti.func
     def node_overlap(self, node0, node1):
@@ -492,27 +503,38 @@ class LBVH:
     @ti.kernel
     def traverse_bvh_single_test(self, nid: ti.i32) -> ti.int32:
 
-        stack = ti.Vector([-1 for j in range(128)])
-        stack[0] = 0
+        # stack = ti.Vector([-1 for j in range(128)])
+        self.stack_test[0] = 0
         stack_counter = 1
         idx = 0
         cnt = 0
+        self.nodes.visited.fill(0)
+        print("start")
         while stack_counter > 0:
-            # print(stack)
+            # print(stack_counter)
             stack_counter -= 1
-            idx = stack[stack_counter]
+            idx = self.stack_test[stack_counter]
+            if self.nodes[idx].visited == 0:
+                self.nodes[idx].visited = 1
+            else:
+                print(idx, "duplicate!!")
             if self.node_overlap(nid, idx):
                 if idx >= self.leaf_offset:
                     ti.atomic_add(cnt, 1)
-                elif stack_counter < 127:
-                    left, right = self.nodes[idx].left, self.nodes[idx].right
-                    stack[stack_counter] = left
-                    stack_counter += 1
-                    stack[stack_counter] = right
-                    stack_counter += 1
                 else:
-                    print(nid, "fuck")
-                    break
+                    left, right = self.nodes[idx].left, self.nodes[idx].right
+                    self.stack_test[stack_counter] = left
+                    stack_counter += 1
+                    self.stack_test[stack_counter] = right
+                    stack_counter += 1
+                # else:
+                #     print(nid, "fuck")
+                #     break
+
+        # for i in range(self.num_leafs):
+        #     idx = i + self.leaf_offset
+        #     if self.node_overlap(nid, idx):
+        #         cnt += 1
 
         return cnt
 

@@ -202,6 +202,7 @@ def show_options():
     if not old_lin_vel_z_ui == lin_vel_z_ui:
         sim.obs_lin_vel[0][2] = lin_vel_z_ui
 
+
     # with gui.sub_window("Debug", 0.8, 0.8, 0.3, 0.5) as w:
     #
     #     if sim.max_num_tetra_dynamic > 0:
