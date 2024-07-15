@@ -69,23 +69,38 @@ class MeshTaichiWrapper:
         self.eid_np = np.reshape(self.eid_np, (len(self.mesh.edges), 2))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
-        # self.bending_indices_np = self.initBendingIndices()
-        # self.bending_indices = ti.Vector.field(n=2, shape=self.bending_indices_np.shape[0])
-        # self.bending_indices.copy_from(self.bending_indices_np)
+        self.bending_indices = ti.field(dtype=ti.i32)
+        self.initBendingIndices()
+
+        self.render_bending_vert = ti.Vector.field(3, dtype=ti.f32, shape=(len(self.mesh.verts),))
+        self.init_render_bending_vert()
 
 
-###########################
+    @ti.kernel
+    def init_render_bending_vert(self):
+        for v in self.mesh.verts:
+            self.render_bending_vert[v.id] = ti.Vector([v.x[0], v.x[1], v.x[2]])
 
     def initBendingIndices(self):
         # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
         bend_count, neighbor_set = self.findTriNeighbors()
-        return self.getBendingPair(bend_count,neighbor_set)
+        bending_indices_np = self.getBendingPair(bend_count, neighbor_set)
+
+        ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
+
+        for i in range(bending_indices_np.shape[0]):
+            self.bending_indices[2 * i] = bending_indices_np[i][0]
+            self.bending_indices[2 * i + 1] = bending_indices_np[i][1]
+
+    @ti.kernel
+    def bendinIndi(self):
+        for v in self.mesh.verts:
+            self.render_bending_vert[v.id] = ti.Vector([v.x[0], v.x[1], v.x[2]])
 
     def findTriNeighbors(self):
         # print("initBend")
         # print(self.fid_np)
         # print(self.fid_np.shape)
-
         num_f = np.rint(self.fid_np.shape[0]).astype(int)
         edgeTable = np.zeros((num_f * 3, self.fid_np.shape[1]), dtype=int)
         # print(edgeTable.shape)
@@ -109,7 +124,7 @@ class MeshTaichiWrapper:
 
         ii = 0
         bending_constraint_count = 0
-        while (ii < 3 * num_f):
+        while (ii < 3 * num_f - 1):
             e0 = edgeTable[ii, :]
             e1 = edgeTable[ii + 1, :]
 
@@ -123,16 +138,14 @@ class MeshTaichiWrapper:
                 ii = ii + 1
 
         # print(bending_constraint_count, "asdf!!")
-
         return bending_constraint_count, neighbors
 
-    def getBendingPair(self,bend_count,neighbors):
+    def getBendingPair(self, bend_count, neighbors):
 
         num_f = np.rint(self.fid_np.shape[0]).astype(int)
-        pairs = np.zeros((bend_count,2),dtype = int )
+        pairs = np.zeros((bend_count, 2), dtype=int)
 
         count = 0
-
         # print(neighbors)
 
         for f in range(num_f):
@@ -140,26 +153,24 @@ class MeshTaichiWrapper:
                 eid = 3 * f + i
                 neighbor_edge = neighbors[eid]
 
-                if neighbor_edge >= 0 :
+                if neighbor_edge >= 0:
                     # print(eid,neighbor_edge,neighbors[neighbor_edge])
-                    neighbors[neighbor_edge]=-1
+                    neighbors[neighbor_edge] = -1
                     # find not shared vertex in common edge of adjacent triangles
                     v = np.sort(self.fid_np[f])
 
-                    neighbor_fid = int(np.floor(neighbor_edge / 3.0 + 1e-4)+ 1e-4)
+                    neighbor_fid = int(np.floor(neighbor_edge / 3.0 + 1e-4) + 1e-4)
                     neighbor_eid_local = neighbor_fid % 3
 
                     w = np.sort(self.fid_np[neighbor_fid])
 
-                    pairs[count, 0] = v[~np.isin(v,w)]
-                    pairs[count, 1] = w[~np.isin(w,v)]
+                    pairs[count, 0] = v[~np.isin(v, w)]
+                    pairs[count, 1] = w[~np.isin(w, v)]
 
                     count = count + 1
 
         # print("검산!!!",count == bend_count)
-
-        # if count == 40:
-        #     print(pairs)
+        return pairs
 
 
 

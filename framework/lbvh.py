@@ -190,7 +190,6 @@ class LBVH:
             delta_min = delta_r
 
         # print(d)
-
         l_max = 2
         while self.delta(i, i + l_max * d) > delta_min:
             l_max <<= 2
@@ -208,9 +207,43 @@ class LBVH:
             start = i + l * d
             end = i
 
-
         return start, end
 
+    @ti.func
+    def determine_range_test(self, i, n):
+
+        delta_l = self.delta(i, i - 1)
+        delta_r = self.delta(i, i + 1)
+
+        d = 1
+
+        delta_min = delta_l
+        if delta_r < delta_l:
+            d = - 1
+            delta_min = delta_r
+
+        print("delta_l: ", delta_l)
+        print("delta_r: ", delta_r)
+        print("d: ", d)
+        # print(d)
+        l_max = 2
+        while self.delta(i, i + l_max * d) > delta_min:
+            l_max <<= 2
+
+        l = 0
+        t = l_max // 2
+        while t >= 1:
+            if i + (l + t) * d >= 0 and i + (l + t) * d < n and self.delta(i, i + (l + t) * d) > delta_min:
+                l += t
+            t //= 2
+        print("l: ", l)
+        start = i
+        end = i + l * d
+        if d == -1:
+            start = i + l * d
+            end = i
+
+        return start, end
 
 
     @ti.kernel
@@ -220,8 +253,24 @@ class LBVH:
         for i in range(self.num_leafs - 1):
             start, end = self.determine_range(i, self.num_leafs)
             split = self.find_split(start, end)
-            left = split + self.num_leafs - 1 if split == start else split
-            right = split + 1 + self.num_leafs - 1 if split + 1 == end else split + 1
+            # if split < start or split > end:
+            #     print("split is out of range")
+            left = split
+            if split == start:
+                left += self.leaf_offset
+
+            right = split + 1
+            if right == end:
+                right += self.leaf_offset
+
+            # if left == 17515:
+            #     print(i, left, right)
+            # if i == 17514:
+            #     print(i, start, end, split)
+            #
+            # if i == 17515:
+            #     print(i, start, end, split)
+
             self.nodes[i].left = left
             self.nodes[i].right = right
             self.nodes[i].visited = 0
@@ -230,16 +279,27 @@ class LBVH:
             self.nodes[i].start = start
             self.nodes[i].end = end
 
-        cnt = 0
-        for i in range(self.num_leafs - 1):
-            if self.nodes[i].left == self.nodes[i].parent:
-                cnt += 1
-                # print(i, "loop!")
+        test_id = 17514
+        print("morton code", test_id, ": ", self.morton_codes[test_id])
+        print("morton code", test_id - 1, ": ", self.morton_codes[test_id - 1])
+        print("morton code", test_id + 1, ": ", self.morton_codes[test_id + 1])
+        start, end = self.determine_range_test(test_id, self.num_leafs)
+        print(test_id, start, end)
+        # cnt_l = 0
+        # cnt_r = 0
+        # for i in range(self.num_leafs - 1):
+        #     if self.nodes[i].left == self.nodes[i].parent:
+        #         # cnt_l += 1
+        #         # if cnt_l < 3:
+        #         print(i)
+                # cnt_l += 1
+            # if self.nodes[i].right == self.nodes[i].parent:
+            #     cnt_r += 1
+            #     print(i, "loop!")
 
-        print("# loop: ", cnt)
+        # print("# loop: ", cnt_l, cnt_r)
         # for i in range(self.num_leafs - 1):
         #     print(i, self.nodes[i].parent)
-
 
     @ti.func
     def atomicCAS(self, id, old, new):
@@ -310,6 +370,7 @@ class LBVH:
         # # # # for i in range(self.num_leafs):
         # # # i = 0 + self.num_leafs - 1
         cnt_total = 0
+
         for i in range(self.num_leafs):
             node_id = i + self.num_leafs - 1
             min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
@@ -381,7 +442,7 @@ class LBVH:
             #         break
 
             # print(stack)
-        print(cnt_total /self.num_leafs)
+        # print(cnt_total /self.num_leafs)
         return cnt
 
     @ti.kernel
@@ -482,9 +543,9 @@ class LBVH:
         self.assign_internal_nodes()
         self.compute_bvh_aabbs()
 
-        print(self.nodes[17423].parent, self.nodes[17423].left, self.nodes[17423].right)
-        print(self.nodes[196503].parent, self.nodes[196503].left, self.nodes[196503].right)
-        print(self.nodes[17424].parent, self.nodes[17424].left, self.nodes[17424].right)
+        # print(self.nodes[17423].parent, self.nodes[17423].left, self.nodes[17423].right)
+        # print(self.nodes[196503].parent, self.nodes[196503].left, self.nodes[196503].right)
+        # print(self.nodes[17424].parent, self.nodes[17424].left, self.nodes[17424].right)
 
 
     @ti.func

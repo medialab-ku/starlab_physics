@@ -48,9 +48,9 @@ offsets = concat.concat_mesh(concat_model_name, model_dir, model_names, trans_li
 
 #dynamic mesh
 # mesh_dy = MeshTaichiWrapper("../models/concat.obj", offsets=offsets, scale=0.005, trans=ti.math.vec3(0, -6.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", offsets=[0], scale=5.0, trans=ti.math.vec3(0, 20.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/square_big.obj", offsets=[0], scale=2.0, trans=ti.math.vec3(0, 5.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
 
 #static mesh
 # mesh_st = MeshTaichiWrapper("../models/OBJ/torus3K.obj",  offsets=[0], scale=2.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_st = MeshTaichiWrapper("../models/OBJ/JinhoOBJ.obj",  offsets=[0], scale=0.01, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/Arabesque/Kyra_DVStandClubbing_0000.obj",  offsets=[0], scale=10.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
