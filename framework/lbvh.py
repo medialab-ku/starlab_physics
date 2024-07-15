@@ -197,7 +197,7 @@ class LBVH:
         l = 0
         t = l_max // 2
         while t >= 1:
-            if i + (l + t) * d >= 0 and i + (l + t) * d < n and self.delta(i, i + (l + t) * d) > delta_min:
+            if i + (l + t) * d >= 0 and i + (l + t) * d < n and self.delta(i, i + (l + t) * d) >= delta_min:
                 l += t
             t //= 2
 
@@ -230,10 +230,16 @@ class LBVH:
         while self.delta(i, i + l_max * d) > delta_min:
             l_max <<= 2
 
+        print("l_max: ", l_max)
         l = 0
         t = l_max // 2
+        print("t: ", t)
         while t >= 1:
-            if i + (l + t) * d >= 0 and i + (l + t) * d < n and self.delta(i, i + (l + t) * d) > delta_min:
+            a = i + (l + t) * d
+            b = self.delta(i, a)
+            print("a: ", a)
+            print("b: ", b)
+            if a >= 0 and a < n and b >= delta_min:
                 l += t
             t //= 2
         print("l: ", l)
@@ -279,25 +285,25 @@ class LBVH:
             self.nodes[i].start = start
             self.nodes[i].end = end
 
-        test_id = 17514
-        print("morton code", test_id, ": ", self.morton_codes[test_id])
-        print("morton code", test_id - 1, ": ", self.morton_codes[test_id - 1])
-        print("morton code", test_id + 1, ": ", self.morton_codes[test_id + 1])
-        start, end = self.determine_range_test(test_id, self.num_leafs)
-        print(test_id, start, end)
-        # cnt_l = 0
-        # cnt_r = 0
-        # for i in range(self.num_leafs - 1):
-        #     if self.nodes[i].left == self.nodes[i].parent:
-        #         # cnt_l += 1
-        #         # if cnt_l < 3:
-        #         print(i)
+        # test_id = 17514
+        # print("morton code", test_id, ": ", self.morton_codes[test_id])
+        # print("morton code", test_id - 1, ": ", self.morton_codes[test_id - 1])
+        # print("morton code", test_id + 1, ": ", self.morton_codes[test_id + 1])
+        # start, end = self.determine_range_test(test_id, self.num_leafs)
+        # print(test_id, start, end)
+        cnt_l = 0
+        cnt_r = 0
+        for i in range(self.num_leafs - 1):
+            if self.nodes[i].left == self.nodes[i].parent:
                 # cnt_l += 1
-            # if self.nodes[i].right == self.nodes[i].parent:
-            #     cnt_r += 1
-            #     print(i, "loop!")
+                # if cnt_l < 3:
+                # print(i)
+                cnt_l += 1
+            if self.nodes[i].right == self.nodes[i].parent:
+                cnt_r += 1
+                print(i, "loop!")
 
-        # print("# loop: ", cnt_l, cnt_r)
+        print("# loop: ", cnt_l, cnt_r)
         # for i in range(self.num_leafs - 1):
         #     print(i, self.nodes[i].parent)
 
@@ -319,41 +325,41 @@ class LBVH:
     def compute_bvh_aabbs(self):
 
         self.init_flag()
-        # while True:
-        #     cnt = self.compute_node_aabbs()
-        #     # print("cnt: ", cnt)
-        #     if cnt == 0:
-        #         break
+        while True:
+            cnt = self.compute_node_aabbs()
+            # print("cnt: ", cnt)
+            if cnt == 0:
+                break
 
         # print(self.nodes[0].aabb_min, self.nodes[0].aabb_max)
-        cnt = self.compute_node_aabbs()
+        # cnt = self.compute_node_aabbs()
     @ti.kernel
     def compute_node_aabbs(self) -> ti.int32:
         # ti.loop_config(block_dim=64)
         cnt = 0
         for i in range(self.num_leafs - 1):
-            aabb_min, aabb_max = ti.math.vec3(1e4), ti.math.vec3(-1e4)
-            start, end = self.nodes[i].start, self.nodes[i].end
-            size = end - start + 1
-            offset = self.num_leafs - 1 + start
-            for j in range(size):
-                min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
-                aabb_min = ti.min(aabb_min, min0)
-                aabb_max = ti.max(aabb_max, max0)
-
-            self.nodes[i].aabb_min = aabb_min
-            self.nodes[i].aabb_max = aabb_max
-        #     if self.nodes[i].visited == 2:
-        #         left, right = self.nodes[i].left, self.nodes[i].right
-        #         min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
-        #         max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
-        #         self.nodes[i].aabb_min = ti.min(min0, min1)
-        #         self.nodes[i].aabb_max = ti.max(max0, max1)
-        #         parent = self.nodes[i].parent
-        #         self.nodes[i].visited += 1
-        #         self.nodes[parent].visited += 1
-        #         ti.atomic_add(cnt, 1)
-        # return cnt
+        #     aabb_min, aabb_max = ti.math.vec3(1e4), ti.math.vec3(-1e4)
+        #     start, end = self.nodes[i].start, self.nodes[i].end
+        #     size = end - start + 1
+        #     offset = self.num_leafs - 1 + start
+        #     for j in range(size):
+        #         min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
+        #         aabb_min = ti.min(aabb_min, min0)
+        #         aabb_max = ti.max(aabb_max, max0)
+        #
+        #     self.nodes[i].aabb_min = aabb_min
+        #     self.nodes[i].aabb_max = aabb_max
+            if self.nodes[i].visited == 2:
+                left, right = self.nodes[i].left, self.nodes[i].right
+                min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
+                max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
+                self.nodes[i].aabb_min = ti.min(min0, min1)
+                self.nodes[i].aabb_max = ti.max(max0, max1)
+                parent = self.nodes[i].parent
+                self.nodes[i].visited += 1
+                self.nodes[parent].visited += 1
+                ti.atomic_add(cnt, 1)
+        return cnt
         # # id0 = 0 + self.num_leafs - 1
         # cnt = 0
         # cnt_total = 0

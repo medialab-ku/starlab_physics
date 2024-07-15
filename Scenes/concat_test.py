@@ -43,7 +43,7 @@ for i in range(3):
 # scale_list.append(1.)
 # scale_list.append(1.)
 # scale_list.append(5.)
-concat_model_name="concat.obj"
+concat_model_name = "concat.obj"
 offsets = concat.concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
 
 #dynamic mesh
