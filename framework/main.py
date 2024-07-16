@@ -376,7 +376,7 @@ while window.running:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
         # sim.lbvh_st.draw_zSort(scene)
-        sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
+        # sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
 

@@ -291,7 +291,7 @@ class LBVH:
             #
             # if i == 17515:
             #     print(i, start, end, split)
-            print(i, start, end, split, left, right)
+            # print(i, start, end, split, left, right)
             self.nodes[i].left = left
             self.nodes[i].right = right
             self.nodes[i].visited = 0
