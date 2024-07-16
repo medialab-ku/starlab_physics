@@ -12,12 +12,12 @@ model_names = []
 trans_list = []
 scale_list = []
 
-for i in range(3):
-    for j in range(3):
+for i in range(1):
+    for j in range(1):
         for k in range(3):
-            model_names.append("sphere1K.obj")
-            trans_list.append(np.array([0.5 * i, 1.0 * j, 0.5 * k]))
-            scale_list.append(5.0)
+            model_names.append("square.obj")
+            trans_list.append(np.array([0.0 * i, 0.0 * j, 0.0 * k]))
+            scale_list.append(1.0)
 
 # for i in range(1):
 #     for j in range(1):
@@ -48,9 +48,9 @@ offsets = concat.concat_mesh(concat_model_name, model_dir, model_names, trans_li
 
 #dynamic mesh
 # mesh_dy = MeshTaichiWrapper("../models/concat.obj", offsets=offsets, scale=0.005, trans=ti.math.vec3(0, -6.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dy = MeshTaichiWrapper("../models/OBJ/square_big.obj", offsets=[0], scale=2.0, trans=ti.math.vec3(0, 5.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", offsets=[0], scale=5.0, trans=ti.math.vec3(0, 5.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
 
 #static mesh
 # mesh_st = MeshTaichiWrapper("../models/OBJ/torus3K.obj",  offsets=[0], scale=2.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_st = MeshTaichiWrapper("../models/Arabesque/Kyra_DVStandClubbing_0000.obj",  offsets=[0], scale=10.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/concat.obj",  offsets=[0], scale=5.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
