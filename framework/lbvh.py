@@ -46,12 +46,12 @@ class LBVH:
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
-        self.BITS_PER_PASS = 8
+        self.BITS_PER_PASS = 6
         self.RADIX = pow(2, self.BITS_PER_PASS)
         self.passes = (30 + self.BITS_PER_PASS - 1) // self.BITS_PER_PASS
         self.prefix_sum_executer = ti.algorithms.PrefixSumExecutor(self.RADIX)
         self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
-        self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
+        # self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
 
         self.atomic_flag = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
@@ -114,12 +114,12 @@ class LBVH:
 
     # // obtain and set morton code based on normalized position
             morton3d = self.morton_3d(x, y, z)
-            if morton3d < 0:
-                cnt += 1
+            # if morton3d < 0:
+            #     cnt += 1
             self.morton_codes[f.id] = morton3d
             # ti.atomic_max(max_value, morton3d)
             self.object_ids[f.id] = f.id
-        print(cnt)
+        # print(cnt)
 
         # return max_value
 
@@ -332,14 +332,14 @@ class LBVH:
         # for i in range(self.num_leafs - 1):
         #     print(i, self.nodes[i].parent)
 
-    @ti.func
-    def atomicCAS(self, id, old, new):
-
-        old_value = self.nodes[id].visited
-        if self.nodes[id].visited == old:
-            self.nodes[id].visited = new
-
-        return old_value
+    # @ti.func
+    # def atomicCAS(self, id, old, new):
+    #
+    #     old_value = self.nodes[id].visited
+    #     if self.nodes[id].visited == old:
+    #         self.nodes[id].visited = new
+    #
+    #     return old_value
 
     @ti.kernel
     def init_flag(self):
@@ -479,7 +479,8 @@ class LBVH:
     @ti.kernel
     def count_frequency(self, pass_num: ti.i32):
         for i in range(self.num_leafs):
-            digit = (self.morton_codes[i] >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
+            mc_i = self.morton_codes[i]
+            digit = (mc_i >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
             ti.atomic_add(self.prefix_sum[digit], 1)
 
 
@@ -488,7 +489,8 @@ class LBVH:
 
         for i in range(self.num_leafs):
             I = self.num_leafs - 1 - i
-            digit = (self.morton_codes[I] >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
+            mc_i = self.morton_codes[I]
+            digit = (mc_i >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
             idx = ti.atomic_sub(self.prefix_sum[digit], 1) - 1
             if idx >= 0:
                 self.sorted_object_ids[idx] = self.object_ids[I]
@@ -544,7 +546,7 @@ class LBVH:
         self.add_count()
 
     def radix_sort(self):
-        # print(passes)
+        print(self.passes)
         for pi in range(self.passes):
             self.prefix_sum.fill(0)
             self.count_frequency(pi)
@@ -564,11 +566,11 @@ class LBVH:
         self.nodes.parent.fill(-1)
         # self.nodes.visited.fill(0)
         self.assign_morton(mesh, aabb_min_g, aabb_max_g)
-        # self.radix_sort()
+        self.radix_sort()
 
         # self.sort()
         # self.sort()
-        ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
+        # ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
         # self.test_sort()
 
         self.assign_leaf_nodes(mesh)

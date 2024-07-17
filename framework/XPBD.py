@@ -502,13 +502,13 @@ class Solver:
                 # aabb_max = x + self.padding * ti.math.vec3(1.0)
                 # a = self.lbvh_dy.traverse_bvh_single(aabb_min, aabb_max, vid, self.vt_dy_candidates, self.vt_dy_candidates_num)
                 # ti.atomic_add(cnt, a)
-            else:
-                vid = i - 2 * self.max_num_verts_dy
-                x = self.mesh_st.verts.x[vid]
-                aabb_min = x - self.padding * ti.math.vec3(1.0)
-                aabb_max = x + self.padding * ti.math.vec3(1.0)
-                a = self.lbvh_dy.traverse_bvh_single(aabb_min, aabb_max, vid, self.tv_st_candidates, self.tv_st_candidates_num)
-                ti.atomic_add(cnt, a)
+            # else:
+            #     vid = i - 2 * self.max_num_verts_dy
+            #     x = self.mesh_st.verts.x[vid]
+            #     aabb_min = x - self.padding * ti.math.vec3(1.0)
+            #     aabb_max = x + self.padding * ti.math.vec3(1.0)
+            #     a = self.lbvh_dy.traverse_bvh_single(aabb_min, aabb_max, vid, self.tv_st_candidates, self.tv_st_candidates_num)
+            #     ti.atomic_add(cnt, a)
 
         return cnt
 
@@ -824,7 +824,7 @@ class Solver:
             self.solve_collision_constraints_x()
 
         compliance_sewing = 1000 * self.YM * dt * dt
-        self.solve_sewing_constraints_x(compliance_sewing)
+        # self.solve_sewing_constraints_x(compliance_sewing)
         # self.solve_pressure_constraints_x()
         self.update_dx()
     def solve_constraints_v(self):
@@ -968,12 +968,12 @@ class Solver:
         if self.enable_collision_handling:
             self.mesh_dy.computeAABB_faces(padding=self.padding)
             aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB()
-            self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
+            # self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
 
             if self.mesh_st != None:
                 self.mesh_st.computeAABB_faces(padding=self.padding)
                 aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-                self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+                # self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
             # cnt_lbvh = self.broadphase_lbvh()
         for _ in range(n_substeps):

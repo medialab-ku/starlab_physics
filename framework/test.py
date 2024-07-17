@@ -35,4 +35,20 @@ def compute_adjacency_list(num_verts, edges):
 
 edges = [0, 1, 1, 2, 2, 0]
 adjacency_list = compute_adjacency_list(3, edges)
-print(Hierholzer(adjacency_list))
+# print(Hierholzer(adjacency_list))
+
+print(int('11111111', 2))
+mc_i = int('00101101101101101101101101101101', 2)
+
+morton_codes = []
+morton_codes.append(int('00101101101101101101101101101101', 2))
+morton_codes.append(int('00001001001001001001001001001001', 2))
+morton_codes.append(int('00111111111111111111111111111111', 2))
+morton_codes.append(int('00010010010010010010010010010010', 2))
+pass_num = 0
+BITS_PER_PASS = 6
+RADIX = pow(2, BITS_PER_PASS)
+pass_num = (30 + BITS_PER_PASS - 1) // BITS_PER_PASS
+for i in range(pass_num):
+    digit = (mc_i >> (i * BITS_PER_PASS)) & (RADIX - 1)
+    print(bin(digit))
