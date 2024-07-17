@@ -973,7 +973,7 @@ class Solver:
             if self.mesh_st != None:
                 self.mesh_st.computeAABB_faces(padding=self.padding)
                 aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-                # self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+                self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
             # cnt_lbvh = self.broadphase_lbvh()
         for _ in range(n_substeps):

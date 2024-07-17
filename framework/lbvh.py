@@ -487,14 +487,17 @@ class LBVH:
     @ti.kernel
     def sort_by_digit(self, pass_num: ti.i32):
 
+        ti.loop_config(serialize=True)
         for i in range(self.num_leafs):
             I = self.num_leafs - 1 - i
             mc_i = self.morton_codes[I]
             digit = (mc_i >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
-            idx = ti.atomic_sub(self.prefix_sum[digit], 1) - 1
-            if idx >= 0:
-                self.sorted_object_ids[idx] = self.object_ids[I]
-                self.sorted_morton_codes[idx] = self.morton_codes[I]
+            idx = self.prefix_sum[digit] - 1
+            # if idx >= 0:
+            self.sorted_object_ids[idx] = self.object_ids[I]
+            self.sorted_morton_codes[idx] = self.morton_codes[I]
+            self.prefix_sum[digit] -= 1
+
 
     @ti.kernel
     def upsweep(self, step: ti.int32, size: ti.int32):
@@ -546,7 +549,7 @@ class LBVH:
         self.add_count()
 
     def radix_sort(self):
-        print(self.passes)
+        # print(self.passes)
         for pi in range(self.passes):
             self.prefix_sum.fill(0)
             self.count_frequency(pi)
