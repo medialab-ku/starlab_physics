@@ -51,7 +51,7 @@ class LBVH:
         self.passes = (30 + self.BITS_PER_PASS - 1) // self.BITS_PER_PASS
         self.prefix_sum_executer = ti.algorithms.PrefixSumExecutor(self.RADIX)
         self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
-        # self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
+        self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
 
         self.atomic_flag = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
@@ -262,7 +262,7 @@ class LBVH:
 
 
     @ti.kernel
-    def assign_internal_nodes(self):
+    def assign_internal_nodes_Karras12(self):
 
         # ti.loop_config(block_dim=64)
         cnt = 0
@@ -340,6 +340,52 @@ class LBVH:
     #         self.nodes[id].visited = new
     #
     #     return old_value
+    @ti.kernel
+    def assign_internal_nodes_and_bv_Apetrei14(self):
+
+        for i in range(self.num_leafs):
+
+            R = i
+            L = i
+
+            current = i
+            aabb_min = self.nodes[i + self.leaf_offset].aabb_min
+            aabb_max = self.nodes[i + self.leaf_offset].aabb_max
+            is_leaf = True
+            while True:
+
+                if L == 0 and R == self.num_leafs - 1: break
+
+                idx = self.nodes[current + self.leaf_offset] if is_leaf else 2 * current
+
+
+                previous = -1
+                parent = -1
+                if 0 == L or (R == N and self.delta(R + 1, R) < self.delta(L, L - 1)):
+
+                    parent = R
+                    previous = other_bounds[parent].exchange(L)
+
+                    if invalid != previous:
+                        R = previous
+                        self.nodes[parent].left = idx
+
+                    else:
+                        parent = L - 1;
+                        previous = other_bounds[parent].exchange(R)
+                        if (invalid != previous):
+                            L = previous
+                            self.nodes[parent].right = idx
+
+
+
+                self.nodes[parent].Box.Expand(aabb)
+                if invalid == previous: break
+
+                current = parent
+                aabb_min, aabb_max = self.nodes[current].aabb_min, self.nodes[current].aabb_max
+                is_leaf = False
+
 
     @ti.kernel
     def init_flag(self):
@@ -577,8 +623,7 @@ class LBVH:
         # self.test_sort()
 
         self.assign_leaf_nodes(mesh)
-        self.assign_internal_nodes()
-
+        self.assign_internal_nodes_Karras12()
         # self.nodes.visited.fill(0)
         self.compute_bvh_aabbs()
 
