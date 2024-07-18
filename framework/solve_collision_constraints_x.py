@@ -3,7 +3,7 @@ import distance as di
 
 
 @ti.func
-def __vt_st(vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_cache_size, vt_st_pair, vt_st_pair_num, vt_st_pair_g, vt_st_pair_schur):
+def __vt_st(compliance, vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_cache_size, vt_st_pair, vt_st_pair_num, vt_st_pair_g, vt_st_pair_schur):
     v0 = vi_d
     v1 = mesh_st.face_indices[3 * fi_s + 0]
     v2 = mesh_st.face_indices[3 * fi_s + 1]
@@ -51,8 +51,8 @@ def __vt_st(vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_cache_size, vt_st_pair, vt
         g0, g1, g2, g3 = di.g_PT(x0, x1, x2, x3)
 
     if d < dHat:
-        schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0) + 1e-4
-        ld = (dHat - d) / schur
+        schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0)
+        ld = compliance * (dHat - d) / (compliance * schur + 1.0)
         mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
         mesh_dy.verts.nc[v0] += 1
         if vt_st_pair_num[vi_d] < vt_st_cache_size:

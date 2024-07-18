@@ -537,7 +537,7 @@ class Solver:
 
         return cnt
     @ti.kernel
-    def solve_collision_constraints_x(self):
+    def solve_collision_constraints_x(self, compliance: ti.f32):
 
         self.vt_st_pair_num.fill(0)
         self.tv_st_pair_num.fill(0)
@@ -549,7 +549,7 @@ class Solver:
                 vid = i
                 for j in range(self.vt_st_candidates_num[vid]):
                     fi_s = self.vt_st_candidates[vid, j]
-                    solve_collision_constraints_x.__vt_st(vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
+                    solve_collision_constraints_x.__vt_st(compliance, vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
                 # for j in range(self.vt_dy_candidates_num[vid]):
@@ -821,7 +821,8 @@ class Solver:
         # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
             cnt_lbvh = self.broadphase_lbvh()
-            self.solve_collision_constraints_x()
+            compliance_collision = 1e6
+            self.solve_collision_constraints_x(compliance_collision)
 
         compliance_sewing = 1000 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
