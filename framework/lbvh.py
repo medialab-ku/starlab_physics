@@ -357,12 +357,12 @@ class LBVH:
         self.init_Apetrei()
         while True:
             cnt, root = self.assign_internal_nodes_and_bv_Apetrei()
-            print("cnt: ", cnt)
+            # print("cnt: ", cnt)
             # print(root)
             if cnt == 0:
                 self.root = root
                 break
-        print(self.root)
+        # print(self.root)
         # for i in range(self.num_leafs - 1):
         #     print(i, self.nodes[i].range_l, self.nodes[i].range_r)
         #     # print(root)
@@ -618,10 +618,10 @@ class LBVH:
         return cnt
 
     @ti.func
-    def traverse_bvh_single(self, min0, max0, i, cache, nums):
+    def traverse_bvh_single(self, root, min0, max0, i, cache, nums):
 
         stack = ti.Vector([-1 for j in range(32)])
-        stack[0] = 0
+        stack[0] = self.root
         stack_counter = 1
         idx = self.root
         cnt = 0

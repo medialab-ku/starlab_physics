@@ -123,7 +123,7 @@ def show_options():
             print(sim.lbvh_st.traverse_bvh_single_test(n_leaf))
         n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_leafs - 2)
         if not n_internal_old == n_internal:
-            print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
+            # print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
             print("left: ", sim.lbvh_st.nodes[n_internal].child_a, "right: ", sim.lbvh_st.nodes[n_internal].child_b)
 
         # if sim.max_num_tetra_dynamic > 0:
