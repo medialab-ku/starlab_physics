@@ -814,9 +814,7 @@ class Solver:
     def solve_constraints_jacobi_x(self, dt):
 
         self.init_variables()
-        # print(self.YM)
         compliance = self.YM * dt * dt
-        # print(compliance)
         self.solve_spring_constraints_x(compliance)
         # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:

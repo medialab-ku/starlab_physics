@@ -88,7 +88,7 @@ def show_options():
     n_leaf_old = n_leaf
     n_internal_old = n_internal
 
-    with gui.sub_window("Time Step", 0., 0., 0.3, 0.5) as w:
+    with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.5) as w:
         # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
@@ -158,49 +158,49 @@ def show_options():
     if not old_strain_limit == strain_limit_ui:
         sim.strain_limit = strain_limit_ui
 
-    global ang_vel_x_ui
-    global ang_vel_y_ui
-    global ang_vel_z_ui
-
-    global lin_vel_x_ui
-    global lin_vel_y_ui
-    global lin_vel_z_ui
-
-    old_ang_vel_x_ui = ang_vel_x_ui
-    old_ang_vel_y_ui = ang_vel_y_ui
-    old_ang_vel_z_ui = ang_vel_z_ui
-
-    old_lin_vel_x_ui = lin_vel_x_ui
-    old_lin_vel_y_ui = lin_vel_y_ui
-    old_lin_vel_z_ui = lin_vel_z_ui
-
-    with gui.sub_window("Move obstacle", 0.8, 0.8, 0.3, 0.5) as w:
-        sim.enable_move_obstacle = w.checkbox("move obstacle", sim.enable_move_obstacle)
-        ang_vel_x_ui = w.slider_float("ang vel x", ang_vel_x_ui, -40, 40.)
-        ang_vel_y_ui = w.slider_float("ang vel y", ang_vel_y_ui, -40, 40.)
-        ang_vel_z_ui = w.slider_float("ang vel z", ang_vel_z_ui, -40, 40.)
-
-        lin_vel_x_ui = w.slider_float("lin vel x", lin_vel_x_ui, -40.0, 40.)
-        lin_vel_y_ui = w.slider_float("lin vel y", lin_vel_y_ui, -40.0, 40.)
-        lin_vel_z_ui = w.slider_float("lin vel z", lin_vel_z_ui, -40.0, 40.)
-
-    if not old_ang_vel_x_ui == ang_vel_x_ui:
-        sim.obs_ang_vel[0][0] = ang_vel_x_ui
-
-    if not old_ang_vel_y_ui == ang_vel_y_ui:
-        sim.obs_ang_vel[0][1] = ang_vel_y_ui
-
-    if not old_ang_vel_z_ui == ang_vel_z_ui:
-        sim.obs_ang_vel[0][2] = ang_vel_z_ui
-
-    if not old_lin_vel_x_ui == lin_vel_x_ui:
-        sim.obs_lin_vel[0][0] = lin_vel_x_ui
-
-    if not old_lin_vel_y_ui == lin_vel_y_ui:
-        sim.obs_lin_vel[0][1] = lin_vel_y_ui
-
-    if not old_lin_vel_z_ui == lin_vel_z_ui:
-        sim.obs_lin_vel[0][2] = lin_vel_z_ui
+    # global ang_vel_x_ui
+    # global ang_vel_y_ui
+    # global ang_vel_z_ui
+    #
+    # global lin_vel_x_ui
+    # global lin_vel_y_ui
+    # global lin_vel_z_ui
+    #
+    # old_ang_vel_x_ui = ang_vel_x_ui
+    # old_ang_vel_y_ui = ang_vel_y_ui
+    # old_ang_vel_z_ui = ang_vel_z_ui
+    #
+    # old_lin_vel_x_ui = lin_vel_x_ui
+    # old_lin_vel_y_ui = lin_vel_y_ui
+    # old_lin_vel_z_ui = lin_vel_z_ui
+    #
+    # with gui.sub_window("Move obstacle", 0.8, 0.8, 0.3, 0.5) as w:
+    #     sim.enable_move_obstacle = w.checkbox("move obstacle", sim.enable_move_obstacle)
+    #     ang_vel_x_ui = w.slider_float("ang vel x", ang_vel_x_ui, -40, 40.)
+    #     ang_vel_y_ui = w.slider_float("ang vel y", ang_vel_y_ui, -40, 40.)
+    #     ang_vel_z_ui = w.slider_float("ang vel z", ang_vel_z_ui, -40, 40.)
+    #
+    #     lin_vel_x_ui = w.slider_float("lin vel x", lin_vel_x_ui, -40.0, 40.)
+    #     lin_vel_y_ui = w.slider_float("lin vel y", lin_vel_y_ui, -40.0, 40.)
+    #     lin_vel_z_ui = w.slider_float("lin vel z", lin_vel_z_ui, -40.0, 40.)
+    #
+    # if not old_ang_vel_x_ui == ang_vel_x_ui:
+    #     sim.obs_ang_vel[0][0] = ang_vel_x_ui
+    #
+    # if not old_ang_vel_y_ui == ang_vel_y_ui:
+    #     sim.obs_ang_vel[0][1] = ang_vel_y_ui
+    #
+    # if not old_ang_vel_z_ui == ang_vel_z_ui:
+    #     sim.obs_ang_vel[0][2] = ang_vel_z_ui
+    #
+    # if not old_lin_vel_x_ui == lin_vel_x_ui:
+    #     sim.obs_lin_vel[0][0] = lin_vel_x_ui
+    #
+    # if not old_lin_vel_y_ui == lin_vel_y_ui:
+    #     sim.obs_lin_vel[0][1] = lin_vel_y_ui
+    #
+    # if not old_lin_vel_z_ui == lin_vel_z_ui:
+    #     sim.obs_lin_vel[0][2] = lin_vel_z_ui
 
 
     # with gui.sub_window("Debug", 0.8, 0.8, 0.3, 0.5) as w:
