@@ -18,6 +18,7 @@ class LBVH:
         self.num_leafs = num_leafs
         self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
+        self.root = -1
         # self.leaf_nodes = Node.field(shape=self.num_leafs)
         # self.internal_nodes = Node.field(shape=(self.num_leafs - 1))
         self.stack_test = ti.field(dtype=ti.int32, shape=self.num_nodes)
@@ -154,7 +155,7 @@ class LBVH:
     def delta_Apetrei(self, i):
         xor = 32
         if i > 0:
-            xor = self.morton_codes[i] ^ self.morton_codes[i - 1]
+            xor = self.morton_codes[i] ^ self.morton_codes[i + 1]
         return xor
 
     @ti.func
@@ -306,25 +307,14 @@ class LBVH:
             self.nodes[parent].range_r = right
 
         return parent
+
     @ti.kernel
-    def assign_internal_nodes_and_bv_Apetrei14(self):
-
+    def init_flag(self):
         for i in range(self.num_leafs):
-            idx = i + self.leaf_offset
+            parent = self.nodes[i + self.num_leafs - 1].parent
+            self.nodes[parent].visited += 1
 
-            self.nodes[idx].range_l = i
-            self.nodes[idx].range_r = i
 
-            if i == 0 or (i != self.num_leafs - 1 and self.delta_Apetrei(i) < self.delta_Apetrei(i - 1)):
-                parent = i
-                self.nodes[parent].child_a = idx
-                self.nodes[parent].range_l = i
-            else:
-                parent = i - 1
-                self.nodes[parent].child_b = idx
-                self.nodes[parent].range_r = i
-
-            # while True:
 
 
 
@@ -343,8 +333,85 @@ class LBVH:
             if cnt == 0:
                 break
 
-        # print(self.nodes[0].aabb_min, self.nodes[0].aabb_max)
-        # cnt = self.compute_node_aabbs()
+    @ti.kernel
+    def init_Apetrei(self):
+        for i in range(self.num_leafs):
+            idx = i + self.leaf_offset
+            self.nodes[idx].range_l = i
+            self.nodes[idx].range_r = i
+
+            if i == 0 or (i != (self.num_leafs - 1) and self.delta_Apetrei(i) < self.delta_Apetrei(i - 1)):
+                parent = i
+                self.nodes[parent].child_a = idx
+                self.nodes[parent].range_l = i
+                self.nodes[parent].visited += 1
+            else:
+                parent = i - 1
+                self.nodes[parent].child_b = idx
+                self.nodes[parent].range_r = i
+                self.nodes[parent].visited += 1
+
+            # print(i, parent)
+
+    def bvh_construction_Apetrei(self):
+        self.init_Apetrei()
+        while True:
+            cnt, root = self.assign_internal_nodes_and_bv_Apetrei()
+            print("cnt: ", cnt)
+            # print(root)
+            if cnt == 0:
+                self.root = root
+                break
+        print(self.root)
+        # for i in range(self.num_leafs - 1):
+        #     print(i, self.nodes[i].range_l, self.nodes[i].range_r)
+        #     # print(root)
+
+    @ti.kernel
+    def assign_internal_nodes_and_bv_Apetrei(self) -> (ti.int32, ti.int32):
+
+        cnt = 0
+        root = -1
+        for i in range(self.num_leafs - 1):
+
+            # left, right = self.nodes[i].range_l, self.nodes[i].range_r
+            # if left == 0 and right == (self.num_leafs - 1):
+            #     print("root: ", i)
+                # cnt = 0
+                # return 0
+
+            if self.nodes[i].visited == 2:
+                parent = -1
+                left, right = self.nodes[i].range_l, self.nodes[i].range_r
+                # print(i, left, right)
+                child_a, child_b = self.nodes[i].child_a, self.nodes[i].child_b
+                min0, min1 = self.nodes[child_a].aabb_min, self.nodes[child_b].aabb_min
+                max0, max1 = self.nodes[child_a].aabb_max, self.nodes[child_b].aabb_max
+                self.nodes[i].aabb_min = ti.min(min0, min1)
+                self.nodes[i].aabb_max = ti.max(max0, max1)
+                if left == 0 and right == (self.num_leafs - 1):
+                    root = i
+
+                elif left == 0 or (right != self.num_leafs - 1 and self.delta_Apetrei(right) < self.delta_Apetrei(left - 1)):
+                    parent = right
+                    self.nodes[parent].child_a = i
+                    self.nodes[parent].range_l = left
+                    self.nodes[i].parent = parent
+                    self.nodes[parent].visited += 1
+                    self.nodes[i].visited += 1
+                    ti.atomic_add(cnt, 1)
+                else:
+                    parent = left - 1
+                    self.nodes[parent].child_b = i
+                    self.nodes[parent].range_r = right
+                    self.nodes[i].parent = parent
+                    self.nodes[parent].visited += 1
+                    self.nodes[i].visited += 1
+                    ti.atomic_add(cnt, 1)
+
+            # print(i, self.nodes[i].range_l, self.nodes[i].range_r)
+        return cnt, root
+
     @ti.kernel
     def compute_node_aabbs(self) -> ti.int32:
         # ti.loop_config(block_dim=64)
@@ -372,6 +439,7 @@ class LBVH:
                 self.nodes[i].aabb_min = ti.min(min0, min1)
                 self.nodes[i].aabb_max = ti.max(max0, max1)
                 parent = self.nodes[i].parent
+
                 self.nodes[i].visited += 1
                 self.nodes[parent].visited += 1
                 ti.atomic_add(cnt, 1)
@@ -468,8 +536,6 @@ class LBVH:
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
         # for i in range(2):
-        self.nodes.visited.fill(0)
-        self.nodes.parent.fill(-1)
         # self.nodes.visited.fill(0)
         self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         self.radix_sort()
@@ -479,12 +545,15 @@ class LBVH:
         # ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
         # self.test_sort()
 
+        self.nodes.visited.fill(0)
+        self.nodes.parent.fill(-1)
         self.assign_leaf_nodes(mesh)
+        self.bvh_construction_Apetrei()
 
         # self.assign_internal_nodes_and_bv_Apetrei14()
-        self.assign_internal_nodes_Karras12()
-        self.nodes.visited.fill(0)
-        self.compute_bvh_aabbs()
+        # self.assign_internal_nodes_Karras12()
+        # self.nodes.visited.fill(0)
+        # self.compute_bvh_aabbs()
 
         # print(self.nodes[17423].parent, self.nodes[17423].left, self.nodes[17423].right)
         # print(self.nodes[196503].parent, self.nodes[196503].left, self.nodes[196503].right)
@@ -554,7 +623,7 @@ class LBVH:
         stack = ti.Vector([-1 for j in range(32)])
         stack[0] = 0
         stack_counter = 1
-        idx = 0
+        idx = self.root
         cnt = 0
         while stack_counter > 0:
             # print(stack)
@@ -687,11 +756,11 @@ class LBVH:
         # scene.particles(, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
 
         self.update_aabb_x_and_line0(n_internal)
-        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
-
-        left, right = self.nodes[n_internal].child_a, self.nodes[n_internal].child_b
-        self.update_aabb_x_and_line0(left)
-        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(1, 0, 0))
-
-        self.update_aabb_x_and_line0(right)
         scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 0, 1))
+
+        # left, right = self.nodes[n_internal].child_a, self.nodes[n_internal].child_b
+        # self.update_aabb_x_and_line0(left)
+        # scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(1, 0, 0))
+        #
+        # self.update_aabb_x_and_line0(right)
+        # scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 0, 1))
