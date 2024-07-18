@@ -124,7 +124,7 @@ def show_options():
         n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_leafs - 2)
         if not n_internal_old == n_internal:
             print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
-            print("left: ", sim.lbvh_st.nodes[n_internal].left, "right: ", sim.lbvh_st.nodes[n_internal].right)
+            print("left: ", sim.lbvh_st.nodes[n_internal].child_a, "right: ", sim.lbvh_st.nodes[n_internal].child_b)
 
         # if sim.max_num_tetra_dynamic > 0:
         #     tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
@@ -328,12 +328,12 @@ while window.running:
             g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
 
         if window.event.key == ti.ui.LEFT:
-            n_internal = sim.lbvh_st.nodes[n_internal].left
+            n_internal = sim.lbvh_st.nodes[n_internal].child_a
             if n_internal < 0:
                 n_internal = 0
 
         if window.event.key == ti.ui.RIGHT:
-            n_internal = sim.lbvh_st.nodes[n_internal].right
+            n_internal = sim.lbvh_st.nodes[n_internal].child_b
             if n_internal < 0:
                 n_internal = 0
 

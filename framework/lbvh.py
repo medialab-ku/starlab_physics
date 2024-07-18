@@ -4,13 +4,13 @@ import taichi as ti
 class Node:
     object_id: ti.i32
     parent: ti.i32
-    left: ti.i32
-    right: ti.i32
+    child_a: ti.i32
+    child_b: ti.i32
     visited: ti.i32
     aabb_min: ti.math.vec3
     aabb_max: ti.math.vec3
-    start: ti.i32
-    end: ti.i32
+    range_l: ti.i32
+    range_r: ti.i32
 
 @ti.data_oriented
 class LBVH:
@@ -130,8 +130,8 @@ class LBVH:
             # // no need to set parent to nullptr, each child will have a parents
             id = self.object_ids[f.id]
             self.nodes[f.id + self.num_leafs - 1].object_id = id
-            self.nodes[f.id + self.num_leafs - 1].left = -1
-            self.nodes[f.id + self.num_leafs - 1].right = -1
+            self.nodes[f.id + self.num_leafs - 1].child_a = -1
+            self.nodes[f.id + self.num_leafs - 1].child_b = -1
             self.nodes[f.id + self.num_leafs - 1].aabb_min = mesh.faces.aabb_min[id]
             self.nodes[f.id + self.num_leafs - 1].aabb_max = mesh.faces.aabb_max[id]
 
@@ -149,6 +149,13 @@ class LBVH:
             else:
                 ret = ti.math.clz(xor)
         return ret
+
+    @ti.func
+    def delta_Apetrei(self, i):
+        xor = 32
+        if i > 0:
+            xor = self.morton_codes[i] ^ self.morton_codes[i - 1]
+        return xor
 
     @ti.func
     def find_split(self, l, r):
@@ -269,13 +276,6 @@ class LBVH:
         for i in range(self.num_leafs - 1):
             start, end = self.determine_range(i, self.num_leafs)
             split = self.find_split(start, end)
-
-            if start == end:
-                cnt += 1
-                # print(i)
-
-            # if split < start or split > end:
-            #     print("split is out of range")
             left = split
             if split == start:
                 left += self.leaf_offset
@@ -284,107 +284,48 @@ class LBVH:
             if right == end:
                 right += self.leaf_offset
 
-            # if left == 17515:
-            #     print(i, left, right)
-            # if i == 17514:
-            #     print(i, start, end, split)
-            #
-            # if i == 17515:
-            #     print(i, start, end, split)
-            # print(i, start, end, split, left, right)
-            self.nodes[i].left = left
-            self.nodes[i].right = right
+            self.nodes[i].child_a = left
+            self.nodes[i].child_b = right
             self.nodes[i].visited = 0
             self.nodes[left].parent = i
             self.nodes[right].parent = i
-            self.nodes[i].start = start
-            self.nodes[i].end = end
-
-        # print("# start == end: ", cnt)
-        # test_id = 17514
-        # print("morton code", test_id, ": ", self.morton_codes[test_id])
-        # if self.morton_codes[test_id] < 0:
-        #     print(test_id)
-        # for i in range(self.num_leafs):
-        #     if self.morton_codes[i] < 0:
-        #         print(i)
-        # print("morton code", test_id - 1, ": ", self.morton_codes[test_id - 1])
-        # print("morton code", test_id, ": ", self.morton_codes[test_id])
-        # print("morton code", test_id + 1, ": ", self.morton_codes[test_id + 1])
-
-        # start, end = self.determine_range_test(test_id, self.num_leafs)
-        # print(test_id, start, end)
-        # print(self.delta(start, end))
-
-        # start, end = self.determine_range(0, self.num_leafs)
-        # print(0, start, end)
+            self.nodes[i].range_l = start
+            self.nodes[i].range_r = end
 
 
-        # cnt_l = 0
-        # cnt_r = 0
-        # for i in range(self.num_leafs - 1):
-        #     if self.nodes[i].left == self.nodes[i].parent:
-        #         cnt_l += 1
-        #     if self.nodes[i].right == self.nodes[i].parent:
-        #         cnt_r += 1
-        # #
-        # print("# loop: ", cnt_l + cnt_r)
-        # for i in range(self.num_leafs - 1):
-        #     print(i, self.nodes[i].parent)
+    @ti.func
+    def choose_parent(self, left, right, current_node):
 
-    # @ti.func
-    # def atomicCAS(self, id, old, new):
-    #
-    #     old_value = self.nodes[id].visited
-    #     if self.nodes[id].visited == old:
-    #         self.nodes[id].visited = new
-    #
-    #     return old_value
+        if left == 0 or (right != self.num_leafs - 1 and self.delta_Apetrei(right) < self.delta_Apetrei(left - 1)):
+            parent = right
+            self.nodes[parent].child_a = current_node
+            self.nodes[parent].range_l = left
+        else:
+            parent = left - 1
+            self.nodes[parent].child_b = current_node
+            self.nodes[parent].range_r = right
+
+        return parent
     @ti.kernel
     def assign_internal_nodes_and_bv_Apetrei14(self):
 
         for i in range(self.num_leafs):
+            idx = i + self.leaf_offset
 
-            R = i
-            L = i
+            self.nodes[idx].range_l = i
+            self.nodes[idx].range_r = i
 
-            current = i
-            aabb_min = self.nodes[i + self.leaf_offset].aabb_min
-            aabb_max = self.nodes[i + self.leaf_offset].aabb_max
-            is_leaf = True
-            while True:
+            if i == 0 or (i != self.num_leafs - 1 and self.delta_Apetrei(i) < self.delta_Apetrei(i - 1)):
+                parent = i
+                self.nodes[parent].child_a = idx
+                self.nodes[parent].range_l = i
+            else:
+                parent = i - 1
+                self.nodes[parent].child_b = idx
+                self.nodes[parent].range_r = i
 
-                if L == 0 and R == self.num_leafs - 1: break
+            # while True:
 
-                idx = self.nodes[current + self.leaf_offset] if is_leaf else 2 * current
-
-
-                previous = -1
-                parent = -1
-                if 0 == L or (R == N and self.delta(R + 1, R) < self.delta(L, L - 1)):
-
-                    parent = R
-                    previous = other_bounds[parent].exchange(L)
-
-                    if invalid != previous:
-                        R = previous
-                        self.nodes[parent].left = idx
-
-                    else:
-                        parent = L - 1;
-                        previous = other_bounds[parent].exchange(R)
-                        if (invalid != previous):
-                            L = previous
-                            self.nodes[parent].right = idx
-
-
-
-                self.nodes[parent].Box.Expand(aabb)
-                if invalid == previous: break
-
-                current = parent
-                aabb_min, aabb_max = self.nodes[current].aabb_min, self.nodes[current].aabb_max
-                is_leaf = False
 
 
     @ti.kernel
@@ -395,132 +336,48 @@ class LBVH:
 
     def compute_bvh_aabbs(self):
 
-        # self.init_flag()
-        # while True:
-        #     cnt = self.compute_node_aabbs()
-        #     # print("cnt: ", cnt)
-        #     if cnt == 0:
-        #         break
+        self.init_flag()
+        while True:
+            cnt = self.compute_node_aabbs()
+            # print("cnt: ", cnt)
+            if cnt == 0:
+                break
 
         # print(self.nodes[0].aabb_min, self.nodes[0].aabb_max)
-        cnt = self.compute_node_aabbs()
+        # cnt = self.compute_node_aabbs()
     @ti.kernel
     def compute_node_aabbs(self) -> ti.int32:
         # ti.loop_config(block_dim=64)
         cnt = 0
         for i in range(self.num_leafs - 1):
-            aabb_min, aabb_max = ti.math.vec3(1e4), ti.math.vec3(-1e4)
-            start, end = self.nodes[i].start, self.nodes[i].end
-            size = end - start + 1
-            offset = self.num_leafs - 1 + start
-            for j in range(size):
-                min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
-                aabb_min = ti.min(aabb_min, min0)
-                aabb_max = ti.max(aabb_max, max0)
+            # parent = self.nodes[i + self.num_leafs - 1].parent
+            # self.nodes[parent].visited += 1
+            # aabb_min, aabb_max = ti.math.vec3(1e4), ti.math.vec3(-1e4)
+            # start, end = self.nodes[i].range_l, self.nodes[i].range_r
+            # size = end - start + 1
+            # offset = self.num_leafs - 1 + start
+            # for j in range(size):
+            #     min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
+            #     aabb_min = ti.min(aabb_min, min0)
+            #     aabb_max = ti.max(aabb_max, max0)
+            #
+            # self.nodes[i].aabb_min = aabb_min
+            # self.nodes[i].aabb_max = aabb_max
+            # idx = i
+            # while True:
+            if self.nodes[i].visited == 2:
+                left, right = self.nodes[i].child_a, self.nodes[i].child_b
+                min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
+                max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
+                self.nodes[i].aabb_min = ti.min(min0, min1)
+                self.nodes[i].aabb_max = ti.max(max0, max1)
+                parent = self.nodes[i].parent
+                self.nodes[i].visited += 1
+                self.nodes[parent].visited += 1
+                ti.atomic_add(cnt, 1)
 
-            self.nodes[i].aabb_min = aabb_min
-            self.nodes[i].aabb_max = aabb_max
-        #     if self.nodes[i].visited == 2:
-        #         left, right = self.nodes[i].left, self.nodes[i].right
-        #         min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
-        #         max0, max1 = self.nodes[left].aabb_max, self.nodes[right].aabb_max
-        #         self.nodes[i].aabb_min = ti.min(min0, min1)
-        #         self.nodes[i].aabb_max = ti.max(max0, max1)
-        #         parent = self.nodes[i].parent
-        #         self.nodes[i].visited += 1
-        #         self.nodes[parent].visited += 1
-        #         ti.atomic_add(cnt, 1)
         return cnt
-        # # id0 = 0 + self.num_leafs - 1
-        # cnt = 0
-        # cnt_total = 0
-        # for i in range(self.num_leafs):
-        #     min0, max0 = self.nodes[i + self.num_leafs - 1].aabb_min, self.nodes[i + self.num_leafs - 1].aabb_max
-        #     for j in range(self.num_leafs):
-        #         min1, max1 = self.nodes[j + self.num_leafs - 1].aabb_min, self.nodes[j + self.num_leafs - 1].aabb_max
-        #         ti.atomic_add(cnt_total, 1)
-        #         if self.aabb_overlap(min0, max0, min1, max1):
-        #             ti.atomic_add(cnt, 1)
-        # print(cnt_total / self.num_leafs)
-        # #
-        # cnt = 0
-        # # # # for i in range(self.num_leafs):
-        # # # i = 0 + self.num_leafs - 1
-        # cnt_total = 0
-        #
-        # for i in range(self.num_leafs):
-        #     node_id = i + self.num_leafs - 1
-        #     min0, max0 = self.nodes[node_id].aabb_min, self.nodes[node_id].aabb_max
-        #
-        #     stack = ti.Vector([-1 for j in range(128)])
-        #     # stack[0] = 0
-        #     stack_counter = 1
-        #     #
-        #     while stack_counter > 0:
-        #         stack_counter -= 1
-        #         idx = stack[stack_counter]
-        #         if self.nodes[idx].visited > 0:
-        #             print("a cycle!")
-        #             break
-        #
-        #         self.nodes[idx].visited += 1
-        #         # stack[stack_counter] = -1
-        #         min1, max1 = self.nodes[idx].aabb_min, self.nodes[idx].aabb_max
-        #         if self.aabb_overlap(min0, max0, min1, max1):
-        #             ti.atomic_add(cnt_total, 1)
-        #             if idx >= self.num_leafs - 1:
-        #                 ti.atomic_add(cnt, 1)
-        #
-        #             else:
-        #                 left, right = self.nodes[idx].left, self.nodes[idx].right
-        #                 if stack_counter < 127:
-        #                     stack[stack_counter] = left
-        #                     stack_counter += 1
-        #                 else:
-        #                     print("fuck")
-        #                     break
-        #                 if stack_counter < 127:
-        #                     stack[stack_counter] = right
-        #                     stack_counter += 1
-        #                 else:
-        #                     print("fuck")
-        #                     break
-        #     stack[0] = -1
-        #     stack_counter = 1
-        #     idx = 0
-        #     # while True:
-        #     #     left, right = self.nodes[idx].left, self.nodes[idx].right
-        #     #     overlapL = self.node_overlap(node_id, left)
-        #     #     overlapR = self.node_overlap(node_id, right)
-        #     #
-        #     #     if overlapL and left >= self.leaf_offset:
-        #     #         ti.atomic_add(cnt, 1)
-        #     #
-        #     #     if overlapR and right >= self.leaf_offset:
-        #     #         ti.atomic_add(cnt, 1)
-        #     #
-        #     #     traverseL = overlapL and left < self.leaf_offset
-        #     #     traverseR = overlapR and right < self.leaf_offset
-        #     #
-        #     #     if traverseL == 0 and traverseR == 0:
-        #     #         stack_counter -= 1
-        #     #         idx = stack[stack_counter]
-        #     #
-        #     #     else:
-        #     #         idx = left if traverseL else right
-        #     #         if traverseL and traverseR:
-        #     #             if stack_counter < 255:
-        #     #                 stack[stack_counter] = right
-        #     #                 stack_counter += 1
-        #     #             else:
-        #     #                 print("fuck")
-        #     #                 break
-        #     #     if idx < 0:
-        #     #         break
-        #
-        #     # print(stack)
-        # # print(cnt_total /self.num_leafs)
-        # return cnt
+
 
     @ti.kernel
     def count_frequency(self, pass_num: ti.i32):
@@ -623,8 +480,10 @@ class LBVH:
         # self.test_sort()
 
         self.assign_leaf_nodes(mesh)
+
+        # self.assign_internal_nodes_and_bv_Apetrei14()
         self.assign_internal_nodes_Karras12()
-        # self.nodes.visited.fill(0)
+        self.nodes.visited.fill(0)
         self.compute_bvh_aabbs()
 
         # print(self.nodes[17423].parent, self.nodes[17423].left, self.nodes[17423].right)
@@ -673,7 +532,7 @@ class LBVH:
                 if idx >= self.leaf_offset:
                     ti.atomic_add(cnt, 1)
                 else:
-                    left, right = self.nodes[idx].left, self.nodes[idx].right
+                    left, right = self.nodes[idx].child_a, self.nodes[idx].child_b
                     self.stack_test[stack_counter] = left
                     stack_counter += 1
                     self.stack_test[stack_counter] = right
@@ -711,7 +570,7 @@ class LBVH:
                     ti.atomic_add(cnt, 1)
 
                 else:
-                    left, right = self.nodes[idx].left, self.nodes[idx].right
+                    left, right = self.nodes[idx].child_a, self.nodes[idx].child_b
                     stack[stack_counter] = left
                     stack_counter += 1
                     stack[stack_counter] = right
@@ -830,7 +689,7 @@ class LBVH:
         self.update_aabb_x_and_line0(n_internal)
         scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
 
-        left, right = self.nodes[n_internal].left, self.nodes[n_internal].right
+        left, right = self.nodes[n_internal].child_a, self.nodes[n_internal].child_b
         self.update_aabb_x_and_line0(left)
         scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(1, 0, 0))
 
