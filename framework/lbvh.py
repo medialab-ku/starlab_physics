@@ -153,9 +153,8 @@ class LBVH:
 
     @ti.func
     def delta_Apetrei(self, i):
-        xor = 32
-        if i > 0:
-            xor = self.morton_codes[i] ^ self.morton_codes[i + 1]
+        # xor = 32
+        xor = self.morton_codes[i] ^ self.morton_codes[i + 1]
         return xor
 
     @ti.func
@@ -362,10 +361,6 @@ class LBVH:
             if cnt == 0:
                 self.root = root
                 break
-        # print(self.root)
-        # for i in range(self.num_leafs - 1):
-        #     print(i, self.nodes[i].range_l, self.nodes[i].range_r)
-        #     # print(root)
 
     @ti.kernel
     def assign_internal_nodes_and_bv_Apetrei(self) -> (ti.int32, ti.int32):
@@ -373,13 +368,6 @@ class LBVH:
         cnt = 0
         root = -1
         for i in range(self.num_leafs - 1):
-
-            # left, right = self.nodes[i].range_l, self.nodes[i].range_r
-            # if left == 0 and right == (self.num_leafs - 1):
-            #     print("root: ", i)
-                # cnt = 0
-                # return 0
-
             if self.nodes[i].visited == 2:
                 parent = -1
                 left, right = self.nodes[i].range_l, self.nodes[i].range_r
@@ -549,8 +537,8 @@ class LBVH:
         self.nodes.parent.fill(-1)
         self.assign_leaf_nodes(mesh)
         self.bvh_construction_Apetrei()
-
-        # self.assign_internal_nodes_and_bv_Apetrei14()
+        # print(self.root)
+        # self.root = 0
         # self.assign_internal_nodes_Karras12()
         # self.nodes.visited.fill(0)
         # self.compute_bvh_aabbs()

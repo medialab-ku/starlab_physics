@@ -439,6 +439,24 @@ class Solver:
             e.verts[1].nc += 1.0
 
     @ti.kernel
+    def solve_bending_constraints_x(self, compliance: ti.f32):
+        # print(compliance)
+        for e in self.mesh_dy.edges:
+            l0 = e.l0
+            x10 = e.verts[0].y - e.verts[1].y
+            lij = x10.norm()
+
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
+            ld = compliance * C / (compliance * schur + 1.0)
+
+            e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * ld * nabla_C
+            e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * ld * nabla_C
+            e.verts[0].nc += 1.0
+            e.verts[1].nc += 1.0
+
+    @ti.kernel
     def solve_spring_constraints_x_test(self, compliance: ti.f32):
 
         # print(compliance)
@@ -816,6 +834,7 @@ class Solver:
         self.init_variables()
         compliance = self.YM * dt * dt
         self.solve_spring_constraints_x(compliance)
+        self.solve_bending_constraints_x(compliance)
         # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
             cnt_lbvh = self.broadphase_lbvh(self.lbvh_st.root)

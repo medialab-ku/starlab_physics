@@ -70,6 +70,7 @@ class MeshTaichiWrapper:
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
         self.bending_indices = ti.field(dtype=ti.i32)
+        self.bending_l0 = ti.field(dtype=ti.f32)
         self.initBendingIndices()
 
         self.render_bending_vert = ti.Vector.field(3, dtype=ti.f32, shape=(len(self.mesh.verts),))
@@ -87,6 +88,7 @@ class MeshTaichiWrapper:
         bending_indices_np = self.getBendingPair(bend_count, neighbor_set)
 
         ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
+        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
 
         for i in range(bending_indices_np.shape[0]):
             self.bending_indices[2 * i] = bending_indices_np[i][0]
