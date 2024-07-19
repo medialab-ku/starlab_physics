@@ -15,7 +15,13 @@ class Node:
 @ti.data_oriented
 class LBVH:
     def __init__(self, num_leafs):
-        self.num_leafs = num_leafs
+
+        self.res_x = 32
+        self.res_y = 32
+        self.res_z = 32
+        self.cell_size = 0.1
+        self.num_leafs = self.res_x * self.res_y * self.res_z
+        print("# leafs", self.num_leafs)
         self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
         self.root = -1
@@ -77,49 +83,85 @@ class LBVH:
         return ti.cast(xx | (yy << 1) | (zz << 2), ti.int32)
 
     @ti.kernel
-    def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
+    def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
 
         # max_value = -1
         # min0 = ti.math.vec3(1e4)
         # max0 = ti.math.vec3(-1e4)
         cnt = 0
-        for f in mesh.faces:
-        # # // obtain center of triangle
-        #     u = f.verts[0]
-        #     v = f.verts[1]
-        #     w = f.verts[2]
-        #     pos = (1. / 3.) * (u.x + v.x + w.x)
+        # aabb_min0 = ti.math.vec3(0.0)
+        # aabb_max0 = ti.math.vec3(self.res_x * self.cell_size, self.res_y * self.cell_size, self.res_z * self.cell_size)
 
-            pos = 0.5 * (f.aabb_max + f.aabb_min)
+        cell_size_x = (aabb_max[0] - aabb_min[0]) / self.res_x
+        cell_size_y = (aabb_max[1] - aabb_min[1]) / self.res_y
+        cell_size_z = (aabb_max[2] - aabb_min[2]) / self.res_z
 
-            # if f.id < 10:
-            #     print(pos[1])
-            # pos[1] = 0.0
-            # pos = ti.math.vec3(x, y, z)
-            self.face_centers[f.id] = pos
-            #
-            # ti.atomic_max(max0, pos)
-            # ti.atomic_min(min0, pos)
+        cell_size = 0.5 * (cell_size_x + cell_size_y + cell_size_z) / 3.0
 
-        # for f in mesh.faces:
-        #     pos = self.face_centers[f.id]
-                # = 0.5 * (f.aabb_min + f.aabb_max)
-        # // normalize position
+        for i in range(self.num_leafs):
+            x0 = i // (self.res_y * self.res_z)
+            y0 = (i % (self.res_y * self.res_z)) // self.res_z
+            z0 = i % self.res_z
+
+            pos = ti.math.vec3(cell_size_x * x0 + 0.5 * cell_size_x, cell_size_y * y0 + 0.5 * cell_size_y, cell_size_z * z0 + 0.5 * cell_size_z) + aabb_min
+            self.face_centers[i] = pos
+
             x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
             y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
             z = (pos[2] - aabb_min[2]) / (aabb_max[2] - aabb_min[2])
-        # // clamp to deal with numeric issues
+
+                # // clamp to deal with numeric issues
             x = ti.math.clamp(x, 0., 1.)
             y = ti.math.clamp(y, 0., 1.)
             z = ti.math.clamp(z, 0., 1.)
 
-    # // obtain and set morton code based on normalized position
+            # // obtain and set morton code based on normalized position
             morton3d = self.morton_3d(x, y, z)
             # if morton3d < 0:
             #     cnt += 1
-            self.morton_codes[f.id] = morton3d
+            self.morton_codes[i] = morton3d
             # ti.atomic_max(max_value, morton3d)
-            self.object_ids[f.id] = f.id
+            self.object_ids[i] = i
+
+        return cell_size
+
+    #     for f in mesh.faces:
+    #     # # // obtain center of triangle
+    #     #     u = f.verts[0]
+    #     #     v = f.verts[1]
+    #     #     w = f.verts[2]
+    #     #     pos = (1. / 3.) * (u.x + v.x + w.x)
+    #
+    #         pos = 0.5 * (f.aabb_max + f.aabb_min)
+    #
+    #         # if f.id < 10:
+    #         #     print(pos[1])
+    #         # pos[1] = 0.0
+    #         # pos = ti.math.vec3(x, y, z)
+    #         self.face_centers[f.id] = pos
+    #         #
+    #         # ti.atomic_max(max0, pos)
+    #         # ti.atomic_min(min0, pos)
+    #
+    #     # for f in mesh.faces:
+    #     #     pos = self.face_centers[f.id]
+    #             # = 0.5 * (f.aabb_min + f.aabb_max)
+    #     # // normalize position
+    #         x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
+    #         y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
+    #         z = (pos[2] - aabb_min[2]) / (aabb_max[2] - aabb_min[2])
+    #     # // clamp to deal with numeric issues
+    #         x = ti.math.clamp(x, 0., 1.)
+    #         y = ti.math.clamp(y, 0., 1.)
+    #         z = ti.math.clamp(z, 0., 1.)
+    #
+    # # // obtain and set morton code based on normalized position
+    #         morton3d = self.morton_3d(x, y, z)
+    #         # if morton3d < 0:
+    #         #     cnt += 1
+    #         self.morton_codes[f.id] = morton3d
+    #         # ti.atomic_max(max_value, morton3d)
+    #         self.object_ids[f.id] = f.id
         # print(cnt)
 
         # return max_value
@@ -525,7 +567,8 @@ class LBVH:
 
         # for i in range(2):
         # self.nodes.visited.fill(0)
-        self.assign_morton(mesh, aabb_min_g, aabb_max_g)
+
+        self.cell_size = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         self.radix_sort()
 
         # self.sort()
@@ -533,10 +576,10 @@ class LBVH:
         # ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
         # self.test_sort()
 
-        self.nodes.visited.fill(0)
-        self.nodes.parent.fill(-1)
-        self.assign_leaf_nodes(mesh)
-        self.bvh_construction_Apetrei()
+        # self.nodes.visited.fill(0)
+        # self.nodes.parent.fill(-1)
+        # self.assign_leaf_nodes(mesh)
+        # self.bvh_construction_Apetrei()
         # print(self.root)
         # self.root = 0
         # self.assign_internal_nodes_Karras12()
@@ -645,6 +688,7 @@ class LBVH:
     def draw_zSort(self, scene):
         self.update_zSort_face_centers_and_line()
         scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
+        scene.particles(self.face_centers, radius=self.cell_size, color=(0, 1, 0))
     #
     @ti.kernel
     def update_aabb_x_and_lines(self):
