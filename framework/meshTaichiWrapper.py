@@ -70,6 +70,7 @@ class MeshTaichiWrapper:
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
         self.bending_indices = ti.field(dtype=ti.i32)
+        self.bending_constraint_count=0
         self.bending_l0 = ti.field(dtype=ti.f32)
         self.initBendingIndices()
 
@@ -84,8 +85,8 @@ class MeshTaichiWrapper:
 
     def initBendingIndices(self):
         # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
-        bend_count, neighbor_set = self.findTriNeighbors()
-        bending_indices_np = self.getBendingPair(bend_count, neighbor_set)
+        self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
+        bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
 
         ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
         ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
@@ -93,6 +94,14 @@ class MeshTaichiWrapper:
         for i in range(bending_indices_np.shape[0]):
             self.bending_indices[2 * i] = bending_indices_np[i][0]
             self.bending_indices[2 * i + 1] = bending_indices_np[i][1]
+
+        self.init_bengding_l0()
+
+    @ti.kernel
+    def init_bengding_l0(self):
+        for bi in ti.ndrange(self.bending_constraint_count):
+            v0,v1 = self.bending_indices[2*bi],self.bending_indices[2*bi+1]
+            self.bending_l0[bi] = (self.mesh.verts.x[v0] - self.mesh.verts.x[v1]).norm()
 
     @ti.kernel
     def bendinIndi(self):

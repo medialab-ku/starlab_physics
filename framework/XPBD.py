@@ -24,6 +24,7 @@ class Solver:
         self.dt = dt
         self.dHat = dHat
         self.YM = YM
+        self.YM_b = YM
         self.PR = PR
         self.unit_vector = ti.Vector.field(n=3, dtype=ti.f32, shape=3)
         self.unit_vector[0] = ti.math.vec3(1.0, 0.0, 0.0)
@@ -441,20 +442,27 @@ class Solver:
     @ti.kernel
     def solve_bending_constraints_x(self, compliance: ti.f32):
         # print(compliance)
-        for e in self.mesh_dy.edges:
-            l0 = e.l0
-            x10 = e.verts[0].y - e.verts[1].y
+        for bi in ti.ndrange(self.mesh_dy.bending_constraint_count):
+            v0,v1 = self.mesh_dy.bending_indices[2*bi],self.mesh_dy.bending_indices[2*bi+1]
+            l0 = self.mesh_dy.bending_l0[bi]
+            x10 = self.mesh_dy.verts.x[v0] - self.mesh_dy.verts.x[v1]
             lij = x10.norm()
 
             C = (lij - l0)
             nabla_C = x10.normalized()
-            schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
+
+            e_v0_fixed, e_v1_fixed = self.mesh_dy.verts.fixed[v0], self.mesh_dy.verts.fixed[v1]
+            e_v0_m_inv, e_v1_m_inv = self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.m_inv[v1]
+
+            schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv) * nabla_C.dot(nabla_C)
             ld = compliance * C / (compliance * schur + 1.0)
 
-            e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * ld * nabla_C
-            e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * ld * nabla_C
-            e.verts[0].nc += 1.0
-            e.verts[1].nc += 1.0
+            self.mesh_dy.verts.dx[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
+            self.mesh_dy.verts.dx[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
+
+            self.mesh_dy.verts.nc[v0] += 1.0
+            self.mesh_dy.verts.nc[v1] += 1.0
+
 
     @ti.kernel
     def solve_spring_constraints_x_test(self, compliance: ti.f32):
@@ -833,8 +841,9 @@ class Solver:
 
         self.init_variables()
         compliance = self.YM * dt * dt
+        compliance_bend = self.YM_b * dt * dt
         self.solve_spring_constraints_x(compliance)
-        self.solve_bending_constraints_x(compliance)
+        self.solve_bending_constraints_x(compliance_bend)
         # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
             cnt_lbvh = self.broadphase_lbvh(self.lbvh_st.root)
@@ -979,7 +988,7 @@ class Solver:
             self.mesh_dy.verts.nc[v2_id] += 1.0
 
     def forward(self, n_substeps):
-        self.load_sewing_pairs()
+        # self.load_sewing_pairs()
         dt_sub = self.dt / n_substeps
         # ti.profiler.clear_kernel_profiler_info()
 

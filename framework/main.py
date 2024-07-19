@@ -52,6 +52,7 @@ lin_vel_z_ui = sim.obs_lin_vel[0][2]
 
 PR_ui = sim.PR
 YM_ui = sim.YM
+YM_b_ui = sim.YM_b
 
 friction_coeff_ui = sim.mu
 
@@ -69,6 +70,7 @@ def show_options():
     global dt_ui
     global strain_limit_ui
     global YM_ui
+    global YM_b_ui
     global PR_ui
     global sim
     global dHat_ui
@@ -83,6 +85,7 @@ def show_options():
     old_friction_coeff = dHat_ui
     old_strain_limit = strain_limit_ui
     YM_old = YM_ui
+    YM_b_old = YM_b_ui
     PR_old = PR_ui
 
     n_leaf_old = n_leaf
@@ -97,6 +100,7 @@ def show_options():
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         strain_limit_ui = w.slider_float("strain limit", strain_limit_ui, 0.0, 1.0)
         YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
+        YM_b_ui = w.slider_float("YM_b", YM_b_ui, 0.0, 1e8)
         # if sim.max_num_tetra_dynamic > 0:
         #     PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
@@ -151,6 +155,9 @@ def show_options():
 
     if not YM_old == YM_ui:
         sim.YM = YM_ui
+
+    if not YM_b_old == YM_b_ui:
+        sim.YM_b = YM_b_ui
 
     if not PR_old == PR_ui:
         sim.PR = PR_ui
