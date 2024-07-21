@@ -961,7 +961,7 @@ class Solver:
             self.mesh_dy.verts.nc[v2_id] += 1.0
 
     def forward(self, n_substeps):
-        self.load_sewing_pairs()
+        # self.load_sewing_pairs()
         dt_sub = self.dt / n_substeps
         # ti.profiler.clear_kernel_profiler_info()
 

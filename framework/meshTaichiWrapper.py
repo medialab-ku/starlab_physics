@@ -38,6 +38,7 @@ class MeshTaichiWrapper:
         self.mesh.verts.v.fill(0.0)
         self.mesh.verts.x.from_numpy(self.mesh.get_position_as_numpy())
         self.num_verts = len(self.mesh.verts)
+        self.num_edges = len(self.mesh.edges)
 
         self.faces = self.mesh.faces
         self.verts = self.mesh.verts
@@ -68,6 +69,22 @@ class MeshTaichiWrapper:
         self.eid_np = self.edge_indices.to_numpy()
         self.eid_np = np.reshape(self.eid_np, (len(self.mesh.edges), 2))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
+        self.eid_field = ti.field(dtype=ti.int32, shape=self.eid_np.shape)
+        self.eid_field.from_numpy(self.eid_np)
+
+        self.verts_color = ti.field(dtype=ti.int32, shape=self.num_verts)
+        self.verts_color.fill(-1)
+        self.adj_verts_list = ti.field(dtype=ti.int32, shape=(self.num_verts, self.num_verts))
+        self.available_colors = ti.field(dtype=ti.i32, shape=7)
+
+        self.initAdjVerts()
+        self.colorVerts()
+        # self.printVertsColor()
+        # self.checkAdjColorDifference()
+
+        self.color_position = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.num_verts,))
+        self.color_RGB = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.num_verts,))
+        self.visualizeVertsColor()
 
         self.bending_indices = ti.field(dtype=ti.i32)
         self.initBendingIndices()
@@ -202,6 +219,68 @@ class MeshTaichiWrapper:
 
         for v in self.mesh.verts:
             v.m_inv = 1.0 / v.m_inv
+
+    @ti.kernel
+    def initAdjVerts(self):
+        for i, j in ti.ndrange(self.num_verts, self.num_verts):
+            self.adj_verts_list[i,j] = 0
+
+        for e in range(self.num_edges):
+            v1 = self.eid_field[e,0]
+            v2 = self.eid_field[e,1]
+            self.adj_verts_list[v1,v2] = 1
+            self.adj_verts_list[v2,v1] = 1
+            # print(v1, v2)
+
+    @ti.kernel
+    def colorVerts(self):
+        for i in range(self.num_verts):
+            for j in range(7):
+                self.available_colors[j] = 1
+
+            for j in range(self.num_verts):
+                if self.adj_verts_list[i,j] == 1 and self.verts_color[j] != -1:
+                    self.available_colors[self.verts_color[j]] = 0
+
+            # print(i, self.available_colors[0], self.available_colors[1], self.available_colors[2], self.available_colors[3])
+
+            for c in range(7):
+                if self.available_colors[c] == 1:
+                    self.verts_color[i] = c
+                    break
+
+    @ti.kernel
+    def checkAdjColorDifference(self):
+        for i in range(self.num_verts):
+            for j in range(self.num_verts):
+                print(i, j, self.verts_color[i], self.verts_color[j], self.verts_color[i] == self.verts_color[j])
+
+    @ti.kernel
+    def printVertsColor(self):
+        for i in range(self.num_verts):
+            print(i, self.verts_color[i])
+
+    @ti.kernel
+    def visualizeVertsColor(self):
+        for v in self.mesh.verts:
+            # print(v.id)
+            if self.verts_color[v.id] >= 0:
+                self.color_position[v.id] = v.x
+
+                if self.verts_color[v.id] == 0:
+                    self.color_RGB[v.id] = ti.Vector([1.0, 0.0, 0.0])
+                elif self.verts_color[v.id] == 1:
+                    self.color_RGB[v.id] = ti.Vector([0.0, 1.0, 0.0])
+                elif self.verts_color[v.id] == 2:
+                    self.color_RGB[v.id] = ti.Vector([0.0, 0.0, 1.0])
+                elif self.verts_color[v.id] == 3:
+                    self.color_RGB[v.id] = ti.Vector([1.0, 1.0, 0.0])
+                elif self.verts_color[v.id] == 4:
+                    self.color_RGB[v.id] = ti.Vector([1.0, 0.0, 1.0])
+                elif self.verts_color[v.id] == 5:
+                    self.color_RGB[v.id] = ti.Vector([0.0, 1.0, 1.0])
+                elif self.verts_color[v.id] == 6:
+                    self.color_RGB[v.id] = ti.Vector([1.0, 1.0, 1.0])
 
 
     # @ti.kernel

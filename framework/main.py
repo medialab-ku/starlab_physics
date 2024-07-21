@@ -7,6 +7,7 @@ from Scenes import concat_test as scene1
 import os
 import XPBD
 import selection_tool as st
+import numpy as np
 
 sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -379,9 +380,12 @@ while window.running:
         # sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
+    position_np = scene1.mesh_dy.color_position.to_numpy()
+    color_np = scene1.mesh_dy.color_RGB.to_numpy()
+    scene.particles(scene1.mesh_dy.color_position, radius=0.01, per_vertex_color=scene1.mesh_dy.color_RGB)
 
     #draw selected particles
-    scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
+    # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
