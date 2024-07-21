@@ -291,7 +291,7 @@ class MeshTaichiWrapper:
             v.x += self.trans
 
     @ti.kernel
-    def computeAABB(self) -> (ti.math.vec3, ti.math.vec3):
+    def computeAABB(self, padding: ti.f32) -> (ti.math.vec3, ti.math.vec3):
         aabb_min = ti.math.vec3(1e5)
         aabb_max = ti.math.vec3(-1e5)
 
@@ -299,6 +299,9 @@ class MeshTaichiWrapper:
             temp = v.x
             ti.atomic_max(aabb_max, temp)
             ti.atomic_min(aabb_min, temp)
+
+        aabb_min -= padding * ti.math.vec3(1.0)
+        aabb_max += padding * ti.math.vec3(1.0)
 
         return aabb_min, aabb_max
 

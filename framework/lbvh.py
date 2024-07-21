@@ -17,10 +17,10 @@ class LBVH:
     def __init__(self, num_leafs):
 
         self.grid_res = ti.math.ivec3(0)
-        self.grid_res[0] = 32
-        self.grid_res[1] = 32
-        self.grid_res[2] = 32
-        self.cell_size = 0.1
+        self.grid_res[0] = 4
+        self.grid_res[1] = 4
+        self.grid_res[2] = 4
+        self.cell_size = ti.math.ivec3(0)
 
         self.num_cells = self.grid_res[0] * self.grid_res[1] * self.grid_res[2]
         self.cell_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_cells)
@@ -28,8 +28,15 @@ class LBVH:
         self.cell_morton_codes = ti.field(dtype=ti.int32, shape=self.num_cells)
         self.cell_ids_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.cell_morton_codes_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
+        self.num_faces_in_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
+        self.prefix_sum_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
+        self.prefix_sum_cell_temp = ti.field(dtype=ti.i32, shape=self.num_cells)
+        self.prefix_sum_executer_cell = ti.algorithms.PrefixSumExecutor(self.num_cells)
 
         self.num_leafs = num_leafs
+        self.face_cell_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.sorted_face_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
+
         print("# leafs", self.num_leafs)
         self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
@@ -41,7 +48,6 @@ class LBVH:
         self.nodes = Node.field(shape=self.num_nodes)
 
         self.object_cell_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
-        self.num_objects_in_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
 
         self.sorted_object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
@@ -54,7 +60,6 @@ class LBVH:
         self.test = 1
         self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.test)
         self.aabb_x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
-
 
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.test)
 
@@ -94,21 +99,21 @@ class LBVH:
         zz = self.expand_bits(ti.cast(z, ti.uint64))
         return ti.cast(xx | (yy << 1) | (zz << 2), ti.int32)
 
-
     @ti.kernel
-    def assign_cell_morton(self, aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
+    def assign_cell_morton(self, aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.math.vec3:
 
-        cell_size_x = (aabb_max[0] - aabb_min[0]) / self.grid_res[0]
-        cell_size_y = (aabb_max[1] - aabb_min[1]) / self.grid_res[1]
-        cell_size_z = (aabb_max[2] - aabb_min[2]) / self.grid_res[2]
-        cell_size = 0.5 * (cell_size_x + cell_size_y + cell_size_z) / 3.0
+        cell_size = ti.math.vec3(0.)
+        cell_size[0] = (aabb_max[0] - aabb_min[0]) / self.grid_res[0]
+        cell_size[1] = (aabb_max[1] - aabb_min[1]) / self.grid_res[1]
+        cell_size[2] = (aabb_max[2] - aabb_min[2]) / self.grid_res[2]
+        # cell_size = 0.5 * (cell_size_x + cell_size_y + cell_size_z) / 3.0
 
         for i in range(self.num_cells):
             x0 = i // (self.grid_res[1] * self.grid_res[2])
             y0 = (i % (self.grid_res[1] * self.grid_res[2])) // self.grid_res[2]
             z0 = i % self.grid_res[2]
 
-            pos = ti.math.vec3(cell_size_x * x0 + 0.5 * cell_size_x, cell_size_y * y0 + 0.5 * cell_size_y, cell_size_z * z0 + 0.5 * cell_size_z) + aabb_min
+            pos = ti.math.vec3(cell_size[0] * x0 + 0.5 * cell_size[0], cell_size[1] * y0 + 0.5 * cell_size[1], cell_size[2] * z0 + 0.5 * cell_size[2]) + aabb_min
             self.cell_centers[i] = pos
 
             x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
@@ -639,16 +644,37 @@ class LBVH:
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
 
     @ti.func
-    def pos_to_idx3d(self, pos, grid_size: ti.math.vec3, origin: ti.math.vec3):
+    def pos_to_idx3d(self, pos: ti.math.vec3, grid_size: ti.math.vec3, origin: ti.math.vec3):
         return ((pos - origin) / grid_size).cast(int)
 
     @ti.func
-    def flatten_grid_index(self, grid_index):
-        return grid_index[0] * self.grid_res[1] * self.grid_res[2] + grid_index[1] * self.grid_res[2] + grid_index[2]
+    def flatten_cell_id(self, cell_id):
+        return cell_id[0] * self.grid_res[1] * self.grid_res[2] + cell_id[1] * self.grid_res[2] + cell_id[2]
 
     @ti.func
-    def get_flatten_grid_index(self, pos):
-        return self.flatten_grid_index(self.pos_to_idx3d(pos))
+    def get_flatten_cell_id(self, pos: ti.math.vec3, grid_size: ti.math.vec3, origin: ti.math.vec3):
+        return self.flatten_cell_id(self.pos_to_idx3d(pos, grid_size, origin))
+
+    @ti.kernel
+    def assign_face_cell_ids(self, mesh: ti.template(), grid_size: ti.math.vec3, origin: ti.math.vec3):
+
+        for f in mesh.faces:
+            pos = 0.5 * (f.aabb_min + f.aabb_max)
+            cell_id = self.get_flatten_cell_id(pos, grid_size, origin)
+            self.face_cell_ids[f.id] = cell_id
+            ti.atomic_add(self.prefix_sum_cell[cell_id], 1)
+
+    @ti.kernel
+    def counting_sort_cells(self, mesh: ti.template()):
+
+        ti.loop_config(serialize=True)
+        for f in mesh.faces:
+            I = self.num_leafs - 1 - f.id
+            cell_id = self.face_cell_ids[I]
+            idx = self.prefix_sum_cell_temp[cell_id] - 1
+            self.sorted_face_ids[idx] = I
+            self.prefix_sum_cell_temp[I] -= 1
+
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
@@ -657,8 +683,22 @@ class LBVH:
 
         # self.cell_size = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
 
-        self.assign_cell_morton(aabb_min_g, aabb_max_g)
+        self.cell_size = self.assign_cell_morton(aabb_min_g, aabb_max_g)
         self.radix_sort_cells()
+        self.prefix_sum_cell.fill(0)
+        self.assign_face_cell_ids(mesh, self.cell_size, aabb_min_g)
+        # print(self.prefix_sum_cell)
+        self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
+        self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
+
+        # print(self.prefix_sum_cell)
+
+        if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
+            print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
+
+
+        # self.counting_sort_cells()
+
 
         # self.sort()
         # self.sort()

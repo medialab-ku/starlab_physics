@@ -19,6 +19,7 @@ prefix_sum_executer = ti.algorithms.PrefixSumExecutor(RADIX)
 
 num_leafs = 10
 morton_codes = ti.field(dtype=ti.int32, shape=num_leafs)
+ids = ti.field(dtype=ti.int32, shape=num_leafs)
 # sorted_morton_codes = []
 
 prefix_sum = ti.field(dtype=ti.int32, shape=RADIX)
@@ -35,16 +36,16 @@ i = 2
 
 @ti.kernel
 def init():
-    morton_codes[0] = 329
-    morton_codes[1] = 457
-    morton_codes[2] = 657
-    morton_codes[3] = 839
-    morton_codes[4] = 436
-    morton_codes[5] = 355
-    morton_codes[6] = 436
-    morton_codes[7] = 436
-    morton_codes[8] = 720
-    morton_codes[9] = 355
+    morton_codes[0] = 9
+    morton_codes[1] = 7
+    morton_codes[2] = 7
+    morton_codes[3] = 9
+    morton_codes[4] = 6
+    morton_codes[5] = 5
+    morton_codes[6] = 6
+    morton_codes[7] = 6
+    morton_codes[8] = 0
+    morton_codes[9] = 5
 
 @ti.kernel
 def count_frequency(pass_num: ti.i32):
@@ -76,7 +77,7 @@ def sort_by_digit(pass_num: ti.i32):
 #the prefix_sum range must be less then the size of the array
 def radix_sort():
 
-    for pi in range(3):
+    for pi in range(1):
         # print(pi)
         prefix_sum.fill(0)
 
