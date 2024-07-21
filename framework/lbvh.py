@@ -16,11 +16,20 @@ class Node:
 class LBVH:
     def __init__(self, num_leafs):
 
-        self.res_x = 32
-        self.res_y = 32
-        self.res_z = 32
+        self.grid_res = ti.math.ivec3(0)
+        self.grid_res[0] = 32
+        self.grid_res[1] = 32
+        self.grid_res[2] = 32
         self.cell_size = 0.1
-        self.num_leafs = self.res_x * self.res_y * self.res_z
+
+        self.num_cells = self.grid_res[0] * self.grid_res[1] * self.grid_res[2]
+        self.cell_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_cells)
+        self.cell_ids = ti.field(dtype=ti.i32, shape=self.num_cells)
+        self.cell_morton_codes = ti.field(dtype=ti.int32, shape=self.num_cells)
+        self.cell_ids_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
+        self.cell_morton_codes_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
+
+        self.num_leafs = num_leafs
         print("# leafs", self.num_leafs)
         self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
@@ -30,6 +39,9 @@ class LBVH:
         self.stack_test = ti.field(dtype=ti.int32, shape=self.num_nodes)
 
         self.nodes = Node.field(shape=self.num_nodes)
+
+        self.object_cell_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.num_objects_in_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
 
         self.sorted_object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.object_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
@@ -50,7 +62,9 @@ class LBVH:
         # self.aabb_index1 = ti.field(dtype=ti.uint32, shape=24)
 
         self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
+        self.zSort_line_idx_cells = ti.field(dtype=ti.uint32, shape=2 * self.num_cells)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
         self.BITS_PER_PASS = 6
@@ -59,8 +73,6 @@ class LBVH:
         self.prefix_sum_executer = ti.algorithms.PrefixSumExecutor(self.RADIX)
         self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
         self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
-
-        self.atomic_flag = ti.field(dtype=ti.i32, shape=self.num_leafs)
 
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
@@ -82,6 +94,37 @@ class LBVH:
         zz = self.expand_bits(ti.cast(z, ti.uint64))
         return ti.cast(xx | (yy << 1) | (zz << 2), ti.int32)
 
+
+    @ti.kernel
+    def assign_cell_morton(self, aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
+
+        cell_size_x = (aabb_max[0] - aabb_min[0]) / self.grid_res[0]
+        cell_size_y = (aabb_max[1] - aabb_min[1]) / self.grid_res[1]
+        cell_size_z = (aabb_max[2] - aabb_min[2]) / self.grid_res[2]
+        cell_size = 0.5 * (cell_size_x + cell_size_y + cell_size_z) / 3.0
+
+        for i in range(self.num_cells):
+            x0 = i // (self.grid_res[1] * self.grid_res[2])
+            y0 = (i % (self.grid_res[1] * self.grid_res[2])) // self.grid_res[2]
+            z0 = i % self.grid_res[2]
+
+            pos = ti.math.vec3(cell_size_x * x0 + 0.5 * cell_size_x, cell_size_y * y0 + 0.5 * cell_size_y, cell_size_z * z0 + 0.5 * cell_size_z) + aabb_min
+            self.cell_centers[i] = pos
+
+            x = (pos[0] - aabb_min[0]) / (aabb_max[0] - aabb_min[0])
+            y = (pos[1] - aabb_min[1]) / (aabb_max[1] - aabb_min[1])
+            z = (pos[2] - aabb_min[2]) / (aabb_max[2] - aabb_min[2])
+
+            # // clamp to deal with numeric issues
+            x = ti.math.clamp(x, 0., 1.)
+            y = ti.math.clamp(y, 0., 1.)
+            z = ti.math.clamp(z, 0., 1.)
+
+            morton3d = self.morton_3d(x, y, z)
+            self.cell_morton_codes[i] = morton3d
+            self.cell_ids[i] = i
+
+        return cell_size
     @ti.kernel
     def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
 
@@ -92,16 +135,16 @@ class LBVH:
         # aabb_min0 = ti.math.vec3(0.0)
         # aabb_max0 = ti.math.vec3(self.res_x * self.cell_size, self.res_y * self.cell_size, self.res_z * self.cell_size)
 
-        cell_size_x = (aabb_max[0] - aabb_min[0]) / self.res_x
-        cell_size_y = (aabb_max[1] - aabb_min[1]) / self.res_y
-        cell_size_z = (aabb_max[2] - aabb_min[2]) / self.res_z
+        cell_size_x = (aabb_max[0] - aabb_min[0]) / self.grid_res[0]
+        cell_size_y = (aabb_max[1] - aabb_min[1]) / self.grid_res[1]
+        cell_size_z = (aabb_max[2] - aabb_min[2]) / self.grid_res[2]
 
         cell_size = 0.5 * (cell_size_x + cell_size_y + cell_size_z) / 3.0
 
         for i in range(self.num_leafs):
-            x0 = i // (self.res_y * self.res_z)
-            y0 = (i % (self.res_y * self.res_z)) // self.res_z
-            z0 = i % self.res_z
+            x0 = i // (self.grid_res[1] * self.grid_res[2])
+            y0 = (i % (self.grid_res[1] * self.grid_res[2])) // self.grid_res[2]
+            z0 = i % self.grid_res[2]
 
             pos = ti.math.vec3(cell_size_x * x0 + 0.5 * cell_size_x, cell_size_y * y0 + 0.5 * cell_size_y, cell_size_z * z0 + 0.5 * cell_size_z) + aabb_min
             self.face_centers[i] = pos
@@ -484,6 +527,13 @@ class LBVH:
             digit = (mc_i >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
             ti.atomic_add(self.prefix_sum[digit], 1)
 
+    @ti.kernel
+    def count_frequency_cells(self, pass_num: ti.i32):
+        for i in range(self.num_cells):
+            mc_i = self.cell_morton_codes[i]
+            digit = (mc_i >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
+            ti.atomic_add(self.prefix_sum[digit], 1)
+
 
     @ti.kernel
     def sort_by_digit(self, pass_num: ti.i32):
@@ -497,6 +547,20 @@ class LBVH:
             # if idx >= 0:
             self.sorted_object_ids[idx] = self.object_ids[I]
             self.sorted_morton_codes[idx] = self.morton_codes[I]
+            self.prefix_sum[digit] -= 1
+
+    @ti.kernel
+    def sort_by_digit_cells(self, pass_num: ti.i32):
+
+        ti.loop_config(serialize=True)
+        for i in range(self.num_cells):
+            I = self.num_cells - 1 - i
+            mc_i = self.cell_morton_codes[I]
+            digit = (mc_i >> (pass_num * self.BITS_PER_PASS)) & (self.RADIX - 1)
+            idx = self.prefix_sum[digit] - 1
+            # if idx >= 0:
+            self.cell_ids_sorted[idx] = self.cell_ids[I]
+            self.cell_morton_codes_sorted[idx] = self.cell_morton_codes[I]
             self.prefix_sum[digit] -= 1
 
 
@@ -560,16 +624,41 @@ class LBVH:
             self.morton_codes.copy_from(self.sorted_morton_codes)
             self.object_ids.copy_from(self.sorted_object_ids)
 
+    def radix_sort_cells(self):
+        # print(self.passes)
+        for pi in range(self.passes):
+            self.prefix_sum.fill(0)
+            self.count_frequency_cells(pi)
+            self.prefix_sum_executer.run(self.prefix_sum)
+            # self.blelloch_scan()
+            self.sort_by_digit_cells(pi)
+            self.cell_morton_codes.copy_from(self.cell_morton_codes_sorted)
+            self.cell_ids.copy_from(self.cell_ids_sorted)
+
     def sort(self):
         ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
+
+    @ti.func
+    def pos_to_idx3d(self, pos, grid_size: ti.math.vec3, origin: ti.math.vec3):
+        return ((pos - origin) / grid_size).cast(int)
+
+    @ti.func
+    def flatten_grid_index(self, grid_index):
+        return grid_index[0] * self.grid_res[1] * self.grid_res[2] + grid_index[1] * self.grid_res[2] + grid_index[2]
+
+    @ti.func
+    def get_flatten_grid_index(self, pos):
+        return self.flatten_grid_index(self.pos_to_idx3d(pos))
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
         # for i in range(2):
         # self.nodes.visited.fill(0)
 
-        self.cell_size = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
-        self.radix_sort()
+        # self.cell_size = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
+
+        self.assign_cell_morton(aabb_min_g, aabb_max_g)
+        self.radix_sort_cells()
 
         # self.sort()
         # self.sort()
@@ -685,10 +774,17 @@ class LBVH:
             self.zSort_line_idx[2 * i + 0] = self.object_ids[i]
             self.zSort_line_idx[2 * i + 1] = self.object_ids[i + 1]
 
+    @ti.kernel
+    def update_zSort_cell_centers_and_line(self):
+        for i in range(self.num_cells - 1):
+            self.zSort_line_idx_cells[2 * i + 0] = self.cell_ids[i]
+            self.zSort_line_idx_cells[2 * i + 1] = self.cell_ids[i + 1]
+
     def draw_zSort(self, scene):
-        self.update_zSort_face_centers_and_line()
-        scene.lines(self.face_centers, indices=self.zSort_line_idx, width=1.0, color=(1, 0, 0))
-        scene.particles(self.face_centers, radius=self.cell_size, color=(0, 1, 0))
+        # self.update_zSort_face_centers_and_line()
+        self.update_zSort_cell_centers_and_line()
+        scene.lines(self.cell_centers, indices=self.zSort_line_idx_cells, width=1.0, color=(1, 0, 0))
+        # scene.particles(self.face_centers, radius=self.cell_size, color=(0, 1, 0))
     #
     @ti.kernel
     def update_aabb_x_and_lines(self):
