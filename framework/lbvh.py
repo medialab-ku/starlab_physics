@@ -235,6 +235,8 @@ class LBVH:
             # // there is one less internal node than leaf node, test for that
             # self.internal_nodes[i].parent = None
 
+
+
     @ti.func
     def delta(self, i, j, num_leafs, morton_codes):
         ret = -1
@@ -436,6 +438,13 @@ class LBVH:
             self.nodes[parent].visited += 1
 
 
+    @ti.kernel
+    def init_flag_cells(self):
+        for i in range(self.num_cells):
+            parent = self.cell_nodes[i + self.num_cells - 1].parent
+            self.cell_nodes[parent].visited += 1
+
+
 
 
 
@@ -453,6 +462,33 @@ class LBVH:
             # print("cnt: ", cnt)
             if cnt == 0:
                 break
+
+    def compute_bvh_aabbs_cells(self):
+
+        self.init_flag_cells()
+        while True:
+            cnt = self.compute_cell_node_aabbs()
+            # print("cnt: ", cnt)
+            if cnt == 0:
+                break
+
+    @ti.kernel
+    def compute_cell_node_aabbs(self) -> ti.int32:
+        cnt = 0
+        for i in range(self.num_cells - 1):
+            if self.cell_nodes[i].visited == 2:
+                left, right = self.cell_nodes[i].child_a, self.cell_nodes[i].child_b
+                min0, min1 = self.cell_nodes[left].aabb_min, self.cell_nodes[right].aabb_min
+                max0, max1 = self.cell_nodes[left].aabb_max, self.cell_nodes[right].aabb_max
+                self.cell_nodes[i].aabb_min = ti.min(min0, min1)
+                self.cell_nodes[i].aabb_max = ti.max(max0, max1)
+                parent = self.cell_nodes[i].parent
+
+                self.cell_nodes[i].visited += 1
+                self.cell_nodes[parent].visited += 1
+                ti.atomic_add(cnt, 1)
+
+        return cnt
 
     @ti.kernel
     def init_Apetrei(self):
@@ -527,21 +563,6 @@ class LBVH:
         # ti.loop_config(block_dim=64)
         cnt = 0
         for i in range(self.num_leafs - 1):
-            # parent = self.nodes[i + self.num_leafs - 1].parent
-            # self.nodes[parent].visited += 1
-            # aabb_min, aabb_max = ti.math.vec3(1e4), ti.math.vec3(-1e4)
-            # start, end = self.nodes[i].range_l, self.nodes[i].range_r
-            # size = end - start + 1
-            # offset = self.num_leafs - 1 + start
-            # for j in range(size):
-            #     min0, max0 = self.nodes[j + offset].aabb_min, self.nodes[j + offset].aabb_max
-            #     aabb_min = ti.min(aabb_min, min0)
-            #     aabb_max = ti.max(aabb_max, max0)
-            #
-            # self.nodes[i].aabb_min = aabb_min
-            # self.nodes[i].aabb_max = aabb_max
-            # idx = i
-            # while True:
             if self.nodes[i].visited == 2:
                 left, right = self.nodes[i].child_a, self.nodes[i].child_b
                 min0, min1 = self.nodes[left].aabb_min, self.nodes[right].aabb_min
@@ -693,8 +714,8 @@ class LBVH:
         for f in mesh.faces:
             pos = 0.5 * (f.aabb_min + f.aabb_max)
             cell_id = self.get_flatten_cell_id(pos, grid_size, origin)
-            if cell_id >= self.num_cells:
-                print("fuck")
+            # if cell_id >= self.num_cells:
+            #     print("fuck")
             self.face_ids[f.id] = f.id
             self.face_cell_ids[f.id] = cell_id
             ti.atomic_add(self.prefix_sum_cell[cell_id], 1)
@@ -728,6 +749,33 @@ class LBVH:
             # if i > 0:
             #     num_faces_in_cell = self.prefix_sum_cell[i] - self.prefix_sum_cell[i - 1]
 
+    @ti.kernel
+    def assign_leaf_cell_nodes(self, mesh: ti.template()):
+        # print(self.num_leafs)
+        for i in range(self.num_cells):
+            # // no need to set parent to nullptr, each child will have a parents
+            if i == 0:
+                self.cell_nodes[i + self.num_cells - 1].range_l = 0
+            else:
+                self.cell_nodes[i + self.num_cells - 1].range_l = self.prefix_sum_cell[i - 1]
+            self.cell_nodes[i + self.num_cells - 1].range_r = self.prefix_sum_cell[i]
+            self.cell_nodes[i + self.num_cells - 1].child_a = -1
+            self.cell_nodes[i + self.num_cells - 1].child_b = -1
+
+            size = self.cell_nodes[i + self.num_cells - 1].range_r - self.cell_nodes[i + self.num_cells - 1].range_l + 1
+            offset = self.cell_nodes[i + self.num_cells - 1].range_l
+
+            aabb_min = self.cell_centers[i]
+            aabb_max = self.cell_centers[i]
+            # for j in range(size):
+            #     fid = self.sorted_to_origin_face_ids[j + offset]
+            #     ti.math.min(aabb_min, mesh.faces.aabb_min[fid])
+            #     ti.math.max(aabb_max, mesh.faces.aabb_max[fid])
+
+            self.cell_nodes[i + self.num_cells - 1].aabb_min = aabb_min
+            self.cell_nodes[i + self.num_cells - 1].aabb_max = aabb_max
+
+
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
         # for i in range(2):
@@ -754,6 +802,10 @@ class LBVH:
             print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
 
         self.counting_sort_cells()
+        self.assign_leaf_cell_nodes(mesh)
+
+        self.cell_nodes.visited.fill(0)
+        self.compute_bvh_aabbs_cells()
 
 
         # print(self.sorted_face_ids)
@@ -970,6 +1022,49 @@ class LBVH:
         self.aabb_index0[22] = 3
         self.aabb_index0[23] = 7
 
+    @ti.kernel
+    def update_cell_aabb_x_and_line0(self, n: ti.i32):
+
+        aabb_min = self.cell_nodes[n].aabb_min
+        aabb_max = self.cell_nodes[n].aabb_max
+
+        # print(aabb_min, aabb_max)
+
+        self.aabb_x0[0] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_max[2])
+        self.aabb_x0[1] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_max[2])
+        self.aabb_x0[2] = ti.math.vec3(aabb_min[0], aabb_max[1], aabb_min[2])
+        self.aabb_x0[3] = ti.math.vec3(aabb_max[0], aabb_max[1], aabb_min[2])
+
+        self.aabb_x0[4] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_max[2])
+        self.aabb_x0[5] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_max[2])
+        self.aabb_x0[6] = ti.math.vec3(aabb_min[0], aabb_min[1], aabb_min[2])
+        self.aabb_x0[7] = ti.math.vec3(aabb_max[0], aabb_min[1], aabb_min[2])
+
+        self.aabb_index0[0] = 0
+        self.aabb_index0[1] = 1
+        self.aabb_index0[2] = 1
+        self.aabb_index0[3] = 2
+        self.aabb_index0[4] = 2
+        self.aabb_index0[5] = 3
+        self.aabb_index0[6] = 3
+        self.aabb_index0[7] = 0
+        self.aabb_index0[8] = 4
+        self.aabb_index0[9] = 5
+        self.aabb_index0[10] = 5
+        self.aabb_index0[11] = 6
+        self.aabb_index0[12] = 6
+        self.aabb_index0[13] = 7
+        self.aabb_index0[14] = 7
+        self.aabb_index0[15] = 4
+        self.aabb_index0[16] = 0
+        self.aabb_index0[17] = 4
+        self.aabb_index0[18] = 1
+        self.aabb_index0[19] = 5
+        self.aabb_index0[20] = 2
+        self.aabb_index0[21] = 6
+        self.aabb_index0[22] = 3
+        self.aabb_index0[23] = 7
+
 
     def draw_bvh_aabb(self, scene):
         self.update_aabb_x_and_lines()
@@ -983,6 +1078,16 @@ class LBVH:
         # scene.particles(, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
 
         self.update_aabb_x_and_line0(n_internal)
+        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 0, 1))
+
+    def draw_bvh_cell_aabb_test(self, scene, n_leaf, n_internal):
+        n_leaf += (self.num_cells - 1)
+        self.update_cell_aabb_x_and_line0(n_leaf)
+        scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
+        # pos = self.face_centers[n_leaf]
+        # scene.particles(, indices=self.aabb_index0, width=2.0, color=(0, 1, 0))
+
+        self.update_cell_aabb_x_and_line0(n_internal)
         scene.lines(self.aabb_x0, indices=self.aabb_index0, width=2.0, color=(0, 0, 1))
 
         # left, right = self.nodes[n_internal].child_a, self.nodes[n_internal].child_b
