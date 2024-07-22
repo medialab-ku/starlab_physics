@@ -17,15 +17,18 @@ class LBVH:
     def __init__(self, num_leafs):
 
         self.grid_res = ti.math.ivec3(0)
-        self.grid_res[0] = 4
-        self.grid_res[1] = 4
-        self.grid_res[2] = 4
+        self.grid_res[0] = 2
+        self.grid_res[1] = 2
+        self.grid_res[2] = 2
         self.cell_size = ti.math.ivec3(0)
 
         self.num_cells = self.grid_res[0] * self.grid_res[1] * self.grid_res[2]
+        print("# cells: ", self.num_cells)
         self.cell_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_cells)
         self.cell_ids = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.cell_morton_codes = ti.field(dtype=ti.int32, shape=self.num_cells)
+        self.cell_nodes = Node.field(shape=(2 * self.num_cells - 1))
+
         self.cell_ids_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.cell_morton_codes_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.num_faces_in_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
@@ -34,10 +37,13 @@ class LBVH:
         self.prefix_sum_executer_cell = ti.algorithms.PrefixSumExecutor(self.num_cells)
 
         self.num_leafs = num_leafs
+        self.face_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.face_cell_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.sorted_face_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.sorted_face_cell_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
+        self.sorted_to_origin_face_ids = ti.field(int, shape=self.num_leafs)
 
-        print("# leafs", self.num_leafs)
+        # print("# leafs", num_leafs)
         self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
         self.root = -1
@@ -128,7 +134,6 @@ class LBVH:
             morton3d = self.morton_3d(x, y, z)
             self.cell_morton_codes[i] = morton3d
             self.cell_ids[i] = i
-
         return cell_size
     @ti.kernel
     def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
@@ -231,10 +236,10 @@ class LBVH:
             # self.internal_nodes[i].parent = None
 
     @ti.func
-    def delta(self, i, j):
+    def delta(self, i, j, num_leafs, morton_codes):
         ret = -1
-        if j <= (self.num_leafs - 1) and j >= 0:
-            xor = self.morton_codes[i] ^ self.morton_codes[j]
+        if j <= (num_leafs - 1) and j >= 0:
+            xor = morton_codes[i] ^ morton_codes[j]
             if xor == 0:
                 ret = 32
             else:
@@ -248,9 +253,9 @@ class LBVH:
         return xor
 
     @ti.func
-    def find_split(self, l, r):
-        first_code = self.morton_codes[l]
-        last_code = self.morton_codes[r]
+    def find_split(self, l, r, morton_codes):
+        first_code = morton_codes[l]
+        last_code = morton_codes[r]
 
         ret = -1
         if first_code == last_code:
@@ -267,7 +272,7 @@ class LBVH:
                 new_split = split + step
 
                 if new_split < r:
-                    split_code = self.morton_codes[new_split]
+                    split_code = morton_codes[new_split]
                     split_prefix = ti.math.clz(first_code ^ split_code)
                     if split_prefix > common_prefix:
                         split = new_split
@@ -277,10 +282,10 @@ class LBVH:
 
 
     @ti.func
-    def determine_range(self, i, n):
+    def determine_range(self, i, n, morton_codes):
 
-        delta_l = self.delta(i, i - 1)
-        delta_r = self.delta(i, i + 1)
+        delta_l = self.delta(i, i - 1, n, morton_codes)
+        delta_r = self.delta(i, i + 1, n, morton_codes)
 
         d = 1
 
@@ -291,7 +296,7 @@ class LBVH:
 
         # print(d)
         l_max = 2
-        while self.delta(i, i + l_max * d) > delta_min:
+        while self.delta(i, i + l_max * d, n, morton_codes) > delta_min:
             l_max <<= 2
 
         l = 0
@@ -299,7 +304,7 @@ class LBVH:
         while t > 0:
             delta = -1
             if i + (l + t) * d >= 0 and i + (l + t) * d < n:
-                delta = self.delta(i, i + (l + t) * d)
+                delta = self.delta(i, i + (l + t) * d, n, morton_codes)
 
             if delta > delta_min:
                 l += t
@@ -364,8 +369,8 @@ class LBVH:
         # ti.loop_config(block_dim=64)
         cnt = 0
         for i in range(self.num_leafs - 1):
-            start, end = self.determine_range(i, self.num_leafs)
-            split = self.find_split(start, end)
+            start, end = self.determine_range(i, self.num_leafs, self.morton_codes)
+            split = self.find_split(start, end, self.morton_codes)
             left = split
             if split == start:
                 left += self.leaf_offset
@@ -382,6 +387,33 @@ class LBVH:
             self.nodes[i].range_l = start
             self.nodes[i].range_r = end
 
+    @ti.kernel
+    def assign_internal_nodes_Karras12_cells(self):
+
+        # ti.loop_config(block_dim=64)
+        cnt = 0
+        for i in range(self.num_cells - 1):
+            start, end = self.determine_range(i, self.num_cells, self.cell_morton_codes)
+            split = self.find_split(start, end, self.cell_morton_codes)
+
+            left = split
+            if split == start:
+                left += (self.num_cells - 1)
+
+            right = split + 1
+            if right == end:
+                right += (self.num_cells - 1)
+
+            self.cell_nodes[i].child_a = left
+            self.cell_nodes[i].child_b = right
+            self.cell_nodes[i].visited = 0
+            self.cell_nodes[left].parent = i
+            self.cell_nodes[right].parent = i
+            self.cell_nodes[i].range_l = start
+            self.cell_nodes[i].range_r = end
+
+        for i in range(self.num_cells - 1):
+            print(i, self.cell_nodes[i].child_a, self.cell_nodes[i].child_b)
 
     @ti.func
     def choose_parent(self, left, right, current_node):
@@ -661,20 +693,40 @@ class LBVH:
         for f in mesh.faces:
             pos = 0.5 * (f.aabb_min + f.aabb_max)
             cell_id = self.get_flatten_cell_id(pos, grid_size, origin)
+            if cell_id >= self.num_cells:
+                print("fuck")
+            self.face_ids[f.id] = f.id
             self.face_cell_ids[f.id] = cell_id
             ti.atomic_add(self.prefix_sum_cell[cell_id], 1)
 
     @ti.kernel
-    def counting_sort_cells(self, mesh: ti.template()):
+    def counting_sort_cells(self):
 
         ti.loop_config(serialize=True)
-        for f in mesh.faces:
-            I = self.num_leafs - 1 - f.id
+        for fid in range(self.num_leafs):
+            I = self.num_leafs - 1 - fid
             cell_id = self.face_cell_ids[I]
             idx = self.prefix_sum_cell_temp[cell_id] - 1
-            self.sorted_face_ids[idx] = I
-            self.prefix_sum_cell_temp[I] -= 1
+            self.sorted_face_ids[idx] = self.face_ids[I]
+            self.sorted_face_cell_ids[idx] = self.face_cell_ids[I]
+            ti.atomic_sub(self.prefix_sum_cell_temp[cell_id], 1)
 
+        for fid in range(self.num_leafs):
+            sorted_id = self.sorted_face_ids[fid]
+            self.sorted_to_origin_face_ids[sorted_id] = fid
+
+    @ti.kernel
+    def countruct_leaf_cell_aabb(self):
+
+        for i in range(self.num_cells):
+            offset = self.num_cells - 1
+            self.cell_nodes[i + offset].aabb_min = self.cell_centers[i]
+            self.cell_nodes[i + offset].aabb_max = self.cell_centers[i]
+
+            # num_faces_in_cell = self.prefix_sum_cell[0]
+            # offset = 0
+            # if i > 0:
+            #     num_faces_in_cell = self.prefix_sum_cell[i] - self.prefix_sum_cell[i - 1]
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
@@ -685,9 +737,14 @@ class LBVH:
 
         self.cell_size = self.assign_cell_morton(aabb_min_g, aabb_max_g)
         self.radix_sort_cells()
+        self.assign_internal_nodes_Karras12_cells()
+
         self.prefix_sum_cell.fill(0)
         self.assign_face_cell_ids(mesh, self.cell_size, aabb_min_g)
+
+        # print(self.face_cell_ids)
         # print(self.prefix_sum_cell)
+        # print(self.face_cell_ids)
         self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
         self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
 
@@ -696,8 +753,11 @@ class LBVH:
         if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
             print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
 
+        self.counting_sort_cells()
 
-        # self.counting_sort_cells()
+
+        # print(self.sorted_face_ids)
+        # print(self.sorted_face_cell_ids)
 
 
         # self.sort()
@@ -711,7 +771,6 @@ class LBVH:
         # self.bvh_construction_Apetrei()
         # print(self.root)
         # self.root = 0
-        # self.assign_internal_nodes_Karras12()
         # self.nodes.visited.fill(0)
         # self.compute_bvh_aabbs()
 

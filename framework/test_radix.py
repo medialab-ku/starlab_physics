@@ -92,6 +92,7 @@ def radix_sort():
         prefix_sum_executer.run(prefix_sum)
         # print(prefix_sum)
         sort_by_digit(pi)
+        # print(prefix_sum)
         morton_codes.copy_from(sorted_morton_codes)
         # for i in range(9):
         #     prefix_sum[i + 1] = prefix_sum[i] + prefix_sum[i + 1]
