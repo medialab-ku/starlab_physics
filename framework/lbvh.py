@@ -730,15 +730,25 @@ class LBVH:
     @ti.kernel
     def counting_sort_cells(self):
 
-        ti.loop_config(serialize=True)
+        # ti.loop_config(serialize=True)
+        # for fid in range(self.num_leafs):
+        #     I = self.num_leafs - 1 - fid
+        #     cell_id = self.face_cell_ids[I]
+        #     base_offset = 0
+        #     if cell_id - 1 >= 0:
+        #         base_offset = self.prefix_sum_cell[cell_id - 1]
+        #
+        #     self.sorted_face_ids[I] = self.prefix_sum_cell_temp[cell_id] - 1 + base_offset
+        #     self.prefix_sum_cell_temp[cell_id] -= 1
+
+        # ti.loop_config(serialize=True)
         for fid in range(self.num_leafs):
             I = self.num_leafs - 1 - fid
             cell_id = self.face_cell_ids[I]
-            idx = self.prefix_sum_cell_temp[cell_id] - 1
-            self.sorted_face_ids[idx] = self.face_ids[I]
-            self.sorted_face_cell_ids[idx] = cell_id
-            ti.atomic_sub(self.prefix_sum_cell_temp[cell_id], 1)
+            idx = ti.atomic_sub(self.prefix_sum_cell_temp[cell_id], 1) - 1
 
+            self.sorted_face_ids[idx] = self.face_ids[I]
+            # self.sorted_face_cell_ids[idx] = cell_id
 
     @ti.kernel
     def countruct_leaf_cell_aabb(self):
@@ -807,11 +817,13 @@ class LBVH:
         self.face_aabb_min.copy_from(mesh.faces.aabb_min)
         self.face_aabb_max.copy_from(mesh.faces.aabb_max)
 
+        print(self.face_ids)
         if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
             print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
 
+
         self.counting_sort_cells()
-        # print(self.sorted_face_ids)
+        print(self.sorted_face_ids)
         self.assign_leaf_cell_nodes(mesh)
         self.cell_nodes.visited.fill(0)
         self.compute_bvh_aabbs_cells()
