@@ -87,6 +87,10 @@ class LBVH:
         self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
         self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
 
+        self.cell_size = self.assign_cell_morton(ti.math.vec3(0.0), ti.math.vec3(1e3))
+        self.radix_sort_cells()
+        self.assign_internal_nodes_Karras12_cells()
+
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
     @ti.func
@@ -786,10 +790,9 @@ class LBVH:
         # self.nodes.visited.fill(0)
 
         # self.cell_size = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
-
-        self.cell_size = self.assign_cell_morton(aabb_min_g, aabb_max_g)
-        self.radix_sort_cells()
-        self.assign_internal_nodes_Karras12_cells()
+        self.cell_size[0] = (aabb_max_g[0] - aabb_min_g[0]) / self.grid_res[0]
+        self.cell_size[1] = (aabb_max_g[1] - aabb_min_g[1]) / self.grid_res[1]
+        self.cell_size[2] = (aabb_max_g[2] - aabb_min_g[2]) / self.grid_res[2]
 
         self.prefix_sum_cell.fill(0)
         self.assign_face_cell_ids(mesh, self.cell_size, aabb_min_g)
