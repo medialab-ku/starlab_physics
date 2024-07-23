@@ -43,6 +43,9 @@ class LBVH:
         self.sorted_face_cell_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.sorted_to_origin_face_ids = ti.field(int, shape=self.num_leafs)
 
+        self.face_aabb_min = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+        self.face_aabb_max = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+
         # print("# leafs", num_leafs)
         self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
@@ -68,7 +71,6 @@ class LBVH:
         self.aabb_x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
 
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.test)
-
         self.aabb_index0 = ti.field(dtype=ti.uint32, shape=24)
         # self.aabb_index1 = ti.field(dtype=ti.uint32, shape=24)
 
@@ -134,6 +136,7 @@ class LBVH:
             morton3d = self.morton_3d(x, y, z)
             self.cell_morton_codes[i] = morton3d
             self.cell_ids[i] = i
+
         return cell_size
     @ti.kernel
     def assign_morton(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3) -> ti.i32:
@@ -414,8 +417,8 @@ class LBVH:
             self.cell_nodes[i].range_l = start
             self.cell_nodes[i].range_r = end
 
-        for i in range(self.num_cells - 1):
-            print(i, self.cell_nodes[i].child_a, self.cell_nodes[i].child_b)
+        # for i in range(self.num_cells - 1):
+        #     print(i, self.cell_nodes[i].child_a, self.cell_nodes[i].child_b)
 
     @ti.func
     def choose_parent(self, left, right, current_node):
@@ -796,8 +799,10 @@ class LBVH:
         # print(self.face_cell_ids)
         self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
         self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
+        # print(self.prefix_sum_cell)
 
-        print(self.prefix_sum_cell)
+        self.face_aabb_min.copy_from(mesh.faces.aabb_min)
+        self.face_aabb_max.copy_from(mesh.faces.aabb_max)
 
         if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
             print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
@@ -805,7 +810,6 @@ class LBVH:
         self.counting_sort_cells()
         # print(self.sorted_face_ids)
         self.assign_leaf_cell_nodes(mesh)
-
         self.cell_nodes.visited.fill(0)
         self.compute_bvh_aabbs_cells()
         # print(self.sorted_face_ids)
@@ -911,6 +915,43 @@ class LBVH:
 
                 else:
                     left, right = self.nodes[idx].child_a, self.nodes[idx].child_b
+                    stack[stack_counter] = left
+                    stack_counter += 1
+                    stack[stack_counter] = right
+                    stack_counter += 1
+
+        return cnt
+
+    @ti.func
+    def traverse_cell_bvh_single(self, min0, max0, i, cache, nums):
+
+        stack = ti.Vector([-1 for j in range(32)])
+        stack[0] = 0
+        stack_counter = 1
+        cnt = 0
+        while stack_counter > 0:
+            # print(stack)
+            stack_counter -= 1
+            idx = stack[stack_counter]
+            min1, max1 = self.cell_nodes[idx].aabb_min, self.cell_nodes[idx].aabb_max
+            # print(min1, max1)
+            cnt += 1
+            if self.aabb_overlap(min0, max0, min1, max1):
+                if idx >= self.num_cells - 1:
+                    size = self.cell_nodes[idx].range_r - self.cell_nodes[idx].range_l + 1
+                    offset = self.cell_nodes[idx].range_l
+                    for j in range(size):
+                        fid = self.sorted_face_ids[j + offset]
+                        # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
+                        aabb_min = self.face_aabb_min[fid]
+                        aabb_max = self.face_aabb_max[fid]
+                        if self.aabb_overlap(min0, max0, aabb_min, aabb_max):
+                            cache[i, nums[i]] = self.cell_nodes[idx].object_id
+                            nums[i] += 1
+                            ti.atomic_add(cnt, 1)
+
+                else:
+                    left, right = self.cell_nodes[idx].child_a, self.cell_nodes[idx].child_b
                     stack[stack_counter] = left
                     stack_counter += 1
                     stack[stack_counter] = right

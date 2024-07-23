@@ -388,7 +388,7 @@ class Solver:
         if self.mesh_st != None:
             self.mesh_st.reset()
             self.mesh_st.computeAABB_faces(padding=0.0)
-            aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
+            aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=0.01)
             # print(aabb_min_st, aabb_max_st)
             self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
             # self.broadphase_lbvh()
@@ -520,7 +520,8 @@ class Solver:
                 y = self.mesh_dy.verts.y[vid]
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
-                a = self.lbvh_st.traverse_bvh_single(root, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
+                # a = self.lbvh_st.traverse_bvh_single(root, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
+                a = self.lbvh_st.traverse_cell_bvh_single(aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
                 # x = self.mesh_dy.verts.x[vid]
@@ -994,7 +995,7 @@ class Solver:
 
         if self.enable_collision_handling:
             self.mesh_dy.computeAABB_faces(padding=self.padding)
-            aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB()
+            # aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB()
             # self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
 
             # if self.mesh_st != None:
