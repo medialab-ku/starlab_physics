@@ -749,6 +749,7 @@ class LBVH:
     @ti.kernel
     def assign_leaf_cell_nodes(self, mesh: ti.template()):
         # print(self.num_leafs)
+        # ti.loop_config(serialize=True)
         for i in range(self.num_cells):
             # // no need to set parent to nullptr, each child will have a parents
             if i == 0:
@@ -762,18 +763,19 @@ class LBVH:
             size = self.cell_nodes[i + self.num_cells - 1].range_r - self.cell_nodes[i + self.num_cells - 1].range_l + 1
             offset = self.cell_nodes[i + self.num_cells - 1].range_l
 
-            aabb_min = self.cell_centers[i]
-            aabb_max = self.cell_centers[i]
-            print(size, offset)
+            aabb_min = ti.math.vec3(1e3)
+            aabb_max = ti.math.vec3(-1e3)
+            # print(size, offset)
             for j in range(size):
                 fid = self.sorted_face_ids[j + offset]
-                ti.math.min(aabb_min, mesh.faces.aabb_min[fid])
-                ti.math.max(aabb_max, mesh.faces.aabb_max[fid])
+                # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
+                aabb_min = ti.math.min(aabb_min, mesh.faces.aabb_min[fid])
+                aabb_max = ti.math.max(aabb_max, mesh.faces.aabb_max[fid])
 
             self.cell_nodes[i + self.num_cells - 1].aabb_min = aabb_min
             self.cell_nodes[i + self.num_cells - 1].aabb_max = aabb_max
 
-            # print(self.cell_nodes[i + self.num_cells - 1].range_l, self.cell_nodes[i + self.num_cells - 1].range_r)
+            # print(self.cell_nodes[i + self.num_cells - 1].aabb_min, self.cell_nodes[i + self.num_cells - 1].aabb_max)
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
