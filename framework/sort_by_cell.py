@@ -43,14 +43,13 @@ def get_flattened_cell_id():
 @ti.kernel
 def counting_sort_by_cell():
 
-    ti.loop_config(serialize=True)
+    # ti.loop_config(serialize=True)
     for i in range(num_particles):
         I = num_particles - 1 - i
         cid = cell_id[I]
-        idx = prefix_sum_temp[cid] - 1
+        idx = ti.atomic_sub(prefix_sum_temp[cid], 1) - 1
         sorted_cell_id[idx] = cid
         sorted_id[idx] = I
-        ti.atomic_sub(prefix_sum_temp[cid], 1)
 
     for i in range(num_particles):
         sid = sorted_id[i]
