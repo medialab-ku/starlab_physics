@@ -119,13 +119,13 @@ def show_options():
         w.text(verts_str)
         w.text(edges_str)
 
-        n_leaf = w.slider_int("leaf id", n_leaf, 0, sim.lbvh_st.num_leafs - 1)
-        if not n_leaf_old == n_leaf:
-            print(sim.lbvh_st.traverse_bvh_single_test(n_leaf))
-        n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_leafs - 2)
-        if not n_internal_old == n_internal:
-            print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
-            print("left: ", sim.lbvh_st.nodes[n_internal].child_a, "right: ", sim.lbvh_st.nodes[n_internal].child_b)
+        # n_leaf = w.slider_int("leaf id", n_leaf, 0, sim.lbvh_st.num_edges - 1)
+        # if not n_leaf_old == n_leaf:
+        #     print(sim.lbvh_st.traverse_bvh_single_test(n_leaf))
+        # n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_edges - 2)
+        # if not n_internal_old == n_internal:
+        #     print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
+        #     print("left: ", sim.lbvh_st.nodes[n_internal].child_a, "right: ", sim.lbvh_st.nodes[n_internal].child_b)
 
         # if sim.max_num_tetra_dynamic > 0:
         #     tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
@@ -372,7 +372,7 @@ while window.running:
     # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
-        # scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
+        scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
@@ -380,12 +380,15 @@ while window.running:
         # sim.lbvh_st.draw_bvh_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
-    position_np = scene1.mesh_dy.color_position.to_numpy()
-    color_np = scene1.mesh_dy.color_RGB.to_numpy()
-    scene.particles(scene1.mesh_dy.color_position, radius=0.01, per_vertex_color=scene1.mesh_dy.color_RGB)
+    # color_np = scene1.mesh_dy.color_RGB.to_numpy()
+    # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=10.0, per_vertex_color=scene1.mesh_dy.color_RGB)
+
+    # position_np = scene1.mesh_dy.color_position.to_numpy()
+    # color_np = scene1.mesh_dy.color_RGB.to_numpy()
+    # scene.particles(scene1.mesh_dy.color_position, radius=0.01, per_vertex_color=scene1.mesh_dy.color_RGB)
 
     #draw selected particles
-    # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
+    scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)

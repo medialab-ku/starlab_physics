@@ -419,10 +419,43 @@ class Solver:
 
         return (v0 == v2) or (v0 == v3) or (v1 == v2) or (v1 == v3)
 
+    def solve_spring_constraints_x_parallel(self, compliance: ti.f32):
+        for i in range(self.mesh_dy.num_colors):
+            if i < self.mesh_dy.num_colors - 1:
+                current_offset = self.mesh_dy.color_prefix_sum_np[i]
+                next_offset = self.mesh_dy.color_prefix_sum_np[i + 1]
+                self.parallel_kernel_solver_x(compliance, current_offset, next_offset)
+            elif i == self.mesh_dy.num_colors - 1:
+                current_offset = self.mesh_dy.color_prefix_sum_np[i]
+                next_offset = self.mesh_dy.num_edges
+                self.parallel_kernel_solver_x(compliance, current_offset, next_offset)
+
+    @ti.kernel
+    def parallel_kernel_solver_x(self, compliance: ti.f32, current_offset: ti.i32, next_offset: ti.i32):
+
+        size = next_offset - current_offset + 1
+        for i in range(size):
+            edge_idx = self.mesh_dy.sorted_edges_index[i + current_offset]
+            v0, v1 = self.mesh_dy.edge_indices[2 * edge_idx + 0], self.mesh_dy.edge_indices[2 * edge_idx + 1]
+
+            l0 = self.mesh_dy.edges.l0[edge_idx]
+            x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            lij = x10.norm()
+
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] +
+                     self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1]) * nabla_C.dot(nabla_C)
+            ld = compliance * C / (compliance * schur + 1.0)
+
+            self.mesh_dy.verts.y[v0] -= (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C)
+            self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
 
     @ti.kernel
     def solve_spring_constraints_x(self, compliance: ti.f32):
         # print(compliance)
+
+        # ti.loop_config(serialize=True)
         for e in self.mesh_dy.edges:
             l0 = e.l0
             x10 = e.verts[0].y - e.verts[1].y
@@ -817,7 +850,8 @@ class Solver:
         # print(self.YM)
         compliance = self.YM * dt * dt
         # print(compliance)
-        self.solve_spring_constraints_x(compliance)
+        self.solve_spring_constraints_x_parallel(compliance)
+        # self.solve_spring_constraints_x(compliance)
         # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
             cnt_lbvh = self.broadphase_lbvh()
@@ -826,7 +860,8 @@ class Solver:
         compliance_sewing = 1000 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
         # self.solve_pressure_constraints_x()
-        self.update_dx()
+
+        # self.update_dx()
     def solve_constraints_v(self):
         self.mesh_dy.verts.dv.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
