@@ -48,7 +48,6 @@ def counting_sort_by_cell():
         I = num_particles - 1 - i
         cid = cell_id[I]
         idx = prefix_sum_temp[cid] - 1
-        # sorted_id[idx] = I
         sorted_cell_id[idx] = cid
         sorted_id[idx] = I
         ti.atomic_sub(prefix_sum_temp[cid], 1)

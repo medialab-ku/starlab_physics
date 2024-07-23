@@ -729,12 +729,9 @@ class LBVH:
             cell_id = self.face_cell_ids[I]
             idx = self.prefix_sum_cell_temp[cell_id] - 1
             self.sorted_face_ids[idx] = self.face_ids[I]
-            self.sorted_face_cell_ids[idx] = self.face_cell_ids[I]
+            self.sorted_face_cell_ids[idx] = cell_id
             ti.atomic_sub(self.prefix_sum_cell_temp[cell_id], 1)
 
-        for fid in range(self.num_leafs):
-            sorted_id = self.sorted_face_ids[fid]
-            self.sorted_to_origin_face_ids[sorted_id] = fid
 
     @ti.kernel
     def countruct_leaf_cell_aabb(self):
@@ -758,7 +755,7 @@ class LBVH:
                 self.cell_nodes[i + self.num_cells - 1].range_l = 0
             else:
                 self.cell_nodes[i + self.num_cells - 1].range_l = self.prefix_sum_cell[i - 1]
-            self.cell_nodes[i + self.num_cells - 1].range_r = self.prefix_sum_cell[i]
+            self.cell_nodes[i + self.num_cells - 1].range_r = self.prefix_sum_cell[i] - 1
             self.cell_nodes[i + self.num_cells - 1].child_a = -1
             self.cell_nodes[i + self.num_cells - 1].child_b = -1
 
@@ -767,14 +764,16 @@ class LBVH:
 
             aabb_min = self.cell_centers[i]
             aabb_max = self.cell_centers[i]
-            # for j in range(size):
-            #     fid = self.sorted_to_origin_face_ids[j + offset]
-            #     ti.math.min(aabb_min, mesh.faces.aabb_min[fid])
-            #     ti.math.max(aabb_max, mesh.faces.aabb_max[fid])
+            print(size, offset)
+            for j in range(size):
+                fid = self.sorted_face_ids[j + offset]
+                ti.math.min(aabb_min, mesh.faces.aabb_min[fid])
+                ti.math.max(aabb_max, mesh.faces.aabb_max[fid])
 
             self.cell_nodes[i + self.num_cells - 1].aabb_min = aabb_min
             self.cell_nodes[i + self.num_cells - 1].aabb_max = aabb_max
 
+            # print(self.cell_nodes[i + self.num_cells - 1].range_l, self.cell_nodes[i + self.num_cells - 1].range_r)
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
@@ -796,12 +795,13 @@ class LBVH:
         self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
         self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
 
-        # print(self.prefix_sum_cell)
+        print(self.prefix_sum_cell)
 
         if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
             print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
 
         self.counting_sort_cells()
+        # print(self.sorted_face_ids)
         self.assign_leaf_cell_nodes(mesh)
 
         self.cell_nodes.visited.fill(0)

@@ -96,7 +96,7 @@ class Solver:
             self.max_num_verts_st = len(self.mesh_st.verts)
             self.max_num_edges_st = len(self.mesh_st.edges)
             self.max_num_faces_st = len(self.mesh_st.faces)
-            self.mesh_st.computeAABB_faces(padding=0.0)
+            self.mesh_st.computeAABB_faces(padding=0.01)
             aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=0.1)
             # print(aabb_min_st, aabb_max_st)
             self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)

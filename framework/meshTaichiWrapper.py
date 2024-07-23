@@ -313,8 +313,8 @@ class MeshTaichiWrapper:
             f.aabb_min = ti.math.min(f.verts[0].x, f.verts[1].x, f.verts[2].x)
             f.aabb_max = ti.math.max(f.verts[0].x, f.verts[1].x, f.verts[2].x)
 
-            # f.aabb_min -= padding * ti.math.vec3(1.0)
-            # f.aabb_max += padding * ti.math.vec3(1.0)
+            f.aabb_min -= padding * ti.math.vec3(1.0)
+            f.aabb_max += padding * ti.math.vec3(1.0)
 
 
     def export(self, scene_name, frame, is_static = False):
