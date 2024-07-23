@@ -806,8 +806,6 @@ class LBVH:
 
         self.cell_nodes.visited.fill(0)
         self.compute_bvh_aabbs_cells()
-
-
         # print(self.sorted_face_ids)
         # print(self.sorted_face_cell_ids)
 

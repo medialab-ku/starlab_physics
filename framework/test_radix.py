@@ -24,15 +24,8 @@ ids = ti.field(dtype=ti.int32, shape=num_leafs)
 
 prefix_sum = ti.field(dtype=ti.int32, shape=RADIX)
 sorted_morton_codes = ti.field(dtype=ti.int32, shape=num_leafs)
-# for i in range(pass_num):
-#     digit = (mc_i >> (i * BITS_PER_PASS)) & (RADIX - 1)
-#     print(bin(digit))
 
-test = 329
-
-i = 2
-
-# print((test % pow(10, i + 1)) // pow(10, i))
+pos = ti.Vector.field(dtype=ti.f32, shape=num_leafs)
 
 @ti.kernel
 def init():
