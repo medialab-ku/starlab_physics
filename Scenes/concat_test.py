@@ -84,11 +84,11 @@ for i in range(2):
 
 #dynamic mesh
 # mesh_dy = MeshTaichiWrapper("../models/concat.obj", offsets=offsets, scale=0.005, trans=ti.math.vec3(0, -6.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dy = MeshTaichiWrapper("../models/OBJ/square_big.obj", offsets=[0], scale=1.0, trans=ti.math.vec3(0, 1.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/plane_64.obj", offsets=[0], scale=1.0, trans=ti.math.vec3(0, 1.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
 
 
 
 #static mesh
-mesh_st = MeshTaichiWrapper("../models/OBJ/square_big.obj",  offsets=[0], scale=1.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/OBJ/plane_64.obj",  offsets=[0], scale=1.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # mesh_st = MeshTaichiWrapper("../models/OBJ/square_big.obj",  offsets=[0], scale=1.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

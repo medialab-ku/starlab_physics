@@ -167,6 +167,11 @@ class Solver:
         self.sewing_pairs_num = ti.field(dtype=ti.int32, shape=())
         self.sewing_pairs_num[None] = 0
 
+        self.c_total = ti.field(dtype=ti.f32, shape=1)
+
+        self.iteration_data = np.array([])
+        self.C_data = np.array([])
+
     # @ti.kernel
     # def __init_animation_pos(self, is_selected: ti.template()):
     #     for i in is_selected:
@@ -432,8 +437,7 @@ class Solver:
 
     @ti.kernel
     def parallel_kernel_solver_x(self, compliance: ti.f32, current_offset: ti.i32, next_offset: ti.i32):
-
-        size = next_offset - current_offset + 1
+        size = next_offset - current_offset
         for i in range(size):
             edge_idx = self.mesh_dy.sorted_edges_index[i + current_offset]
             v0, v1 = self.mesh_dy.edge_indices[2 * edge_idx + 0], self.mesh_dy.edge_indices[2 * edge_idx + 1]
@@ -448,7 +452,11 @@ class Solver:
                      self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1]) * nabla_C.dot(nabla_C)
             ld = compliance * C / (compliance * schur + 1.0)
 
-            self.mesh_dy.verts.y[v0] -= (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C)
+            self.c_total[0] += C
+
+            # we can directly apply constraints to the predicted position of vertex
+            # Hence, we don't need to use the update_dx() function
+            self.mesh_dy.verts.y[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
             self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
 
     @ti.kernel
@@ -470,6 +478,8 @@ class Solver:
             e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * ld * nabla_C
             e.verts[0].nc += 1.0
             e.verts[1].nc += 1.0
+
+            self.c_total[0] += C
 
     @ti.kernel
     def solve_spring_constraints_x_test(self, compliance: ti.f32):
@@ -829,7 +839,7 @@ class Solver:
 
         for v in self.mesh_dy.verts:
             # if v.id != 0:
-            v.x += dt * v.v
+            v.x += dt * v.dx
 
 
 
@@ -837,31 +847,42 @@ class Solver:
     def compute_velocity(self, dt: ti.f32):
         for v in self.mesh_dy.verts:
             v.v = v.fixed * (v.y - v.x) / dt
-
+            v.x += dt * v.v
     def init_variables(self):
 
         self.mesh_dy.verts.dx.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
+        self.c_total.fill(0.0)
 
 
     def solve_constraints_jacobi_x(self, dt):
 
         self.init_variables()
-        # print(self.YM)
         compliance = self.YM * dt * dt
-        # print(compliance)
-        self.solve_spring_constraints_x_parallel(compliance)
-        # self.solve_spring_constraints_x(compliance)
+        self.solve_spring_constraints_x(compliance)
         # self.solve_spring_constraints_x_test(compliance)
-        if self.enable_collision_handling:
-            cnt_lbvh = self.broadphase_lbvh()
-            self.solve_collision_constraints_x()
+        # if self.enable_collision_handling:
+        #     cnt_lbvh = self.broadphase_lbvh()
+        #     self.solve_collision_constraints_x()
+
+        compliance_sewing = 1000 * self.YM * dt * dt
+        # self.solve_sewing_constraints_x(compliance_sewing)
+        # self.solve_pressure_constraints_x()
+        self.update_dx()
+
+    def solve_constraints_graph_color_x(self, dt):
+
+        self.init_variables()
+        compliance = self.YM * dt * dt
+        self.solve_spring_constraints_x_parallel(compliance)
+        # if self.enable_collision_handling:
+        #     cnt_lbvh = self.broadphase_lbvh()
+        #     self.solve_collision_constraints_x()
 
         compliance_sewing = 1000 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
         # self.solve_pressure_constraints_x()
 
-        # self.update_dx()
     def solve_constraints_v(self):
         self.mesh_dy.verts.dv.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
@@ -997,7 +1018,7 @@ class Solver:
 
     def forward(self, n_substeps):
         # self.load_sewing_pairs()
-        dt_sub = self.dt / n_substeps
+        # dt_sub = self.dt / n_substeps
         # ti.profiler.clear_kernel_profiler_info()
 
         if self.enable_collision_handling:
@@ -1011,15 +1032,32 @@ class Solver:
                 self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
             # cnt_lbvh = self.broadphase_lbvh()
+
+        # iterations(to achieve converged solution, x_star)
+        iter = 1
+        dt_sub = self.dt
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             # cnt_brute = self.broadphase_brute()
-            self.solve_constraints_jacobi_x(dt_sub)
-            self.compute_velocity(dt_sub)
+            # self.solve_constraints_jacobi_x(dt_sub)
+            self.solve_constraints_graph_color_x(dt_sub)
 
-            if self.enable_velocity_update:
-                self.solve_constraints_v()
+            self.iteration_data = np.append(self.iteration_data, iter)
+            iter += 1
+            self.C_data = np.append(self.C_data, self.c_total[0])
 
-            self.update_x(dt_sub)
+            epsilon = 0.001
+            if self.c_total[0] < epsilon: break
+            # self.compute_velocity(dt_sub)
+            # if self.enable_velocity_update:
+            #     self.solve_constraints_v()
+
+            # self.update_x(dt_sub)
+
+        self.compute_velocity(dt_sub)
             # print("brute: ", cnt_brute / self.max_num_verts_dy)
             # print("lbvh:  ", cnt_lbvh  / self.max_num_verts_dy)
+
+    def visualize_data(self):
+        print(self.iteration_data)
+        print(self.C_data)

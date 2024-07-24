@@ -32,6 +32,10 @@ class MeshTaichiWrapper:
                                'aabb_max': ti.math.vec3,
                                'morton_code': ti.uint32})
 
+        # extract OBJ mesh name
+        self.mesh_name = model_path[len("../models/OBJ/"):]
+        self.mesh_name = self.mesh_name[:-len(".obj")]
+
         self.offsets = offsets
         self.mesh.verts.fixed.fill(1.0)
         self.mesh.verts.m_inv.fill(0.0)
@@ -78,43 +82,67 @@ class MeshTaichiWrapper:
         self.edges_color.fill(-1)
         self.adj_edges_list = ti.field(dtype=ti.int32, shape=(self.num_edges, self.num_edges))
         self.adj_edges_list.fill(0)
-        self.num_colors = 10
+        self.num_colors = 20
         self.available_colors = ti.field(dtype=ti.int32, shape=self.num_colors) # temporary
 
-        print("verts :", self.num_verts, "edges :", self.num_edges)
-        self.initEdgeIndicesForColor() # ensure the sequence of edge indices
-        self.initAdjEdges()
-
-        self.edge_indices_for_color_np = self.edge_indices_for_color.to_numpy()
-        self.edges_color_np = self.edges_color.to_numpy()
-        self.adj_edges_list_np = self.adj_edges_list.to_numpy()
-        self.available_colors_np = self.available_colors.to_numpy()
-
-        self.colorEdgesGreedy()
-
-        self.edges_color.from_numpy(self.edges_color_np)
-        self.adj_edges_list.from_numpy(self.adj_edges_list_np)
-        self.available_colors.from_numpy(self.available_colors_np)
-
-        # self.printEdgesColor()
-        self.checkAdjColor()
-
+        # these data will be ultimately used in XPBD.py
         self.sorted_edges_index = self.edge_indices_for_color
-        self.sorted_edges_color = self.edges_color
+        self.sorted_edges_index_np = self.sorted_edges_index.to_numpy()
         self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.num_colors)
         self.color_prefix_sum.fill(0)
-
-        # before sort
-        self.sorted_edges_index_np = self.sorted_edges_index.to_numpy()
-        self.sorted_edges_color_np = self.sorted_edges_color.to_numpy()
         self.color_prefix_sum_np = self.color_prefix_sum.to_numpy()
 
-        self.colorCountingSort() # sort
+        self.color_prefix_sum_np_name = "./precomputed/" + self.mesh_name + "_prefix_sum.npy"
+        self.sorted_edges_index_np_name = "./precomputed/" + self.mesh_name + "_sorted_edges_index.npy"
 
-        # after sort
-        self.sorted_edges_index.from_numpy(self.sorted_edges_index_np)
-        self.sorted_edges_color.from_numpy(self.sorted_edges_color_np)
-        self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
+        # if the existing data is in the direction, just import the data to reduce initialization time
+        if os.path.isfile(self.color_prefix_sum_np_name) and os.path.isfile(self.sorted_edges_index_np_name):
+            print("Importing the existing color list...")
+            self.color_prefix_sum_np = np.load(self.color_prefix_sum_np_name)
+            self.sorted_edges_index_np = np.load(self.sorted_edges_index_np_name)
+            self.sorted_edges_index.from_numpy(self.sorted_edges_index_np)
+
+        # otherwise, the initialization time should be consumed
+        else:
+            print("verts :", self.num_verts, "edges :", self.num_edges)
+            self.initEdgeIndicesForColor() # ensure the sequence of edge indices
+            self.initAdjEdges()
+
+            # before color
+            self.edge_indices_for_color_np = self.edge_indices_for_color.to_numpy()
+            self.edges_color_np = self.edges_color.to_numpy()
+            self.adj_edges_list_np = self.adj_edges_list.to_numpy()
+            self.available_colors_np = self.available_colors.to_numpy()
+
+            self.colorEdgesGreedy()
+
+            # after color
+            self.edges_color.from_numpy(self.edges_color_np)
+            self.adj_edges_list.from_numpy(self.adj_edges_list_np)
+            self.available_colors.from_numpy(self.available_colors_np)
+
+            # self.printEdgesColor()
+            self.checkAdjColor()
+
+            self.sorted_edges_index = self.edge_indices_for_color
+            self.sorted_edges_color = self.edges_color
+            self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.num_colors)
+            self.color_prefix_sum.fill(0)
+
+            # before sort
+            self.sorted_edges_index_np = self.sorted_edges_index.to_numpy()
+            self.sorted_edges_color_np = self.sorted_edges_color.to_numpy()
+            self.color_prefix_sum_np = self.color_prefix_sum.to_numpy()
+
+            self.colorCountingSort() # sort
+
+            # after sort
+            self.sorted_edges_index.from_numpy(self.sorted_edges_index_np)
+            self.sorted_edges_color.from_numpy(self.sorted_edges_color_np)
+            self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
+
+            # export coloring result
+            self.exportColorResult()
 
         self.bending_indices = ti.field(dtype=ti.i32)
         self.initBendingIndices()
@@ -331,38 +359,18 @@ class MeshTaichiWrapper:
 
         self.sorted_edges_color_np = np.copy(sorted_edges_color_temp)
         self.sorted_edges_index_np = np.copy(sorted_edges_index_temp)
-        for i in range(self.num_edges):
-            print(i, self.sorted_edges_color_np[i], self.sorted_edges_index_np[i])
-        print(self.sorted_edges_color_np)
-        print(self.color_prefix_sum_np)
-        print(self.sorted_edges_index_np)
+        # for i in range(self.num_edges):
+        #     print(i, self.sorted_edges_color_np[i], self.sorted_edges_index_np[i])
+        # print(self.sorted_edges_color_np)
+        # print(self.color_prefix_sum_np)
+        # print(self.sorted_edges_index_np)
 
-
-    # @ti.kernel
-    # def visualizeVertsColor(self):
-    #     for e in range(self.num_edges):
-    #         if self.edges_color[e] >= 0:
-    #             if self.edges_color[e] == 0:
-    #                 self.color_RGB[e] = ti.Vector([1.0, 0.0, 0.0])
-    #             elif self.edges_color[e] == 1:
-    #                 self.color_RGB[e] = ti.Vector([0.0, 1.0, 0.0])
-    #             elif self.edges_color[e] == 2:
-    #                 self.color_RGB[e] = ti.Vector([0.0, 0.0, 1.0])
-    #             elif self.edges_color[e] == 3:
-    #                 self.color_RGB[e] = ti.Vector([1.0, 1.0, 0.0])
-    #             elif self.edges_color[e] == 4:
-    #                 self.color_RGB[e] = ti.Vector([1.0, 0.0, 1.0])
-    #             elif self.edges_color[e] == 5:
-    #                 self.color_RGB[e] = ti.Vector([0.0, 1.0, 1.0])
-    #             elif self.edges_color[e] == 6:
-    #                 self.color_RGB[e] = ti.Vector([1.0, 1.0, 1.0])
-    #             elif self.edges_color[e] == 7:
-    #                 self.color_RGB[e] = ti.Vector([1.0, 0.5, 0.5])
-    #             elif self.edges_color[e] == 8:
-    #                 self.color_RGB[e] = ti.Vector([0.5, 1.0, 0.5])
-    #             elif self.edges_color[e] == 9:
-    #                 self.color_RGB[e] = ti.Vector([0.5, 0.5, 1.0])
-
+    def exportColorResult(self):
+        print("Exporting new color data...")
+        prefix_sum_name = self.mesh_name + "_prefix_sum.npy"
+        sorted_edges_index_name = self.mesh_name + "_sorted_edges_index.npy"
+        np.save("./precomputed/" + prefix_sum_name, self.color_prefix_sum_np)
+        np.save("./precomputed/" + sorted_edges_index_name, self.sorted_edges_index_np)
 
 
     # @ti.kernel
