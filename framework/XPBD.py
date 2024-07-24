@@ -507,7 +507,7 @@ class Solver:
         # print(s / self.offset_spring)
 
     @ti.kernel
-    def broadphase_lbvh(self, root: ti.int32) -> ti.int32:
+    def broadphase_lbvh(self, cell_size: ti.math.vec3, origin: ti.math.vec3, root: ti.int32) -> ti.int32:
 
         self.vt_st_candidates_num.fill(0)
         self.tv_st_candidates_num.fill(0)
@@ -521,7 +521,7 @@ class Solver:
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
                 # a = self.lbvh_st.traverse_bvh_single(root, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
-                a = self.lbvh_st.traverse_cell_bvh_single(aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
+                a = self.lbvh_st.traverse_cell_bvh_single(cell_size, origin, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
                 # x = self.mesh_dy.verts.x[vid]
@@ -847,7 +847,8 @@ class Solver:
         self.solve_bending_constraints_x(compliance_bend)
         # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
-            cnt_lbvh = self.broadphase_lbvh(self.lbvh_st.root)
+
+            cnt_lbvh = self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_st.root)
             compliance_collision = 1e6
             self.solve_collision_constraints_x(compliance_collision)
 

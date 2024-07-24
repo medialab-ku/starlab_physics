@@ -717,11 +717,11 @@ class LBVH:
         return self.flatten_cell_id(self.pos_to_idx3d(pos, grid_size, origin))
 
     @ti.kernel
-    def assign_face_cell_ids(self, mesh: ti.template(), grid_size: ti.math.vec3, origin: ti.math.vec3):
+    def assign_face_cell_ids(self, mesh: ti.template(), cell_size: ti.math.vec3, origin: ti.math.vec3):
 
         for f in mesh.faces:
             pos = 0.5 * (f.aabb_min + f.aabb_max)
-            cell_id = self.get_flatten_cell_id(pos, grid_size, origin)
+            cell_id = self.get_flatten_cell_id(pos, cell_size, origin)
             # if cell_id >= self.num_cells:
             #     print("fuck")
             self.face_ids[f.id] = f.id
@@ -837,6 +837,8 @@ class LBVH:
         for i in range(self.num_leafs):
             # idx = self.sorted_face_ids[i]
             min0, max0 = self.face_aabb_min[i], self.face_aabb_max[i]
+            pos = 0.5 * (min0 + max0)
+            cell_id = self.get_flatten_cell_id(pos, self.cell_size, self.origin)
             stack = ti.Vector([-1 for j in range(32)])
             stack[0] = 0
             stack_counter = 1
@@ -958,13 +960,18 @@ class LBVH:
         return cnt
 
     @ti.func
-    def traverse_cell_bvh_single(self, min0, max0, i, cache, nums):
-        pos = 0.5 * (min0 + max0)
-        cell_id = self.get_flatten_cell_id(pos, self.cell_size, self.origin)
-        # root = self.cell_nodes[cell_id + self.num_cells - 1].parent
+    def traverse_cell_bvh_single(self, cell_size, origin, min0, max0, i, cache, nums):
+        # print(pos)
+
+        root = 0
+        # pos = 0.5 * (min0 + max0)
+        # cell_id = self.get_flatten_cell_id(pos, cell_size, origin)
+        # if cell_id <= self.num_cells - 1:
+        #     root = self.cell_nodes[cell_id + self.num_cells - 1].parent
+
         # root = self.cell_nodes[root].parent
         stack = ti.Vector([-1 for j in range(32)])
-        stack[0] = 0
+        stack[0] = root
         stack_counter = 1
         cnt = 0
         while stack_counter > 0:
