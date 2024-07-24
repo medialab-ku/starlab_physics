@@ -817,37 +817,56 @@ class LBVH:
         self.face_aabb_min.copy_from(mesh.faces.aabb_min)
         self.face_aabb_max.copy_from(mesh.faces.aabb_max)
 
-        print(self.face_ids)
+        # print(self.face_ids)
         if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
             print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
 
-
         self.counting_sort_cells()
-        print(self.sorted_face_ids)
+        # print(self.sorted_face_ids)
         self.assign_leaf_cell_nodes(mesh)
         self.cell_nodes.visited.fill(0)
         self.compute_bvh_aabbs_cells()
-        # print(self.sorted_face_ids)
-        # print(self.sorted_face_cell_ids)
+
+        # self.test_traverse_cells()
 
 
-        # self.sort()
-        # self.sort()
-        # ti.algorithms.parallel_sort(keys=self.morton_codes, values=self.object_ids)
-        # self.test_sort()
+    @ti.kernel
+    def test_traverse_cells(self):
 
-        # self.nodes.visited.fill(0)
-        # self.nodes.parent.fill(-1)
-        # self.assign_leaf_nodes(mesh)
-        # self.bvh_construction_Apetrei()
-        # print(self.root)
-        # self.root = 0
-        # self.nodes.visited.fill(0)
-        # self.compute_bvh_aabbs()
+        for i in range(self.num_leafs):
+            # idx = self.sorted_face_ids[i]
+            min0, max0 = self.face_aabb_min[i], self.face_aabb_max[i]
+            stack = ti.Vector([-1 for j in range(32)])
+            stack[0] = 0
+            stack_counter = 1
+            cnt = 0
+            while stack_counter > 0:
+                # print(stack)
+                stack_counter -= 1
+                idx = stack[stack_counter]
+                min1, max1 = self.cell_nodes[idx].aabb_min, self.cell_nodes[idx].aabb_max
+                # print(min1, max1)
+                cnt += 1
+                if self.aabb_overlap(min0, max0, min1, max1):
+                    if idx >= self.num_cells - 1:
+                        size = self.cell_nodes[idx].range_r - self.cell_nodes[idx].range_l + 1
+                        offset = self.cell_nodes[idx].range_l
+                        for j in range(size):
+                            fid = self.sorted_face_ids[j + offset]
+                            # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
+                            aabb_min = self.face_aabb_min[fid]
+                            aabb_max = self.face_aabb_max[fid]
+                            if self.aabb_overlap(min0, max0, aabb_min, aabb_max):
+                                ti.atomic_add(cnt, 1)
 
-        # print(self.nodes[17423].parent, self.nodes[17423].left, self.nodes[17423].right)
-        # print(self.nodes[196503].parent, self.nodes[196503].left, self.nodes[196503].right)
-        # print(self.nodes[17424].parent, self.nodes[17424].left, self.nodes[17424].right)
+                    else:
+                        left, right = self.cell_nodes[idx].child_a, self.cell_nodes[idx].child_b
+                        stack[stack_counter] = left
+                        stack_counter += 1
+                        stack[stack_counter] = right
+                        stack_counter += 1
+
+            return cnt
     @ti.kernel
     def test_sort(self):
         cnt = 0
@@ -961,7 +980,7 @@ class LBVH:
                         aabb_min = self.face_aabb_min[fid]
                         aabb_max = self.face_aabb_max[fid]
                         if self.aabb_overlap(min0, max0, aabb_min, aabb_max):
-                            cache[i, nums[i]] = self.cell_nodes[idx].object_id
+                            cache[i, nums[i]] = fid
                             nums[i] += 1
                             ti.atomic_add(cnt, 1)
 
