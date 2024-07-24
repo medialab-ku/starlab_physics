@@ -17,10 +17,11 @@ class LBVH:
     def __init__(self, num_leafs):
 
         self.grid_res = ti.math.ivec3(0)
-        self.grid_res[0] = 2
-        self.grid_res[1] = 2
-        self.grid_res[2] = 2
-        self.cell_size = ti.math.ivec3(0)
+        self.grid_res[0] = 32
+        self.grid_res[1] = 32
+        self.grid_res[2] = 32
+        self.cell_size = ti.math.vec3(0)
+        self.origin = ti.math.vec3(0)
 
         self.num_cells = self.grid_res[0] * self.grid_res[1] * self.grid_res[2]
         print("# cells: ", self.num_cells)
@@ -798,7 +799,7 @@ class LBVH:
 
         # for i in range(2):
         # self.nodes.visited.fill(0)
-
+        self.origin = aabb_min_g
         # self.cell_size = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         self.cell_size[0] = (aabb_max_g[0] - aabb_min_g[0]) / self.grid_res[0]
         self.cell_size[1] = (aabb_max_g[1] - aabb_min_g[1]) / self.grid_res[1]
@@ -958,7 +959,10 @@ class LBVH:
 
     @ti.func
     def traverse_cell_bvh_single(self, min0, max0, i, cache, nums):
-
+        pos = 0.5 * (min0 + max0)
+        cell_id = self.get_flatten_cell_id(pos, self.cell_size, self.origin)
+        # root = self.cell_nodes[cell_id + self.num_cells - 1].parent
+        # root = self.cell_nodes[root].parent
         stack = ti.Vector([-1 for j in range(32)])
         stack[0] = 0
         stack_counter = 1
