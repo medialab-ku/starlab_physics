@@ -488,7 +488,6 @@ class LBVH:
                 max0, max1 = self.cell_nodes[left].aabb_max, self.cell_nodes[right].aabb_max
 
                 self.cell_nodes[i].num_faces = self.cell_nodes[left].num_faces + self.cell_nodes[right].num_faces
-
                 if self.cell_nodes[left].num_faces > 0 and self.cell_nodes[right].num_faces > 0:
                     self.cell_nodes[i].aabb_min = ti.min(min0, min1)
                     self.cell_nodes[i].aabb_max = ti.max(max0, max1)
@@ -497,9 +496,14 @@ class LBVH:
                     self.cell_nodes[i].aabb_min = min0
                     self.cell_nodes[i].aabb_max = max0
 
-                else:
+                elif self.cell_nodes[right].num_faces > 0:
                     self.cell_nodes[i].aabb_min = min1
                     self.cell_nodes[i].aabb_max = max1
+
+                else:
+                    center = 0.25 * (min0 + max0 + min1 + max1)
+                    self.cell_nodes[i].aabb_min = center
+                    self.cell_nodes[i].aabb_max = center
 
                 parent = self.cell_nodes[i].parent
                 self.cell_nodes[i].visited += 1
