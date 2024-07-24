@@ -3,6 +3,7 @@ import taichi as ti
 @ti.dataclass
 class Node:
     object_id: ti.i32
+    num_faces: ti.i32
     parent: ti.i32
     child_a: ti.i32
     child_b: ti.i32
@@ -88,9 +89,6 @@ class LBVH:
         self.prefix_sum = ti.field(dtype=ti.i32, shape=self.RADIX)
         self.prefix_sum_temp = ti.field(dtype=ti.i32, shape=self.RADIX)
 
-        self.cell_size = self.assign_cell_morton(ti.math.vec3(0.0), ti.math.vec3(1e3))
-        self.radix_sort_cells()
-        self.assign_internal_nodes_Karras12_cells()
 
 
     # Expands a 10-bit integer into 30 bits by inserting 2 zeros after each bit.
@@ -473,7 +471,7 @@ class LBVH:
 
     def compute_bvh_aabbs_cells(self):
 
-        self.init_flag_cells()
+        # self.init_flag_cells()
         while True:
             cnt = self.compute_cell_node_aabbs()
             # print("cnt: ", cnt)
@@ -488,10 +486,22 @@ class LBVH:
                 left, right = self.cell_nodes[i].child_a, self.cell_nodes[i].child_b
                 min0, min1 = self.cell_nodes[left].aabb_min, self.cell_nodes[right].aabb_min
                 max0, max1 = self.cell_nodes[left].aabb_max, self.cell_nodes[right].aabb_max
-                self.cell_nodes[i].aabb_min = ti.min(min0, min1)
-                self.cell_nodes[i].aabb_max = ti.max(max0, max1)
-                parent = self.cell_nodes[i].parent
 
+                self.cell_nodes[i].num_faces = self.cell_nodes[left].num_faces + self.cell_nodes[right].num_faces
+
+                if self.cell_nodes[left].num_faces > 0 and self.cell_nodes[right].num_faces > 0:
+                    self.cell_nodes[i].aabb_min = ti.min(min0, min1)
+                    self.cell_nodes[i].aabb_max = ti.max(max0, max1)
+
+                elif self.cell_nodes[left].num_faces > 0:
+                    self.cell_nodes[i].aabb_min = min0
+                    self.cell_nodes[i].aabb_max = max0
+
+                else:
+                    self.cell_nodes[i].aabb_min = min1
+                    self.cell_nodes[i].aabb_max = max1
+
+                parent = self.cell_nodes[i].parent
                 self.cell_nodes[i].visited += 1
                 self.cell_nodes[parent].visited += 1
                 ti.atomic_add(cnt, 1)
@@ -781,9 +791,11 @@ class LBVH:
             size = self.cell_nodes[i + self.num_cells - 1].range_r - self.cell_nodes[i + self.num_cells - 1].range_l + 1
             offset = self.cell_nodes[i + self.num_cells - 1].range_l
 
-            aabb_min = ti.math.vec3(1e3)
-            aabb_max = ti.math.vec3(-1e3)
-            # print(size, offset)
+            aabb_min = self.cell_centers[i]
+            aabb_max = self.cell_centers[i]
+
+            self.cell_nodes[i + self.num_cells - 1].num_faces = size
+
             for j in range(size):
                 fid = self.sorted_face_ids[j + offset]
                 # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
@@ -792,6 +804,9 @@ class LBVH:
 
             self.cell_nodes[i + self.num_cells - 1].aabb_min = aabb_min
             self.cell_nodes[i + self.num_cells - 1].aabb_max = aabb_max
+
+            parent = self.cell_nodes[i + self.num_cells - 1].parent
+            self.cell_nodes[parent].visited += 1
 
             # print(self.cell_nodes[i + self.num_cells - 1].aabb_min, self.cell_nodes[i + self.num_cells - 1].aabb_max)
 
@@ -804,6 +819,10 @@ class LBVH:
         self.cell_size[0] = (aabb_max_g[0] - aabb_min_g[0]) / self.grid_res[0]
         self.cell_size[1] = (aabb_max_g[1] - aabb_min_g[1]) / self.grid_res[1]
         self.cell_size[2] = (aabb_max_g[2] - aabb_min_g[2]) / self.grid_res[2]
+
+        self.cell_size = self.assign_cell_morton(aabb_min_g, aabb_max_g)
+        self.radix_sort_cells()
+        self.assign_internal_nodes_Karras12_cells()
 
         self.prefix_sum_cell.fill(0)
         self.assign_face_cell_ids(mesh, self.cell_size, aabb_min_g)
@@ -824,11 +843,13 @@ class LBVH:
 
         self.counting_sort_cells()
         # print(self.sorted_face_ids)
-        self.assign_leaf_cell_nodes(mesh)
+
         self.cell_nodes.visited.fill(0)
+        self.cell_nodes.num_faces.fill(0)
+        self.assign_leaf_cell_nodes(mesh)
         self.compute_bvh_aabbs_cells()
 
-        # self.test_traverse_cells()
+        # print(self.cell_nodes[0].num_faces)
 
 
     @ti.kernel
@@ -981,7 +1002,7 @@ class LBVH:
             min1, max1 = self.cell_nodes[idx].aabb_min, self.cell_nodes[idx].aabb_max
             # print(min1, max1)
             cnt += 1
-            if self.aabb_overlap(min0, max0, min1, max1):
+            if self.aabb_overlap(min0, max0, min1, max1) and self.cell_nodes[idx].num_faces > 0:
                 if idx >= self.num_cells - 1:
                     size = self.cell_nodes[idx].range_r - self.cell_nodes[idx].range_l + 1
                     offset = self.cell_nodes[idx].range_l
@@ -997,10 +1018,14 @@ class LBVH:
 
                 else:
                     left, right = self.cell_nodes[idx].child_a, self.cell_nodes[idx].child_b
-                    stack[stack_counter] = left
-                    stack_counter += 1
-                    stack[stack_counter] = right
-                    stack_counter += 1
+
+                    if self.cell_nodes[left].num_faces > 0:
+                        stack[stack_counter] = left
+                        stack_counter += 1
+
+                    if self.cell_nodes[right].num_faces > 0:
+                        stack[stack_counter] = right
+                        stack_counter += 1
 
         return cnt
 
