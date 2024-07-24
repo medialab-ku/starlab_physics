@@ -4,6 +4,8 @@ import numpy as np
 import solve_collision_constraints_x
 import solve_collision_constraints_v
 from lbvh import LBVH
+import pandas as pd
+import matplotlib.pyplot as plt
 
 @ti.data_oriented
 class Solver:
@@ -169,8 +171,8 @@ class Solver:
 
         self.c_total = ti.field(dtype=ti.f32, shape=1)
 
-        self.iteration_data = np.array([])
-        self.C_data = np.array([])
+        self.iteration_data = np.array([0])
+        self.C_data = np.array([0])
 
     # @ti.kernel
     # def __init_animation_pos(self, is_selected: ti.template()):
@@ -1034,7 +1036,6 @@ class Solver:
             # cnt_lbvh = self.broadphase_lbvh()
 
         # iterations(to achieve converged solution, x_star)
-        iter = 1
         dt_sub = self.dt
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
@@ -1042,8 +1043,8 @@ class Solver:
             # self.solve_constraints_jacobi_x(dt_sub)
             self.solve_constraints_graph_color_x(dt_sub)
 
-            self.iteration_data = np.append(self.iteration_data, iter)
-            iter += 1
+            self.iteration_data = np.append(self.iteration_data, self.iteration_data[-1] + 1)
+            # print(iter)
             self.C_data = np.append(self.C_data, self.c_total[0])
 
             epsilon = 0.001
@@ -1059,5 +1060,15 @@ class Solver:
             # print("lbvh:  ", cnt_lbvh  / self.max_num_verts_dy)
 
     def visualize_data(self):
-        print(self.iteration_data)
-        print(self.C_data)
+        # print(self.iteration_data)
+        # print(self.C_data)
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.iteration_data, self.C_data, linestyle='-', color='b')
+        plt.title('Convergence of C over Iterations')
+        plt.xlabel('Iteration')
+        plt.ylabel('C Value')
+        plt.grid(True)
+        plt.show()
+
+        self.iteration_data = np.array([0])
+        self.C_data = np.array([0])
