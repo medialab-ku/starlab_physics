@@ -994,13 +994,24 @@ class LBVH:
 
     @ti.func
     def traverse_cell_bvh_single(self, cell_size, origin, min0, max0, i, cache, nums):
-        # print(pos)
-
-        root = 0
         pos = 0.5 * (min0 + max0)
         cell_id = self.get_flatten_cell_id(pos, cell_size, origin)
         cnt = 0
         if cell_id <= self.num_cells - 1:
+            root = 0
+            # root = self.cell_nodes[cell_id + self.num_cells - 1].parent
+            # while True:
+            #
+            #     if root == 0: break
+            #
+            #     left, right = self.cell_nodes[root].child_a, self.cell_nodes[root].child_b
+            #     min_l, max_l = self.cell_nodes[left].aabb_min, self.cell_nodes[left].aabb_max
+            #     min_r, max_r = self.cell_nodes[right].aabb_min, self.cell_nodes[right].aabb_max
+            #
+            #     if self.aabb_overlap(min_l, max_l, min_r, max_r):
+            #         root = self.cell_nodes[root].parent
+            #
+            #     else: break
             # root = self.cell_nodes[cell_id + self.num_cells - 1].parent
             # root = self.cell_nodes[root].parent
             stack = ti.Vector([-1 for j in range(32)])
@@ -1013,30 +1024,31 @@ class LBVH:
                 min1, max1 = self.cell_nodes[idx].aabb_min, self.cell_nodes[idx].aabb_max
                 # print(min1, max1)
                 cnt += 1
-                if self.aabb_overlap(min0, max0, min1, max1) and self.cell_nodes[idx].num_faces > 0:
-                    if idx >= self.num_cells - 1:
-                        size = self.cell_nodes[idx].range_r - self.cell_nodes[idx].range_l + 1
-                        offset = self.cell_nodes[idx].range_l
-                        for j in range(size):
-                            fid = self.sorted_face_ids[j + offset]
-                            # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
-                            aabb_min = self.face_aabb_min[fid]
-                            aabb_max = self.face_aabb_max[fid]
-                            if self.aabb_overlap(min0, max0, aabb_min, aabb_max):
-                                cache[i, nums[i]] = fid
-                                nums[i] += 1
-                                ti.atomic_add(cnt, 1)
+                if self.cell_nodes[idx].num_faces > 0:
+                    if self.aabb_overlap(min0, max0, min1, max1):
+                        if idx >= self.num_cells - 1:
+                            size = self.cell_nodes[idx].range_r - self.cell_nodes[idx].range_l + 1
+                            offset = self.cell_nodes[idx].range_l
+                            for j in range(size):
+                                fid = self.sorted_face_ids[j + offset]
+                                # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
+                                aabb_min = self.face_aabb_min[fid]
+                                aabb_max = self.face_aabb_max[fid]
+                                if self.aabb_overlap(min0, max0, aabb_min, aabb_max):
+                                    cache[i, nums[i]] = fid
+                                    nums[i] += 1
+                                    ti.atomic_add(cnt, 1)
 
-                    else:
-                        left, right = self.cell_nodes[idx].child_a, self.cell_nodes[idx].child_b
+                        else:
+                            left, right = self.cell_nodes[idx].child_a, self.cell_nodes[idx].child_b
 
-                        if self.cell_nodes[left].num_faces > 0:
-                            stack[stack_counter] = left
-                            stack_counter += 1
+                            if self.cell_nodes[left].num_faces > 0:
+                                stack[stack_counter] = left
+                                stack_counter += 1
 
-                        if self.cell_nodes[right].num_faces > 0:
-                            stack[stack_counter] = right
-                            stack_counter += 1
+                            if self.cell_nodes[right].num_faces > 0:
+                                stack[stack_counter] = right
+                                stack_counter += 1
 
         return cnt
 
