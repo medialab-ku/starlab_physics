@@ -299,7 +299,6 @@ while window.running:
             g_selector.is_selected.fill(0.0)
             sim.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
-            sim.visualize_data()
 
         if window.event.key == 'v':
             sim.enable_velocity_update = not sim.enable_velocity_update
@@ -318,6 +317,10 @@ while window.running:
         if window.event.key == 'h':
             print("fix vertices")
             sim.set_fixed_vertices(g_selector.is_selected)
+
+        if window.event.key == 'f':
+            print("frame capture")
+            sim.is_frame_capture = True
 
         if window.event.key == ti.ui.BACKSPACE:
             g_selector.is_selected.fill(0)
@@ -357,7 +360,7 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep)
+        sim.forward(n_substeps=n_substep, frame_num=frame_cpu)
         frame_cpu += 1
 
     show_options()

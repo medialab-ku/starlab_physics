@@ -6,6 +6,7 @@ import solve_collision_constraints_v
 from lbvh import LBVH
 import pandas as pd
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 @ti.data_oriented
 class Solver:
@@ -171,6 +172,7 @@ class Solver:
 
         self.c_total = ti.field(dtype=ti.f32, shape=1)
 
+        self.is_frame_capture = False
         self.iteration_data = np.array([0])
         self.C_data = np.array([0])
 
@@ -1018,7 +1020,7 @@ class Solver:
             self.mesh_dy.verts.nc[v1_id] += 1.0
             self.mesh_dy.verts.nc[v2_id] += 1.0
 
-    def forward(self, n_substeps):
+    def forward(self, n_substeps, frame_num):
         # self.load_sewing_pairs()
         # dt_sub = self.dt / n_substeps
         # ti.profiler.clear_kernel_profiler_info()
@@ -1037,37 +1039,51 @@ class Solver:
 
         # iterations(to achieve converged solution, x_star)
         dt_sub = self.dt
-        for _ in range(n_substeps):
+        for i in range(n_substeps):
             self.compute_y(dt_sub)
             # cnt_brute = self.broadphase_brute()
             # self.solve_constraints_jacobi_x(dt_sub)
             self.solve_constraints_graph_color_x(dt_sub)
 
-            self.iteration_data = np.append(self.iteration_data, self.iteration_data[-1] + 1)
-            # print(iter)
-            self.C_data = np.append(self.C_data, self.c_total[0])
-
             epsilon = 0.001
-            if self.c_total[0] < epsilon: break
+            # if self.c_total[0] < epsilon:
+            #     print(i)
+            #     break
             # self.compute_velocity(dt_sub)
             # if self.enable_velocity_update:
             #     self.solve_constraints_v()
 
             # self.update_x(dt_sub)
 
-        self.compute_velocity(dt_sub)
+            # capture iterations and C convergence per frame
+            if self.is_frame_capture:
+                self.iteration_data = np.append(self.iteration_data, self.iteration_data[-1] + 1)
+                self.C_data = np.append(self.C_data, self.c_total[0])
+
             # print("brute: ", cnt_brute / self.max_num_verts_dy)
             # print("lbvh:  ", cnt_lbvh  / self.max_num_verts_dy)
 
-    def visualize_data(self):
+        if self.is_frame_capture:
+            self.visualize_data(frame_num=frame_num)
+            self.is_frame_capture = False
+            self.c_total[0] = 0.0
+
+        self.compute_velocity(dt_sub)
+
+    def visualize_data(self, frame_num):
         # print(self.iteration_data)
         # print(self.C_data)
         plt.figure(figsize=(10, 6))
         plt.plot(self.iteration_data, self.C_data, linestyle='-', color='b')
-        plt.title('Convergence of C over Iterations')
+        plt.title('Convergence of C over Iterations (frame : ' + str(frame_num) + ')')
         plt.xlabel('Iteration')
         plt.ylabel('C Value')
         plt.grid(True)
+
+        datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filepath = "./results/statistics/"
+        plt.savefig(filepath + datetime_str + "_frame_" + str(frame_num) + ".png")
+
         plt.show()
 
         self.iteration_data = np.array([0])
