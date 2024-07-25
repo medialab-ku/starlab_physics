@@ -809,8 +809,10 @@ class LBVH:
             # // no need to set parent to nullptr, each child will have a parents
             if i == 0:
                 self.cell_nodes[i + self.num_cells - 1].range_l = 0
+
             else:
                 self.cell_nodes[i + self.num_cells - 1].range_l = self.prefix_sum_cell[i - 1]
+
             self.cell_nodes[i + self.num_cells - 1].range_r = self.prefix_sum_cell[i] - 1
             self.cell_nodes[i + self.num_cells - 1].child_a = -1
             self.cell_nodes[i + self.num_cells - 1].child_b = -1
