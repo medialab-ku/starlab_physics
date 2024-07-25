@@ -15,9 +15,9 @@ scale_list = []
 for i in range(2):
     for j in range(2):
         for k in range(2):
-            model_names.append("square.obj")
-            trans_list.append(np.array([1. * i, 1.0 * j, 1. * k]))
-            scale_list.append(1.5)
+            model_names.append("sphere1K.obj")
+            trans_list.append(np.array([0. * i, 0.0 * j, 0. * k]))
+            scale_list.append(3.0)
 
 
 # model_names.append("cylinder3.3k.obj")
