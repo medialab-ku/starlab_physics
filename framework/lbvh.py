@@ -18,9 +18,9 @@ class LBVH:
     def __init__(self, num_leafs):
 
         self.grid_res = ti.math.ivec3(0)
-        self.grid_res[0] = 8
-        self.grid_res[1] = 8
-        self.grid_res[2] = 8
+        self.grid_res[0] = 32
+        self.grid_res[1] = 32
+        self.grid_res[2] = 32
         self.cell_size = ti.math.vec3(0)
         self.origin = ti.math.vec3(0)
 

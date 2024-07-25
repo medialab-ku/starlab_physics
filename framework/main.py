@@ -8,7 +8,7 @@ import os
 import XPBD
 import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -41,6 +41,7 @@ dt_ui = sim.dt
 dHat_ui = sim.dHat
 
 strain_limit_ui = sim.strain_limit
+damping_ui = sim.damping
 
 ang_vel_x_ui = sim.obs_ang_vel[0][0]
 ang_vel_y_ui = sim.obs_ang_vel[0][1]
@@ -69,6 +70,7 @@ def show_options():
     global n_internal
     global dt_ui
     global strain_limit_ui
+    global damping_ui
     global YM_ui
     global YM_b_ui
     global PR_ui
@@ -84,6 +86,7 @@ def show_options():
     old_dHat = dHat_ui
     old_friction_coeff = dHat_ui
     old_strain_limit = strain_limit_ui
+    old_damping = damping_ui
     YM_old = YM_ui
     YM_b_old = YM_b_ui
     PR_old = PR_ui
@@ -96,9 +99,10 @@ def show_options():
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
-        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0101)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         strain_limit_ui = w.slider_float("strain limit", strain_limit_ui, 0.0, 1.0)
+        damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
         YM_b_ui = w.slider_float("YM_b", YM_b_ui, 0.0, 1e8)
         # if sim.max_num_tetra_dynamic > 0:
@@ -122,10 +126,10 @@ def show_options():
         w.text(verts_str)
         w.text(edges_str)
 
-        n_leaf = w.slider_int("leaf id", n_leaf, 0, sim.lbvh_st.num_cells - 1)
+        # n_leaf = w.slider_int("leaf id", n_leaf, 0, sim.lbvh_st.num_cells - 1)
         # if not n_leaf_old == n_leaf:
         #     print(sim.lbvh_st.traverse_bvh_single_test(n_leaf))
-        n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_cells - 2)
+        # n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_cells - 2)
         # if not n_internal_old == n_internal:
         #     # print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
         #     print("left: ", sim.lbvh_st.nodes[n_internal].child_a, "right: ", sim.lbvh_st.nodes[n_internal].child_b)
@@ -164,6 +168,9 @@ def show_options():
 
     if not old_strain_limit == strain_limit_ui:
         sim.strain_limit = strain_limit_ui
+
+    if not old_damping == damping_ui:
+        sim.damping = damping_ui
 
     # global ang_vel_x_ui
     # global ang_vel_y_ui
@@ -383,7 +390,7 @@ while window.running:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
         # sim.lbvh_st.draw_bvh_aabb(scene)
         # sim.lbvh_st.draw_zSort(scene)
-        sim.lbvh_st.draw_bvh_cell_aabb_test(scene, n_leaf, n_internal)
+        # sim.lbvh_st.draw_bvh_cell_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
 

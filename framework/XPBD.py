@@ -31,6 +31,7 @@ class Solver:
         self.unit_vector[1] = ti.math.vec3(0.0, 1.0, 0.0)
         self.unit_vector[2] = ti.math.vec3(0.0, 0.0, 1.0)
         self.strain_limit = 0.01
+        self.damping = 0.001
 
         self.rest_volume = ti.field(dtype=ti.f32, shape=1)
         self.rest_volume[0] = 0
@@ -48,7 +49,7 @@ class Solver:
         # self.grid_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         # self.aabb_vertices = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
         # self.grid_edge_indices = ti.field(dtype=ti.u32, shape=12 * 2)
-        self.padding = 0.1
+        self.padding = 0.05
         # self.init_grid()
 
         # self.grid_origin = -self.grid_size
@@ -384,10 +385,9 @@ class Solver:
     def reset(self):
         # self.frame[0] = 0
         self.mesh_dy.reset()
-
         if self.mesh_st != None:
             self.mesh_st.reset()
-            self.mesh_st.computeAABB_faces(padding=0.0)
+            self.mesh_st.computeAABB_faces(padding=self.padding)
             aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=0.01)
             # print(aabb_min_st, aabb_max_st)
             self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
@@ -432,7 +432,7 @@ class Solver:
             C = (lij - l0)
             nabla_C = x10.normalized()
             schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
-            ld = compliance * C / (compliance * schur + 1.0)
+            ld = C / (schur + 1e-3)
 
             e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * ld * nabla_C
             e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * ld * nabla_C
@@ -442,8 +442,9 @@ class Solver:
     @ti.kernel
     def solve_bending_constraints_x(self, compliance: ti.f32):
         # print(compliance)
-        for bi in ti.ndrange(self.mesh_dy.bending_constraint_count):
-            v0,v1 = self.mesh_dy.bending_indices[2*bi],self.mesh_dy.bending_indices[2*bi+1]
+        for bi in range(self.mesh_dy.bending_constraint_count):
+
+            v0, v1 = self.mesh_dy.bending_indices[2 * bi],self.mesh_dy.bending_indices[2 * bi + 1]
             l0 = self.mesh_dy.bending_l0[bi]
             x10 = self.mesh_dy.verts.x[v0] - self.mesh_dy.verts.x[v1]
             lij = x10.norm()
@@ -455,13 +456,30 @@ class Solver:
             e_v0_m_inv, e_v1_m_inv = self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.m_inv[v1]
 
             schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv) * nabla_C.dot(nabla_C)
-            ld = compliance * C / (compliance * schur + 1.0)
+            ld = C / (schur + 1e-3)
 
             self.mesh_dy.verts.dx[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
             self.mesh_dy.verts.dx[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
-
             self.mesh_dy.verts.nc[v0] += 1.0
             self.mesh_dy.verts.nc[v1] += 1.0
+
+            # else:
+            #     bi = i
+            #     l0 = self.mesh_dy.edges.l0[bi]
+            #     v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
+            #     x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            #     lij = x10.norm()
+            #
+            #     C = (lij - l0)
+            #     nabla_C = x10.normalized()
+            #     schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] + self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1]) * nabla_C.dot(
+            #         nabla_C)
+            #     ld = compliance * C / (compliance * schur + 1.0)
+            #
+            #     self.mesh_dy.verts.dx[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
+            #     self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
+            #     self.mesh_dy.verts.nc[v0] += 1.0
+            #     self.mesh_dy.verts.nc[v1] += 1.0
 
 
     @ti.kernel
@@ -507,7 +525,7 @@ class Solver:
         # print(s / self.offset_spring)
 
     @ti.kernel
-    def broadphase_lbvh(self, cell_size: ti.math.vec3, origin: ti.math.vec3, root: ti.int32) -> ti.int32:
+    def broadphase_lbvh(self, cell_size_st: ti.math.vec3, origin_st: ti.math.vec3, cell_size_dy: ti.math.vec3, origin_dy: ti.math.vec3, root: ti.int32) -> ti.int32:
 
         self.vt_st_candidates_num.fill(0)
         self.tv_st_candidates_num.fill(0)
@@ -521,20 +539,20 @@ class Solver:
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
                 # a = self.lbvh_st.traverse_bvh_single(root, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
-                a = self.lbvh_st.traverse_cell_bvh_single(cell_size, origin, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
+                a = self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
-                # x = self.mesh_dy.verts.x[vid]
-                # aabb_min = x - self.padding * ti.math.vec3(1.0)
-                # aabb_max = x + self.padding * ti.math.vec3(1.0)
-                # a = self.lbvh_dy.traverse_bvh_single(aabb_min, aabb_max, vid, self.vt_dy_candidates, self.vt_dy_candidates_num)
+                x = self.mesh_dy.verts.x[vid]
+                aabb_min = x - self.padding * ti.math.vec3(1.0)
+                aabb_max = x + self.padding * ti.math.vec3(1.0)
+                a = self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid, self.vt_dy_candidates, self.vt_dy_candidates_num)
                 # ti.atomic_add(cnt, a)
-            # else:
-            #     vid = i - 2 * self.max_num_verts_dy
-            #     x = self.mesh_st.verts.x[vid]
-            #     aabb_min = x - self.padding * ti.math.vec3(1.0)
-            #     aabb_max = x + self.padding * ti.math.vec3(1.0)
-            #     a = self.lbvh_dy.traverse_bvh_single(aabb_min, aabb_max, vid, self.tv_st_candidates, self.tv_st_candidates_num)
+            else:
+                vid = i - 2 * self.max_num_verts_dy
+                x = self.mesh_st.verts.x[vid]
+                aabb_min = x - self.padding * ti.math.vec3(1.0)
+                aabb_max = x + self.padding * ti.math.vec3(1.0)
+                a = self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid, self.tv_st_candidates, self.tv_st_candidates_num)
             #     ti.atomic_add(cnt, a)
 
         return cnt
@@ -579,10 +597,10 @@ class Solver:
                     solve_collision_constraints_x.__vt_st(compliance, vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
-                # for j in range(self.vt_dy_candidates_num[vid]):
-                #     fi_d = self.vt_dy_candidates[vid, j]
-                #     if self.is_in_face(vid, fi_d) != True:
-                #         solve_collision_constraints_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
+                for j in range(self.vt_dy_candidates_num[vid]):
+                    fi_d = self.vt_dy_candidates[vid, j]
+                    if self.is_in_face(vid, fi_d) != True:
+                        solve_collision_constraints_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
             else:
                 vis = i - 2 * self.max_num_verts_dy
                 for j in range(self.tv_st_candidates_num[vis]):
@@ -603,11 +621,11 @@ class Solver:
                     solve_collision_constraints_v.__vt_st(vid, fi_s, dtype, self.mesh_dy, self.mesh_st, g0, g1, g2, g3, schur, mu)
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
-                # for j in range(self.vt_dy_pair_num[vid]):
-                #     fi_d, dtype = self.vt_dy_pair[vid, j, 0], self.vt_dy_pair[vid, j, 1]
-                #     g0, g1, g2, g3 = self.vt_dy_pair_g[vid, j, 0], self.vt_dy_pair_g[vid, j, 1], self.vt_dy_pair_g[vid, j, 2], self.vt_dy_pair_g[vid, j, 3]
-                #     schur = self.vt_dy_pair_schur[vid, j]
-                #     solve_collision_constraints_v.__vt_dy(vid, fi_d, dtype, self.mesh_dy, g0, g1, g2, g3, schur, mu)
+                for j in range(self.vt_dy_pair_num[vid]):
+                    fi_d, dtype = self.vt_dy_pair[vid, j, 0], self.vt_dy_pair[vid, j, 1]
+                    g0, g1, g2, g3 = self.vt_dy_pair_g[vid, j, 0], self.vt_dy_pair_g[vid, j, 1], self.vt_dy_pair_g[vid, j, 2], self.vt_dy_pair_g[vid, j, 3]
+                    schur = self.vt_dy_pair_schur[vid, j]
+                    solve_collision_constraints_v.__vt_dy(vid, fi_d, dtype, self.mesh_dy, g0, g1, g2, g3, schur, mu)
             else:
                 vis = i - 2 * self.max_num_verts_dy
                 for j in range(self.tv_st_pair_num[vis]):
@@ -828,9 +846,9 @@ class Solver:
 
 
     @ti.kernel
-    def compute_velocity(self, dt: ti.f32):
+    def compute_velocity(self, damping: ti.f32, dt: ti.f32):
         for v in self.mesh_dy.verts:
-            v.v = v.fixed * (v.y - v.x) / dt
+            v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
 
     def init_variables(self):
 
@@ -848,14 +866,15 @@ class Solver:
         # self.solve_spring_constraints_x_test(compliance)
         if self.enable_collision_handling:
 
-            cnt_lbvh = self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_st.root)
+            cnt_lbvh = self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.lbvh_st.root)
+            # cnt_brute = self.broadphase_brute()
             compliance_collision = 1e6
             self.solve_collision_constraints_x(compliance_collision)
 
-        compliance_sewing = 1000 * self.YM * dt * dt
+        # compliance_sewing = 0.5 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
-        # self.solve_pressure_constraints_x()
         self.update_dx()
+
     def solve_constraints_v(self):
         self.mesh_dy.verts.dv.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
@@ -996,20 +1015,20 @@ class Solver:
 
         if self.enable_collision_handling:
             self.mesh_dy.computeAABB_faces(padding=self.padding)
-            # aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB()
-            # self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
+            aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB(padding=self.padding)
+            self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
 
-            # if self.mesh_st != None:
-            #     self.mesh_st.computeAABB_faces(padding=self.padding)
-            #     aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
-            #     self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+            if self.mesh_st != None:
+                self.mesh_st.computeAABB_faces(padding=self.padding)
+                aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
+                self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
             # cnt_lbvh = self.broadphase_lbvh()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             # cnt_brute = self.broadphase_brute()
             self.solve_constraints_jacobi_x(dt_sub)
-            self.compute_velocity(dt_sub)
+            self.compute_velocity(damping=self.damping, dt=dt_sub)
 
             if self.enable_velocity_update:
                 self.solve_constraints_v()

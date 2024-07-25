@@ -84,11 +84,12 @@ for i in range(2):
 
 #dynamic mesh
 # mesh_dy = MeshTaichiWrapper("../models/concat.obj", offsets=offsets, scale=0.005, trans=ti.math.vec3(0, -6.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
-mesh_dy = MeshTaichiWrapper("../models/OBJ/plane.obj", offsets=[0], scale=2.0, trans=ti.math.vec3(0, 3.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper("../models/OBJ/poncho_8K.obj", offsets=[0], scale=3.4, trans=ti.math.vec3(0, 5.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 # mesh_dy = MeshTaichiWrapper("../models/OBJ/BasicTShirt.obj", offsets=[0], scale=0.001, trans=ti.math.vec3(0, -13.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 mesh_st = None
 
 #static mesh
 # mesh_st = MeshTaichiWrapper("../models/OBJ/square_big.obj",  offsets=[0], scale=1.5, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-# mesh_st = MeshTaichiWrapper("../models/OBJ/APoseSMPL.obj",  offsets=[0], scale=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_st = MeshTaichiWrapper("../models/OBJ/sphere1K.obj",  offsets=[0], scale=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper("../models/OBJ/APoseSMPL.obj",  offsets=[0], scale=12.0, trans=ti.math.vec3(0.0, 0.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+# mesh_st = MeshTaichiWrapper("../models/OBJ/sphere1K.obj",  offsets=[0], scale=3.0, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+# mesh_st = MeshTaichiWrapper("../models/OBJ/square_huge.obj",  offsets=[0], scale=0.8, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
