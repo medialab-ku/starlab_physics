@@ -432,7 +432,7 @@ class Solver:
             C = (lij - l0)
             nabla_C = x10.normalized()
             schur = (e.verts[0].fixed * e.verts[0].m_inv + e.verts[1].fixed * e.verts[1].m_inv) * nabla_C.dot(nabla_C)
-            ld = C / (schur + 1e-3)
+            ld = compliance * C / (compliance * schur + 1.0)
 
             e.verts[0].dx -= e.verts[0].fixed * e.verts[0].m_inv * ld * nabla_C
             e.verts[1].dx += e.verts[1].fixed * e.verts[1].m_inv * ld * nabla_C
@@ -456,7 +456,7 @@ class Solver:
             e_v0_m_inv, e_v1_m_inv = self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.m_inv[v1]
 
             schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv) * nabla_C.dot(nabla_C)
-            ld = C / (schur + 1e-3)
+            ld = compliance * C / (compliance * schur + 1.0)
 
             self.mesh_dy.verts.dx[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
             self.mesh_dy.verts.dx[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
