@@ -64,7 +64,7 @@ def show_options():
     YM_old = YM_ui
     YM_b_old = YM_b_ui
 
-    with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.5) as w:
+    with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
@@ -84,15 +84,25 @@ def show_options():
         if mesh_export is True:
             frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
-        frame_str = "# frame: " + str(frame_cpu)
+
+        w.text("dynamic mesh stats.")
         verts_str = "# verts: " + str(sim.max_num_verts_dy)
         edges_str = "# edges: " + str(sim.max_num_edges_dy)
         faces_str = "# faces: " + str(sim.max_num_faces_dy)
-
-        w.text(frame_str)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
+
+        w.text("static mesh stats.")
+        verts_str = "# verts: " + str(sim.max_num_verts_st)
+        edges_str = "# edges: " + str(sim.max_num_edges_st)
+        faces_str = "# faces: " + str(sim.max_num_faces_st)
+        w.text(verts_str)
+        w.text(edges_str)
+        w.text(faces_str)
+
+        frame_str = "# frame: " + str(frame_cpu)
+        w.text(frame_str)
 
     if not old_dt == dt_ui:
         sim.dt = dt_ui
