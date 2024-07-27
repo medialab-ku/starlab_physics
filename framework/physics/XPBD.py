@@ -209,21 +209,22 @@ class Solver:
         self.tv_st_candidates_num.fill(0)
         self.vt_dy_candidates_num.fill(0)
 
-        cnt = 0
         for i in range(2 * self.max_num_verts_dy + self.max_num_verts_st):
+
             if i < self.max_num_verts_dy:
                 vid = i
                 y = self.mesh_dy.verts.y[vid]
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
                 self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
+
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
                 x = self.mesh_dy.verts.x[vid]
                 aabb_min = x - self.padding * ti.math.vec3(1.0)
                 aabb_max = x + self.padding * ti.math.vec3(1.0)
                 self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid, self.vt_dy_candidates, self.vt_dy_candidates_num)
-                # ti.atomic_add(cnt, a)
+
             else:
                 vid = i - 2 * self.max_num_verts_dy
                 x = self.mesh_st.verts.x[vid]
@@ -308,7 +309,7 @@ class Solver:
 
         if self.enable_collision_handling:
 
-            self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.lbvh_st.root)
+            self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
             compliance_collision = 1e6
             self.solve_collision_constraints_x(compliance_collision)
 

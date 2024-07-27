@@ -32,18 +32,8 @@ frame_end = 100
 dt_ui = sim.dt
 dHat_ui = sim.dHat
 
-strain_limit_ui = sim.strain_limit
 damping_ui = sim.damping
 
-ang_vel_x_ui = sim.obs_ang_vel[0][0]
-ang_vel_y_ui = sim.obs_ang_vel[0][1]
-ang_vel_z_ui = sim.obs_ang_vel[0][2]
-
-lin_vel_x_ui = sim.obs_lin_vel[0][0]
-lin_vel_y_ui = sim.obs_lin_vel[0][1]
-lin_vel_z_ui = sim.obs_lin_vel[0][2]
-
-PR_ui = sim.PR
 YM_ui = sim.YM
 YM_b_ui = sim.YM_b
 
