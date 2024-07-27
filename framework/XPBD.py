@@ -1,9 +1,8 @@
 import csv
 import taichi as ti
 import numpy as np
-import solve_collision_constraints_x
-import solve_collision_constraints_v
-from lbvh import LBVH
+from framework.deprecated import solve_collision_constraints_x, solve_collision_constraints_v
+from lbvh_cell import LBVH_CELL
 
 @ti.data_oriented
 class Solver:
@@ -93,7 +92,7 @@ class Solver:
         # aabb_min_st, aabb_max_st = self.mesh_st.computeAABB()
         self.lbvh_st = None
         if self.mesh_st != None:
-            self.lbvh_st = LBVH(len(self.mesh_st.faces))
+            self.lbvh_st = LBVH_CELL(len(self.mesh_st.faces))
             self.max_num_verts_st = len(self.mesh_st.verts)
             self.max_num_edges_st = len(self.mesh_st.edges)
             self.max_num_faces_st = len(self.mesh_st.faces)
@@ -103,7 +102,7 @@ class Solver:
             self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
         # print(len(self.mesh_dy.faces))
-        self.lbvh_dy = LBVH(len(self.mesh_dy.faces))
+        self.lbvh_dy = LBVH_CELL(len(self.mesh_dy.faces))
 
         # self.lbvh_st_v = LBVH(len(self.mesh_st.verts))
         # self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)

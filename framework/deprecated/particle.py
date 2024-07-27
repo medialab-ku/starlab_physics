@@ -77,7 +77,7 @@ class Particle:
             self.x[i] += self.trans
 
     def export(self, scene_name, mesh_id, frame):
-        directory = os.path.join("results/",scene_name,"Particle_ID_"+str(mesh_id))
+        directory = os.path.join("../results/", scene_name, "Particle_ID_" + str(mesh_id))
 
         try :
             if not os.path.exists(directory):

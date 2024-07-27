@@ -6,10 +6,14 @@ class BlellochScan:
     def __init__(self, num_array):
         self.num_array = num_array
         self.num_steps = int(math.log2(self.num_array))
+        self.prefix_sum_temp = ti.field(ti.i32, shape=self.num_array)
+
 
     @ti.kernel
     def upsweep(self, prefix_sum: ti.template(), step: ti.int32, size: ti.int32):
         offset = step - 1
+
+        ti.loop_config(block_dim=64)
         for i in range(size):
             id = offset + step * i
             prefix_sum[id] += prefix_sum[id - (step >> 1)]
@@ -18,6 +22,8 @@ class BlellochScan:
     def downsweep(self, prefix_sum: ti.template(), step: ti.int32, size: ti.int32):
         offset = step - 1
         offset_rev = (step >> 1)
+
+        ti.loop_config(block_dim=64)
         for i in range(size):
             id = offset + step * i
             temp = prefix_sum[id - offset_rev]
@@ -25,13 +31,13 @@ class BlellochScan:
             prefix_sum[id] += temp
 
     @ti.kernel
-    def add_count(self, prefix_sum_temp: ti.template(), prefix_sum: ti.template()):
+    def add_count(self, prefix_sum: ti.template()):
         for i in range(self.num_array):
-            prefix_sum[i] += prefix_sum_temp[i]
+            prefix_sum[i] += self.prefix_sum_temp[i]
 
-    def run(self, prefix_sum_temp: ti.template(), prefix_sum: ti.template()):
+    def run(self, prefix_sum: ti.template()):
 
-        prefix_sum_temp.copy_from(prefix_sum)
+        self.prefix_sum_temp.copy_from(prefix_sum)
         d = 0
         test = self.num_array
         while test > 1:
@@ -51,4 +57,4 @@ class BlellochScan:
             self.downsweep(prefix_sum, step, size)
             d -= 1
 
-        self.add_count(prefix_sum_temp, prefix_sum)
+        self.add_count(prefix_sum)

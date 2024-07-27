@@ -14,7 +14,7 @@ class Node:
     range_r: ti.i32
 
 @ti.data_oriented
-class LBVH:
+class LBVH_CELL:
     def __init__(self, num_leafs):
 
         self.grid_res = ti.math.ivec3(0)
@@ -671,55 +671,6 @@ class LBVH:
             self.prefix_sum[digit] -= 1
 
 
-    @ti.kernel
-    def upsweep(self, step: ti.int32, size: ti.int32):
-        offset = step - 1
-        for i in range(size):
-            id = offset + step * i
-            self.prefix_sum[id] += self.prefix_sum[id - (step >> 1)]
-
-    @ti.kernel
-    def downsweep(self, step: ti.int32, size: ti.int32):
-        offset = step - 1
-        offset_rev = (step >> 1)
-        for i in range(size):
-            id = offset + step * i
-            temp = self.prefix_sum[id - offset_rev]
-            self.prefix_sum[id - offset_rev] = self.prefix_sum[id]
-            self.prefix_sum[id] += temp
-
-
-    @ti.kernel
-    def add_count(self):
-
-        for i in range(self.RADIX):
-            self.prefix_sum[i] += self.prefix_sum_temp[i]
-
-    def blelloch_scan(self):
-
-        self.prefix_sum_temp.copy_from(self.prefix_sum)
-
-        d = 0
-        test = self.RADIX
-        while test > 1:
-            step = 1 << (d + 1)
-            size = self.RADIX // step
-            self.upsweep(step, size)
-
-            d += 1
-            test //= 2
-
-        self.prefix_sum[self.RADIX - 1] = 0
-        d = self.BITS_PER_PASS - 1
-
-        while d >= 0:
-            step = 1 << (d + 1)
-            size = self.RADIX // step
-            self.downsweep(step, size)
-            d -= 1
-
-        self.add_count()
-
     def radix_sort(self):
         # print(self.passes)
         for pi in range(self.passes):
@@ -771,17 +722,6 @@ class LBVH:
 
     @ti.kernel
     def counting_sort_cells(self):
-
-        # ti.loop_config(serialize=True)
-        # for fid in range(self.num_leafs):
-        #     I = self.num_leafs - 1 - fid
-        #     cell_id = self.face_cell_ids[I]
-        #     base_offset = 0
-        #     if cell_id - 1 >= 0:
-        #         base_offset = self.prefix_sum_cell[cell_id - 1]
-        #
-        #     self.sorted_face_ids[I] = self.prefix_sum_cell_temp[cell_id] - 1 + base_offset
-        #     self.prefix_sum_cell_temp[cell_id] -= 1
 
         # ti.loop_config(serialize=True)
         for fid in range(self.num_leafs):
@@ -843,10 +783,8 @@ class LBVH:
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
 
-        # for i in range(2):
-        # self.nodes.visited.fill(0)
+
         self.origin = aabb_min_g
-        # self.cell_size = self.assign_morton(mesh, aabb_min_g, aabb_max_g)
         self.cell_size = self.assign_cell_centers(aabb_min_g, aabb_max_g)
         self.prefix_sum_cell.fill(0)
         self.assign_face_cell_ids(mesh, self.cell_size, aabb_min_g)
@@ -854,11 +792,6 @@ class LBVH:
         # self.prefix_sum_executer_cell_Blelloch.run(self.prefix_sum_cell_temp, self.prefix_sum_cell)
         self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
         self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
-        #
-        #
-        # self.face_aabb_min.copy_from(mesh.faces.aabb_min)
-        # self.face_aabb_max.copy_from(mesh.faces.aabb_max)
-
         self.counting_sort_cells()
         if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
             print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
@@ -868,56 +801,7 @@ class LBVH:
         self.assign_leaf_cell_nodes(mesh)
         self.compute_bvh_aabbs_cells()
 
-        # print(self.cell_nodes[0].num_faces)
 
-
-    @ti.kernel
-    def test_traverse_cells(self):
-
-        for i in range(self.num_leafs):
-            # idx = self.sorted_face_ids[i]
-            min0, max0 = self.face_aabb_min[i], self.face_aabb_max[i]
-            pos = 0.5 * (min0 + max0)
-            cell_id = self.get_flatten_cell_id(pos, self.cell_size, self.origin)
-            stack = ti.Vector([-1 for j in range(32)])
-            stack[0] = 0
-            stack_counter = 1
-            cnt = 0
-            while stack_counter > 0:
-                # print(stack)
-                stack_counter -= 1
-                idx = stack[stack_counter]
-                min1, max1 = self.cell_nodes[idx].aabb_min, self.cell_nodes[idx].aabb_max
-                # print(min1, max1)
-                cnt += 1
-                if self.aabb_overlap(min0, max0, min1, max1):
-                    if idx >= self.num_cells - 1:
-                        size = self.cell_nodes[idx].range_r - self.cell_nodes[idx].range_l + 1
-                        offset = self.cell_nodes[idx].range_l
-                        for j in range(size):
-                            fid = self.sorted_face_ids[j + offset]
-                            # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
-                            aabb_min = self.face_aabb_min[fid]
-                            aabb_max = self.face_aabb_max[fid]
-                            if self.aabb_overlap(min0, max0, aabb_min, aabb_max):
-                                ti.atomic_add(cnt, 1)
-
-                    else:
-                        left, right = self.cell_nodes[idx].child_a, self.cell_nodes[idx].child_b
-                        stack[stack_counter] = left
-                        stack_counter += 1
-                        stack[stack_counter] = right
-                        stack_counter += 1
-
-            return cnt
-    @ti.kernel
-    def test_sort(self):
-        cnt = 0
-        for i in range(self.num_leafs - 1):
-            if self.morton_codes[i + 1] >= self.morton_codes[i]:
-                cnt += 1
-
-        print(cnt)
     @ti.func
     def node_overlap(self, node0, node1):
         min0, max0 = self.nodes[node0].aabb_min, self.nodes[node0].aabb_min
@@ -930,44 +814,6 @@ class LBVH:
         return (min1[0] <= max2[0] and max1[0] >= min2[0] and
                 min1[1] <= max2[1] and max1[1] >= min2[1] and
                 min1[2] <= max2[2] and max1[2] >= min2[2])
-
-    @ti.kernel
-    def traverse_bvh_single_test(self, nid: ti.i32) -> ti.int32:
-
-        # stack = ti.Vector([-1 for j in range(128)])
-        self.stack_test[0] = 0
-        stack_counter = 1
-        idx = 0
-        cnt = 0
-        self.nodes.visited.fill(0)
-        print("start")
-        while stack_counter > 0:
-            # print(stack_counter)
-            stack_counter -= 1
-            idx = self.stack_test[stack_counter]
-            if self.nodes[idx].visited == 0:
-                self.nodes[idx].visited = 1
-            else:
-                print(idx, "duplicate!!")
-            if self.node_overlap(nid, idx):
-                if idx >= self.leaf_offset:
-                    ti.atomic_add(cnt, 1)
-                else:
-                    left, right = self.nodes[idx].child_a, self.nodes[idx].child_b
-                    self.stack_test[stack_counter] = left
-                    stack_counter += 1
-                    self.stack_test[stack_counter] = right
-                    stack_counter += 1
-                # else:
-                #     print(nid, "fuck")
-                #     break
-
-        # for i in range(self.num_leafs):
-        #     idx = i + self.leaf_offset
-        #     if self.node_overlap(nid, idx):
-        #         cnt += 1
-
-        return cnt
 
     @ti.func
     def traverse_bvh_single(self, root, min0, max0, i, cache, nums):
