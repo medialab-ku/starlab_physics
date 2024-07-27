@@ -63,8 +63,6 @@ class LBVH_CELL:
         self.aabb_index0 = ti.field(dtype=ti.uint32, shape=24)
         # self.aabb_index1 = ti.field(dtype=ti.uint32, shape=24)
 
-        self.face_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
-
         self.zSort_line_idx = ti.field(dtype=ti.uint32, shape=self.num_nodes)
         self.zSort_line_idx_cells = ti.field(dtype=ti.uint32, shape=2 * self.num_cells)
         self.parent_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
@@ -664,7 +662,6 @@ class LBVH_CELL:
     def traverse_cell_bvh_single(self, cell_size, origin, min0, max0, i, cache, nums):
         pos = 0.5 * (min0 + max0)
         cell_id = self.get_flatten_cell_id(pos, cell_size, origin)
-        cnt = 0
         if cell_id <= self.num_cells - 1:
             root = 0
             # root = self.cell_nodes[cell_id + self.num_cells - 1].parent
@@ -691,7 +688,6 @@ class LBVH_CELL:
                 idx = stack[stack_counter]
                 min1, max1 = self.cell_nodes[idx].aabb_min, self.cell_nodes[idx].aabb_max
                 # print(min1, max1)
-                cnt += 1
                 if self.cell_nodes[idx].num_faces > 0:
                     if self.aabb_overlap(min0, max0, min1, max1):
                         if idx >= self.num_cells - 1:
@@ -705,7 +701,6 @@ class LBVH_CELL:
                                 if self.aabb_overlap(min0, max0, aabb_min, aabb_max):
                                     cache[i, nums[i]] = fid
                                     nums[i] += 1
-                                    ti.atomic_add(cnt, 1)
 
                         else:
                             left, right = self.cell_nodes[idx].child_a, self.cell_nodes[idx].child_b
@@ -717,8 +712,6 @@ class LBVH_CELL:
                             if self.cell_nodes[right].num_faces > 0:
                                 stack[stack_counter] = right
                                 stack_counter += 1
-
-        return cnt
 
     @ti.kernel
     def update_zSort_cell_centers_and_line(self):

@@ -19,20 +19,12 @@ camera.position(2., 4.0, 7.0)
 camera.fov(40)
 camera.up(0, 1, 0)
 
-colors_static = []
-colors_static.append((1.0, 0.0, 0))
-colors_static.append((0, 0.5, 0))
-colors_static.append((1, 0.5, 0))
-colors_static.append((0, 0.5, 1))
-
 run_sim = False
-
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
-# print("sim.max_num_verts_dynamic", sim.max_num_verts_dy)
 
 n_substep = 20
 frame_end = 100
@@ -60,20 +52,13 @@ friction_coeff_ui = sim.mu
 mesh_export = False
 frame_cpu = 0
 
-n_leaf = 0
-n_internal = 0
-
 def show_options():
 
     global n_substep
-    global n_leaf
-    global n_internal
     global dt_ui
-    global strain_limit_ui
     global damping_ui
     global YM_ui
     global YM_b_ui
-    global PR_ui
     global sim
     global dHat_ui
     global friction_coeff_ui
@@ -85,28 +70,19 @@ def show_options():
     old_dt = dt_ui
     old_dHat = dHat_ui
     old_friction_coeff = dHat_ui
-    old_strain_limit = strain_limit_ui
     old_damping = damping_ui
     YM_old = YM_ui
     YM_b_old = YM_b_ui
-    PR_old = PR_ui
-
-    n_leaf_old = n_leaf
-    n_internal_old = n_internal
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.5) as w:
-        # dt_ui = w.slider_float("dt", dt_ui, 0.0, 0.1)
-        dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
 
+        dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
-        strain_limit_ui = w.slider_float("strain limit", strain_limit_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
         YM_b_ui = w.slider_float("YM_b", YM_b_ui, 0.0, 1e8)
-        # if sim.max_num_tetra_dynamic > 0:
-        #     PR_ui = w.slider_float("PR", PR_ui, 0.0, 0.495)
 
         MODE_WIREFRAME = w.checkbox("wireframe", MODE_WIREFRAME)
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
@@ -121,32 +97,12 @@ def show_options():
         frame_str = "# frame: " + str(frame_cpu)
         verts_str = "# verts: " + str(sim.max_num_verts_dy)
         edges_str = "# edges: " + str(sim.max_num_edges_dy)
+        faces_str = "# faces: " + str(sim.max_num_faces_dy)
 
         w.text(frame_str)
         w.text(verts_str)
         w.text(edges_str)
-
-        # n_leaf = w.slider_int("leaf id", n_leaf, 0, sim.lbvh_st.num_cells - 1)
-        # if not n_leaf_old == n_leaf:
-        #     print(sim.lbvh_st.traverse_bvh_single_test(n_leaf))
-        # n_internal = w.slider_int("internal id", n_internal, 0, sim.lbvh_st.num_cells - 2)
-        # if not n_internal_old == n_internal:
-        #     # print(n_internal, sim.lbvh_st.nodes[n_internal].aabb_min, sim.lbvh_st.nodes[n_internal].aabb_max)
-        #     print("left: ", sim.lbvh_st.nodes[n_internal].child_a, "right: ", sim.lbvh_st.nodes[n_internal].child_b)
-
-        # if sim.max_num_tetra_dynamic > 0:
-        #     tetra_str = "# tetrs: " + str(sim.max_num_tetra_dynamic)
-        #     w.text(tetra_str)
-        #     rest_volume = sim.rest_volume[0]
-        #     current_volume = sim.current_volume[0]
-        #
-        #     volume_ratio = round(100.0 * current_volume / rest_volume, 2)
-        #     volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
-        #     w.text(volume_ratio_str)
-        #
-        #     num_inverted_tetrs = sim.num_inverted_elements[0]
-        #     num_inverted_tetrs_str = "# inverted tetrs: " + str(num_inverted_tetrs)
-        #     w.text(num_inverted_tetrs_str)
+        w.text(faces_str)
 
     if not old_dt == dt_ui:
         sim.dt = dt_ui
@@ -163,84 +119,8 @@ def show_options():
     if not YM_b_old == YM_b_ui:
         sim.YM_b = YM_b_ui
 
-    if not PR_old == PR_ui:
-        sim.PR = PR_ui
-
-    if not old_strain_limit == strain_limit_ui:
-        sim.strain_limit = strain_limit_ui
-
     if not old_damping == damping_ui:
         sim.damping = damping_ui
-
-    # global ang_vel_x_ui
-    # global ang_vel_y_ui
-    # global ang_vel_z_ui
-    #
-    # global lin_vel_x_ui
-    # global lin_vel_y_ui
-    # global lin_vel_z_ui
-    #
-    # old_ang_vel_x_ui = ang_vel_x_ui
-    # old_ang_vel_y_ui = ang_vel_y_ui
-    # old_ang_vel_z_ui = ang_vel_z_ui
-    #
-    # old_lin_vel_x_ui = lin_vel_x_ui
-    # old_lin_vel_y_ui = lin_vel_y_ui
-    # old_lin_vel_z_ui = lin_vel_z_ui
-    #
-    # with gui.sub_window("Move obstacle", 0.8, 0.8, 0.3, 0.5) as w:
-    #     sim.enable_move_obstacle = w.checkbox("move obstacle", sim.enable_move_obstacle)
-    #     ang_vel_x_ui = w.slider_float("ang vel x", ang_vel_x_ui, -40, 40.)
-    #     ang_vel_y_ui = w.slider_float("ang vel y", ang_vel_y_ui, -40, 40.)
-    #     ang_vel_z_ui = w.slider_float("ang vel z", ang_vel_z_ui, -40, 40.)
-    #
-    #     lin_vel_x_ui = w.slider_float("lin vel x", lin_vel_x_ui, -40.0, 40.)
-    #     lin_vel_y_ui = w.slider_float("lin vel y", lin_vel_y_ui, -40.0, 40.)
-    #     lin_vel_z_ui = w.slider_float("lin vel z", lin_vel_z_ui, -40.0, 40.)
-    #
-    # if not old_ang_vel_x_ui == ang_vel_x_ui:
-    #     sim.obs_ang_vel[0][0] = ang_vel_x_ui
-    #
-    # if not old_ang_vel_y_ui == ang_vel_y_ui:
-    #     sim.obs_ang_vel[0][1] = ang_vel_y_ui
-    #
-    # if not old_ang_vel_z_ui == ang_vel_z_ui:
-    #     sim.obs_ang_vel[0][2] = ang_vel_z_ui
-    #
-    # if not old_lin_vel_x_ui == lin_vel_x_ui:
-    #     sim.obs_lin_vel[0][0] = lin_vel_x_ui
-    #
-    # if not old_lin_vel_y_ui == lin_vel_y_ui:
-    #     sim.obs_lin_vel[0][1] = lin_vel_y_ui
-    #
-    # if not old_lin_vel_z_ui == lin_vel_z_ui:
-    #     sim.obs_lin_vel[0][2] = lin_vel_z_ui
-
-
-    # with gui.sub_window("Debug", 0.8, 0.8, 0.3, 0.5) as w:
-    #
-    #     if sim.max_num_tetra_dynamic > 0:
-    #         # rest_volume = sim.rest_volume[0]
-    #         # current_volume = sim.current_volume[0]
-    #         #
-    #         # volume_ratio = round(100.0 * current_volume / rest_volume, 2)
-    #         # volume_ratio_str = "volume ratio(%): " + str(volume_ratio) + "%"
-    #         # w.text(volume_ratio_str)
-    #
-    #         num_inverted_elements_str = "# inverted elements: " + str(sim.num_inverted_elements[0])
-    #         w.text(num_inverted_elements_str)
-    #
-    #     # num_vt_dynamic_str = "# vt_dynamic: " + str(sim.vt_active_set_num_dynamic[0])
-    #     # w.text(num_vt_dynamic_str)
-    #     #
-    #     # num_ee_static_str = "# ee_static: " + str(sim.ee_active_set_num[0])
-    #     # w.text(num_ee_static_str)
-    #     #
-    #     # num_vt_static_str = "# vt_static: " + str(sim.vt_active_set_num[0])
-    #     # w.text(num_vt_static_str)
-    #     #
-    #     # num_tv_static_str = "# tv_static: " + str(sim.tv_active_set_num[0])
-    #     # w.text(num_tv_static_str)
 
 def load_animation():
     global sim
@@ -265,9 +145,6 @@ def load_animation():
         for a in range(num_animation) :
             animationFrag = [animation_raw[ic][k + 7*a] for k in range(7)] # [vx,vy,vz,rx,ry,rz,frame]
             animationDict[ic].append(animationFrag)
-
-    # print(animationDict)
-    # sim._set_animation(animationDict, g_selector.is_selected)
 
 while window.running:
 
@@ -341,21 +218,6 @@ while window.running:
         if window.event.key == ti.ui.TAB:
             g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
 
-        if window.event.key == ti.ui.LEFT:
-            n_internal = sim.lbvh_st.nodes[n_internal].child_a
-            if n_internal < 0:
-                n_internal = 0
-
-        if window.event.key == ti.ui.RIGHT:
-            n_internal = sim.lbvh_st.nodes[n_internal].child_b
-            if n_internal < 0:
-                n_internal = 0
-
-        if window.event.key == ti.ui.UP:
-
-            n_internal = sim.lbvh_st.nodes[n_internal].parent
-            if n_internal < 0:
-                n_internal = 0
 
     if window.get_event(ti.ui.RELEASE):
         if window.event.key == ti.ui.LMB:
@@ -379,18 +241,10 @@ while window.running:
 
     scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
     scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
-    # scene.lines(scene1.mesh_dy.render_bending_vert, indices=scene1.mesh_dy.bending_indices, width=1.0, color=(1, 0, 0))
-    # sim.lbvh_dy.draw_zSort(scene)
-    # sim.lbvh_dy.draw_bvh_aabb_test(scene, n_leaf, n_internal)
-    # scene.lines(sim.mesh_dy.verts.x, indices=sim.mesh_dy.edge_indices, width=1.0, color=(0, 0, 0))
 
     if sim.mesh_st != None:
-        # scene.lines(sim.mesh_st.verts.x, indices=sim.mesh_st.edge_indices, width=1.0, color=(0, 0, 0))
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
-        # sim.lbvh_st.draw_bvh_aabb(scene)
-        # sim.lbvh_st.draw_zSort(scene)
-        # sim.lbvh_st.draw_bvh_cell_aabb_test(scene, n_leaf, n_internal)
 
     g_selector.renderTestPos()
 
