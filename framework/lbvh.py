@@ -1,5 +1,5 @@
 import taichi as ti
-
+from BlellochScan import BlellochScan
 @ti.dataclass
 class Node:
     object_id: ti.i32
@@ -36,7 +36,10 @@ class LBVH:
         self.num_faces_in_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.prefix_sum_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.prefix_sum_cell_temp = ti.field(dtype=ti.i32, shape=self.num_cells)
+
+        self.prefix_sum_executer_cell_Blelloch = BlellochScan(self.num_cells)
         self.prefix_sum_executer_cell = ti.algorithms.PrefixSumExecutor(self.num_cells)
+        # self.prefix_sum_executer_cell = ti.algorithms.PrefixSumExecutor(self.num_cells)
 
         self.num_leafs = num_leafs
         self.face_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
@@ -847,6 +850,8 @@ class LBVH:
         self.cell_size = self.assign_cell_centers(aabb_min_g, aabb_max_g)
         self.prefix_sum_cell.fill(0)
         self.assign_face_cell_ids(mesh, self.cell_size, aabb_min_g)
+
+        # self.prefix_sum_executer_cell_Blelloch.run(self.prefix_sum_cell_temp, self.prefix_sum_cell)
         self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
         self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
         #
