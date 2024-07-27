@@ -1,5 +1,5 @@
 import taichi as ti
-import distance as di
+import framework.collision.distance as di
 
 
 @ti.func
