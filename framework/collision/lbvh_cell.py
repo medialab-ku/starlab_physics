@@ -1,5 +1,5 @@
 import taichi as ti
-from BlellochScan import BlellochScan
+from framework.utilities.BlellochScan import BlellochScan
 @ti.dataclass
 class Node:
     object_id: ti.i32

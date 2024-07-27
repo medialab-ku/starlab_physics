@@ -1,8 +1,8 @@
 import random
 from framework.deprecated.particle import Particle
-from framework.meshTaichiWrapper import MeshTaichiWrapper
+from framework.meshio.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
-from framework.TetMesh import TetMesh
+from framework.meshio.TetMesh import TetMesh
 
 
 # ti.init(arch=ti.cuda, device_memory_GB=3, kernel_profiler=True)

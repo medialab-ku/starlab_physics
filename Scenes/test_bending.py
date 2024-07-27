@@ -1,7 +1,6 @@
-import random
 import numpy as np
-import framework.concat as concat
-from framework.meshTaichiWrapper import MeshTaichiWrapper
+import framework.meshio.concat as concat
+from framework.meshio.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
 
 enable_profiler = False

@@ -126,7 +126,7 @@ class TetMesh:
 
 
     def export(self, scene_name, mesh_id, frame):
-        directory = os.path.join("results/",scene_name,"TetMesh_ID_"+str(mesh_id))
+        directory = os.path.join("../results/", scene_name, "TetMesh_ID_" + str(mesh_id))
 
         try :
             if not os.path.exists(directory):

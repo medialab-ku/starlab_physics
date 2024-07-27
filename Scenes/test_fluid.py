@@ -1,6 +1,6 @@
 import random
 from framework.deprecated.particle import Particle
-from framework.meshTaichiWrapper import MeshTaichiWrapper
+from framework.meshio.meshTaichiWrapper import MeshTaichiWrapper
 import taichi as ti
 
 

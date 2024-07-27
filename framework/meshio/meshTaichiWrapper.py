@@ -319,9 +319,9 @@ class MeshTaichiWrapper:
 
     def export(self, scene_name, frame, is_static = False):
         if is_static:
-            directory = os.path.join("results/", scene_name, "StaticMesh_ID_")
+            directory = os.path.join("../results/", scene_name, "StaticMesh_ID_")
         else:
-            directory = os.path.join("results/", scene_name, "Mesh_ID_")
+            directory = os.path.join("../results/", scene_name, "Mesh_ID_")
 
         try:
             if not os.path.exists(directory):
