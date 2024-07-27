@@ -74,9 +74,10 @@ def show_options():
         YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
         YM_b_ui = w.slider_float("YM_b", YM_b_ui, 0.0, 1e8)
 
-        MODE_WIREFRAME = w.checkbox("wireframe", MODE_WIREFRAME)
-        LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
+        frame_str = "# frame: " + str(frame_cpu)
+        w.text(frame_str)
 
+        LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
         sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
         sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         mesh_export = w.checkbox("export mesh", mesh_export)
@@ -84,7 +85,7 @@ def show_options():
         if mesh_export is True:
             frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
-
+        w.text("")
         w.text("dynamic mesh stats.")
         verts_str = "# verts: " + str(sim.max_num_verts_dy)
         edges_str = "# edges: " + str(sim.max_num_edges_dy)
@@ -93,6 +94,7 @@ def show_options():
         w.text(edges_str)
         w.text(faces_str)
 
+        w.text("")
         w.text("static mesh stats.")
         verts_str = "# verts: " + str(sim.max_num_verts_st)
         edges_str = "# edges: " + str(sim.max_num_edges_st)
@@ -101,8 +103,6 @@ def show_options():
         w.text(edges_str)
         w.text(faces_str)
 
-        frame_str = "# frame: " + str(frame_cpu)
-        w.text(frame_str)
 
     if not old_dt == dt_ui:
         sim.dt = dt_ui
