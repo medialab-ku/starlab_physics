@@ -1,9 +1,7 @@
 import taichi as ti
 import json
 
-# from Scenes import test_fem as scene1
 from Scenes import concat_test as scene1
-# from Scenes import cloth_stack as scene1
 import os
 from framework.physics import XPBD
 from framework.utilities import selection_tool as st
@@ -22,9 +20,6 @@ camera.up(0, 1, 0)
 run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
-
-#test 3
-
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
 
@@ -95,7 +90,6 @@ def show_options():
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
-
         w.text("")
         w.text("static mesh stats.")
         verts_str = "# verts: " + str(sim.max_num_verts_st)
@@ -131,10 +125,8 @@ def load_animation():
         animation_raw = json.load(f)
     animation_raw = {int(k): v for k, v in animation_raw.items()}
 
-    # 4 = (g_selector.num_maxCounter)
     animationDict = {(i+1):[] for i in range(4)}
 
-    # 4 = (g_selector.num_maxCounter)
     for i in range(4):
         ic = i + 1
         icAnimation = animation_raw[ic]
@@ -159,13 +151,11 @@ while window.running:
     scene.point_light(pos=(0.5, 1.5, 1.5), color=(0.3, 0.3, 0.3))
 
     if window.get_event(ti.ui.PRESS):
-        # if window.event.key == 'c':
-        #     g_selector.selection_Count_Up()
-        #
+
         if window.event.key == 'x':  # export selection
             print("==== Vertex EXPORT!! ====")
             g_selector.export_selection()
-        #
+
         if window.event.key == 'i':
             print("==== IMPORT!! ====")
             g_selector.import_selection()
