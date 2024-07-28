@@ -1,8 +1,8 @@
 import csv
 import taichi as ti
 import numpy as np
-from framework.physics import collision_constraints_x, collision_constraints_v
-from framework.collision.lbvh_cell import LBVH_CELL
+from ..physics import collision_constraints_x, collision_constraints_v
+from ..collision.lbvh_cell import LBVH_CELL
 
 @ti.data_oriented
 class Solver:
