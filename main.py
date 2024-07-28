@@ -23,7 +23,7 @@ run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 
-#test 2
+#test 3
 
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
