@@ -125,7 +125,7 @@ def show_options():
 def load_animation():
     global sim
 
-    with open('animation/animation.json') as f:
+    with open('framework/animation/animation.json') as f:
         animation_raw = json.load(f)
     animation_raw = {int(k): v for k, v in animation_raw.items()}
 
