@@ -25,7 +25,8 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
 
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v0] += mu * dvTan
+            mesh_dy.verts.dv[v0] += mu * dvTan
+            mesh_dy.verts.nc[v0] += 1
 
     elif dtype == 1:
         if Cv < 0.:
@@ -40,7 +41,8 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v0] += mu * dvTan
+            mesh_dy.verts.dv[v0] += mu * dvTan
+            mesh_dy.verts.nc[v0] += 1
 
     elif dtype == 2:
         if Cv < 0.:
@@ -55,7 +57,8 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v0] += mu * dvTan
+            mesh_dy.verts.dv[v0] += mu * dvTan
+            mesh_dy.verts.nc[v0] += 1
 
 
     elif dtype == 3:
@@ -73,7 +76,8 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v0] += mu * dvTan
+            mesh_dy.verts.dv[v0] += mu * dvTan
+            mesh_dy.verts.nc[v0] += 1
 
     elif dtype == 4:
         if Cv < 0.:
@@ -90,7 +94,8 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v0] += mu * dvTan
+            mesh_dy.verts.dv[v0] += mu * dvTan
+            mesh_dy.verts.nc[v0] += 1
 
     elif dtype == 5:
         if Cv < 0.:
@@ -107,7 +112,8 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v0] += mu * dvTan
+            mesh_dy.verts.dv[v0] += mu * dvTan
+            mesh_dy.verts.nc[v0] += 1
 
     elif dtype == 6:
         if Cv < 0.:
@@ -124,7 +130,8 @@ def __vt_st(vid_d, fid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             dvTan = mesh_dy.verts.m_inv[v0] * ldTan * g0Tan
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v0] += mu * dvTan
+            mesh_dy.verts.dv[v0] += mu * dvTan
+            mesh_dy.verts.nc[v0] += 1
 
 @ti.func
 def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
@@ -149,7 +156,8 @@ def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
 
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v1] += mu * dvTan1
+            mesh_dy.verts.dv[v1] += mu * dvTan1
+            mesh_dy.verts.nc[v1] += 1
 
     elif dtype == 1:
         if Cv < 0.0:
@@ -166,7 +174,8 @@ def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
 
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v2] += mu * dvTan2
+            mesh_dy.verts.dv[v2] += mu * dvTan2
+            mesh_dy.verts.nc[v2] += 1
 
     elif dtype == 2:
         if Cv < 0.0:
@@ -183,7 +192,8 @@ def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
 
             if mu * abs(Cv) > cTan:
                 mu = 1.0
-            mesh_dy.verts.v[v3] += mu * dvTan3
+            mesh_dy.verts.dv[v3] += mu * dvTan3
+            mesh_dy.verts.nc[v3] += 1
 
     elif dtype == 3:
 
@@ -211,8 +221,11 @@ def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             if mu * abs(Cv) > cTan:
                 mu = 1.0
 
-            mesh_dy.verts.v[v1] += mu * dvTan1
-            mesh_dy.verts.v[v2] += mu * dvTan2
+            mesh_dy.verts.dv[v1] += mu * dvTan1
+            mesh_dy.verts.dv[v2] += mu * dvTan2
+
+            mesh_dy.verts.nc[v1] += 1
+            mesh_dy.verts.nc[v2] += 1
 
     elif dtype == 4:
         if Cv < 0.0:
@@ -241,8 +254,11 @@ def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             if mu * abs(Cv) > cTan:
                 mu = 1.0
 
-            mesh_dy.verts.v[v2] += mu * dvTan2
-            mesh_dy.verts.v[v3] += mu * dvTan3
+            mesh_dy.verts.dv[v2] += mu * dvTan2
+            mesh_dy.verts.dv[v3] += mu * dvTan3
+
+            mesh_dy.verts.nc[v2] += 1
+            mesh_dy.verts.nc[v3] += 1
 
     elif dtype == 5:
         if Cv < 0.0:
@@ -268,8 +284,11 @@ def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             if mu * abs(Cv) > cTan:
                 mu = 1.0
 
-            mesh_dy.verts.v[v1] += mu * dvTan1
-            mesh_dy.verts.v[v3] += mu * dvTan3
+            mesh_dy.verts.dv[v1] += mu * dvTan1
+            mesh_dy.verts.dv[v3] += mu * dvTan3
+
+            mesh_dy.verts.nc[v1] += 1
+            mesh_dy.verts.nc[v3] += 1
 
     elif dtype == 6:
         if Cv < 0.0:
@@ -302,9 +321,13 @@ def __tv_st(fid_d, vid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
             if mu * abs(Cv) > cTan:
                 mu = 1.0
 
-            mesh_dy.verts.v[v1] += mu * dvTan1
-            mesh_dy.verts.v[v2] += mu * dvTan2
-            mesh_dy.verts.v[v3] += mu * dvTan3
+            mesh_dy.verts.dv[v1] += mu * dvTan1
+            mesh_dy.verts.dv[v2] += mu * dvTan2
+            mesh_dy.verts.dv[v3] += mu * dvTan3
+
+            mesh_dy.verts.nc[v1] += 1
+            mesh_dy.verts.nc[v2] += 1
+            mesh_dy.verts.nc[v3] += 1
 
 
 @ti.func
@@ -342,6 +365,9 @@ def __vt_dy(vid_d, fid_d, dtype, mesh_dy, g0, g1, g2, g3, schur, mu):
             mesh_dy.verts.dv[v0] += mu * dvTan0
             mesh_dy.verts.dv[v1] += mu * dvTan1
 
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v1] += 1
+
         elif dtype == 1:
 
             mesh_dy.verts.dv[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0 * ld_v
@@ -366,6 +392,9 @@ def __vt_dy(vid_d, fid_d, dtype, mesh_dy, g0, g1, g2, g3, schur, mu):
             mesh_dy.verts.dv[v0] += mu * dvTan0
             mesh_dy.verts.dv[v2] += mu * dvTan2
 
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v2] += 1
+
         elif dtype == 2:
             mesh_dy.verts.dv[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0 * ld_v
             mesh_dy.verts.dv[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3 * ld_v
@@ -387,6 +416,9 @@ def __vt_dy(vid_d, fid_d, dtype, mesh_dy, g0, g1, g2, g3, schur, mu):
                 mu = 1.0
             mesh_dy.verts.dv[v0] += mu * dvTan0
             mesh_dy.verts.dv[v3] += mu * dvTan3
+
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v3] += 1
 
         elif dtype == 3:
 
@@ -419,6 +451,10 @@ def __vt_dy(vid_d, fid_d, dtype, mesh_dy, g0, g1, g2, g3, schur, mu):
             mesh_dy.verts.dv[v1] += mu * dvTan1
             mesh_dy.verts.dv[v2] += mu * dvTan2
 
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v1] += 1
+            mesh_dy.verts.nc[v2] += 1
+
         elif dtype == 4:
 
             mesh_dy.verts.dv[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0 * ld_v
@@ -449,6 +485,10 @@ def __vt_dy(vid_d, fid_d, dtype, mesh_dy, g0, g1, g2, g3, schur, mu):
             mesh_dy.verts.dv[v0] += mu * dvTan0
             mesh_dy.verts.dv[v2] += mu * dvTan2
             mesh_dy.verts.dv[v3] += mu * dvTan3
+
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v2] += 1
+            mesh_dy.verts.nc[v3] += 1
 
 
         elif dtype == 5:
@@ -481,6 +521,10 @@ def __vt_dy(vid_d, fid_d, dtype, mesh_dy, g0, g1, g2, g3, schur, mu):
             mesh_dy.verts.dv[v0] += mu * dvTan0
             mesh_dy.verts.dv[v1] += mu * dvTan1
             mesh_dy.verts.dv[v3] += mu * dvTan3
+
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v1] += 1
+            mesh_dy.verts.nc[v3] += 1
 
         elif dtype == 6:
 
@@ -519,6 +563,11 @@ def __vt_dy(vid_d, fid_d, dtype, mesh_dy, g0, g1, g2, g3, schur, mu):
             mesh_dy.verts.dv[v1] += mu * dvTan1
             mesh_dy.verts.dv[v2] += mu * dvTan2
             mesh_dy.verts.dv[v3] += mu * dvTan3
+
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v1] += 1
+            mesh_dy.verts.nc[v2] += 1
+            mesh_dy.verts.nc[v3] += 1
 
 @ti.func
 def solve_collision_ee_static_v(self, eid_d, eid_s, dHat, mu):

@@ -309,12 +309,20 @@ class MeshTaichiWrapper:
     @ti.kernel
     def computeAABB_faces(self, padding: ti.f32):
 
+        aabb_min = ti.math.vec3(1e5)
+        aabb_max = ti.math.vec3(-1e5)
+        ones = ti.math.vec3(1.0)
         for f in self.mesh.faces:
             f.aabb_min = ti.math.min(f.verts[0].x, f.verts[1].x, f.verts[2].x)
             f.aabb_max = ti.math.max(f.verts[0].x, f.verts[1].x, f.verts[2].x)
 
-            f.aabb_min -= padding * ti.math.vec3(1.0)
-            f.aabb_max += padding * ti.math.vec3(1.0)
+            f.aabb_min -= padding * ones
+            f.aabb_max += padding * ones
+        #     ti.atomic_max(aabb_max, f.aabb_max)
+        #     ti.atomic_min(aabb_min, f.aabb_min)
+        #
+        # return aabb_min, aabb_max
+
 
 
     def export(self, scene_name, frame, is_static = False):
