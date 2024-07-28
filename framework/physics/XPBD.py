@@ -10,10 +10,9 @@ class Solver:
                  enable_profiler,
                  mesh_dy,
                  mesh_st,
-                 grid_size,
                  dHat,
-                 YM,
-                 PR,
+                 stiffness_stretch,
+                 stiffness_bending,
                  g,
                  dt):
 
@@ -22,22 +21,11 @@ class Solver:
         self.g = g
         self.dt = dt
         self.dHat = dHat
-        self.YM = YM
-        self.YM_b = YM
+        self.stiffness_stretch = stiffness_stretch
+        self.stiffness_bending = stiffness_bending
         self.damping = 0.001
-
-        self.rest_volume = ti.field(dtype=ti.f32, shape=1)
-        self.rest_volume[0] = 0
-
-        self.current_volume = ti.field(dtype=ti.f32, shape=1)
-        self.current_volume[0] = 0.0
-
-        self.num_inverted_elements = ti.field(dtype=ti.i32, shape=1)
-
-        self.grid_size = grid_size
         self.mu = 0.1
         self.padding = 0.05
-
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -159,6 +147,8 @@ class Solver:
     def solve_spring_constraints_x(self, compliance_stretch: ti.f32, compliance: ti.f32):
 
         for i in range(self.max_num_edges_dy + self.mesh_dy.bending_constraint_count):
+
+            # solve stretch constraints
             if i < self.max_num_edges_dy:
                 bi = i
                 l0 = self.mesh_dy.edges.l0[bi]
@@ -176,6 +166,8 @@ class Solver:
                 self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
                 self.mesh_dy.verts.nc[v0] += 1.0
                 self.mesh_dy.verts.nc[v1] += 1.0
+
+            # solve stretch constraints
             else:
                 bi = i - self.max_num_edges_dy
                 v0, v1 = self.mesh_dy.bending_indices[2 * bi], self.mesh_dy.bending_indices[2 * bi + 1]
@@ -196,32 +188,6 @@ class Solver:
                 self.mesh_dy.verts.dx[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
                 self.mesh_dy.verts.nc[v0] += 1.0
                 self.mesh_dy.verts.nc[v1] += 1.0
-
-
-    @ti.kernel
-    def solve_bending_constraints_x(self, compliance: ti.f32):
-        # print(compliance)
-        for bi in range(self.mesh_dy.bending_constraint_count):
-
-            v0, v1 = self.mesh_dy.bending_indices[2 * bi],self.mesh_dy.bending_indices[2 * bi + 1]
-            l0 = self.mesh_dy.bending_l0[bi]
-            x10 = self.mesh_dy.verts.x[v0] - self.mesh_dy.verts.x[v1]
-            lij = x10.norm()
-
-            C = (lij - l0)
-            nabla_C = x10.normalized()
-
-            e_v0_fixed, e_v1_fixed = self.mesh_dy.verts.fixed[v0], self.mesh_dy.verts.fixed[v1]
-            e_v0_m_inv, e_v1_m_inv = self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.m_inv[v1]
-
-            schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv) * nabla_C.dot(nabla_C)
-            ld = compliance * C / (compliance * schur + 1.0)
-
-            self.mesh_dy.verts.dx[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
-            self.mesh_dy.verts.dx[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
-            self.mesh_dy.verts.nc[v0] += 1.0
-            self.mesh_dy.verts.nc[v1] += 1.0
-
 
     @ti.kernel
     def broadphase_lbvh(self, cell_size_st: ti.math.vec3, origin_st: ti.math.vec3, cell_size_dy: ti.math.vec3, origin_dy: ti.math.vec3):
@@ -333,8 +299,8 @@ class Solver:
 
         self.init_variables()
 
-        compliance_stretch = self.YM * dt * dt
-        compliance_bending = self.YM_b * dt * dt
+        compliance_stretch = self.stiffness_bending * dt * dt
+        compliance_bending = self.stiffness_stretch * dt * dt
 
         self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
 

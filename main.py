@@ -6,7 +6,7 @@ import os
 from framework.physics import XPBD
 from framework.utilities import selection_tool as st
 
-sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, grid_size=ti.math.vec3(4., 4., 4.), YM=5e5, PR=0.3, dHat=4e-3)
+sim = XPBD.Solver(scene1.enable_profiler, scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -31,8 +31,8 @@ dHat_ui = sim.dHat
 
 damping_ui = sim.damping
 
-YM_ui = sim.YM
-YM_b_ui = sim.YM_b
+YM_ui = sim.stiffness_bending
+YM_b_ui = sim.stiffness_stretch
 
 friction_coeff_ui = sim.mu
 
@@ -110,10 +110,10 @@ def show_options():
         sim.mu = friction_coeff_ui
 
     if not YM_old == YM_ui:
-        sim.YM = YM_ui
+        sim.stiffness_bending = YM_ui
 
     if not YM_b_old == YM_b_ui:
-        sim.YM_b = YM_b_ui
+        sim.stiffness_stretch = YM_b_ui
 
     if not old_damping == damping_ui:
         sim.damping = damping_ui
