@@ -429,21 +429,23 @@ class Solver:
         return (v0 == v2) or (v0 == v3) or (v1 == v2) or (v1 == v3)
 
     def solve_spring_constraints_x_parallel(self, compliance: ti.f32):
-        for i in range(self.mesh_dy.num_colors):
-            if i < self.mesh_dy.num_colors - 1:
-                current_offset = self.mesh_dy.color_prefix_sum_np[i]
-                next_offset = self.mesh_dy.color_prefix_sum_np[i + 1]
-                self.parallel_kernel_solver_x(compliance, current_offset, next_offset)
-            elif i == self.mesh_dy.num_colors - 1:
-                current_offset = self.mesh_dy.color_prefix_sum_np[i]
-                next_offset = self.mesh_dy.num_edges
-                self.parallel_kernel_solver_x(compliance, current_offset, next_offset)
+        for i in range(self.mesh_dy.constraint_graph.max_num_colors):
+            if i < self.mesh_dy.constraint_graph.max_num_colors - 1:
+                current_offset = self.mesh_dy.constraint_graph.color_prefix_sum_np[i]
+                next_offset = self.mesh_dy.constraint_graph.color_prefix_sum_np[i + 1]
+                if current_offset < next_offset:
+                    self.parallel_kernel_solver_x(compliance, current_offset, next_offset)
+            elif i == self.mesh_dy.constraint_graph.max_num_colors - 1:
+                current_offset = self.mesh_dy.constraint_graph.color_prefix_sum_np[i]
+                next_offset = self.mesh_dy.constraint_graph.num_edges
+                if current_offset < next_offset:
+                    self.parallel_kernel_solver_x(compliance, current_offset, next_offset)
 
     @ti.kernel
     def parallel_kernel_solver_x(self, compliance: ti.f32, current_offset: ti.i32, next_offset: ti.i32):
         size = next_offset - current_offset
         for i in range(size):
-            edge_idx = self.mesh_dy.sorted_edges_index[i + current_offset]
+            edge_idx = self.mesh_dy.constraint_graph.sorted_edges_index[i + current_offset]
             v0, v1 = self.mesh_dy.edge_indices[2 * edge_idx + 0], self.mesh_dy.edge_indices[2 * edge_idx + 1]
 
             l0 = self.mesh_dy.edges.l0[edge_idx]
