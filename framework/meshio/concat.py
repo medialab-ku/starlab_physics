@@ -49,7 +49,7 @@ def concat_mesh(concat_model_name, model_dir, model_names, translations, scales)
 
     # model_directory_cat = "../models/"
     # model_name_concat = "concat.obj"
-    model_path = Path(__file__).resolve().parent.parent.parent / "models"
+    model_path = Path(__file__).resolve().parent.parent.parent / "models/OBJ"
     # print(model_path)
     model_path_concat = str(model_path / concat_model_name)
     # model_path_concat = os.path.join(model_path, concat_model_name)

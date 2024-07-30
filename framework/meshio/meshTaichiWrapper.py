@@ -5,11 +5,13 @@ import igl
 import os
 import numpy as np
 import random
+from framework.utilities.graph_coloring import GraphColoring
 
 @ti.data_oriented
 class MeshTaichiWrapper:
     def __init__(self,
-                 model_path,
+                 model_dir,
+                 model_name,
                  offsets,
                  trans=ti.math.vec3(0, 0, 0),
                  rot=ti.math.vec3(0, 0, 0),
@@ -17,7 +19,10 @@ class MeshTaichiWrapper:
                  is_static=False):
 
         self.is_static = is_static
-        self.mesh = patcher.load_mesh(model_path, relations=["FV", "EV", "FE"])
+
+        print(model_dir + "/" + model_name)
+
+        self.mesh = patcher.load_mesh(model_dir + "/" + model_name, relations=["FV", "EV", "FE"])
         self.mesh.verts.place({'fixed': ti.f32,
                                'm_inv': ti.f32,
                                'x0': ti.math.vec3,
@@ -42,7 +47,7 @@ class MeshTaichiWrapper:
         self.faces = self.mesh.faces
         self.verts = self.mesh.verts
 
-        print(model_path, "# faces:", len(self.mesh.faces))
+        # print(model_path, "# faces:", len(self.mesh.faces))
 
         # self.setCenterToOrigin()
         self.face_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.faces) * 3)
@@ -58,6 +63,10 @@ class MeshTaichiWrapper:
         self.faces = self.mesh.faces
         self.edges = self.mesh.edges
 
+        self.num_verts = len(self.mesh.verts)
+        self.num_edges = len(self.mesh.edges)
+        self.num_faces = len(self.mesh.faces)
+
         self.trans = trans
         self.rot = rot
         self.scale = scale
@@ -70,6 +79,28 @@ class MeshTaichiWrapper:
         self.eid_np = self.edge_indices.to_numpy()
         self.eid_np = np.reshape(self.eid_np, (len(self.mesh.edges), 2))
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
+
+        self.eid_field = ti.field(dtype=ti.int32, shape=self.eid_np.shape)
+        self.eid_field.from_numpy(self.eid_np)
+
+        # extract OBJ mesh name
+        # self.mesh_name = model_path[len("../models/OBJ/"):]
+        self.mesh_name = model_name[:-len(".obj")]
+        print("name: ", self.mesh_name)
+        if not is_static:
+            print("-------------------------------------------------------------")
+            print("Dynamic mesh graph coloring\n")
+            self.constraint_graph = GraphColoring(
+                mesh_dir=model_dir,
+                mesh_name=self.mesh_name,
+                num_verts=self.num_verts,
+                num_edges=self.num_edges,
+                edges=self.edges,
+                eid_np=self.eid_np,
+                coloring_mode=False)
+            if self.constraint_graph is not None:
+                print("\nThe constraint graph is successfully constructed.\n")
+            print("-------------------------------------------------------------")
 
         self.bending_indices = ti.field(dtype=ti.i32)
         self.bending_constraint_count=0
