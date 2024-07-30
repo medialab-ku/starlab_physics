@@ -356,18 +356,17 @@ class Solver:
 
         self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
 
-        # self.update_dx()
+        self.update_dx()
 
         if self.enable_collision_handling:
 
             self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
 
-            # self.init_variables()
+            self.init_variables()
 
             compliance_collision = 1e8
             self.solve_collision_constraints_x(compliance_collision)
-
-        self.update_dx()
+            self.update_dx()
 
         # compliance_sewing = 0.5 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
