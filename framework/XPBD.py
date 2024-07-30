@@ -445,7 +445,7 @@ class Solver:
     def parallel_kernel_solver_x(self, compliance: ti.f32, current_offset: ti.i32, next_offset: ti.i32):
         size = next_offset - current_offset
         for i in range(size):
-            edge_idx = self.mesh_dy.constraint_graph.sorted_edges_index[i + current_offset]
+            edge_idx = self.mesh_dy.constraint_graph.sorted_edges_sequence_for_color[i + current_offset]
             v0, v1 = self.mesh_dy.edge_indices[2 * edge_idx + 0], self.mesh_dy.edge_indices[2 * edge_idx + 1]
 
             l0 = self.mesh_dy.edges.l0[edge_idx]

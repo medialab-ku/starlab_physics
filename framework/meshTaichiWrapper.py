@@ -77,15 +77,19 @@ class MeshTaichiWrapper:
         # extract OBJ mesh name
         self.mesh_name = model_path[len("../models/OBJ/"):]
         self.mesh_name = self.mesh_name[:-len(".obj")]
-        self.constraint_graph = GraphColoring(
-            mesh_name=self.mesh_name,
-            num_verts=self.num_verts,
-            num_edges=self.num_edges,
-            edges=self.edges,
-            eid_np=self.eid_np,
-            coloring_mode=False)
-        if self.constraint_graph is not None:
-            print("\nThe constraint graph is successfully constructed.\n")
+        if not is_static:
+            print("-------------------------------------------------------------")
+            print("Dynamic mesh graph coloring\n")
+            self.constraint_graph = GraphColoring(
+                mesh_name=self.mesh_name,
+                num_verts=self.num_verts,
+                num_edges=self.num_edges,
+                edges=self.edges,
+                eid_np=self.eid_np,
+                coloring_mode=False)
+            if self.constraint_graph is not None:
+                print("\nThe constraint graph is successfully constructed.\n")
+            print("-------------------------------------------------------------")
 
         self.bending_indices = ti.field(dtype=ti.i32)
         self.initBendingIndices()
