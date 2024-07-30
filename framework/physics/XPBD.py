@@ -23,7 +23,7 @@ class Solver:
         self.stiffness_stretch = stiffness_stretch
         self.stiffness_bending = stiffness_bending
         self.damping = 0.001
-        self.mu = 0.1
+        self.mu = 0.8
         self.padding = 0.05
 
         self.enable_velocity_update = False
@@ -72,21 +72,21 @@ class Solver:
         self.vt_dy_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
         self.vt_dy_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
 
-        self.ee_st_pair_cache_size = 40
-        self.ee_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
-        self.ee_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
-        self.ee_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size, 2))
-        self.ee_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
-        self.ee_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size, 4))
-        self.ee_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
-
-        self.ee_dy_pair_cache_size = 40
-        self.ee_dy_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size))
-        self.ee_dy_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
-        self.ee_dy_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size, 2))
-        self.ee_dy_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
-        self.ee_dy_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size, 4))
-        self.ee_dy_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size))
+        # self.ee_st_pair_cache_size = 40
+        # self.ee_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
+        # self.ee_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
+        # self.ee_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size, 2))
+        # self.ee_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
+        # self.ee_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size, 4))
+        # self.ee_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
+        #
+        # self.ee_dy_pair_cache_size = 40
+        # self.ee_dy_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size))
+        # self.ee_dy_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
+        # self.ee_dy_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size, 2))
+        # self.ee_dy_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
+        # self.ee_dy_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size, 4))
+        # self.ee_dy_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size))
 
         # self.frame = ti.field(dtype=ti.i32, shape=1)
         # self.frame[0] = 0
