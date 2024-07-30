@@ -23,6 +23,11 @@ model_names.append("poncho_8K.obj")
 trans_list.append([0.0, 7.5, 0.0])
 scale_list.append(3.0)
 
+model_names.append("poncho_8K.obj")
+trans_list.append([0.0, 8.0, 0.0])
+scale_list.append(3.0)
+
+
 # append more meshes
 # model_names.append("your-obj-name.obj")
 # trans_list.append([x, y, z])
