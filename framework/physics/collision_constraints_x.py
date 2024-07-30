@@ -464,9 +464,8 @@ def __ee_dy(ei0, ei1, mesh_dy, dHat):
     #     ee_dynamic_pair_g[ei0, ee_dynamic_pair_num[ei0], 3] = g3
     #     ee_dynamic_pair_schur[ei0, ee_dynamic_pair_num[ei0]] = schur
     #     ee_dynamic_pair_num[ei0] += 1
-
 @ti.func
-def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
+def __ee_st(compliance, ei_d, ei_s, mesh_dy, mesh_st, dHat):
 
     v0 = mesh_dy.edge_indices[2 * ei_d + 0]
     v1 = mesh_dy.edge_indices[2 * ei_d + 1]
@@ -478,6 +477,7 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
     x2, x3 = mesh_st.verts.x[v2], mesh_st.verts.x[v3]
 
     dtype = di.d_type_EE(x0, x1, x2, x3)
+    # print("ee type: ", dtype)
     g0, g1, g2, g3 = ti.math.vec3(0.0), ti.math.vec3(0.0), ti.math.vec3(0.0), ti.math.vec3(0.0)
     d = dHat
     schur = 0.0
@@ -485,8 +485,8 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PP(x0, x2)
         if d < dHat:
             g0, g2 = di.g_PP(x0, x2)
-            schur = mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0) + 1e-4
-            ld = (dHat - d) / schur
+            schur = mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
             mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
             mesh_dy.verts.nc[v0] += 1
 
@@ -494,8 +494,8 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PP(x0, x3)
         if d < dHat:
             g0, g3 = di.g_PP(x0, x3)
-            schur = mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0) + 1e-4
-            ld = (dHat - d) / schur
+            schur = mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
             mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
             mesh_dy.verts.nc[v0] += 1
 
@@ -503,8 +503,8 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PE(x0, x2, x3)
         if d < dHat:
             g0, g2, g3 = di.g_PE(x0, x2, x3)
-            schur = mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0) + 1e-4
-            ld = (dHat - d) / schur
+            schur = mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
             mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
             mesh_dy.verts.nc[v0] += 1
 
@@ -512,8 +512,8 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PP(x1, x2)
         if d < dHat:
             g1, g2 = di.g_PP(x1, x2)
-            schur = mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4
-            ld = (dHat - d) / schur
+            schur = mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
 
             mesh_dy.verts.dx[v1] += mesh_dy.verts.m_inv[v1] * ld * g1
             mesh_dy.verts.nc[v1] += 1
@@ -522,9 +522,8 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PP(x1, x3)
         if d < dHat:
             g1, g3 = di.g_PP(x1, x3)
-            schur = mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4
-            ld = (dHat - d) / schur
-
+            schur = mesh_dy.verts.m_inv[v1] * g1.dot(g1)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
             mesh_dy.verts.dx[v1] += mesh_dy.verts.m_inv[v0] * ld * g1
             mesh_dy.verts.nc[v1] += 1
 
@@ -532,8 +531,8 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PE(x1, x2, x3)
         if d < dHat:
             g1, g2, g3 = di.g_PE(x1, x2, x3)
-            schur = mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4
-            ld = (dHat - d) / schur
+            schur = mesh_dy.verts.m_inv[v1] * g1.dot(g1)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
             mesh_dy.verts.dx[v1] += mesh_dy.verts.m_inv[v0] * ld * g1
             mesh_dy.verts.nc[v1] += 1
 
@@ -541,8 +540,8 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PE(x2, x0, x1)
         if d < dHat:
             g2, g0, g1 = di.g_PE(x2, x0, x1)
-            schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0) + mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4
-            ld = (dHat - d) / schur
+            schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0) + mesh_dy.verts.m_inv[v1] * g1.dot(g1)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
 
             mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
             mesh_dy.verts.dx[v1] += mesh_dy.verts.m_inv[v1] * ld * g1
@@ -553,29 +552,29 @@ def __ee_st(ei_d, ei_s, mesh_dy, mesh_st, dHat):
         d = di.d_PE(x3, x0, x1)
         if d < dHat:
             g3, g0, g1 = di.g_PE(x3, x0, x1)
-            schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0) + mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4
-            ld = (dHat - d) / schur
+            schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0) + mesh_dy.verts.m_inv[v1] * g1.dot(g1)
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
 
             mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
             mesh_dy.verts.dx[v1] += mesh_dy.verts.m_inv[v1] * ld * g1
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v1] += 1
 
-
     elif dtype == 8:
         x01 = x0 - x1
         x23 = x2 - x3
         metric_para_EE = x01.cross(x23).norm()
-        if metric_para_EE > 1e-3:
-            d = di.d_EE(x0, x1, x2, x3)
-            if d < dHat:
-                g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
-                schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0) + mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4
-                ld = (dHat - d) / schur
-                mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
-                mesh_dy.verts.dx[v1] += mesh_dy.verts.m_inv[v1] * ld * g1
-                mesh_dy.verts.nc[v0] += 1
-                mesh_dy.verts.nc[v1] += 1
+        # if metric_para_EE < 1e-3: print("parallel!")
+        d = di.d_EE(x0, x1, x2, x3)
+        if d < dHat:
+            g0, g1, g2, g3 = di.g_EE(x0, x1, x2, x3)
+            schur = (mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0) +
+                     mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1))
+            ld = compliance * (dHat - d) / (compliance * schur + 1.0)
+            mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.nc[v0] += 1
+            mesh_dy.verts.nc[v1] += 1
     #
     # if d < dHat and ee_static_pair_num[eid_d] < ee_static_pair_cache_size:
     #     ee_static_pair[eid_d, ee_static_pair_num[eid_d], 0] = eid_s

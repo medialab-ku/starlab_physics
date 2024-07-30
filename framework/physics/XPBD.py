@@ -7,7 +7,6 @@ from ..collision.lbvh_cell import LBVH_CELL
 @ti.data_oriented
 class Solver:
     def __init__(self,
-                 enable_profiler,
                  mesh_dy,
                  mesh_st,
                  dHat,
@@ -30,9 +29,7 @@ class Solver:
         self.enable_velocity_update = False
         self.enable_collision_handling = False
         self.enable_move_obstacle = False
-        self.enable_profiler = enable_profiler
         self.export_mesh = False
-
 
         self.max_num_verts_dy = len(self.mesh_dy.verts)
         self.max_num_edges_dy = len(self.mesh_dy.edges)
@@ -227,26 +224,33 @@ class Solver:
         self.vt_dy_pair_num.fill(0)
 
         d = self.dHat
-        for i in range(2 * self.max_num_verts_dy + self.max_num_verts_st):
+        # for i in range(2 * self.max_num_verts_dy + self.max_num_verts_st):
+        #
+        #     if i < self.max_num_verts_dy:
+        #         vid = i
+        #         for j in range(self.vt_st_candidates_num[vid]):
+        #             fi_s = self.vt_st_candidates[vid, j]
+        #             collision_constraints_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
+        #
+        #     elif i < 2 * self.max_num_verts_dy:
+        #         vid = i - self.max_num_verts_dy
+        #         for j in range(self.vt_dy_candidates_num[vid]):
+        #             fi_d = self.vt_dy_candidates[vid, j]
+        #             if self.is_in_face(vid, fi_d) != True:
+        #                 collision_constraints_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
+        #     else:
+        #         vis = i - 2 * self.max_num_verts_dy
+        #         for j in range(self.tv_st_candidates_num[vis]):
+        #             fi_d = self.tv_st_candidates[vis, j]
+        #             collision_constraints_x.__tv_st(compliance_col, fi_d, vis, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
 
-            if i < self.max_num_verts_dy:
-                vid = i
-                for j in range(self.vt_st_candidates_num[vid]):
-                    fi_s = self.vt_st_candidates[vid, j]
-                    collision_constraints_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
-
-            elif i < 2 * self.max_num_verts_dy:
-                vid = i - self.max_num_verts_dy
-                for j in range(self.vt_dy_candidates_num[vid]):
-                    fi_d = self.vt_dy_candidates[vid, j]
-                    if self.is_in_face(vid, fi_d) != True:
-                        collision_constraints_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
-            else:
-                vis = i - 2 * self.max_num_verts_dy
-                for j in range(self.tv_st_candidates_num[vis]):
-                    fi_d = self.tv_st_candidates[vis, j]
-                    collision_constraints_x.__tv_st(compliance_col, fi_d, vis, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
-
+        for eid in range(self.max_num_edges_dy):
+            # for j in range(self.ee_st_candidates_num[eid]):
+            #     fis = self.ee_st_candidates[eid, j]
+            #     for k in range(3):
+            for eis in range(self.max_num_edges_st):
+                # eis = self.mesh_st.face_edge_indices[3 * fis + k]
+                collision_constraints_x.__ee_st(compliance_col, eid, eis, self.mesh_dy, self.mesh_st, d)
     @ti.kernel
     def solve_collision_constraints_v(self, mu: ti.f32):
 
@@ -304,13 +308,17 @@ class Solver:
 
         self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
 
+        # self.update_dx()
+
         if self.enable_collision_handling:
 
             self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
+
+            # self.init_variables()
+
             compliance_collision = 1e8
             self.solve_collision_constraints_x(compliance_collision)
-
-        self.update_dx()
+            self.update_dx()
 
         # compliance_sewing = 0.5 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
@@ -327,7 +335,8 @@ class Solver:
     @ti.kernel
     def update_dx(self):
         for v in self.mesh_dy.verts:
-            v.y += v.fixed * (v.dx / v.nc)
+            if v.nc > 0:
+                v.y += v.fixed * (v.dx / v.nc)
 
     @ti.kernel
     def set_fixed_vertices(self, fixed_vertices: ti.template()):
