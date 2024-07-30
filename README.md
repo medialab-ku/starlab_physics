@@ -13,6 +13,9 @@
 
     python main.py
 
+![demo_short](https://github.com/user-attachments/assets/eb8bf322-3b65-4c87-bbc3-d96940c1853a)
+
+
 # Frequently used keys
 * **'r'** : reset simulation
 * **' '** : run/stop simulation
