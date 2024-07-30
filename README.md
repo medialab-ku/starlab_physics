@@ -1,43 +1,44 @@
-# VTON
+# XPBD Cloth Simulation
+
+# Environment
 
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
-<a href="https://pytorch.org/get-started/locally/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white">
 
-# Environment
-    
-    Ubuntu 22.04
+# Install
 
-# How to Install Physics
-
-## 1. Add a git submodule
-
-    git submodule add https://github.com/medialab-ku/starlab_physics
-
-## 2. Use a specific branch
-
-Add the following tag:
-
-**branch = v0.1**
-
-in ".gitmodules" as follows:
-    
-    [submodule "starlab_physics"]
-	path = starlab_physics
-	url = https://github.com/medialab-ku/starlab_physics
-	branch = v0.1  
-
-## 3. Pull a git submodule
-
-When you first clone the project, the submodule directory(i.e, "starlab_physics") is empty.
-
-Therefore, you should execute the following commends to clone the submodule project.
-    
-    git submodule init
-    git submodule update --remote
-
-
-## 4. Install required packages
-
-    cd starlab-physics
     pip install -r requirements.txt
+
+# run demo
+
+    python main.py
+
+# Frequently used keys
+* **'r'** : reset simulation
+* **' '** : run/stop simulation
+
+# Changing the simulation mesh
+
+The mesh data(i.e., *.obj) are in the **"starlab_physics/models/OBJ"** folder.
+
+In **"starlab_physics/Scenes/concat_test.py"** file, 
+
+    model_dir = str(model_path / "OBJ")
+    model_names = []
+    trans_list = []
+    scale_list = []
+    
+    ...
+
+    offsets = concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
+
+fill in **...** with your mesh data, as follows:
+
+    model_names.append("your-obj-name.obj")
+    trans_list.append([x, y, z])
+    scale_list.append(size)
+
+# References
+1.
+2. Macklin, Miles, Matthias Müller, and Nuttapong Chentanez. "XPBD: position-based simulation of compliant constrained dynamics." Proceedings of the 9th International Conference on Motion in Games. 2016.
+3Lauterbach, Christian, et al. "Fast BVH construction on GPUs." Computer Graphics Forum. Vol. 28. No. 2. Oxford, UK: Blackwell Publishing Ltd, 2009.

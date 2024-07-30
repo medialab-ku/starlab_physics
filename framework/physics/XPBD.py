@@ -239,8 +239,8 @@ class Solver:
         self.vt_st_pair_num.fill(0)
         self.tv_st_pair_num.fill(0)
         self.vt_dy_pair_num.fill(0)
-        self.ee_st_pair_num.fill(0)
-        self.ee_dy_pair_num.fill(0)
+        # self.ee_st_pair_num.fill(0)
+        # self.ee_dy_pair_num.fill(0)
 
         d = self.dHat
         for i in range(2 * self.max_num_verts_dy + self.max_num_verts_st):

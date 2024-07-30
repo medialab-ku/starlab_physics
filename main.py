@@ -68,14 +68,14 @@ def show_options():
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
-        YM_ui = w.slider_float("YM", YM_ui, 0.0, 1e8)
-        YM_b_ui = w.slider_float("YM_b", YM_b_ui, 0.0, 1e8)
+        YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e8)
+        YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
 
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
-        sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
+        # sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
         sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         mesh_export = w.checkbox("export mesh", mesh_export)
 
