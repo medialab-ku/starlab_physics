@@ -87,7 +87,7 @@ class GraphColoring:
             self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
 
             self.insertPhantom() # insert phantom constraints and phantom particles in the edge graph
-            self.exportColorResult() # export coloring result
+            # self.exportColorResult() # export coloring result
 
     @ti.kernel
     def initEdgeIndicesForColor(self):
@@ -200,20 +200,23 @@ class GraphColoring:
         # insert all cliques of the edge graph in the set S
         # using the Bron-Kerbosch algorithm : https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
         print("- Inserting cliques...", end=" ")
-        cliques = self.BronKerboschIterative()
+        cliques = self.BronKerboschIterative() # the list that stores cliques (in the paper, it is called as the set S)
         print("Done.")
 
-        # ... and sort S in order of decreasing size
+        # ... and sort S(cliques) in order of decreasing size
         print("- Sorting cliques...", end=" ")
         cliques.sort(key=lambda x: len(x), reverse=True)
-        # print("Cliques :", cliques)
-        # print("The number of cliques :", len(cliques))
+        print("Cliques")
+        for i in range(len(cliques)):
+            print(i, ":", cliques[i])
         print("Done.")
 
         # traverse all cliques and insert phantom particles
         print("- Inserting phantom particles...", end=" ")
         enough_clique_size = len(cliques[0]) // 2 # As the paper says, the good trade-off is choosing w(G)/2 as "q"
         # print("The clique size enough to neglect :", enough_clique_size)
+
+        max_shared_vertex = {} # hash table to store vertices which has the largest shared number
         for clique in cliques:
             # execute the iteration until the size of clique is small enough
             if len(clique) < enough_clique_size:
@@ -230,10 +233,21 @@ class GraphColoring:
             vertices_of_edges_np = np.array(verts_of_edges)
             unique_verts, counts = np.unique(vertices_of_edges_np, return_counts=True)
             max_count_vert = unique_verts[np.argmax(counts)]
-            # print("The vertex that have the largest number in this clique :", max_count_vert)
 
+            # insert max vertex in the hash table (Key : clique, Value : vertex)
+            max_shared_vertex[tuple(clique)] = int(max_count_vert)
+        # print(max_shared_vertex)
 
-
+        edge_cliques = {key: set() for key in np.arange(self.num_edges, dtype=int)}
+        count = 0
+        for i in range(len(cliques)):
+            for edge in cliques[i]:
+                edge_cliques[edge].add(i)
+                count += 1
+        print("Cliques per edge")
+        for key in edge_cliques:
+            print(key, ":", edge_cliques[key])
+        print(count)
         print("Done.")
 
         end_time = time.time()
@@ -250,7 +264,7 @@ class GraphColoring:
             R, P, X = stack.pop()
 
             if not P and not X:
-                if len(R) >= 3:
+                if len(R) >= 5:
                     maximal_cliques.append({int(node) for node in R})
                 continue
 
