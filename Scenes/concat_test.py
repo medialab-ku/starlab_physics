@@ -4,7 +4,7 @@ import taichi as ti
 from pathlib import Path
 
 enable_profiler = False
-ti.init(arch=ti.cuda, device_memory_GB=6, kernel_profiler=enable_profiler)
+ti.init(arch=ti.cuda, device_memory_GB=8, kernel_profiler=enable_profiler)
 
 model_path = Path(__file__).resolve().parent.parent / "models"
 
@@ -14,11 +14,11 @@ trans_list = []
 scale_list = []
 
 concat_model_name = "concat.obj"
-
-model_names.append("poncho_8K.obj")
-trans_list.append([0.0, 5.0, 0.0])
-scale_list.append(3.4)
 #
+# model_names.append("poncho_8K.obj")
+# trans_list.append([0.0, 5.0, 0.0])
+# scale_list.append(3.4)
+# #
 model_names.append("poncho_8K.obj")
 trans_list.append([0.0, 5.5, 0.0])
 scale_list.append(3.0)

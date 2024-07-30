@@ -1,7 +1,7 @@
 import taichi as ti
 import json
 
-from Scenes import test_ee as scene1
+from Scenes import concat_test as scene1
 import os
 from framework.physics import XPBD
 from framework.utilities import selection_tool as st
