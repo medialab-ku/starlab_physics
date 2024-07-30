@@ -15,9 +15,9 @@ scale_list = []
 
 concat_model_name = "concat.obj"
 #
-# model_names.append("poncho_8K.obj")
-# trans_list.append([0.0, 5.0, 0.0])
-# scale_list.append(3.4)
+model_names.append("poncho_8K.obj")
+trans_list.append([0.0, 5.0, 0.0])
+scale_list.append(3.4)
 # #
 model_names.append("poncho_8K.obj")
 trans_list.append([0.0, 5.5, 0.0])

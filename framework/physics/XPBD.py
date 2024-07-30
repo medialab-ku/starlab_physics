@@ -214,22 +214,22 @@ class Solver:
                 aabb_max = x + self.padding * ti.math.vec3(1.0)
                 self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid, self.tv_st_candidates, self.tv_st_candidates_num)
 
-        self.ee_st_candidates_num.fill(0)
-        self.ee_dy_candidates_num.fill(0)
-
-        for i in range(2 * self.max_num_edges_dy):
-            if i < self.max_num_edges_dy:
-                ii = i
-                v0, v1 = self.mesh_dy.edge_indices[2 * ii], self.mesh_dy.edge_indices[2 * ii + 1]
-                aabb_min = ti.math.min(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) - self.padding * ti.math.vec3(1.0)
-                aabb_max = ti.math.max(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) + self.padding * ti.math.vec3(1.0)
-                self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, ii, self.ee_st_candidates, self.ee_st_candidates_num)
-            else:
-                ii = i - self.max_num_edges_dy
-                v0, v1 = self.mesh_dy.edge_indices[2 * ii], self.mesh_dy.edge_indices[2 * ii + 1]
-                aabb_min = ti.math.min(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) - self.padding * ti.math.vec3(1.0)
-                aabb_max = ti.math.max(self.mesh_dy.verts.y[v0],self.mesh_dy.verts.y[v1]) + self.padding * ti.math.vec3(1.0)
-                self.lbvh_dy.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, ii, self.ee_dy_candidates, self.ee_dy_candidates_num)
+        # self.ee_st_candidates_num.fill(0)
+        # self.ee_dy_candidates_num.fill(0)
+        #
+        # for i in range(2 * self.max_num_edges_dy):
+        #     if i < self.max_num_edges_dy:
+        #         ii = i
+        #         v0, v1 = self.mesh_dy.edge_indices[2 * ii], self.mesh_dy.edge_indices[2 * ii + 1]
+        #         aabb_min = ti.math.min(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) - self.padding * ti.math.vec3(1.0)
+        #         aabb_max = ti.math.max(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) + self.padding * ti.math.vec3(1.0)
+        #         self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, ii, self.ee_st_candidates, self.ee_st_candidates_num)
+        #     else:
+        #         ii = i - self.max_num_edges_dy
+        #         v0, v1 = self.mesh_dy.edge_indices[2 * ii], self.mesh_dy.edge_indices[2 * ii + 1]
+        #         aabb_min = ti.math.min(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) - self.padding * ti.math.vec3(1.0)
+        #         aabb_max = ti.math.max(self.mesh_dy.verts.y[v0],self.mesh_dy.verts.y[v1]) + self.padding * ti.math.vec3(1.0)
+        #         self.lbvh_dy.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, ii, self.ee_dy_candidates, self.ee_dy_candidates_num)
 
 
 
@@ -263,22 +263,22 @@ class Solver:
                     fi_d = self.tv_st_candidates[vis, j]
                     collision_constraints_x.__tv_st(compliance_col, fi_d, vis, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
 
-        for i in range(2 * self.max_num_edges_dy):
-            if i < self.max_num_edges_dy:
-                eid = i
-                for j in range(self.ee_st_candidates_num[eid]):
-                    fis = self.ee_st_candidates[eid, j]
-                    for k in range(3):
-                        eis = self.mesh_st.face_edge_indices[3 * fis + k]
-                        collision_constraints_x.__ee_st(compliance_col, eid, eis, self.mesh_dy, self.mesh_st, d, self.ee_st_pair_cache_size, self.ee_st_pair, self.ee_st_pair_num, self.ee_st_pair_g, self.ee_st_pair_schur)
-            else:
-                eid = i - self.max_num_edges_dy
-                for j in range(self.ee_dy_candidates_num[eid]):
-                    fid = self.ee_dy_candidates[eid, j]
-                    for k in range(3):
-                        ejd = self.mesh_dy.face_edge_indices[3 * fid + k]
-                        if self.share_vertex(eid, ejd) == False:
-                            collision_constraints_x.__ee_dy(compliance_col, eid, ejd, self.mesh_dy, d, self.ee_dy_pair_cache_size, self.ee_dy_pair, self.ee_dy_pair_num, self.ee_dy_pair_g, self.ee_dy_pair_schur)
+        # for i in range(2 * self.max_num_edges_dy):
+        #     if i < self.max_num_edges_dy:
+        #         eid = i
+        #         for j in range(self.ee_st_candidates_num[eid]):
+        #             fis = self.ee_st_candidates[eid, j]
+        #             for k in range(3):
+        #                 eis = self.mesh_st.face_edge_indices[3 * fis + k]
+        #                 collision_constraints_x.__ee_st(compliance_col, eid, eis, self.mesh_dy, self.mesh_st, d, self.ee_st_pair_cache_size, self.ee_st_pair, self.ee_st_pair_num, self.ee_st_pair_g, self.ee_st_pair_schur)
+        #     else:
+        #         eid = i - self.max_num_edges_dy
+        #         for j in range(self.ee_dy_candidates_num[eid]):
+        #             fid = self.ee_dy_candidates[eid, j]
+        #             for k in range(3):
+        #                 ejd = self.mesh_dy.face_edge_indices[3 * fid + k]
+        #                 if self.share_vertex(eid, ejd) == False:
+        #                     collision_constraints_x.__ee_dy(compliance_col, eid, ejd, self.mesh_dy, d, self.ee_dy_pair_cache_size, self.ee_dy_pair, self.ee_dy_pair_num, self.ee_dy_pair_g, self.ee_dy_pair_schur)
 
     @ti.kernel
     def solve_collision_constraints_v(self, mu: ti.f32):
@@ -310,24 +310,24 @@ class Solver:
                     schur = self.tv_st_pair_schur[vis, j]
                     collision_constraints_v.__tv_st(fi_d, vis, dtype, self.mesh_dy, self.mesh_st, g0, g1, g2, g3, schur, mu)
 
-        for i in range(2 * self.max_num_edges_dy):
-            if i < self.max_num_edges_dy:
-                ei_d = i
-                for j in range(self.ee_st_pair_num[ei_d]):
-                    # eis = self.mesh_st.face_edge_indices[3 * fis + k]
-                    ei_s, dtype = self.ee_st_pair[ei_d, j, 0], self.ee_st_pair[ei_d, j, 1]
-                    g0, g1, g2, g3 = self.ee_st_pair_g[ei_d, j, 0], self.ee_st_pair_g[ei_d, j, 1], self.ee_st_pair_g[ei_d, j, 2], self.ee_st_pair_g[ei_d, j, 3]
-                    schur = self.ee_st_pair_schur[ei_d, j]
-                    collision_constraints_v.__ee_st(ei_d, ei_s, dtype, self.mesh_dy, self.mesh_st, g0, g1, g2, g3, schur, mu)
-
-            else:
-                ei_d = i - self.max_num_edges_dy
-                for j in range(self.ee_dy_pair_num[ei_d]):
-                    # eis = self.mesh_st.face_edge_indices[3 * fis + k]
-                    ej_d, dtype = self.ee_dy_pair[ei_d, j, 0], self.ee_dy_pair[ei_d, j, 1]
-                    g0, g1, g2, g3 = self.ee_dy_pair_g[ei_d, j, 0], self.ee_st_pair_g[ei_d, j, 1], self.ee_st_pair_g[ei_d, j, 2], self.ee_dy_pair_g[ei_d, j, 3]
-                    schur = self.ee_dy_pair_schur[ei_d, j]
-                    collision_constraints_v.__ee_dy(ei_d, ej_d, self.mesh_dy, g0, g1, g2, g3, schur, mu)
+        # for i in range(2 * self.max_num_edges_dy):
+        #     if i < self.max_num_edges_dy:
+        #         ei_d = i
+        #         for j in range(self.ee_st_pair_num[ei_d]):
+        #             # eis = self.mesh_st.face_edge_indices[3 * fis + k]
+        #             ei_s, dtype = self.ee_st_pair[ei_d, j, 0], self.ee_st_pair[ei_d, j, 1]
+        #             g0, g1, g2, g3 = self.ee_st_pair_g[ei_d, j, 0], self.ee_st_pair_g[ei_d, j, 1], self.ee_st_pair_g[ei_d, j, 2], self.ee_st_pair_g[ei_d, j, 3]
+        #             schur = self.ee_st_pair_schur[ei_d, j]
+        #             collision_constraints_v.__ee_st(ei_d, ei_s, dtype, self.mesh_dy, self.mesh_st, g0, g1, g2, g3, schur, mu)
+        #
+        #     else:
+        #         ei_d = i - self.max_num_edges_dy
+        #         for j in range(self.ee_dy_pair_num[ei_d]):
+        #             # eis = self.mesh_st.face_edge_indices[3 * fis + k]
+        #             ej_d, dtype = self.ee_dy_pair[ei_d, j, 0], self.ee_dy_pair[ei_d, j, 1]
+        #             g0, g1, g2, g3 = self.ee_dy_pair_g[ei_d, j, 0], self.ee_st_pair_g[ei_d, j, 1], self.ee_st_pair_g[ei_d, j, 2], self.ee_dy_pair_g[ei_d, j, 3]
+        #             schur = self.ee_dy_pair_schur[ei_d, j]
+        #             collision_constraints_v.__ee_dy(ei_d, ej_d, self.mesh_dy, g0, g1, g2, g3, schur, mu)
 
     @ti.kernel
     def update_x(self, dt: ti.f32):
