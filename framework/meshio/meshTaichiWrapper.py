@@ -20,7 +20,7 @@ class MeshTaichiWrapper:
 
         self.is_static = is_static
 
-        print(model_dir + "/" + model_name)
+        # print(model_dir + "/" + model_name)
 
         self.mesh = patcher.load_mesh(model_dir + "/" + model_name, relations=["FV", "EV", "FE"])
         self.mesh.verts.place({'fixed': ti.f32,
@@ -85,28 +85,27 @@ class MeshTaichiWrapper:
 
         # extract OBJ mesh name
         # self.mesh_name = model_path[len("../models/OBJ/"):]
-        # self.mesh_name = model_name[:-len(".obj")]
-        # print("name: ", self.mesh_name)
-        # if not is_static:
-        #     print("-------------------------------------------------------------")
-        #     print("Dynamic mesh graph coloring\n")
-        #     self.constraint_graph = GraphColoring(
-        #         mesh_dir=model_dir,
-        #         mesh_name=self.mesh_name,
-        #         num_verts=self.num_verts,
-        #         num_edges=self.num_edges,
-        #         edges=self.edges,
-        #         eid_np=self.eid_np,
-        #         coloring_mode=False)
-        #     if self.constraint_graph is not None:
-        #         print("\nThe constraint graph is successfully constructed.\n")
-        #     print("-------------------------------------------------------------")
+        self.mesh_name = model_name
+        print("name: ", self.mesh_name)
+        if not is_static:
+            print("-------------------------------------------------------------")
+            print("Dynamic mesh graph coloring\n")
+            self.constraint_graph = GraphColoring(
+                mesh_dir=model_dir,
+                mesh_name=self.mesh_name,
+                num_verts=self.num_verts,
+                num_edges=self.num_edges,
+                edges=self.edges,
+                eid_np=self.eid_np,
+                coloring_mode=False)
+            if self.constraint_graph is not None:
+                print("\nThe constraint graph is successfully constructed.\n")
+            print("-------------------------------------------------------------")
 
         self.bending_indices = ti.field(dtype=ti.i32)
-        self.bending_constraint_count=0
+        self.bending_constraint_count = 0
         self.bending_l0 = ti.field(dtype=ti.f32)
         self.initBendingIndices()
-
         self.render_bending_vert = ti.Vector.field(3, dtype=ti.f32, shape=(len(self.mesh.verts),))
         self.init_render_bending_vert()
 
@@ -128,7 +127,7 @@ class MeshTaichiWrapper:
         # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
         self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
         bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
-
+        print("# bending: ", self.bending_constraint_count)
         ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
         ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
 

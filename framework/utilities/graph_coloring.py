@@ -66,32 +66,33 @@ class GraphColoring:
             self.adj_edges_list_np = self.adj_edges_list.to_numpy()
             self.available_colors_np = self.available_colors.to_numpy()
 
-            self.colorEdgesGreedy() # coloring edges
+            # coloring edges
+            # self.colorEdgesGreedy()
 
             # after color
-            self.edges_color.from_numpy(self.edges_color_np)
-            self.adj_edges_list.from_numpy(self.adj_edges_list_np)
-            self.available_colors.from_numpy(self.available_colors_np)
-
-            # self.printEdgesColor()
-            self.checkAdjColor() # checking integrity of the graph
-
-            self.sorted_edges_sequence_for_color = self.edge_indices_sequence
-            self.sorted_edges_color = self.edges_color
-            self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.max_num_colors)
-            self.color_prefix_sum.fill(0)
-
-            # before sort
-            self.sorted_edges_sequence_np = self.sorted_edges_sequence_for_color.to_numpy()
-            self.sorted_edges_color_np = self.sorted_edges_color.to_numpy()
-            self.color_prefix_sum_np = self.color_prefix_sum.to_numpy()
-
-            self.colorCountingSort()  # sort
+            # self.edges_color.from_numpy(self.edges_color_np)
+            # self.adj_edges_list.from_numpy(self.adj_edges_list_np)
+            # self.available_colors.from_numpy(self.available_colors_np)
+            #
+            # # self.printEdgesColor()
+            # self.checkAdjColor() # checking integrity of the graph
+            #
+            # self.sorted_edges_sequence_for_color = self.edge_indices_sequence
+            # self.sorted_edges_color = self.edges_color
+            # self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.max_num_colors)
+            # self.color_prefix_sum.fill(0)
+            #
+            # # before sort
+            # self.sorted_edges_sequence_np = self.sorted_edges_sequence_for_color.to_numpy()
+            # self.sorted_edges_color_np = self.sorted_edges_color.to_numpy()
+            # self.color_prefix_sum_np = self.color_prefix_sum.to_numpy()
+            #
+            # self.colorCountingSort()  # sort
 
             # after sort
-            self.sorted_edges_sequence_for_color.from_numpy(self.sorted_edges_sequence_np)
-            self.sorted_edges_color.from_numpy(self.sorted_edges_color_np)
-            self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
+            # self.sorted_edges_sequence_for_color.from_numpy(self.sorted_edges_sequence_np)
+            # self.sorted_edges_color.from_numpy(self.sorted_edges_color_np)
+            # self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
 
             self.insertPhantom() # insert phantom constraints and phantom particles in the edge graph
             self.exportColorResult() # export coloring result
@@ -271,7 +272,7 @@ class GraphColoring:
             R, P, X = stack.pop()
 
             if not P and not X:
-                if len(R) >= 5:
+                if len(R) >= 3:
                     maximal_cliques.append({int(node) for node in R})
                 continue
 

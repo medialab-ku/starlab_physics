@@ -35,13 +35,13 @@ scale_list.append(3.0)
 # trans_list.append([x, y, z])
 # scale_list.append(size)
 
-offsets = concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
+# offsets = concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
 
 #dynamic mesh
-mesh_dy = MeshTaichiWrapper(model_dir, "concat.obj", offsets=offsets, scale=1.0, trans=ti.math.vec3(0, 0.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper(model_dir, "square.obj", offsets=[0], scale=1.0, trans=ti.math.vec3(0, 4.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 #static mesh
-mesh_st = MeshTaichiWrapper(model_dir, "SMPL_APose.obj",  offsets=[0], scale=12.0, trans=ti.math.vec3(0.0, 0.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper(model_dir, "square.obj",  offsets=[0], scale=1.5, trans=ti.math.vec3(0.0, 0.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 
 # if you wan to use another mesh as a static object...
 # mesh_st = MeshTaichiWrapper(str(model_path / "OBJ/your-obj-name.obj"),  offsets=[0], scale=12.0, trans=ti.math.vec3(0.0, 0.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
