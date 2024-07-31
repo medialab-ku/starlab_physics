@@ -180,7 +180,7 @@ class TetMesh:
 
     @ti.kernel
     def set_eid(self):
-        for i in ti.ndrange(self.fid.shape[0]) :
+        for i in ti.ndrange(self.fid.shape[0]):
             self.eid[3 * i, 0] = self.fid[i, 0]
             self.eid[3 * i, 1] = self.fid[i, 1]
 
