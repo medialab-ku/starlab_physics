@@ -95,7 +95,7 @@ class GraphColoring:
             # self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
 
             self.insertPhantom() # insert phantom constraints and phantom particles in the edge graph
-            self.exportColorResult() # export coloring result
+            # self.exportColorResult() # export coloring result
 
     @ti.kernel
     def initEdgeIndicesForColor(self):
@@ -222,7 +222,7 @@ class GraphColoring:
         # traverse all cliques and insert phantom particles
         print("- Inserting phantom particles...", end=" ")
         enough_clique_size = len(cliques[0]) // 2 # As the paper says, the good trade-off is choosing w(G)/2 as "q"
-        # print("The clique size enough to neglect :", enough_clique_size)
+        print("The clique size enough to neglect :", enough_clique_size)
 
         max_shared_vertex = {} # hash table to store vertices which has the largest shared number
         for clique in cliques:
@@ -241,21 +241,21 @@ class GraphColoring:
             vertices_of_edges_np = np.array(verts_of_edges)
             unique_verts, counts = np.unique(vertices_of_edges_np, return_counts=True)
             max_count_vert = unique_verts[np.argmax(counts)]
-
+            print(max_count_vert)
             # insert max vertex in the hash table (Key : clique, Value : vertex)
             max_shared_vertex[tuple(clique)] = int(max_count_vert)
         # print(max_shared_vertex)
 
-        edge_cliques = {key: set() for key in np.arange(self.num_edges, dtype=int)}
-        count = 0
-        for i in range(len(cliques)):
-            for edge in cliques[i]:
-                edge_cliques[edge].add(i)
-                count += 1
-        print("Cliques per edge")
-        for key in edge_cliques:
-            print(key, ":", edge_cliques[key])
-        print(count)
+        # edge_cliques = {key: set() for key in np.arange(self.num_edges, dtype=int)}
+        # count = 0
+        # for i in range(len(cliques)):
+        #     for edge in cliques[i]:
+        #         edge_cliques[edge].add(i)
+        #         count += 1
+        # print("Cliques per edge")
+        # for key in edge_cliques:
+        #     print(key, ":", edge_cliques[key])
+        # print(count)
         print("Done.")
 
         end_time = time.time()

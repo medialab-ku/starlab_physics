@@ -1,8 +1,8 @@
 import csv
 import taichi as ti
 import numpy as np
-from ..physics import collision_constraints_x, collision_constraints_v
-from ..collision.lbvh_cell import LBVH_CELL
+from framework.physics import collision_constraints_x, collision_constraints_v
+from framework.collision.lbvh_cell import LBVH_CELL
 
 @ti.data_oriented
 class Solver:
@@ -25,6 +25,8 @@ class Solver:
         self.damping = 0.001
         self.mu = 0.8
         self.padding = 0.05
+
+        self.solver_type = 0
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -138,7 +140,7 @@ class Solver:
 
 
     @ti.kernel
-    def solve_spring_constraints_x(self, compliance_stretch: ti.f32, compliance: ti.f32):
+    def solve_spring_constraints_jacobi_x(self, compliance_stretch: ti.f32, compliance: ti.f32):
 
         for i in range(self.max_num_edges_dy + self.mesh_dy.bending_constraint_count):
 
@@ -182,6 +184,31 @@ class Solver:
                 self.mesh_dy.verts.dx[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
                 self.mesh_dy.verts.nc[v0] += 1.0
                 self.mesh_dy.verts.nc[v1] += 1.0
+
+    @ti.kernel
+    def solve_stretch_constraints_gauss_seidel_x(self, compliance_stretch: ti.f32):
+
+        ti.loop_config(serialize=True)
+        for i in range(self.max_num_edges_dy):
+            # solve stretch constraints
+            # if i < self.max_num_edges_dy:
+            bi = i
+            l0 = self.mesh_dy.edges.l0[bi]
+            v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
+            x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            lij = x10.norm()
+
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] + self.mesh_dy.verts.fixed[v1] *
+                     self.mesh_dy.verts.m_inv[v1]) * nabla_C.dot(nabla_C)
+
+            ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
+
+            self.mesh_dy.verts.y[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
+            self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
+            # self.mesh_dy.verts.nc[v0] += 1.0
+            # self.mesh_dy.verts.nc[v1] += 1.0
 
     @ti.kernel
     def broadphase_lbvh(self, cell_size_st: ti.math.vec3, origin_st: ti.math.vec3, cell_size_dy: ti.math.vec3, origin_dy: ti.math.vec3):
@@ -354,7 +381,7 @@ class Solver:
         compliance_stretch = self.stiffness_bending * dt * dt
         compliance_bending = self.stiffness_stretch * dt * dt
 
-        self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
+        self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
 
         self.update_dx()
 
@@ -363,6 +390,22 @@ class Solver:
             self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
 
             self.init_variables()
+
+            compliance_collision = 1e8
+            self.solve_collision_constraints_x(compliance_collision)
+            self.update_dx()
+
+    def solve_constraints_gauss_seidel_x(self, dt):
+
+        compliance_stretch = self.stiffness_bending * dt * dt
+        compliance_bending = self.stiffness_stretch * dt * dt
+
+        self.solve_stretch_constraints_gauss_seidel_x(compliance_stretch)
+
+        if self.enable_collision_handling:
+            self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
+
+            # self.init_variables()
 
             compliance_collision = 1e8
             self.solve_collision_constraints_x(compliance_collision)
@@ -460,7 +503,12 @@ class Solver:
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
-            self.solve_constraints_jacobi_x(dt_sub)
+
+            if self.solver_type == 0:
+                self.solve_constraints_jacobi_x(dt_sub)
+            elif self.solver_type == 1:
+                self.solve_constraints_gauss_seidel_x(dt_sub)
+
             self.compute_velocity(damping=self.damping, dt=dt_sub)
 
             if self.enable_velocity_update:

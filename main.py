@@ -27,6 +27,7 @@ n_substep = 20
 frame_end = 100
 
 dt_ui = sim.dt
+solver_type_ui = sim.solver_type
 dHat_ui = sim.dHat
 
 damping_ui = sim.damping
@@ -43,6 +44,7 @@ def show_options():
 
     global n_substep
     global dt_ui
+    global solver_type_ui
     global damping_ui
     global YM_ui
     global YM_b_ui
@@ -55,6 +57,7 @@ def show_options():
     global frame_end
 
     old_dt = dt_ui
+    old_solver_type_ui = solver_type_ui
     old_dHat = dHat_ui
     old_friction_coeff = dHat_ui
     old_damping = damping_ui
@@ -62,6 +65,12 @@ def show_options():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
+
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 1)
+        if solver_type_ui == 0:
+            w.text("solver type: jacobi")
+        elif solver_type_ui == 1:
+            w.text("solver type: gauss seidel")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
@@ -102,6 +111,9 @@ def show_options():
 
     if not old_dt == dt_ui:
         sim.dt = dt_ui
+
+    if not old_solver_type_ui == solver_type_ui:
+        sim.solver_type = solver_type_ui
 
     if not old_dHat == dHat_ui:
         sim.dHat = dHat_ui
@@ -154,7 +166,7 @@ while window.running:
 
         if window.event.key == 'x':  # export selection
             print("==== Vertex EXPORT!! ====")
-            g_selector.export_selection()
+            g_selector.export_sewdlection()
 
         if window.event.key == 'i':
             print("==== IMPORT!! ====")
