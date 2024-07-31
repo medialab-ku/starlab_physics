@@ -119,7 +119,6 @@ class MeshTaichiWrapper:
                 self.face_edge_indices[3 * f.id + d] = f.edges[d].id
 
 
-
     @ti.kernel
     def init_render_bending_vert(self):
         for v in self.mesh.verts:
