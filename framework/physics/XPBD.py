@@ -138,6 +138,9 @@ class Solver:
 
         return (v0 == v2) or (v0 == v3) or (v1 == v2) or (v1 == v3)
 
+    # @ti.kernel
+    # def ThomasAlgorithm(self):
+
 
     @ti.kernel
     def solve_spring_constraints_jacobi_x(self, compliance_stretch: ti.f32, compliance: ti.f32):
@@ -207,6 +210,31 @@ class Solver:
 
             self.mesh_dy.verts.y[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
             self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
+            # self.mesh_dy.verts.nc[v0] += 1.0
+            # self.mesh_dy.verts.nc[v1] += 1.0
+
+    @ti.kernel
+    def solve_bending_constraints_gauss_seidel_x(self, compliance_bending: ti.f32):
+
+        ti.loop_config(serialize=True)
+        for i in range(self.max_num_edges_dy):
+            bi = i
+            v0, v1 = self.mesh_dy.bending_indices[2 * bi], self.mesh_dy.bending_indices[2 * bi + 1]
+            l0 = self.mesh_dy.bending_l0[bi]
+            x10 = self.mesh_dy.verts.x[v0] - self.mesh_dy.verts.x[v1]
+            lij = x10.norm()
+
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+
+            e_v0_fixed, e_v1_fixed = self.mesh_dy.verts.fixed[v0], self.mesh_dy.verts.fixed[v1]
+            e_v0_m_inv, e_v1_m_inv = self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.m_inv[v1]
+
+            schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv) * nabla_C.dot(nabla_C)
+            ld = compliance_bending * C / (compliance_bending * schur + 1.0)
+
+            self.mesh_dy.verts.y[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
+            self.mesh_dy.verts.y[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
             # self.mesh_dy.verts.nc[v0] += 1.0
             # self.mesh_dy.verts.nc[v1] += 1.0
 
@@ -378,8 +406,8 @@ class Solver:
 
         self.init_variables()
 
-        compliance_stretch = self.stiffness_bending * dt * dt
-        compliance_bending = self.stiffness_stretch * dt * dt
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
 
         self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
 
@@ -397,10 +425,11 @@ class Solver:
 
     def solve_constraints_gauss_seidel_x(self, dt):
 
-        compliance_stretch = self.stiffness_bending * dt * dt
-        compliance_bending = self.stiffness_stretch * dt * dt
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
 
         self.solve_stretch_constraints_gauss_seidel_x(compliance_stretch)
+        self.solve_bending_constraints_gauss_seidel_x(compliance_bending)
 
         if self.enable_collision_handling:
             self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)

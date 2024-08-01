@@ -5,6 +5,8 @@ import igl
 import os
 import numpy as np
 import random
+import framework.utilities.graph as graph_utils
+
 from framework.utilities.graph_coloring import GraphColoring
 
 @ti.data_oriented
@@ -78,6 +80,7 @@ class MeshTaichiWrapper:
         self.initEdgeIndices()
         self.eid_np = self.edge_indices.to_numpy()
         self.eid_np = np.reshape(self.eid_np, (len(self.mesh.edges), 2))
+        # print(self.eid_np)
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
         self.eid_field = ti.field(dtype=ti.int32, shape=self.eid_np.shape)
@@ -86,21 +89,41 @@ class MeshTaichiWrapper:
         # extract OBJ mesh name
         # self.mesh_name = model_path[len("../models/OBJ/"):]
         self.mesh_name = model_name
-        print("name: ", self.mesh_name)
-        if not is_static:
-            print("-------------------------------------------------------------")
-            print("Dynamic mesh graph coloring\n")
-            self.constraint_graph = GraphColoring(
-                mesh_dir=model_dir,
-                mesh_name=self.mesh_name,
-                num_verts=self.num_verts,
-                num_edges=self.num_edges,
-                edges=self.edges,
-                eid_np=self.eid_np,
-                coloring_mode=False)
-            if self.constraint_graph is not None:
-                print("\nThe constraint graph is successfully constructed.\n")
-            print("-------------------------------------------------------------")
+
+        if is_static is False:
+            graph = graph_utils.construct_graph(self.num_verts, self.eid_np)
+            graph_utils.eulerization(graph)
+
+            # print(len(graph[0]))
+            # print(graph)
+            # path = graph_utils.bfs_shortest_path(graph, 0, 3)
+            # print("path: ", path)
+
+            # euler_path = graph_utils.Hierholzer(graph)
+            # num_duplicates = np.zeros(self.num_verts, dtype=int)
+            # path_size = len(euler_path)
+            # for i in range(path_size):
+            #     vid = euler_path[i]
+            #     num_duplicates[vid] += 1
+            #
+            # print(num_duplicates)
+            # print("path: ", euler_path)
+
+        # print("name: ", self.mesh_name)
+        # if not is_static:
+        #     print("-------------------------------------------------------------")
+        #     print("Dynamic mesh graph coloring\n")
+        #     self.constraint_graph = GraphColoring(
+        #         mesh_dir=model_dir,
+        #         mesh_name=self.mesh_name,
+        #         num_verts=self.num_verts,
+        #         num_edges=self.num_edges,
+        #         edges=self.edges,
+        #         eid_np=self.eid_np,
+        #         coloring_mode=False)
+        #     if self.constraint_graph is not None:
+        #         print("\nThe constraint graph is successfully constructed.\n")
+        #     print("-------------------------------------------------------------")
 
         self.bending_indices = ti.field(dtype=ti.i32)
         self.bending_constraint_count = 0
@@ -127,7 +150,7 @@ class MeshTaichiWrapper:
         # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
         self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
         bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
-        print("# bending: ", self.bending_constraint_count)
+        # print("# bending: ", self.bending_constraint_count)
         ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
         ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
 

@@ -66,11 +66,13 @@ def show_options():
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 1)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 2)
         if solver_type_ui == 0:
             w.text("solver type: jacobi")
         elif solver_type_ui == 1:
             w.text("solver type: gauss seidel")
+        elif solver_type_ui == 2:
+            w.text("solver type: euler")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
@@ -166,7 +168,7 @@ while window.running:
 
         if window.event.key == 'x':  # export selection
             print("==== Vertex EXPORT!! ====")
-            g_selector.export_sewdlection()
+            g_selector.export_selection()
 
         if window.event.key == 'i':
             print("==== IMPORT!! ====")
