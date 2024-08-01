@@ -92,21 +92,16 @@ class MeshTaichiWrapper:
 
         if is_static is False:
             graph = graph_utils.construct_graph(self.num_verts, self.eid_np)
-            graph_utils.eulerization(graph)
-
-            # print(len(graph[0]))
-            # print(graph)
-            # path = graph_utils.bfs_shortest_path(graph, 0, 3)
-            # print("path: ", path)
-
-            # euler_path = graph_utils.Hierholzer(graph)
-            # num_duplicates = np.zeros(self.num_verts, dtype=int)
-            # path_size = len(euler_path)
-            # for i in range(path_size):
-            #     vid = euler_path[i]
-            #     num_duplicates[vid] += 1
+            euler_graph = graph_utils.eulerization(graph)
+            euler_path = graph_utils.Hierholzer(euler_graph)
+            print(euler_path)
+            num_duplicates = np.zeros(self.num_verts, dtype=int)
+            path_size = len(euler_path)
+            for i in range(path_size):
+                vid = euler_path[i]
+                num_duplicates[vid] += 1
             #
-            # print(num_duplicates)
+            print(num_duplicates)
             # print("path: ", euler_path)
 
         # print("name: ", self.mesh_name)

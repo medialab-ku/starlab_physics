@@ -74,15 +74,39 @@ def floyd_warshall(graph):
 
 def eulerization(graph):
 
-    dist = floyd_warshall(graph)
-    odd_degree_nodes = []
-    num_nodes = len(graph)
-    for i in range(num_nodes):
+    # print(graph)
+    while True:
+        dist = floyd_warshall(graph)
+        odd_degree_nodes = []
+        num_nodes = len(graph)
+        for i in range(num_nodes):
 
-        if len(graph[i]) % 2 == 1:
-            odd_degree_nodes.append(i)
+            if len(graph[i]) % 2 == 1:
+                odd_degree_nodes.append(i)
 
-    print(odd_degree_nodes)
+        # print(odd_degree_nodes)
+        if len(odd_degree_nodes) == 0:
+            break
+
+        dist_min = 1e9
+        pair = [-1, -1]
+        for i in range(0, len(odd_degree_nodes) - 1):
+            i_odd = odd_degree_nodes[i]
+            for j in range(i + 1, len(odd_degree_nodes)):
+                j_odd = odd_degree_nodes[j]
+                dist_ij = dist[i_odd][j_odd]
+                if dist_ij < dist_min:
+                    dist_min = dist_ij
+                    pair = [i_odd, j_odd]
+
+        path = bfs_shortest_path(graph, pair[0], pair[1])
+
+        for i in range(0, len(path) - 1):
+            node_i, node_j = path[i], path[i + 1]
+            graph[node_i].append(node_j)
+            graph[node_j].append(node_i)
+
+    return graph
 
 def Hierholzer(adjacency_list):
     first = 0
