@@ -6,6 +6,9 @@ import os
 import numpy as np
 import random
 import framework.utilities.graph as graph_utils
+import networkx as nx
+import time
+
 
 from framework.utilities.graph_coloring import GraphColoring
 
@@ -91,17 +94,93 @@ class MeshTaichiWrapper:
         self.mesh_name = model_name
 
         if is_static is False:
-            graph = graph_utils.construct_graph(self.num_verts, self.eid_np)
-            euler_graph = graph_utils.eulerization(graph)
-            euler_path = graph_utils.Hierholzer(euler_graph)
-            print(euler_path)
-            num_duplicates = np.zeros(self.num_verts, dtype=int)
-            path_size = len(euler_path)
-            for i in range(path_size):
-                vid = euler_path[i]
-                num_duplicates[vid] += 1
+
+            # if open("./test.abjlist", "r") is False:
+            dir = model_dir[:-len("models/OBJ")] + "test"
+            if not os.path.exists(dir):
+                print("The ""test"" dictionary does not exist. It will be made and then located in your path...")
+                os.mkdir(dir)
+
+            precomputed_graph = dir + "/" + model_name[:-len(".obj")] + ".edgelist"
+            test = dir + "/" + "test" + ".edgelist"
+            if not os.path.isfile(precomputed_graph):
+            # if os.path.exists(dir)
+                print("Constructing an Euler graph...")
+
+                start = time.time()
+                graph = graph_utils.construct_graph(self.num_verts, self.eid_np)
+                graph = nx.eulerize(graph)
+
+                # nx.eulerize
+                if nx.is_eulerian(graph):
+                    print(list(nx.eulerian_path(graph)))
+
+                # odd_degree_nodes = [n for n, d in graph.degree() if d % 2 == 1]
+                # print(odd_degree_nodes)
+                if nx.is_eulerian(graph):
+                    print("Euler graph construction success...")
+
+                end = time.time()
+                print("Euler Graph Elapsed time:", round(end - start, 5), "sec.")
+
+                # print("Elapsed time:", round(end - start, 5), "sec.")
+                print("Exporting the constructed Euler graph...")
+                nx.write_edgelist(graph, precomputed_graph)
+
+            else:
+                print("Importing a precomputed Euler graph...")
+                graph = nx.read_edgelist(precomputed_graph, create_using=nx.MultiGraph)
+                # print(graph)
+                print("Checking integrity...")
+                if nx.is_eulerian(graph):
+                    print("The imported graph is Eulerian!")
+                else:
+                    print("The imported graph is not Eulerian...")
+
+
+
+
+
+
+
+            # odd_degree_nodes = [v for v, d in graph.degree() if d % 2 != 0]
+            # odd_node_graph = nx.Graph()
+            # for i in range(len(odd_degree_nodes)):
+            #     for j in range(i + 1, len(odd_degree_nodes)):
+            #         u, v = odd_degree_nodes[i], odd_degree_nodes[j]
+            #         # Use shortest path length as edge weight
+            #         distance = nx.shortest_path_length(graph, source=u, target=v)
+            #         odd_node_graph.add_edge(u, v, weight=distance)
             #
-            print(num_duplicates)
+            # print(odd_node_graph)
+            # matching = nx.algorithms.matching.min_weight_matching(odd_node_graph)
+            #
+            # for u, v in matching:
+            #     path = nx.shortest_path(graph, source=u, target=v)
+            #     print(path)
+                # for k in range(len(path) - 1):
+                #     graph.add_edge(path[k], path[k + 1])
+
+            # if nx.is_eulerian(graph):
+            #     print("success...")
+            # print(odd_degree_nodes)
+
+            # for node, neighbors in graph.adjacency():
+            #     print(node, list(neighbors))
+            # print(graph.adjacency())
+            # if nx.is_eulerian(graph):
+            #     path = list(nx.eulerian_path(graph))
+            #     print(path)
+            # euler_graph = graph_utils.eulerization(graph)
+            # euler_path = graph_utils.Hierholzer(euler_graph)
+            # print(euler_path)
+            # num_duplicates = np.zeros(self.num_verts, dtype=int)
+            # path_size = len(euler_path)
+            # for i in range(path_size):
+            #     vid = euler_path[i]
+            #     num_duplicates[vid] += 1
+            # #
+            # print(num_duplicates)
             # print("path: ", euler_path)
 
         # print("name: ", self.mesh_name)

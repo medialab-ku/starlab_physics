@@ -1,15 +1,17 @@
 from collections import deque
 import numpy as np
+import networkx as nx
 def construct_graph(num_verts, edges):
     adjacency_list = [[] for _ in range(num_verts)]
-
+    G = nx.MultiGraph()
     for i in range(len(edges)):
-       id0 = edges[i][0]
-       id1 = edges[i][1]
-       adjacency_list[id0].append(id1)
-       adjacency_list[id1].append(id0)
+       # id0 = edges[i][0]
+       # id1 = edges[i][1]
+       # adjacency_list[id0].append(id1)
+       # adjacency_list[id1].append(id0)
+        G.add_edge(edges[i][0], edges[i][1])
 
-    return adjacency_list
+    return G
 
 # def Dijkstra(graph, start):
 def bfs_shortest_path(graph, start, end):
@@ -76,7 +78,7 @@ def eulerization(graph):
 
     # print(graph)
     while True:
-        dist = floyd_warshall(graph)
+        # dist = floyd_warshall(graph)
         odd_degree_nodes = []
         num_nodes = len(graph)
         for i in range(num_nodes):
@@ -89,17 +91,20 @@ def eulerization(graph):
             break
 
         dist_min = 1e9
-        pair = [-1, -1]
+        # pair = [-1, -1]
+        path = []
         for i in range(0, len(odd_degree_nodes) - 1):
             i_odd = odd_degree_nodes[i]
             for j in range(i + 1, len(odd_degree_nodes)):
                 j_odd = odd_degree_nodes[j]
-                dist_ij = dist[i_odd][j_odd]
-                if dist_ij < dist_min:
-                    dist_min = dist_ij
-                    pair = [i_odd, j_odd]
-
-        path = bfs_shortest_path(graph, pair[0], pair[1])
+                path = bfs_shortest_path(graph, i_odd, j_odd)
+                print(len(path))
+                if len(path) < dist_min:
+                    dist_min = len(path)
+                    # print(dist_min)
+                    # pair = [i_odd, j_odd]
+        print("done")
+        # path = bfs_shortest_path(graph, pair[0], pair[1])
 
         for i in range(0, len(path) - 1):
             node_i, node_j = path[i], path[i + 1]
