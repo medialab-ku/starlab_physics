@@ -1,7 +1,7 @@
 import csv
 import taichi as ti
 import numpy as np
-from ..physics import collision_constraints_x, collision_constraints_v
+from ..physics import collision_constraints_x, collision_constraints_v,solve_pressure_constraints_x
 from ..collision.lbvh_cell import LBVH_CELL
 
 @ti.data_oriented
@@ -13,7 +13,7 @@ class Solver:
                  stiffness_stretch,
                  stiffness_bending,
                  g,
-                 dt):
+                 dt,particle):
 
         self.mesh_dy = mesh_dy
         self.mesh_st = mesh_st
@@ -25,6 +25,8 @@ class Solver:
         self.damping = 0.001
         self.mu = 0.8
         self.padding = 0.05
+
+        self.particle = particle
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -38,6 +40,8 @@ class Solver:
         self.max_num_verts_st = 0
         self.max_num_edges_st = 0
         self.max_num_faces_st = 0
+
+
 
         self.lbvh_st = None
         if self.mesh_st != None:
