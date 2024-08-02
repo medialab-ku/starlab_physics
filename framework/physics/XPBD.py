@@ -1,7 +1,7 @@
 import csv
 import taichi as ti
 import numpy as np
-from ..physics import collision_constraints_x, collision_constraints_v,solve_pressure_constraints_x
+from ..physics import collision_constraints_x, collision_constraints_v#, solve_pressure_constraints_x
 from ..collision.lbvh_cell import LBVH_CELL
 
 @ti.data_oriented
@@ -9,11 +9,12 @@ class Solver:
     def __init__(self,
                  mesh_dy,
                  mesh_st,
+                 particles,
                  dHat,
                  stiffness_stretch,
                  stiffness_bending,
                  g,
-                 dt,particle):
+                 dt):
 
         self.mesh_dy = mesh_dy
         self.mesh_st = mesh_st
@@ -25,8 +26,6 @@ class Solver:
         self.damping = 0.001
         self.mu = 0.8
         self.padding = 0.05
-
-        self.particle = particle
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -40,8 +39,6 @@ class Solver:
         self.max_num_verts_st = 0
         self.max_num_edges_st = 0
         self.max_num_faces_st = 0
-
-
 
         self.lbvh_st = None
         if self.mesh_st != None:
@@ -108,6 +105,25 @@ class Solver:
         self.sewing_pairs = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dy))
         self.sewing_pairs_num = ti.field(dtype=ti.int32, shape=())
         self.sewing_pairs_num[None] = 0
+
+
+
+        self.particle = particles
+        self.num_particles = self.particle.num_particles
+
+        self.x_p = self.particle.x
+        self.y_p = self.particle.y
+        self.v_p = self.particle.v
+        self.nc_p = self.particle.nc
+        self.m_inv_p = self.particle.m_inv
+
+        self.c_press = ti.field(dtype = ti.float32, shape = (self.num_particles))
+        self.schur_p = ti.field(dtype = ti.float32, shape = (self.num_particles))
+        self.pressure_cache_size = 40
+        self.num_particle_neighbours = ti.field(dtype = ti.float32, shape = (self.num_particles))
+        self.particle_neighbours = ti.Vector.field(self.pressure_cache_size,dtype = ti.i32, shape = (self.num_particles))
+        self.particle_neighbours_gradients = ti.Vector.field(3,dtype = ti.f32, shape = (self.num_particles))
+
 
     def reset(self):
 
@@ -360,17 +376,19 @@ class Solver:
 
         self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
 
-        self.update_dx()
+        self.solve
 
-        if self.enable_collision_handling:
-
-            self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
-
-            self.init_variables()
-
-            compliance_collision = 1e8
-            self.solve_collision_constraints_x(compliance_collision)
-            self.update_dx()
+        # self.update_dx()
+        #
+        # if self.enable_collision_handling:
+        #
+        #     self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
+        #
+        #     self.init_variables()
+        #
+        #     compliance_collision = 1e8
+        #     self.solve_collision_constraints_x(compliance_collision)
+        #     self.update_dx()
 
         # compliance_sewing = 0.5 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
@@ -443,6 +461,54 @@ class Solver:
             self.mesh_dy.verts.dx[v2_id] += self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id] * ld * nabla_C
             self.mesh_dy.verts.nc[v1_id] += 1.0
             self.mesh_dy.verts.nc[v2_id] += 1.0
+
+    @ti.kernel
+    def solve_pressure_constraints_x(self):
+
+        for vi in ti.ndrange(self.num_particles):
+            self.c_press[vi] = - 1.0
+            nabla_C_ii = ti.math.vec3(0.0)
+            self.schur_p[vi] = 1e-4
+
+            xi = self.y_p[vi]
+            center_cell = self.pos_to_index(self.y_p[vi])
+
+            for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                grid_index = self.flatten_cell_id(center_cell + offset)
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)],
+                                 self.grid_particles_num[grid_index]):
+                    vj = self.cur2org[p_j]
+                    xj = self.y_p[vj]
+                    xji = xj - xi
+
+                    if xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.pressure_cache_size:
+                        self.particle_neighbours[vi, self.num_particle_neighbours[vi]] = vj
+                        nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
+                        self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = nabla_C_ji
+                        self.c_press[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
+                        nabla_C_ii -= nabla_C_ji
+                        self.schur_p[vi] += nabla_C_ji.dot(nabla_C_ji)
+                        ti.atomic_add(self.num_particle_neighbours[vi], 1)
+
+            self.schur_p[vi] += nabla_C_ii.dot(nabla_C_ii)
+
+            if self.c_press[vi] > 0.0:
+                lambda_i = self.c_press[vi] / self.schur_p[vi]
+                for j in range(self.num_particle_neighbours[vi]):
+                    # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
+                    #     grid_index = self.flatten_grid_index(center_cell + offset)
+                    #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+                    #         vj = self.cur2org[p_j]
+                    vj = self.particle_neighbours[vi, j]
+                    xj = self.y_p[vj]
+                    xji = xj - xi
+
+                    nabla_C_ji = self.particle_neighbours_gradients[vi, j]
+                    self.dx[vj] -= lambda_i * nabla_C_ji
+                    self.nc[vj] += 1
+
+            # self.dx[vi] -= lambda_i * nabla_C_ii
+            # self.nc[vi] += 1
 
     def forward(self, n_substeps):
 

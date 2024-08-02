@@ -1,12 +1,14 @@
 import taichi as ti
 import json
 
-from Scenes import concat_test as scene1
+from Scenes import fluid_test as scene1
 import os
+
 from framework.physics import XPBD
 from framework.utilities import selection_tool as st
 
-sim = XPBD.Solver(scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
+sim = XPBD.Solver(scene1.mesh_dy, scene1.mesh_st, scene1.particles, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
+
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -242,6 +244,8 @@ while window.running:
 
     #draw selected particles
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
+    scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
+
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)

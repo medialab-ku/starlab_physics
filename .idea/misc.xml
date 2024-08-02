@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="taichi_sandbox" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="starlab-physics" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="env_meshtaichi" project-jdk-type="Python SDK" />
 </project>
