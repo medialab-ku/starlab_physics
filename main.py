@@ -246,6 +246,9 @@ while window.running:
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
 
+
+    scene.particles(sim.particle.x, radius=0.01, color=(1, 0, 1))
+
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)

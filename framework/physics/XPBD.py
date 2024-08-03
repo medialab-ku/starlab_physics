@@ -111,7 +111,11 @@ class Solver:
         self.particle = particles
         self.num_particles = self.particle.num_particles
 
+        self.boundary = ti.math.vec3(7.0,7.0,7.0)
+        self.particle_rad = 0.15
+
         self.x_p = self.particle.x
+        self.dx_p = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
         self.y_p = self.particle.y
         self.v_p = self.particle.v
         self.nc_p = self.particle.nc
@@ -131,11 +135,30 @@ class Solver:
         if self.mesh_st != None:
             self.mesh_st.reset()
 
+    @ti.func
+    def confine_boundary(self,p):
+        boundary_min = ti.Vector([self.particle_rad - self.boundary[0]/2.0, self.particle_rad,
+                          self.particle_rad - self.boundary[2]/2.0])
+        boundary_max = ti.Vector([self.boundary[0]/2.0 - self.particle_rad, self.boundary[1] - self.particle_rad,
+                          self.boundary[2]/2.0 - self.particle_rad])
+
+        for i in ti.static(range(3)):
+            if p[i] <= boundary_min[i]:
+                p[i] = boundary_min[i] + 1e-4 * ti.random()
+            elif boundary_max[i] <= p[i]:
+                p[i] = boundary_max[i] - 1e-4 * ti.random()
+
+        return p
 
     @ti.kernel
     def compute_y(self, dt: ti.f32):
-        for v in self.mesh_dy.verts:
-            v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
+        # for v in self.mesh_dy.verts:
+        #     v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
+        for i in self.v_p:
+            self.v_p[i] = self.v_p[i] + self.g * dt
+            self.y_p[i] = self.x_p[i] + self.v_p[i] * dt
+            self.y_p[i] = self.confine_boundary(self.y_p[i])
+
 
     @ti.func
     def is_in_face(self, vid, fid):
@@ -352,20 +375,28 @@ class Solver:
     @ti.kernel
     def update_x(self, dt: ti.f32):
 
-        for v in self.mesh_dy.verts:
+        # for v in self.mesh_dy.verts:
+        #     # if v.id != 0:
+        #     v.x += dt * v.v
+
+        for i in self.x_p:
             # if v.id != 0:
-            v.x += dt * v.v
+            self.x_p[i] += dt * self.v_p[i]
 
 
     @ti.kernel
     def compute_velocity(self, damping: ti.f32, dt: ti.f32):
-        for v in self.mesh_dy.verts:
-            v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
+        # for v in self.mesh_dy.verts:
+        #     v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
+        for i in self.x_p:
+            self.v_p[i] = (1.0 - damping) * (self.y_p[i] - self.x_p[i]) / dt
 
     def init_variables(self):
 
         self.mesh_dy.verts.dx.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
+
+        self.dx_p.fill(0.0)
 
     def solve_constraints_jacobi_x(self, dt):
 
@@ -374,9 +405,9 @@ class Solver:
         compliance_stretch = self.stiffness_bending * dt * dt
         compliance_bending = self.stiffness_stretch * dt * dt
 
-        self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
+        # self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
+        self.solve_pressure_constraints_x()
 
-        self.solve
 
         # self.update_dx()
         #
@@ -462,6 +493,11 @@ class Solver:
             self.mesh_dy.verts.nc[v1_id] += 1.0
             self.mesh_dy.verts.nc[v2_id] += 1.0
 
+    @ti.func
+    def pos_to_index(self,y):
+
+        return
+
     @ti.kernel
     def solve_pressure_constraints_x(self):
 
@@ -510,6 +546,8 @@ class Solver:
             # self.dx[vi] -= lambda_i * nabla_C_ii
             # self.nc[vi] += 1
 
+
+
     def forward(self, n_substeps):
 
         # self.load_sewing_pairs()
@@ -527,11 +565,19 @@ class Solver:
                 aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
                 self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
-        for _ in range(n_substeps):
 
+
+
+        for _ in range(n_substeps):
+            print(_)
             self.compute_y(dt_sub)
+            print(_,"compute_y")
+
             self.solve_constraints_jacobi_x(dt_sub)
+            print(_,"jacobi_x")
+
             self.compute_velocity(damping=self.damping, dt=dt_sub)
+            print(_,"compute vel")
 
             if self.enable_velocity_update:
                 self.solve_constraints_v()
