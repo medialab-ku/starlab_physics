@@ -36,6 +36,7 @@ class MeshTaichiWrapper:
                                'v': ti.math.vec3,
                                'dx': ti.math.vec3,
                                'dv': ti.math.vec3,
+                               'dup': ti.i32,
                                'nc': ti.f32})
         self.mesh.edges.place({'l0': ti.f32})
         self.mesh.faces.place({'aabb_min': ti.math.vec3,
@@ -84,6 +85,7 @@ class MeshTaichiWrapper:
         self.eid_np = self.edge_indices.to_numpy()
         self.eid_np = np.reshape(self.eid_np, (len(self.mesh.edges), 2))
         # print(self.eid_np)
+
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
 
         self.eid_field = ti.field(dtype=ti.int32, shape=self.eid_np.shape)
@@ -93,30 +95,25 @@ class MeshTaichiWrapper:
         # self.mesh_name = model_path[len("../models/OBJ/"):]
         self.mesh_name = model_name
 
+        duplicates = np.zeros(self.num_verts, dtype=int)
+        path_np = np.array([])
+        print(path_np)
         if is_static is False:
-
             # if open("./test.abjlist", "r") is False:
-            dir = model_dir[:-len("models/OBJ")] + "test"
+            dir = model_dir[:-len("models/OBJ")] + "euler_graph"
             if not os.path.exists(dir):
-                print("The ""test"" dictionary does not exist. It will be made and then located in your path...")
+                print("The ""euler_graph"" dictionary does not exist.")
+                print(" It will be made and then located in your path...")
                 os.mkdir(dir)
 
             precomputed_graph = dir + "/" + model_name[:-len(".obj")] + ".edgelist"
-            test = dir + "/" + "test" + ".edgelist"
             if not os.path.isfile(precomputed_graph):
-            # if os.path.exists(dir)
                 print("Constructing an Euler graph...")
 
                 start = time.time()
                 graph = graph_utils.construct_graph(self.num_verts, self.eid_np)
                 graph = nx.eulerize(graph)
 
-                # nx.eulerize
-                if nx.is_eulerian(graph):
-                    print(list(nx.eulerian_path(graph)))
-
-                # odd_degree_nodes = [n for n, d in graph.degree() if d % 2 == 1]
-                # print(odd_degree_nodes)
                 if nx.is_eulerian(graph):
                     print("Euler graph construction success...")
 
@@ -126,6 +123,7 @@ class MeshTaichiWrapper:
                 # print("Elapsed time:", round(end - start, 5), "sec.")
                 print("Exporting the constructed Euler graph...")
                 nx.write_edgelist(graph, precomputed_graph)
+                print("Export complete...")
 
             else:
                 print("Importing a precomputed Euler graph...")
@@ -133,71 +131,46 @@ class MeshTaichiWrapper:
                 # print(graph)
                 print("Checking integrity...")
                 if nx.is_eulerian(graph):
+
+                    path = []
                     print("The imported graph is Eulerian!")
+                    euler_path = list(nx.eulerian_path(graph))
+                    path.append(int(euler_path[0][0]))
+                    path.append(int(euler_path[0][1]))
+                    for i in range(1, len(euler_path)):
+                        path.append(int(euler_path[i][1]))
+
+                    path_len = len(path)
+                    path_np = np.array(path)
+                    # print(path_np.shape[0])
+                    for i in range(path_len):
+                        vid = path[i]
+                        duplicates[vid] += 1
+
+                    # print(duplicates)
                 else:
                     print("The imported graph is not Eulerian...")
 
+        # print(path_np)
+        path_len = path_np.shape[0]
+        l0_len = path_len - 1
+        if path_len < 1:
+            path_len = 1
+            l0_len = 1
 
+        # print(path_len)
+        self.x_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
+        self.m_inv_euler = ti.field(dtype=ti.f32, shape=path_len)
+        self.fixed_euler = ti.field(dtype=ti.f32, shape=path_len)
+        self.l0_euler = ti.field(dtype=ti.f32, shape=l0_len)
+        self.path_euler = ti.field(dtype=ti.i32, shape=path_len)
 
-
-
-
-
-            # odd_degree_nodes = [v for v, d in graph.degree() if d % 2 != 0]
-            # odd_node_graph = nx.Graph()
-            # for i in range(len(odd_degree_nodes)):
-            #     for j in range(i + 1, len(odd_degree_nodes)):
-            #         u, v = odd_degree_nodes[i], odd_degree_nodes[j]
-            #         # Use shortest path length as edge weight
-            #         distance = nx.shortest_path_length(graph, source=u, target=v)
-            #         odd_node_graph.add_edge(u, v, weight=distance)
-            #
-            # print(odd_node_graph)
-            # matching = nx.algorithms.matching.min_weight_matching(odd_node_graph)
-            #
-            # for u, v in matching:
-            #     path = nx.shortest_path(graph, source=u, target=v)
-            #     print(path)
-                # for k in range(len(path) - 1):
-                #     graph.add_edge(path[k], path[k + 1])
-
-            # if nx.is_eulerian(graph):
-            #     print("success...")
-            # print(odd_degree_nodes)
-
-            # for node, neighbors in graph.adjacency():
-            #     print(node, list(neighbors))
-            # print(graph.adjacency())
-            # if nx.is_eulerian(graph):
-            #     path = list(nx.eulerian_path(graph))
-            #     print(path)
-            # euler_graph = graph_utils.eulerization(graph)
-            # euler_path = graph_utils.Hierholzer(euler_graph)
-            # print(euler_path)
-            # num_duplicates = np.zeros(self.num_verts, dtype=int)
-            # path_size = len(euler_path)
-            # for i in range(path_size):
-            #     vid = euler_path[i]
-            #     num_duplicates[vid] += 1
-            # #
-            # print(num_duplicates)
-            # print("path: ", euler_path)
-
-        # print("name: ", self.mesh_name)
-        # if not is_static:
-        #     print("-------------------------------------------------------------")
-        #     print("Dynamic mesh graph coloring\n")
-        #     self.constraint_graph = GraphColoring(
-        #         mesh_dir=model_dir,
-        #         mesh_name=self.mesh_name,
-        #         num_verts=self.num_verts,
-        #         num_edges=self.num_edges,
-        #         edges=self.edges,
-        #         eid_np=self.eid_np,
-        #         coloring_mode=False)
-        #     if self.constraint_graph is not None:
-        #         print("\nThe constraint graph is successfully constructed.\n")
-        #     print("-------------------------------------------------------------")
+        if is_static is False:
+            self.path_euler.from_numpy(path_np)
+            print(self.path_euler)
+            self.verts.dup.from_numpy(duplicates)
+            print(self.verts.dup)
+            self.init_l0_euler()
 
         self.bending_indices = ti.field(dtype=ti.i32)
         self.bending_constraint_count = 0
@@ -206,6 +179,14 @@ class MeshTaichiWrapper:
         self.render_bending_vert = ti.Vector.field(3, dtype=ti.f32, shape=(len(self.mesh.verts),))
         self.init_render_bending_vert()
 
+    @ti.kernel
+    def init_l0_euler(self):
+        # print("shape: ", self.path_euler.shape)
+        len = self.path_euler.shape[0]
+        for i in range(len - 1):
+            v0, v1 = self.path_euler[i], self.path_euler[i + 1]
+            x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
+            self.l0_euler[i] = x01.norm()
 
     @ti.kernel
     def init_face_edge_indices(self):

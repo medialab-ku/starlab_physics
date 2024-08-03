@@ -157,7 +157,7 @@ class Solver:
 
                 C = (lij - l0)
                 nabla_C = x10.normalized()
-                schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] + self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1]) * nabla_C.dot(nabla_C)
+                schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] + self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1])
 
                 ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
@@ -180,7 +180,7 @@ class Solver:
                 e_v0_fixed, e_v1_fixed = self.mesh_dy.verts.fixed[v0], self.mesh_dy.verts.fixed[v1]
                 e_v0_m_inv, e_v1_m_inv = self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.m_inv[v1]
 
-                schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv) * nabla_C.dot(nabla_C)
+                schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv)
                 ld = compliance * C / (compliance * schur + 1.0)
 
                 self.mesh_dy.verts.dx[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
@@ -204,7 +204,7 @@ class Solver:
             C = (lij - l0)
             nabla_C = x10.normalized()
             schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] + self.mesh_dy.verts.fixed[v1] *
-                     self.mesh_dy.verts.m_inv[v1]) * nabla_C.dot(nabla_C)
+                     self.mesh_dy.verts.m_inv[v1])
 
             ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
@@ -425,23 +425,82 @@ class Solver:
 
     def solve_constraints_gauss_seidel_x(self, dt):
 
+        self.init_variables()
+
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
         self.solve_stretch_constraints_gauss_seidel_x(compliance_stretch)
-        self.solve_bending_constraints_gauss_seidel_x(compliance_bending)
+        # self.solve_bending_constraints_gauss_seidel_x(compliance_bending)
 
-        if self.enable_collision_handling:
-            self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
-
-            # self.init_variables()
-
-            compliance_collision = 1e8
-            self.solve_collision_constraints_x(compliance_collision)
-            self.update_dx()
+        # if self.enable_collision_handling:
+        #     self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin)
+        #
+        #     # self.init_variables()
+        #
+        #     compliance_collision = 1e8
+        #     self.solve_collision_constraints_x(compliance_collision)
+        #     self.update_dx()
 
         # compliance_sewing = 0.5 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
+
+    def solve_constraints_euler_x(self, dt):
+
+        self.copy_to_duplicates()
+
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
+
+        self.solve_stretch_constraints_euler_x(compliance_stretch)
+
+        self.mesh_dy.verts.y.fill(0.0)
+        self.aggregate_duplicates()
+
+    @ti.kernel
+    def aggregate_duplicates(self):
+
+        path_len = self.mesh_dy.path_euler.shape[0]
+        # print(path_len)
+        ti.loop_config(serialize=True)
+        for i in range(path_len):
+            vid = self.mesh_dy.path_euler[i]
+            self.mesh_dy.verts.y[vid] += self.mesh_dy.x_euler[i]
+
+        for v in self.mesh_dy.verts:
+            v.y /= v.dup
+
+    @ti.kernel
+    def copy_to_duplicates(self):
+
+        path_len = self.mesh_dy.path_euler.shape[0]
+        # print(path_len)
+        for i in range(path_len):
+            vid = self.mesh_dy.path_euler[i]
+            self.mesh_dy.x_euler[i] = self.mesh_dy.verts.y[vid]
+            self.mesh_dy.m_inv_euler[i] = self.mesh_dy.verts.m_inv[vid]
+            self.mesh_dy.fixed_euler[i] = self.mesh_dy.verts.fixed[vid]
+
+
+    @ti.kernel
+    def solve_stretch_constraints_euler_x(self, compliance_stretch: ti.f32):
+
+        path_len = self.mesh_dy.path_euler.shape[0]
+        # print(self.mesh_dy.l0_euler.shape[0])
+        ti.loop_config(serialize=True)
+        for i in range(path_len - 1):
+            l0 = self.mesh_dy.l0_euler[i]
+            x10 = self.mesh_dy.x_euler[i] - self.mesh_dy.x_euler[i + 1]
+            lij = x10.norm()
+
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            schur = (self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] + self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i + 1]) * nabla_C.dot(nabla_C)
+
+            ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
+
+            self.mesh_dy.x_euler[i] -= self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * ld * nabla_C
+            self.mesh_dy.x_euler[i + 1] += self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i + 1] * ld * nabla_C
 
     def solve_constraints_v(self):
         self.mesh_dy.verts.dv.fill(0.0)
@@ -537,6 +596,8 @@ class Solver:
                 self.solve_constraints_jacobi_x(dt_sub)
             elif self.solver_type == 1:
                 self.solve_constraints_gauss_seidel_x(dt_sub)
+            elif self.solver_type == 2:
+                self.solve_constraints_euler_x(dt_sub)
 
             self.compute_velocity(damping=self.damping, dt=dt_sub)
 
