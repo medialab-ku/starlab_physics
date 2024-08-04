@@ -87,7 +87,6 @@ class MeshTaichiWrapper:
         # print(self.eid_np)
 
         self.mesh.verts.x0.copy_from(self.mesh.verts.x)
-
         self.eid_field = ti.field(dtype=ti.int32, shape=self.eid_np.shape)
         self.eid_field.from_numpy(self.eid_np)
 
@@ -97,7 +96,7 @@ class MeshTaichiWrapper:
 
         duplicates = np.zeros(self.num_verts, dtype=int)
         path_np = np.array([])
-        print(path_np)
+        # print(path_np)
         if is_static is False:
             # if open("./test.abjlist", "r") is False:
             dir = model_dir[:-len("models/OBJ")] + "euler_graph"
@@ -151,25 +150,55 @@ class MeshTaichiWrapper:
                 else:
                     print("The imported graph is not Eulerian...")
 
-        # print(path_np)
+
+
+        print(path_np[:4])
         path_len = path_np.shape[0]
         l0_len = path_len - 1
+        # size0 = 2
+        # size1 = 1
+        # # if l0_len % 2 == 0:
+        # #     size1 = size0 = l0_len // 2
+        # # else:
+        # #     size0 = l0_len // 2
+        # #     size1 = l0_len // 2 + 1
+        # #
+        # # print(size0, size1, l0_len)
+        #
+        # print("_____________")
+        #
+        # for i in range(size0):
+        #     print(path_np[2 * i], path_np[2 * i + 1])
+        #     # print(2 * i)
+        #
+        # print("_____________")
+        #
+        # for i in range(size1):
+        #     print(path_np[2 * i + 1], path_np[2 * i + 2])
+        #     # print(2 * i + 1)
+        #
         if path_len < 1:
             path_len = 1
             l0_len = 1
 
-        # print(path_len)
+        # print(round(path_len / self.num_edges, 3))
+        # print(path_len - 1)
         self.x_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
+        self.v_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
+        self.y_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
         self.m_inv_euler = ti.field(dtype=ti.f32, shape=path_len)
         self.fixed_euler = ti.field(dtype=ti.f32, shape=path_len)
         self.l0_euler = ti.field(dtype=ti.f32, shape=l0_len)
+        self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=l0_len)
+        self.colors_edge_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=l0_len)
         self.path_euler = ti.field(dtype=ti.i32, shape=path_len)
+        self.edge_indices_euler = ti.field(dtype=ti.i32, shape=2 * l0_len)
 
         if is_static is False:
             self.path_euler.from_numpy(path_np)
-            print(self.path_euler)
+            # print(self.path_euler)
             self.verts.dup.from_numpy(duplicates)
-            print(self.verts.dup)
+            # print(self.verts.dup)
             self.init_l0_euler()
 
         self.bending_indices = ti.field(dtype=ti.i32)
@@ -187,6 +216,23 @@ class MeshTaichiWrapper:
             v0, v1 = self.path_euler[i], self.path_euler[i + 1]
             x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
             self.l0_euler[i] = x01.norm()
+            self.x_euler[i] = self.verts.x0[v0]
+
+        self.x_euler[len - 1] = self.verts.x0[self.path_euler[len - 1]]
+
+        for i in range(len - 1):
+            self.edge_indices_euler[2 * i] = i
+            self.edge_indices_euler[2 * i + 1] = i + 1
+
+        for i in range(len - 1):
+            v0, v1 = self.edge_indices_euler[2 * i + 0], self.edge_indices_euler[2 * i + 1]
+            self.colored_edge_pos_euler[i] = 0.5 * (self.x_euler[v0] + self.x_euler[v1])
+
+            if i % 2 == 0:
+                self.colors_edge_euler[i] = ti.math.vec3(1.0, 0.0, 0.0)
+            else:
+                self.colors_edge_euler[i] = ti.math.vec3(0.0, 0.0, 1.0)
+
 
     @ti.kernel
     def init_face_edge_indices(self):
@@ -308,6 +354,9 @@ class MeshTaichiWrapper:
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
         self.mesh.verts.v.fill(0.)
         self.mesh.verts.fixed.fill(0.0)
+        self.v_euler.fill(0.0)
+
+        self.init_l0_euler()
 
     @ti.kernel
     def initFaceIndices(self):

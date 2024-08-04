@@ -245,9 +245,13 @@ while window.running:
     if mesh_export and run_sim and frame_cpu < frame_end:
         sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
-    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
-    scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+    # scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
+    # scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
 
+    scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
+    scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
+    # sim.mesh_dy.colors_edge_euler.fill(ti.math.vec3([1.0, 0.0, 0.0]))
+    scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.1,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
     if sim.mesh_st != None:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
@@ -255,7 +259,7 @@ while window.running:
     g_selector.renderTestPos()
 
     #draw selected particles
-    scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
+    scene.particles(g_selector.renderTestPosition, radius=0.02, color=(1, 0, 1))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)

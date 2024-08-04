@@ -26,7 +26,7 @@ class Solver:
         self.mu = 0.8
         self.padding = 0.05
 
-        self.solver_type = 0
+        self.solver_type = 2
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -113,11 +113,15 @@ class Solver:
         if self.mesh_st != None:
             self.mesh_st.reset()
 
-
     @ti.kernel
-    def compute_y(self, dt: ti.f32):
+    def compute_y(self, g: ti.math.vec3, dt: ti.f32):
         for v in self.mesh_dy.verts:
-            v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
+            v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
+
+        path_len = self.mesh_dy.path_euler.shape[0]
+        # print(path_len)
+        for i in range(path_len):
+            self.mesh_dy.y_euler[i] = self.mesh_dy.x_euler[i] + self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt)
 
     @ti.func
     def is_in_face(self, vid, fid):
@@ -145,7 +149,7 @@ class Solver:
     @ti.kernel
     def solve_spring_constraints_jacobi_x(self, compliance_stretch: ti.f32, compliance: ti.f32):
 
-        for i in range(self.max_num_edges_dy + self.mesh_dy.bending_constraint_count):
+        for i in range(self.max_num_edges_dy):
 
             # solve stretch constraints
             if i < self.max_num_edges_dy:
@@ -391,11 +395,31 @@ class Solver:
             # if v.id != 0:
             v.x += dt * v.v
 
+        path_len = self.mesh_dy.path_euler.shape[0]
+        # print(path_len)
+        for i in range(path_len):
+            self.mesh_dy.x_euler[i] += (self.mesh_dy.v_euler[i] * dt)
+
+        for i in range(path_len - 1):
+            v0, v1 = self.mesh_dy.edge_indices_euler[2 * i + 0], self.mesh_dy.edge_indices_euler[2 * i + 1]
+            self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[v0] + self.mesh_dy.x_euler[v1])
+
+            # if i % 2 == 0:
+            #     self.mesh_dy.colored_edge_pos_euler[i] = ti.math.vec3(1.0, 0.0, 0.0)
+            # else:
+            #     self.mesh_dy.colored_edge_pos_euler[i] = ti.math.vec3(0.0, 0.0, 1.0)
+
+
 
     @ti.kernel
     def compute_velocity(self, damping: ti.f32, dt: ti.f32):
         for v in self.mesh_dy.verts:
             v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
+
+        path_len = self.mesh_dy.path_euler.shape[0]
+        # print(path_len)
+        for i in range(path_len):
+            self.mesh_dy.v_euler[i] = (1.0 - damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
 
     def init_variables(self):
 
@@ -447,22 +471,29 @@ class Solver:
 
     def solve_constraints_euler_x(self, dt):
 
-        self.copy_to_duplicates()
+        # self.copy_to_duplicates()
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
-        self.solve_stretch_constraints_euler_x(compliance_stretch)
+        l0_len = self.mesh_dy.x_euler.shape[0] - 1
+        size1 = size0 = l0_len // 2
 
-        self.mesh_dy.verts.y.fill(0.0)
-        self.aggregate_duplicates()
+        if l0_len % 2 == 1:
+            size0 += 1
+
+        self.solve_stretch_constraints_euler_x(compliance_stretch, size0, 0)
+        self.solve_stretch_constraints_euler_x(compliance_stretch, size1, 1)
+
+        # self.mesh_dy.verts.y.fill(0.0)
+        # self.aggregate_duplicates()
 
     @ti.kernel
     def aggregate_duplicates(self):
 
         path_len = self.mesh_dy.path_euler.shape[0]
         # print(path_len)
-        ti.loop_config(serialize=True)
+        # ti.loop_config(serialize=True)
         for i in range(path_len):
             vid = self.mesh_dy.path_euler[i]
             self.mesh_dy.verts.y[vid] += self.mesh_dy.x_euler[i]
@@ -477,30 +508,30 @@ class Solver:
         # print(path_len)
         for i in range(path_len):
             vid = self.mesh_dy.path_euler[i]
-            self.mesh_dy.x_euler[i] = self.mesh_dy.verts.y[vid]
+            # self.mesh_dy.x_euler[i] = self.mesh_dy.verts.y[vid]
             self.mesh_dy.m_inv_euler[i] = self.mesh_dy.verts.m_inv[vid]
             self.mesh_dy.fixed_euler[i] = self.mesh_dy.verts.fixed[vid]
 
-
     @ti.kernel
-    def solve_stretch_constraints_euler_x(self, compliance_stretch: ti.f32):
+    def solve_stretch_constraints_euler_x(self, compliance_stretch: ti.f32, size: ti.int32, offset: ti.i32):
 
         path_len = self.mesh_dy.path_euler.shape[0]
         # print(self.mesh_dy.l0_euler.shape[0])
-        ti.loop_config(serialize=True)
-        for i in range(path_len - 1):
-            l0 = self.mesh_dy.l0_euler[i]
-            x10 = self.mesh_dy.x_euler[i] - self.mesh_dy.x_euler[i + 1]
+        # ti.loop_config(serialize=True)
+        for i in range(size):
+            i_color = 2 * i + offset
+            v0, v1 = self.mesh_dy.edge_indices_euler[2 * i_color + 0], self.mesh_dy.edge_indices_euler[2 * i_color + 1]
+            l0 = self.mesh_dy.l0_euler[i_color]
+            x10 = self.mesh_dy.y_euler[v0] - self.mesh_dy.y_euler[v1]
             lij = x10.norm()
-
             C = (lij - l0)
             nabla_C = x10.normalized()
-            schur = (self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] + self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i + 1]) * nabla_C.dot(nabla_C)
+            schur = (self.mesh_dy.fixed_euler[v0] * self.mesh_dy.m_inv_euler[v0] + self.mesh_dy.fixed_euler[v1] * self.mesh_dy.m_inv_euler[v1])
 
             ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
-            self.mesh_dy.x_euler[i] -= self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * ld * nabla_C
-            self.mesh_dy.x_euler[i + 1] += self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i + 1] * ld * nabla_C
+            self.mesh_dy.y_euler[v0] -= self.mesh_dy.fixed_euler[v0] * self.mesh_dy.m_inv_euler[v0] * ld * nabla_C
+            self.mesh_dy.y_euler[v1] += self.mesh_dy.fixed_euler[v1] * self.mesh_dy.m_inv_euler[v1] * ld * nabla_C
 
     def solve_constraints_v(self):
         self.mesh_dy.verts.dv.fill(0.0)
@@ -590,7 +621,8 @@ class Solver:
 
         for _ in range(n_substeps):
 
-            self.compute_y(dt_sub)
+            self.copy_to_duplicates()
+            self.compute_y(self.g, dt_sub)
 
             if self.solver_type == 0:
                 self.solve_constraints_jacobi_x(dt_sub)
