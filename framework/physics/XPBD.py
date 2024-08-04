@@ -118,10 +118,10 @@ class Solver:
         for v in self.mesh_dy.verts:
             v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
 
-        path_len = self.mesh_dy.path_euler.shape[0]
+        # path_len = self.mesh_dy.path_euler.shape[0]
         # print(path_len)
-        for i in range(path_len):
-            self.mesh_dy.y_euler[i] = self.mesh_dy.x_euler[i] + self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt)
+        # for i in range(path_len):
+        #     self.mesh_dy.y_euler[i] = self.mesh_dy.x_euler[i] + self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt)
 
     @ti.func
     def is_in_face(self, vid, fid):
@@ -395,14 +395,14 @@ class Solver:
             # if v.id != 0:
             v.x += dt * v.v
 
-        path_len = self.mesh_dy.path_euler.shape[0]
+        # path_len = self.mesh_dy.path_euler.shape[0]
         # print(path_len)
-        for i in range(path_len):
-            self.mesh_dy.x_euler[i] += (self.mesh_dy.v_euler[i] * dt)
+        # for i in range(path_len):
+        #     self.mesh_dy.x_euler[i] += (self.mesh_dy.v_euler[i] * dt)
 
-        for i in range(path_len - 1):
-            v0, v1 = self.mesh_dy.edge_indices_euler[2 * i + 0], self.mesh_dy.edge_indices_euler[2 * i + 1]
-            self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[v0] + self.mesh_dy.x_euler[v1])
+        # for i in range(path_len - 1):
+        #     v0, v1 = self.mesh_dy.edge_indices_euler[2 * i + 0], self.mesh_dy.edge_indices_euler[2 * i + 1]
+        #     self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[v0] + self.mesh_dy.x_euler[v1])
 
             # if i % 2 == 0:
             #     self.mesh_dy.colored_edge_pos_euler[i] = ti.math.vec3(1.0, 0.0, 0.0)
@@ -416,10 +416,10 @@ class Solver:
         for v in self.mesh_dy.verts:
             v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
 
-        path_len = self.mesh_dy.path_euler.shape[0]
-        # print(path_len)
-        for i in range(path_len):
-            self.mesh_dy.v_euler[i] = (1.0 - damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
+        # path_len = self.mesh_dy.path_euler.shape[0]
+        # # print(path_len)
+        # for i in range(path_len):
+        #     self.mesh_dy.v_euler[i] = (1.0 - damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
 
     def init_variables(self):
 
@@ -485,8 +485,8 @@ class Solver:
         self.solve_stretch_constraints_euler_x(compliance_stretch, size0, 0)
         self.solve_stretch_constraints_euler_x(compliance_stretch, size1, 1)
 
-        # self.mesh_dy.verts.y.fill(0.0)
-        # self.aggregate_duplicates()
+        self.mesh_dy.verts.y.fill(0.0)
+        self.aggregate_duplicates()
 
     @ti.kernel
     def aggregate_duplicates(self):
@@ -496,10 +496,14 @@ class Solver:
         # ti.loop_config(serialize=True)
         for i in range(path_len):
             vid = self.mesh_dy.path_euler[i]
-            self.mesh_dy.verts.y[vid] += self.mesh_dy.x_euler[i]
+            self.mesh_dy.verts.y[vid] += self.mesh_dy.y_euler[i]
 
         for v in self.mesh_dy.verts:
             v.y /= v.dup
+
+        # for i in range(path_len):
+        #     vid = self.mesh_dy.path_euler[i]
+        #     self.mesh_dy.y_euler[i] = self.mesh_dy.verts.y[vid]
 
     @ti.kernel
     def copy_to_duplicates(self):
@@ -508,7 +512,7 @@ class Solver:
         # print(path_len)
         for i in range(path_len):
             vid = self.mesh_dy.path_euler[i]
-            # self.mesh_dy.x_euler[i] = self.mesh_dy.verts.y[vid]
+            self.mesh_dy.y_euler[i] = self.mesh_dy.verts.y[vid]
             self.mesh_dy.m_inv_euler[i] = self.mesh_dy.verts.m_inv[vid]
             self.mesh_dy.fixed_euler[i] = self.mesh_dy.verts.fixed[vid]
 
@@ -621,8 +625,8 @@ class Solver:
 
         for _ in range(n_substeps):
 
-            self.copy_to_duplicates()
             self.compute_y(self.g, dt_sub)
+            self.copy_to_duplicates()
 
             if self.solver_type == 0:
                 self.solve_constraints_jacobi_x(dt_sub)
