@@ -17,8 +17,7 @@ model_dir = str(model_path) + "/VTK"
 
 model_dir = model_dir+"/cube.vtk"
 
-particles = Particle(model_dir,trans=ti.math.vec3(0,1.0,0.0),)
-
+particles = Particle(model_dir,trans=ti.math.vec3(0,15.0,0.0),scale=ti.math.vec3(1,1,1) * 20,)
 
 
 # model_names = []

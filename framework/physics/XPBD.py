@@ -110,15 +110,15 @@ class Solver:
         self.num_particles = self.particle.num_particles
 
 
-        self.particle_rad = 0.125
-        self.cell_size = 0.251
+        self.particle_rad = 3/40.0
+        self.cell_size = 2.51
         self.cell_size_recpr = 1.0 / self.cell_size
 
-        self.kernel_radius = 0.125/2.0
+        self.kernel_radius = 1.1
         self.spiky_grad_factor = -45.0 / ti.math.pi
         self.poly6_factor = 315.0 / 64.0 / ti.math.pi
 
-        self.bd = np.array([7.0,7.0,7.0])
+        self.bd = np.array([60.0,40.0,20.0])
         self.boundary = (self.bd[0],self.bd[1],self.bd[2])
 
         self.bd = np.floor(self.bd / self.cell_size).astype(int) + 1
@@ -135,16 +135,17 @@ class Solver:
 
         self.particle_cache_size = 1000
         self.nb_particle_cache_size = 1000
+
         self.grid_particles_num = ti.field(dtype = ti.int32,shape = (self.grid_size))
         self.grid_particle_cache = ti.field(dtype = ti.int32,shape = (self.grid_size) + (self.particle_cache_size,))
 
         self.num_particle_neighbours = ti.field(dtype = ti.int32, shape = (self.num_particles))
-
-        self.c_press = ti.field(dtype = ti.float32, shape = (self.num_particles))
-        self.schur_p = ti.field(dtype = ti.float32, shape = (self.num_particles))
-
         self.particle_neighbours = ti.field(dtype = ti.i32, shape = (self.num_particles,self.nb_particle_cache_size))
         self.particle_neighbours_gradients = ti.Vector.field(3,dtype = ti.f32, shape = (self.num_particles,self.nb_particle_cache_size))
+
+        self.c_dens = ti.field(dtype = ti.float32, shape = (self.num_particles))
+        self.schur_p = ti.field(dtype = ti.float32, shape = (self.num_particles))
+
 
 
     def reset(self):
@@ -398,8 +399,7 @@ class Solver:
         #     v.x += dt * v.v
 
         for i in self.x_p:
-            # if v.id != 0:
-            self.x_p[i] += dt * self.v_p[i]
+            self.x_p[i] = self.y_p[i]
 
 
     @ti.kernel
@@ -414,8 +414,8 @@ class Solver:
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[I]=0
 
-        for i in self.num_particle_neighbours :
-            self.num_particle_neighbours[i]=0
+        for i in ti.grouped(self.particle_neighbours) :
+            self.particle_neighbours[i]=-1
 
         for pi in self.y_p:
             grid_index = self.pos_to_index(self.y_p[pi])
@@ -424,9 +424,10 @@ class Solver:
 
 
     def init_variables(self):
+        #
+        # self.mesh_dy.verts.dx.fill(0.0)
+        # self.mesh_dy.verts.nc.fill(0.0)
 
-        self.mesh_dy.verts.dx.fill(0.0)
-        self.mesh_dy.verts.nc.fill(0.0)
         self.dx_p.fill(0.0)
         self.nc_p.fill(0.0)
 
@@ -436,14 +437,14 @@ class Solver:
 
         self.init_variables()
         self.caching_particles()
-        compliance_stretch = self.stiffness_bending * dt * dt
-        compliance_bending = self.stiffness_stretch * dt * dt
 
+        # compliance_stretch = self.stiffness_bending * dt * dt
+        # compliance_bending = self.stiffness_stretch * dt * dt
         # self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
         self.solve_pressure_constraints_x()
 
-
         self.update_dx()
+
         #
         # if self.enable_collision_handling:
         #
@@ -474,7 +475,7 @@ class Solver:
         #         v.y += v.fixed * (v.dx / v.nc)
 
         for pi in self.y_p:
-            self.y_p[pi] = self.y_p[pi] + self.dx_p[pi] / ( self.nc_p[pi] + 1e-4)/50
+            self.y_p[pi] = self.y_p[pi] + self.dx_p[pi] / ( self.nc_p[pi] + 1e-4)
             self.y_p[pi] = self.confine_boundary(self.y_p[pi])
 
 
@@ -563,59 +564,64 @@ class Solver:
         if 0 < s and s < h:
             x = (h * h - s * s) / (h * h * h)
             result = self.poly6_factor * x * x * x
+
         return result
+    @ti.func
+    def check_grid_in(self,gid):
+
+        check_min = (gid[0]<0 )or (gid[1]<0) or (gid[2]<0)
+        check_max = (gid[0]>self.grid_size[0]-1) or (gid[1]>self.grid_size[1]-1) or (gid[2]>self.grid_size[2]-1)
+
+        return check_max or check_min
 
     @ti.kernel
     def solve_pressure_constraints_x(self):
-
+        self.num_particle_neighbours.fill(0)
         for vi in ti.ndrange(self.num_particles):
-            self.c_press[vi] = 0.0
-            nabla_C_ii = ti.math.vec3(0.0)
-            self.schur_p[vi] = 0.0
 
             xi = self.y_p[vi]
-            grid_index = self.pos_to_index(self.y_p[vi])
+
+            self.c_dens[vi] = 0.0
+            self.schur_p[vi] = 0.0
+
+            center_cell = self.pos_to_index(self.y_p[vi])
 
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                grid_index_flat = self.flatten_cell_id(grid_index + offset)
-
-                # for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)],
-                #                  self.grid_particles_num[grid_index]):
-                #     vj = self.cur2org[p_j]
+                grid_index = center_cell + offset
+                if self.check_grid_in(grid_index):
+                    continue
 
                 for p_j in range(self.grid_particles_num[grid_index]):
                     vj = self.grid_particle_cache[grid_index,p_j]
+
+                    # if(self.grid_particles_num[grid_index]==500):
+                    #     print(vi,"up")
+
                     xj = self.y_p[vj]
                     xji = xj - xi
 
-                    if xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.nb_particle_cache_size:
+                    if (xji.norm() < self.kernel_radius and
+                            self.num_particle_neighbours[vi] < self.nb_particle_cache_size):
                         self.particle_neighbours[vi, self.num_particle_neighbours[vi]] = vj
+
                         nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
                         self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = nabla_C_ji
-                        self.c_press[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
-                        nabla_C_ii -= nabla_C_ji
+                        self.c_dens[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
                         self.schur_p[vi] += nabla_C_ji.dot(nabla_C_ji)
                         ti.atomic_add(self.num_particle_neighbours[vi], 1)
 
-            self.schur_p[vi] += nabla_C_ii.dot(nabla_C_ii)
+            self.c_dens[vi] = self.c_dens[vi] - 1
 
-            if self.c_press[vi] > 0.0:
-                lambda_i = self.c_press[vi] / (self.schur_p[vi] + 1e-4)
+            lambda_i = self.c_dens[vi] / (self.schur_p[vi] + 1e-4)
+
+            if self.c_dens[vi] > 0.0:
                 for j in range(self.num_particle_neighbours[vi]):
-                    # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
-                    #     grid_index = self.flatten_grid_index(center_cell + offset)
-                    #     for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
-                    #         vj = self.cur2org[p_j]
-                    vj = self.particle_neighbours[vi, j]
-                    xj = self.y_p[vj]
-                    xji = xj - xi
 
+                    vj = self.particle_neighbours[vi, j]
                     nabla_C_ji = self.particle_neighbours_gradients[vi, j]
                     self.dx_p[vj] -= lambda_i * nabla_C_ji
                     self.nc_p[vj] += 1
 
-            # self.dx[vi] -= lambda_i * nabla_C_ii
-            # self.nc[vi] += 1
 
 
 
@@ -624,33 +630,30 @@ class Solver:
         # self.load_sewing_pairs()
         dt_sub = self.dt / n_substeps
 
-        if self.enable_collision_handling:
-
-            self.mesh_dy.computeAABB_faces(padding=self.padding)
-            aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB(padding=self.padding)
-            self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
-
-            if self.mesh_st != None:
-
-                self.mesh_st.computeAABB_faces(padding=self.padding)
-                aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
-                self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
-
+        # if self.enable_collision_handling:
+        #
+        #     self.mesh_dy.computeAABB_faces(padding=self.padding)
+        #     aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB(padding=self.padding)
+        #     self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
+        #
+        #     if self.mesh_st != None:
+        #
+        #         self.mesh_st.computeAABB_faces(padding=self.padding)
+        #         aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
+        #         self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
+        #
 
 
 
         for _ in range(n_substeps):
-            print(_)
+
             self.compute_y(dt_sub)
-            print(_,"compute_y")
 
             self.solve_constraints_jacobi_x(dt_sub)
-            print(_,"jacobi_x")
+
+
+            # if self.enable_velocity_update:
+            #     self.solve_constraints_v()
 
             self.compute_velocity(damping=self.damping, dt=dt_sub)
-            print(_,"compute vel")
-
-            if self.enable_velocity_update:
-                self.solve_constraints_v()
-
             self.update_x(dt_sub)
