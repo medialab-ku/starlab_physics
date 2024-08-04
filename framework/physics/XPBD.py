@@ -608,7 +608,7 @@ class Solver:
                         self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = nabla_C_ji
                         self.c_dens[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
                         self.schur_p[vi] += nabla_C_ji.dot(nabla_C_ji)
-                        ti.atomic_add(self.num_particle_neighbours[vi], 1)
+                        self.num_particle_neighbours[vi] += 1
 
             self.c_dens[vi] = self.c_dens[vi] - 1
 
