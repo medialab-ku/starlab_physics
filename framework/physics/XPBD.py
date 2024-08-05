@@ -145,6 +145,7 @@ class Solver:
 
         self.c_dens = ti.field(dtype = ti.float32, shape = (self.num_particles))
         self.schur_p = ti.field(dtype = ti.float32, shape = (self.num_particles))
+        self.lambda_i = ti.field(dtype = ti.float32, shape = (self.num_particles))
 
 
 
@@ -412,7 +413,6 @@ class Solver:
     def caching_particles(self):
         for I in ti.grouped(self.grid_particles_num):
             self.grid_particles_num[I]=0
-
         for i in ti.grouped(self.particle_neighbours) :
             self.particle_neighbours[i]=-1
 
@@ -545,7 +545,7 @@ class Solver:
         cny = self.grid_size[1]
         cnz = self.grid_size[2]
 
-        return cnx * cny * cz + cnx* cy + cx
+        return cnx * cny * cz + cnx * cy + cx
 
     @ti.func
     def spiky_gradient(self,r, h):
@@ -556,6 +556,7 @@ class Solver:
             g_factor = self.spiky_grad_factor * x * x
             result = r * g_factor / r_len
         return result
+
     @ti.func
     def poly6_value(self,s, h):
         result = 0.0
@@ -572,18 +573,19 @@ class Solver:
 
         return check_max or check_min
 
+
     @ti.kernel
     def solve_pressure_constraints_x(self):
         self.num_particle_neighbours.fill(0)
 
         for vi in ti.ndrange(self.num_particles):
-            xi = self.y_p[vi]
 
             self.c_dens[vi] = -1.0
-            self.schur_p[vi] = 0.0
+            nabla_C_ii = ti.Vector([0.0,0.0,0.0])
+            self.schur_p[vi] = 1e-4
+            xi = self.y_p[vi]
 
             center_cell = self.pos_to_index(self.y_p[vi])
-
             for offset in ti.grouped(ti.ndrange(*((-1, 2),) * 3)):
                 grid_index = center_cell + offset
                 if self.check_grid_in(grid_index):
@@ -591,34 +593,32 @@ class Solver:
 
                 for p_j in range(self.grid_particles_num[grid_index]):
                     vj = self.grid_particle_cache[grid_index,p_j]
-
-                    # if(self.grid_particles_num[grid_index]==500):
-                    #     print(vi,"up")
-
                     xj = self.y_p[vj]
                     xji = xj - xi
-
-                    if (xji.norm() < self.kernel_radius and
-                            self.num_particle_neighbours[vi] < self.nb_particle_cache_size):
+                    if (xji.norm() < self.kernel_radius and self.num_particle_neighbours[vi] < self.nb_particle_cache_size):
                         self.particle_neighbours[vi, self.num_particle_neighbours[vi]] = vj
+                        nabla_C_ji = -self.spiky_gradient(xji, self.kernel_radius)
+                        nabla_C_ii -= nabla_C_ji
 
-                        nabla_C_ji = self.spiky_gradient(xji, self.kernel_radius)
-                        self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = nabla_C_ji
+                        self.particle_neighbours_gradients[vi, self.num_particle_neighbours[vi]] = -nabla_C_ji
+
                         self.c_dens[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
                         self.schur_p[vi] += nabla_C_ji.dot(nabla_C_ji)
                         self.num_particle_neighbours[vi] += 1
 
-            lambda_i = self.c_dens[vi] / (self.schur_p[vi] + 1e-4)
+            self.schur_p[vi] += nabla_C_ii.dot(nabla_C_ii)
 
-            if self.c_dens[vi] > 0.0:
+            if self.c_dens[vi] > 0.0 :
+                lambda_i = -self.c_dens[vi] / self.schur_p[vi]
+                # nabla_i_c_i = ti.Vector([0.0,0.0,0.0])
+
                 for j in range(self.num_particle_neighbours[vi]):
-
                     vj = self.particle_neighbours[vi, j]
+
                     nabla_C_ji = self.particle_neighbours_gradients[vi, j]
-                    self.dx_p[vj] -= lambda_i * nabla_C_ji
+
+                    self.dx_p[vj] += lambda_i * nabla_C_ji
                     self.nc_p[vj] += 1
-
-
 
 
     def forward(self, n_substeps):
