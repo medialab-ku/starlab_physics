@@ -152,7 +152,7 @@ class MeshTaichiWrapper:
 
 
 
-        print(path_np[:4])
+        # print(path_np[:4])
         path_len = path_np.shape[0]
         l0_len = path_len - 1
         # size0 = 2
@@ -181,7 +181,7 @@ class MeshTaichiWrapper:
             path_len = 1
             l0_len = 1
 
-        # print(round(path_len / self.num_edges, 3))
+        print(round(path_len / self.num_edges, 3))
         # print(path_len - 1)
         self.x_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
         self.v_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
@@ -233,14 +233,12 @@ class MeshTaichiWrapper:
             else:
                 self.colors_edge_euler[i] = ti.math.vec3(0.0, 0.0, 1.0)
 
-
     @ti.kernel
     def init_face_edge_indices(self):
 
         for f in self.mesh.faces:
             for d in range(3):
                 self.face_edge_indices[3 * f.id + d] = f.edges[d].id
-
 
     @ti.kernel
     def init_render_bending_vert(self):
@@ -347,8 +345,6 @@ class MeshTaichiWrapper:
         # print("검산!!!",count == bend_count)
         return pairs
 
-
-
 ###########################
     def reset(self):
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
@@ -365,7 +361,6 @@ class MeshTaichiWrapper:
             self.face_indices[f.id * 3 + 1] = f.verts[1].id
             self.face_indices[f.id * 3 + 2] = f.verts[2].id
 
-
     @ti.kernel
     def initEdgeIndices(self):
         for e in self.mesh.edges:
@@ -380,7 +375,6 @@ class MeshTaichiWrapper:
 
         for v in self.mesh.verts:
             v.m_inv = 1.0 / v.m_inv
-
 
     # @ti.kernel
     # def Hierholzer(self):
@@ -489,9 +483,6 @@ class MeshTaichiWrapper:
         #     ti.atomic_min(aabb_min, f.aabb_min)
         #
         # return aabb_min, aabb_max
-
-
-
     def export(self, scene_name, frame, is_static = False):
         if is_static:
             directory = os.path.join("../results/", scene_name, "StaticMesh_ID_")
