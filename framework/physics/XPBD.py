@@ -145,7 +145,7 @@ class Solver:
 
         self.c_dens = ti.field(dtype = ti.float32, shape = (self.num_particles))
         self.schur_p = ti.field(dtype = ti.float32, shape = (self.num_particles))
-        self.lambda_i = ti.field(dtype = ti.float32, shape = (self.num_particles))
+        self.lambda_dens = ti.field(dtype = ti.float32, shape = (self.num_particles))
 
 
 
@@ -583,6 +583,7 @@ class Solver:
             self.c_dens[vi] = -1.0
             nabla_C_ii = ti.Vector([0.0,0.0,0.0])
             self.schur_p[vi] = 1e-4
+            self.lambda_dens[vi] =0.0
             xi = self.y_p[vi]
 
             center_cell = self.pos_to_index(self.y_p[vi])
@@ -609,15 +610,19 @@ class Solver:
             self.schur_p[vi] += nabla_C_ii.dot(nabla_C_ii)
 
             if self.c_dens[vi] > 0.0 :
-                lambda_i = -self.c_dens[vi] / self.schur_p[vi]
-                # nabla_i_c_i = ti.Vector([0.0,0.0,0.0])
+                self.lambda_dens[vi] = -self.c_dens[vi] / self.schur_p[vi]
 
+            # self.lambda_dens[vi] = -self.c_dens[vi] / self.schur_p[vi]
+
+        for vi in ti.ndrange(self.num_particles):
+            if self.c_dens[vi] > 0.0 :
                 for j in range(self.num_particle_neighbours[vi]):
                     vj = self.particle_neighbours[vi, j]
 
                     nabla_C_ji = self.particle_neighbours_gradients[vi, j]
 
-                    self.dx_p[vj] += lambda_i * nabla_C_ji
+                    # self.dx_p[vj] += self.lambda_dens[vi] * nabla_C_ji
+                    self.dx_p[vj] += (self.lambda_dens[vi] + self.lambda_dens[vj]) * nabla_C_ji
                     self.nc_p[vj] += 1
 
 
