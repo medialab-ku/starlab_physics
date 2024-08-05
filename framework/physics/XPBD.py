@@ -118,7 +118,7 @@ class Solver:
         self.spiky_grad_factor = -45.0 / ti.math.pi
         self.poly6_factor = 315.0 / 64.0 / ti.math.pi
 
-        self.bd = np.array([60.0,40.0,20.0])
+        self.bd = np.array([40.0,40.0,20.0])
         self.boundary = (self.bd[0],self.bd[1],self.bd[2])
 
         self.bd = np.floor(self.bd / self.cell_size).astype(int) + 1
@@ -133,8 +133,8 @@ class Solver:
         self.nc_p = self.particle.nc
         self.m_inv_p = self.particle.m_inv
 
-        self.particle_cache_size = 1000
-        self.nb_particle_cache_size = 1000
+        self.particle_cache_size = 5000
+        self.nb_particle_cache_size = 5000
 
         self.grid_particles_num = ti.field(dtype = ti.int32,shape = (self.grid_size))
         self.grid_particle_cache = ti.field(dtype = ti.int32,shape = (self.grid_size) + (self.particle_cache_size,))
@@ -151,15 +151,14 @@ class Solver:
     def reset(self):
 
         self.mesh_dy.reset()
+        self.particle.reset()
         if self.mesh_st != None:
             self.mesh_st.reset()
 
     @ti.func
     def confine_boundary(self,p):
-        boundary_min = ti.Vector([self.particle_rad - self.boundary[0]/2.0, self.particle_rad,
-                          self.particle_rad - self.boundary[2]/2.0])
-        boundary_max = ti.Vector([self.boundary[0]/2.0 - self.particle_rad, self.boundary[1] - self.particle_rad,
-                          self.boundary[2]/2.0 - self.particle_rad])
+        boundary_min = ti.Vector([self.particle_rad - self.boundary[0]/2.0, self.particle_rad,self.particle_rad - self.boundary[2]/2.0])
+        boundary_max = ti.Vector([self.boundary[0]/2.0 - self.particle_rad, self.boundary[1] - self.particle_rad, self.boundary[2]/2.0 - self.particle_rad])
 
         for i in ti.static(range(3)):
             if p[i] <= boundary_min[i]:
@@ -392,22 +391,22 @@ class Solver:
         #             collision_constraints_v.__ee_dy(ei_d, ej_d, self.mesh_dy, g0, g1, g2, g3, schur, mu)
 
     @ti.kernel
-    def update_x(self, dt: ti.f32):
+    def update_state(self, dt: ti.f32):
 
         # for v in self.mesh_dy.verts:
         #     # if v.id != 0:
         #     v.x += dt * v.v
-
         for i in self.x_p:
-            self.x_p[i] = self.y_p[i]
+            new_x = self.confine_boundary(self.y_p[i])
+            self.v_p[i] = (1-self.damping)*(new_x - self.x_p[i]) / dt
+            self.x_p[i] = new_x
 
 
     @ti.kernel
     def compute_velocity(self, damping: ti.f32, dt: ti.f32):
         # for v in self.mesh_dy.verts:
         #     v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
-        for i in self.x_p:
-            self.v_p[i] = (1.0 - damping) * (self.y_p[i] - self.x_p[i]) / dt
+        pass
 
     @ti.kernel
     def caching_particles(self):
@@ -476,7 +475,6 @@ class Solver:
 
         for pi in self.y_p:
             self.y_p[pi] = self.y_p[pi] + self.dx_p[pi] / ( self.nc_p[pi] + 1e-4)
-            self.y_p[pi] = self.confine_boundary(self.y_p[pi])
 
 
     @ti.kernel
@@ -577,11 +575,11 @@ class Solver:
     @ti.kernel
     def solve_pressure_constraints_x(self):
         self.num_particle_neighbours.fill(0)
-        for vi in ti.ndrange(self.num_particles):
 
+        for vi in ti.ndrange(self.num_particles):
             xi = self.y_p[vi]
 
-            self.c_dens[vi] = 0.0
+            self.c_dens[vi] = -1.0
             self.schur_p[vi] = 0.0
 
             center_cell = self.pos_to_index(self.y_p[vi])
@@ -609,8 +607,6 @@ class Solver:
                         self.c_dens[vi] += self.poly6_value(xji.norm(), self.kernel_radius)
                         self.schur_p[vi] += nabla_C_ji.dot(nabla_C_ji)
                         self.num_particle_neighbours[vi] += 1
-
-            self.c_dens[vi] = self.c_dens[vi] - 1
 
             lambda_i = self.c_dens[vi] / (self.schur_p[vi] + 1e-4)
 
@@ -651,9 +647,9 @@ class Solver:
 
             self.solve_constraints_jacobi_x(dt_sub)
 
-
             # if self.enable_velocity_update:
             #     self.solve_constraints_v()
 
-            self.compute_velocity(damping=self.damping, dt=dt_sub)
-            self.update_x(dt_sub)
+            self.update_state(dt_sub)
+
+            # self.compute_velocity(damping=self.damping, dt=dt_sub)
