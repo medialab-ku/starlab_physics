@@ -9,7 +9,6 @@ import framework.utilities.graph as graph_utils
 import networkx as nx
 import time
 
-
 from framework.utilities.graph_coloring import GraphColoring
 
 @ti.data_oriented
@@ -146,6 +145,16 @@ class MeshTaichiWrapper:
                         vid = path[i]
                         duplicates[vid] += 1
 
+                    # degree_list = list(graph.degree)
+                    # for i in range(self.num_verts):
+                    #     vid = int(degree_list[i][0])
+                    #     deg = int(degree_list[i][1])
+
+
+
+                    #     duplicates[vid] = deg
+                    # print(degree_list)
+
                     # print(duplicates)
                 else:
                     print("The imported graph is not Eulerian...")
@@ -184,10 +193,20 @@ class MeshTaichiWrapper:
         print(round(path_len / self.num_edges, 3))
         # print(path_len - 1)
         self.x_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
+        self.dx_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
         self.v_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
         self.y_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
+        self.g_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
+
         self.m_inv_euler = ti.field(dtype=ti.f32, shape=path_len)
         self.fixed_euler = ti.field(dtype=ti.f32, shape=path_len)
+
+        self.a_euler = ti.field(dtype=ti.f32, shape=path_len) # top 1st off-diagonal elements
+        self.b_euler = ti.field(dtype=ti.f32, shape=path_len) # diag elements
+        self.c_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
+        self.c_tilde_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
+        self.d_tilde_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
+
         self.l0_euler = ti.field(dtype=ti.f32, shape=l0_len)
         self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=l0_len)
         self.colors_edge_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=l0_len)

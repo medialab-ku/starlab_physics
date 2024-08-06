@@ -469,7 +469,8 @@ class Solver:
         # compliance_sewing = 0.5 * self.YM * dt * dt
         # self.solve_sewing_constraints_x(compliance_sewing)
 
-    def solve_constraints_euler_x(self, dt):
+    #pgs(parallel gauss-seidel via graph coloring)
+    def solve_constraints_euler_pgs_x(self, dt):
 
         # self.copy_to_duplicates()
 
@@ -484,6 +485,29 @@ class Solver:
 
         self.solve_stretch_constraints_euler_x(compliance_stretch, size0, 0)
         self.solve_stretch_constraints_euler_x(compliance_stretch, size1, 1)
+
+        self.mesh_dy.verts.y.fill(0.0)
+        self.aggregate_duplicates()
+
+    #ls: linear solve
+    def solve_constraints_euler_ls_x(self, dt):
+
+        # self.copy_to_duplicates()
+
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
+
+        l0_len = self.mesh_dy.x_euler.shape[0] - 1
+        size1 = size0 = l0_len // 2
+
+        if l0_len % 2 == 1:
+            size0 += 1
+
+        self.compute_grad_and_hessian_stretch_constraints_euler_x(compliance_stretch, size0, 0)
+        self.solve_ls_thomas_euler_x(a=self.mesh_dy.a_euler, b=self.mesh_dy.b_euler, c=self.mesh_dy.c_euler, d=self.mesh_dy.g_euler,
+                                     c_tilde=self.mesh_dy.c_tilde_euler, d_tilde=self.mesh_dy.d_tilde_euler, dx=self.mesh_dy.dx_euler)
+
+        self.update_dx_euler()
 
         self.mesh_dy.verts.y.fill(0.0)
         self.aggregate_duplicates()
@@ -537,6 +561,54 @@ class Solver:
             self.mesh_dy.y_euler[v0] -= self.mesh_dy.fixed_euler[v0] * self.mesh_dy.m_inv_euler[v0] * ld * nabla_C
             self.mesh_dy.y_euler[v1] += self.mesh_dy.fixed_euler[v1] * self.mesh_dy.m_inv_euler[v1] * ld * nabla_C
 
+    @ti.kernel
+    def compute_grad_and_hessian_stretch_constraints_euler_x(self, compliance_stretch: ti.f32, size: ti.int32, offset: ti.i32):
+
+        path_len = self.mesh_dy.path_euler.shape[0]
+        # print(self.mesh_dy.l0_euler.shape[0])
+        # ti.loop_config(serialize=True)
+        for i in range(size):
+            i_color = 2 * i + offset
+            v0, v1 = self.mesh_dy.edge_indices_euler[2 * i_color + 0], self.mesh_dy.edge_indices_euler[2 * i_color + 1]
+            l0 = self.mesh_dy.l0_euler[i_color]
+            x10 = self.mesh_dy.y_euler[v0] - self.mesh_dy.y_euler[v1]
+            lij = x10.norm()
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            schur = (self.mesh_dy.fixed_euler[v0] * self.mesh_dy.m_inv_euler[v0] + self.mesh_dy.fixed_euler[v1] *
+                     self.mesh_dy.m_inv_euler[v1])
+
+            ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
+
+            self.mesh_dy.y_euler[v0] -= self.mesh_dy.fixed_euler[v0] * self.mesh_dy.m_inv_euler[v0] * ld * nabla_C
+            self.mesh_dy.y_euler[v1] += self.mesh_dy.fixed_euler[v1] * self.mesh_dy.m_inv_euler[v1] * ld * nabla_C
+
+    @ti.kernel
+    def solve_ls_thomas_euler_x(self, a: ti.template(), b: ti.template(), c: ti.template(), d: ti.template(),
+                                                                      c_tilde: ti.template(), d_tilde: ti.template(), dx: ti.template()):
+
+        numVerts = b.shape[0]
+        c_tilde[0] = c[0] / b[0]
+
+        ti.loop_config(serialize=True)
+        for i in range(numVerts - 2):
+            id = i + 1
+            c_tilde[id] = c[id] / (b[id] - a[id] * c[id - 1])
+
+        d_tilde[0] = d[0] / b[0]
+
+        ti.loop_config(serialize=True)
+        for i in range(numVerts - 1):
+            id = i + 1
+            d_tilde[id] = (d[id] - a[id] * d_tilde[id - 1]) / (b[id] - a[id] * c_tilde[id - 1])
+
+        dx[numVerts - 1] = d[numVerts - 1]
+
+        ti.loop_config(serialize=True)
+        for i in range(numVerts - 1):
+            id = numVerts - 2 - i
+            dx[id] = d_tilde[id] - c_tilde[id] * dx[id + 1]
+
     def solve_constraints_v(self):
         self.mesh_dy.verts.dv.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
@@ -557,6 +629,11 @@ class Solver:
             vid = self.mesh_dy.path_euler[i]
             self.mesh_dy.y_euler[i] = self.mesh_dy.verts.y[vid]
 
+    @ti.kernel
+    def update_dx_euler(self):
+        path_len = self.mesh_dy.path_euler.shape[0]
+        for i in range(path_len):
+            self.mesh_dy.y_euler[i] += self.mesh_dy.dx_euler[i]
 
     @ti.kernel
     def set_fixed_vertices(self, fixed_vertices: ti.template()):
@@ -640,7 +717,11 @@ class Solver:
             elif self.solver_type == 1:
                 self.solve_constraints_gauss_seidel_x(dt_sub)
             elif self.solver_type == 2:
-                self.solve_constraints_euler_x(dt_sub)
+                self.solve_constraints_euler_pgs_x(dt_sub)
+            elif self.solver_type == 3:
+                self.solve_constraints_euler_ls_x(dt_sub)
+
+
 
             self.compute_velocity(damping=self.damping, dt=dt_sub)
 
