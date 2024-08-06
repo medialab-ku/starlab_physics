@@ -99,6 +99,7 @@ class MeshTaichiWrapper:
         if is_static is False:
             # if open("./test.abjlist", "r") is False:
             dir = model_dir[:-len("models/OBJ")] + "euler_graph"
+            print(dir)
             if not os.path.exists(dir):
                 print("The ""euler_graph"" dictionary does not exist.")
                 print(" It will be made and then located in your path...")

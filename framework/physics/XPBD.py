@@ -493,19 +493,18 @@ class Solver:
     def solve_constraints_euler_ls_x(self, dt):
 
         # self.copy_to_duplicates()
-
         compliance_stretch = self.stiffness_stretch * dt * dt
-        compliance_bending = self.stiffness_bending * dt * dt
+        self.mesh_dy.a_euler.fill(0.0)
+        self.mesh_dy.b_euler.fill(0.0)
+        self.mesh_dy.c_euler.fill(0.0)
 
-        l0_len = self.mesh_dy.x_euler.shape[0] - 1
-        size1 = size0 = l0_len // 2
+        self.compute_grad_and_hessian_stretch_constraints_euler_x(compliance_stretch)
+        self.compute_global_hessian_euler_x()
 
-        if l0_len % 2 == 1:
-            size0 += 1
+        self.mesh_dy.dx_euler.copy_from(self.mesh_dy.g_euler)
 
-        self.compute_grad_and_hessian_stretch_constraints_euler_x(compliance_stretch, size0, 0)
-        self.solve_ls_thomas_euler_x(a=self.mesh_dy.a_euler, b=self.mesh_dy.b_euler, c=self.mesh_dy.c_euler, d=self.mesh_dy.g_euler,
-                                     c_tilde=self.mesh_dy.c_tilde_euler, d_tilde=self.mesh_dy.d_tilde_euler, dx=self.mesh_dy.dx_euler)
+        # self.solve_ls_thomas_euler_x(a=self.mesh_dy.a_euler, b=self.mesh_dy.b_euler, c=self.mesh_dy.c_euler, d=self.mesh_dy.g_euler,
+        #                              c_tilde=self.mesh_dy.c_tilde_euler, d_tilde=self.mesh_dy.d_tilde_euler, dx=self.mesh_dy.dx_euler)
 
         self.update_dx_euler()
 
@@ -562,26 +561,34 @@ class Solver:
             self.mesh_dy.y_euler[v1] += self.mesh_dy.fixed_euler[v1] * self.mesh_dy.m_inv_euler[v1] * ld * nabla_C
 
     @ti.kernel
-    def compute_grad_and_hessian_stretch_constraints_euler_x(self, compliance_stretch: ti.f32, size: ti.int32, offset: ti.i32):
+    def compute_grad_and_hessian_stretch_constraints_euler_x(self, compliance_stretch: ti.f32):
 
         path_len = self.mesh_dy.path_euler.shape[0]
-        # print(self.mesh_dy.l0_euler.shape[0])
-        # ti.loop_config(serialize=True)
-        for i in range(size):
-            i_color = 2 * i + offset
-            v0, v1 = self.mesh_dy.edge_indices_euler[2 * i_color + 0], self.mesh_dy.edge_indices_euler[2 * i_color + 1]
-            l0 = self.mesh_dy.l0_euler[i_color]
-            x10 = self.mesh_dy.y_euler[v0] - self.mesh_dy.y_euler[v1]
+        for i in range(path_len - 1):
+            l0 = self.mesh_dy.l0_euler[i]
+            x10 = self.mesh_dy.y_euler[i] - self.mesh_dy.y_euler[i + 1]
             lij = x10.norm()
             C = (lij - l0)
             nabla_C = x10.normalized()
-            schur = (self.mesh_dy.fixed_euler[v0] * self.mesh_dy.m_inv_euler[v0] + self.mesh_dy.fixed_euler[v1] *
-                     self.mesh_dy.m_inv_euler[v1])
 
-            ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
+            self.mesh_dy.a_euler[i + 0] -= compliance_stretch
+            self.mesh_dy.b_euler[i + 0] += compliance_stretch
+            self.mesh_dy.b_euler[i + 1] += compliance_stretch
+            self.mesh_dy.c_euler[i + 1] -= compliance_stretch
 
-            self.mesh_dy.y_euler[v0] -= self.mesh_dy.fixed_euler[v0] * self.mesh_dy.m_inv_euler[v0] * ld * nabla_C
-            self.mesh_dy.y_euler[v1] += self.mesh_dy.fixed_euler[v1] * self.mesh_dy.m_inv_euler[v1] * ld * nabla_C
+            self.mesh_dy.g_euler[i] -= self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch * C * nabla_C
+            self.mesh_dy.g_euler[i + 1] += self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i + 1] * compliance_stretch * C * nabla_C
+
+    @ti.kernel
+    def compute_global_hessian_euler_x(self):
+
+        path_len = self.mesh_dy.path_euler.shape[0]
+        for i in range(path_len):
+            m_inv = self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i]
+            self.mesh_dy.a_euler[i] *= m_inv
+            self.mesh_dy.b_euler[i] = 1.0 + m_inv * self.mesh_dy.b_euler[i]
+            self.mesh_dy.c_euler[i + 1] *= m_inv
+
 
     @ti.kernel
     def solve_ls_thomas_euler_x(self, a: ti.template(), b: ti.template(), c: ti.template(), d: ti.template(),
@@ -723,7 +730,6 @@ class Solver:
             elif self.solver_type == 4:
                 #contemporary
                 self.solve_constraints_euler_pgs_x(dt_sub)
-
 
 
             self.compute_velocity(damping=self.damping, dt=dt_sub)
