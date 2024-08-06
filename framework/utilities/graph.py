@@ -1,16 +1,10 @@
 from collections import deque
 import numpy as np
 import networkx as nx
-def construct_graph(num_verts, edges):
-    adjacency_list = [[] for _ in range(num_verts)]
+def construct_graph(edges):
     G = nx.MultiGraph()
     for i in range(len(edges)):
-       # id0 = edges[i][0]
-       # id1 = edges[i][1]
-       # adjacency_list[id0].append(id1)
-       # adjacency_list[id1].append(id0)
         G.add_edge(edges[i][0], edges[i][1])
-
     return G
 
 # def Dijkstra(graph, start):

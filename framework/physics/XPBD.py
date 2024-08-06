@@ -720,6 +720,9 @@ class Solver:
                 self.solve_constraints_euler_pgs_x(dt_sub)
             elif self.solver_type == 3:
                 self.solve_constraints_euler_ls_x(dt_sub)
+            elif self.solver_type == 4:
+                #contemporary
+                self.solve_constraints_euler_pgs_x(dt_sub)
 
 
 
