@@ -40,38 +40,38 @@ class Solver:
         self.max_num_edges_st = 0
         self.max_num_faces_st = 0
 
-        self.lbvh_st = None
-        if self.mesh_st != None:
-            self.lbvh_st = LBVH_CELL(len(self.mesh_st.faces))
-            self.max_num_verts_st = len(self.mesh_st.verts)
-            self.max_num_edges_st = len(self.mesh_st.edges)
-            self.max_num_faces_st = len(self.mesh_st.faces)
-
-        self.lbvh_dy = LBVH_CELL(len(self.mesh_dy.faces))
-
-        self.vt_st_pair_cache_size = 40
-        self.vt_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
-        self.vt_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        self.vt_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
-        self.vt_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        self.vt_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
-        self.vt_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
-
-        self.tv_st_pair_cache_size = 40
-        self.tv_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_st, self.vt_st_pair_cache_size))
-        self.tv_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_st)
-        self.tv_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size, 2))
-        self.tv_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_st)
-        self.tv_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size, 4))
-        self.tv_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size))
-
-        self.vt_dy_pair_cache_size = 40
-        self.vt_dy_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_dy_pair_cache_size))
-        self.vt_dy_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        self.vt_dy_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
-        self.vt_dy_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        self.vt_dy_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
-        self.vt_dy_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
+        # self.lbvh_st = None
+        # if self.mesh_st != None:
+        #     self.lbvh_st = LBVH_CELL(len(self.mesh_st.faces))
+        #     self.max_num_verts_st = len(self.mesh_st.verts)
+        #     self.max_num_edges_st = len(self.mesh_st.edges)
+        #     self.max_num_faces_st = len(self.mesh_st.faces)
+        #
+        # self.lbvh_dy = LBVH_CELL(len(self.mesh_dy.faces))
+        #
+        # self.vt_st_pair_cache_size = 40
+        # self.vt_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
+        # self.vt_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        # self.vt_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
+        # self.vt_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        # self.vt_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
+        # self.vt_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
+        #
+        # self.tv_st_pair_cache_size = 40
+        # self.tv_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_st, self.vt_st_pair_cache_size))
+        # self.tv_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_st)
+        # self.tv_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size, 2))
+        # self.tv_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_st)
+        # self.tv_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size, 4))
+        # self.tv_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size))
+        #
+        # self.vt_dy_pair_cache_size = 40
+        # self.vt_dy_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_dy_pair_cache_size))
+        # self.vt_dy_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        # self.vt_dy_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
+        # self.vt_dy_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        # self.vt_dy_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
+        # self.vt_dy_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
 
         # self.ee_st_pair_cache_size = 40
         # self.ee_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
@@ -102,9 +102,9 @@ class Solver:
         # self.action_anim = ti.Vector.field(6, dtype=ti.f32, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
         # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
 
-        self.sewing_pairs = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dy))
-        self.sewing_pairs_num = ti.field(dtype=ti.int32, shape=())
-        self.sewing_pairs_num[None] = 0
+        # self.sewing_pairs = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dy))
+        # self.sewing_pairs_num = ti.field(dtype=ti.int32, shape=())
+        # self.sewing_pairs_num[None] = 0
 
         self.particle = particles
         self.num_particles = self.particle.num_particles
@@ -118,7 +118,7 @@ class Solver:
         self.spiky_grad_factor = -45.0 / ti.math.pi
         self.poly6_factor = 315.0 / 64.0 / ti.math.pi
 
-        self.bd = np.array([40.0,40.0,20.0])
+        self.bd = np.array([100.0,100.0,100.0])
         self.boundary = (self.bd[0],self.bd[1],self.bd[2])
 
         self.bd = np.floor(self.bd / self.cell_size).astype(int) + 1
@@ -127,21 +127,21 @@ class Solver:
         print(self.grid_size)
 
         self.x_p = self.particle.x
-        self.dx_p = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
+        self.dx_p = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
         self.y_p = self.particle.y
         self.v_p = self.particle.v
         self.nc_p = self.particle.nc
         self.m_inv_p = self.particle.m_inv
 
-        self.particle_cache_size = 5000
-        self.nb_particle_cache_size = 5000
+        self.particle_cache_size = 500
+        self.nb_particle_cache_size = 500
 
         self.grid_particles_num = ti.field(dtype = ti.int32,shape = (self.grid_size))
         self.grid_particle_cache = ti.field(dtype = ti.int32,shape = (self.grid_size) + (self.particle_cache_size,))
 
         self.num_particle_neighbours = ti.field(dtype = ti.int32, shape = (self.num_particles))
         self.particle_neighbours = ti.field(dtype = ti.i32, shape = (self.num_particles,self.nb_particle_cache_size))
-        self.particle_neighbours_gradients = ti.Vector.field(3,dtype = ti.f32, shape = (self.num_particles,self.nb_particle_cache_size))
+        self.particle_neighbours_gradients = ti.Vector.field(3,dtype = float, shape = (self.num_particles,self.nb_particle_cache_size))
 
         self.c_dens = ti.field(dtype = ti.float32, shape = (self.num_particles))
         self.schur_p = ti.field(dtype = ti.float32, shape = (self.num_particles))
@@ -170,7 +170,7 @@ class Solver:
         return p
 
     @ti.kernel
-    def compute_y(self, dt: ti.f32):
+    def compute_y(self, dt: float):
         # for v in self.mesh_dy.verts:
         #     v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
         for i in self.v_p:
@@ -392,7 +392,7 @@ class Solver:
         #             collision_constraints_v.__ee_dy(ei_d, ej_d, self.mesh_dy, g0, g1, g2, g3, schur, mu)
 
     @ti.kernel
-    def update_state(self, dt: ti.f32):
+    def update_state(self, dt: float):
 
         # for v in self.mesh_dy.verts:
         #     # if v.id != 0:
@@ -474,7 +474,9 @@ class Solver:
         #         v.y += v.fixed * (v.dx / v.nc)
 
         for pi in self.y_p:
-            self.y_p[pi] = self.y_p[pi] + self.dx_p[pi] / ( self.nc_p[pi] + 1e-4)
+            if self.nc_p[pi] > 0:
+                self.y_p[pi] = self.y_p[pi] + self.dx_p[pi] / self.nc_p[pi]
+                # self.y_p[pi] = self.y_p[pi] + self.dx_p[pi]
 
 
     @ti.kernel
@@ -609,21 +611,35 @@ class Solver:
 
             self.schur_p[vi] += nabla_C_ii.dot(nabla_C_ii)
 
+
+
             if self.c_dens[vi] > 0.0 :
                 self.lambda_dens[vi] = -self.c_dens[vi] / self.schur_p[vi]
 
+        for vi in ti.ndrange(self.num_particles):
+            for j in range(self.num_particle_neighbours[vi]):
+                vj = self.particle_neighbours[vi, j]
+
+                nabla_C_ji = self.particle_neighbours_gradients[vi, j]
+
+                # self.dx_p[vj] += self.lambda_dens[vi] * nabla_C_ji
+                self.dx_p[vj] += (self.lambda_dens[vi] + self.lambda_dens[vj]) * nabla_C_ji
+                self.nc_p[vj] += 1
+
             # self.lambda_dens[vi] = -self.c_dens[vi] / self.schur_p[vi]
 
-        for vi in ti.ndrange(self.num_particles):
-            if self.c_dens[vi] > 0.0 :
-                for j in range(self.num_particle_neighbours[vi]):
-                    vj = self.particle_neighbours[vi, j]
+        # for vi in ti.ndrange(self.num_particles):
+            # if self.c_dens[vi] > 0.0:
+            #     for j in range(self.num_particle_neighbours[vi]):
+            #         vj = self.particle_neighbours[vi, j]
+            #
+            #         nabla_C_ji = self.particle_neighbours_gradients[vi, j]
+            #
+            #         # self.dx_p[vj] += self.lambda_dens[vi] * nabla_C_ji
+            #         self.dx_p[vj] += (self.lambda_dens[vi]) * nabla_C_ji
+            #         self.nc_p[vj] += 1
 
-                    nabla_C_ji = self.particle_neighbours_gradients[vi, j]
 
-                    # self.dx_p[vj] += self.lambda_dens[vi] * nabla_C_ji
-                    self.dx_p[vj] += (self.lambda_dens[vi] + self.lambda_dens[vj]) * nabla_C_ji
-                    self.nc_p[vj] += 1
 
 
     def forward(self, n_substeps):
@@ -643,8 +659,6 @@ class Solver:
         #         aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
         #         self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
         #
-
-
 
         for _ in range(n_substeps):
 

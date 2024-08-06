@@ -173,7 +173,6 @@ while window.running:
         # if window.event.key == 'u':
         #     g_selector.remove_all_sewing()
 
-
         if window.event.key == ' ':
             run_sim = not run_sim
 
@@ -247,7 +246,7 @@ while window.running:
     scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
 
 
-    scene.particles(sim.particle.x, radius=0.3, color=(0, 0, 1))
+    scene.particles(sim.particle.x, radius=0.5, color=(0, 0, 1))
 
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 

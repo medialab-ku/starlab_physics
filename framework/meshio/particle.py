@@ -26,15 +26,38 @@ class Particle:
 
         print(self.num_particles)
 
-        self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
-        self.x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
-        self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
+        self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
+        self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
+        self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
         self.x.from_numpy(points)
 
-        self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
+        self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
         self.v.fill(0.0)
         self.nc = ti.field(dtype=ti.int32, shape=self.num_particles)
-        self.m_inv = ti.field(dtype=ti.f32, shape=self.num_particles)
+        self.m_inv = ti.field(dtype=float, shape=self.num_particles)
+
+        # self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
+        # self.x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
+        # self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
+        # self.x.from_numpy(points)
+        #
+        # self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
+        # self.v.fill(0.0)
+        # self.nc = ti.field(dtype=ti.int32, shape=self.num_particles)
+        # self.m_inv = ti.field(dtype=ti.f32, shape=self.num_particles)
+
+        #
+        # self.x = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
+        # self.x0 = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
+        # self.y = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
+        # self.x.from_numpy(points)
+        #
+        # self.v = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
+        # self.v.fill(0.0)
+        # self.nc = ti.field(dtype=ti.int32, shape=self.num_particles)
+        # self.m_inv = ti.field(dtype=ti.f32, shape=self.num_particles)
+
+
         self.m_inv.fill(1.0)
         self.trans = trans
         self.rot = rot
