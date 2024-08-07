@@ -256,11 +256,10 @@ class Solver:
             g0, g1 = self.mesh_dy.verts.gii[v0], self.mesh_dy.verts.gii[v1]
             h0, h1 = self.mesh_dy.verts.hii[v0], self.mesh_dy.verts.hii[v1]
 
-            det = 1.0 + compliance_stretch * m_inv0 * m_inv1
+            det = h0 * h1 - m_inv0 * m_inv1 * compliance_stretch * compliance_stretch
 
-            self.mesh_dy.verts.dx[v0] += (h1 * g0 - compliance_stretch * g1) / det
-            self.mesh_dy.verts.dx[v1] += (compliance_stretch * g0 - h1 * g1) / det
-
+            self.mesh_dy.verts.dx[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
+            self.mesh_dy.verts.dx[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
 
     @ti.kernel
     def solve_bending_constraints_gauss_seidel_x(self, compliance_bending: ti.f32):
@@ -497,11 +496,12 @@ class Solver:
         self.init_variables()
 
         compliance_stretch = self.stiffness_stretch * dt * dt
-        print(self.stiffness_stretch)
         self.mesh_dy.verts.gii.fill(0.0)
         self.mesh_dy.verts.hii.fill(1.0)
         self.compute_grad_and_hessian_stretch_constraints_jacobi_DOT_x(compliance_stretch)
-        # self.solve_jacobi_DOT_x(compliance_stretch)
+
+        self.solve_jacobi_DOT_x(compliance_stretch)
+
         self.update_jacobi_DOT_dx()
 
         if self.enable_collision_handling:
@@ -517,7 +517,7 @@ class Solver:
     @ti.kernel
     def update_jacobi_DOT_dx(self):
         for v in self.mesh_dy.verts:
-            v.y -= (v.gii / v.hii)
+            v.y += (v.dx / v.nc)
 
     def solve_constraints_gauss_seidel_x(self, dt):
 
