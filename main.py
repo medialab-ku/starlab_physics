@@ -35,8 +35,8 @@ dHat_ui = sim.dHat
 
 damping_ui = sim.damping
 
-YM_ui = sim.stiffness_bending
-YM_b_ui = sim.stiffness_stretch
+YM_ui = sim.stiffness_stretch
+YM_b_ui = sim.stiffness_bending
 
 friction_coeff_ui = sim.mu
 
@@ -69,16 +69,18 @@ def show_options():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 4)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 5)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
-            w.text("solver type: Gauss Seidel")
+            w.text("solver type: Jacobi(DOT)")
         elif solver_type_ui == 2:
-            w.text("solver type: euler(Graph Coloring)")
+            w.text("solver type: Gauss Seidel")
         elif solver_type_ui == 3:
-            w.text("solver type: euler(Linear Solve)")
+            w.text("solver type: euler(Graph Coloring)")
         elif solver_type_ui == 4:
+            w.text("solver type: euler(Linear Solve)")
+        elif solver_type_ui == 5:
             w.text("solver type: Parallel Gauss Seidel")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
@@ -131,10 +133,10 @@ def show_options():
         sim.mu = friction_coeff_ui
 
     if not YM_old == YM_ui:
-        sim.stiffness_bending = YM_ui
+        sim.stiffness_stretch = YM_ui
 
     if not YM_b_old == YM_b_ui:
-        sim.stiffness_stretch = YM_b_ui
+        sim.stiffness_bending = YM_b_ui
 
     if not old_damping == damping_ui:
         sim.damping = damping_ui
@@ -255,12 +257,13 @@ while window.running:
     if mesh_export and run_sim and frame_cpu < frame_end:
         sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
-    # scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
-    # scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
-
-    # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
-    # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
-    scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
+    if sim.solver_type <= 2:
+        scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
+        scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+    else:
+        scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
+        scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
+        # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.02,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
     if sim.mesh_st != None:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))

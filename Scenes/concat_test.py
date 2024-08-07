@@ -36,7 +36,7 @@ scale_list.append(3.0)
 
 # offsets = concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
 #dynamic mesh
-mesh_dy = MeshTaichiWrapper(model_dir, "square.obj", offsets=[0], scale=2.0, trans=ti.math.vec3(0, 0.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = MeshTaichiWrapper(model_dir, "plane.obj", offsets=[0], scale=2.0, trans=ti.math.vec3(0, 0.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 #static mesh
 mesh_st = MeshTaichiWrapper(model_dir, "square.obj",  offsets=[0], scale=1.5, trans=ti.math.vec3(0.0, -20.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

@@ -29,6 +29,8 @@ class MeshTaichiWrapper:
         self.mesh = patcher.load_mesh(model_dir + "/" + model_name, relations=["FV", "EV", "FE"])
         self.mesh.verts.place({'fixed': ti.f32,
                                'm_inv': ti.f32,
+                               'hii': ti.f32,
+                               'gii': ti.math.vec3,
                                'x0': ti.math.vec3,
                                'x': ti.math.vec3,
                                'y': ti.math.vec3,
@@ -37,7 +39,8 @@ class MeshTaichiWrapper:
                                'dv': ti.math.vec3,
                                'dup': ti.i32,
                                'nc': ti.f32})
-        self.mesh.edges.place({'l0': ti.f32})
+        self.mesh.edges.place({'l0': ti.f32,
+                               'hij': ti.f32})
         self.mesh.faces.place({'aabb_min': ti.math.vec3,
                                'aabb_max': ti.math.vec3,
                                'morton_code': ti.uint32})
