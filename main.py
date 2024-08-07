@@ -20,6 +20,9 @@ camera.up(0, 1, 0)
 run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
+
+forward_once = False
+
 #selector
 g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
 
@@ -53,6 +56,7 @@ def show_options():
     global friction_coeff_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
+    global forward_once
     global mesh_export
     global frame_end
 
@@ -88,7 +92,8 @@ def show_options():
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
 
-        LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
+        # LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
+        forward_once = w.checkbox("run once", forward_once)
         # sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
         sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         mesh_export = w.checkbox("export mesh", mesh_export)
@@ -187,7 +192,6 @@ while window.running:
         # if window.event.key == 'u':
         #     g_selector.remove_all_sewing()
 
-
         if window.event.key == ' ':
             run_sim = not run_sim
 
@@ -226,7 +230,6 @@ while window.running:
         if window.event.key == ti.ui.TAB:
             g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
 
-
     if window.get_event(ti.ui.RELEASE):
         if window.event.key == ti.ui.LMB:
             g_selector.LMB_mouse_pressed = False
@@ -242,18 +245,22 @@ while window.running:
         sim.forward(n_substeps=n_substep)
         frame_cpu += 1
 
+    if forward_once:
+        sim.forward(n_substeps=n_substep)
+        frame_cpu += 1
+        forward_once = False
+
     show_options()
 
     if mesh_export and run_sim and frame_cpu < frame_end:
         sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
-    scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
-    scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+    # scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
+    # scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
 
     # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
     # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
-    # sim.mesh_dy.colors_edge_euler.fill(ti.math.vec3([1.0, 0.0, 0.0]))
-    # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.1,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
+    scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
     if sim.mesh_st != None:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))

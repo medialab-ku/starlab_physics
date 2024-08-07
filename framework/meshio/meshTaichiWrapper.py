@@ -206,7 +206,7 @@ class MeshTaichiWrapper:
         self.b_euler = ti.field(dtype=ti.f32, shape=path_len) # diag elements
         self.c_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
         self.c_tilde_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
-        self.d_tilde_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
+        self.d_tilde_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
 
         self.l0_euler = ti.field(dtype=ti.f32, shape=l0_len)
         self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=l0_len)

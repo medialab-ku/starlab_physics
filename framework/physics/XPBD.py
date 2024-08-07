@@ -26,7 +26,7 @@ class Solver:
         self.mu = 0.8
         self.padding = 0.05
 
-        self.solver_type = 2
+        self.solver_type = 3
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -487,7 +487,7 @@ class Solver:
         self.solve_stretch_constraints_euler_x(compliance_stretch, size1, 1)
 
         self.mesh_dy.verts.y.fill(0.0)
-        self.aggregate_duplicates()
+        # self.aggregate_duplicates()
 
     #ls: linear solve
     def solve_constraints_euler_ls_x(self, dt):
@@ -497,19 +497,47 @@ class Solver:
         self.mesh_dy.a_euler.fill(0.0)
         self.mesh_dy.b_euler.fill(0.0)
         self.mesh_dy.c_euler.fill(0.0)
+        self.mesh_dy.g_euler.fill(0.0)
+        self.mesh_dy.d_tilde_euler.fill(0.0)
+        self.mesh_dy.c_tilde_euler.fill(0.0)
 
         self.compute_grad_and_hessian_stretch_constraints_euler_x(compliance_stretch)
+
+        # a = self.mesh_dy.a_euler.to_numpy()
+        # a = a[: -1]
+        # b = self.mesh_dy.b_euler.to_numpy()
+        # c = self.mesh_dy.c_euler.to_numpy()
+        # c = c[1:]
+        #
+        # tri_diag_mat = np.diag(b) + np.diag(a, k=1) + np.diag(c, k=-1)
+        #
+        # print(tri_diag_mat)
+
+        # print(self.mesh_dy.b_euler)
+        # print(self.mesh_dy.c_euler)
+
         self.compute_global_hessian_euler_x()
 
-        self.mesh_dy.dx_euler.copy_from(self.mesh_dy.g_euler)
+        # a = self.mesh_dy.a_euler.to_numpy()
+        # a = a[: -1]
+        # b = self.mesh_dy.b_euler.to_numpy()
+        # c = self.mesh_dy.c_euler.to_numpy()
+        # c = c[1:]
+        #
+        # tri_diag_mat = np.diag(b) + np.diag(a, k=1) + np.diag(c, k=-1)
 
-        # self.solve_ls_thomas_euler_x(a=self.mesh_dy.a_euler, b=self.mesh_dy.b_euler, c=self.mesh_dy.c_euler, d=self.mesh_dy.g_euler,
-        #                              c_tilde=self.mesh_dy.c_tilde_euler, d_tilde=self.mesh_dy.d_tilde_euler, dx=self.mesh_dy.dx_euler)
+        # print(tri_diag_mat)
 
-        self.update_dx_euler()
+        # self.mesh_dy.dx_euler.copy_from(self.mesh_dy.g_euler)
+        self.solve_ls_thomas_euler_x(a=self.mesh_dy.a_euler, b=self.mesh_dy.b_euler, c=self.mesh_dy.c_euler, d=self.mesh_dy.g_euler,
+                                      c_tilde=self.mesh_dy.c_tilde_euler, d_tilde=self.mesh_dy.d_tilde_euler, dx=self.mesh_dy.dx_euler)
+
+        # dx = self.mesh_dy.dx_euler
+
+        self.update_y_euler()
 
         self.mesh_dy.verts.y.fill(0.0)
-        self.aggregate_duplicates()
+        # self.aggregate_duplicates()
 
     @ti.kernel
     def aggregate_duplicates(self):
@@ -586,6 +614,7 @@ class Solver:
         for i in range(path_len):
             m_inv = self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i]
             self.mesh_dy.a_euler[i] *= m_inv
+            # self.mesh_dy.b_euler[i] *= m_inv
             self.mesh_dy.b_euler[i] = 1.0 + m_inv * self.mesh_dy.b_euler[i]
             self.mesh_dy.c_euler[i + 1] *= m_inv
 
@@ -600,15 +629,18 @@ class Solver:
         ti.loop_config(serialize=True)
         for i in range(numVerts - 2):
             id = i + 1
+            # print(id)
             c_tilde[id] = c[id] / (b[id] - a[id] * c[id - 1])
 
+        # print("_______________")
         d_tilde[0] = d[0] / b[0]
 
         ti.loop_config(serialize=True)
         for i in range(numVerts - 1):
             id = i + 1
+            # print(id)
             d_tilde[id] = (d[id] - a[id] * d_tilde[id - 1]) / (b[id] - a[id] * c_tilde[id - 1])
-
+        #
         dx[numVerts - 1] = d[numVerts - 1]
 
         ti.loop_config(serialize=True)
@@ -637,7 +669,7 @@ class Solver:
             self.mesh_dy.y_euler[i] = self.mesh_dy.verts.y[vid]
 
     @ti.kernel
-    def update_dx_euler(self):
+    def update_y_euler(self):
         path_len = self.mesh_dy.path_euler.shape[0]
         for i in range(path_len):
             self.mesh_dy.y_euler[i] += self.mesh_dy.dx_euler[i]
