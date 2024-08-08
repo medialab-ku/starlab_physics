@@ -869,28 +869,61 @@ class Solver:
 
         for _ in range(n_substeps):
 
-            self.copy_to_duplicates()
-            self.compute_y(self.g, dt_sub)
             # self.copy_to_duplicates()
-
             if self.solver_type == 0:
+                self.compute_y(self.g, dt_sub)
                 self.solve_constraints_jacobi_x(dt_sub)
+                self.compute_velocity(damping=self.damping, dt=dt_sub)
+
+                if self.enable_velocity_update:
+                    self.solve_constraints_v()
+
+                self.update_x(dt_sub)
+
+
             elif self.solver_type == 1:
                 # contemporary
                 self.solve_constraints_jacobi_DOT_x(dt_sub)
             elif self.solver_type == 2:
                 self.solve_constraints_gauss_seidel_x(dt_sub)
+                self.compute_velocity(damping=self.damping, dt=dt_sub)
+
+                if self.enable_velocity_update:
+                    self.solve_constraints_v()
+
+                self.update_x(dt_sub)
+
             elif self.solver_type == 3:
+                self.copy_to_duplicates()
+                self.compute_y(self.g, dt_sub)
                 self.solve_constraints_euler_pgs_x(dt_sub)
+                self.compute_velocity(damping=self.damping, dt=dt_sub)
+
+                if self.enable_velocity_update:
+                    self.solve_constraints_v()
+
+                self.update_x(dt_sub)
+
             elif self.solver_type == 4:
+                self.copy_to_duplicates()
+                self.compute_y(self.g, dt_sub)
                 self.solve_constraints_euler_ls_x(dt_sub)
+                self.compute_velocity(damping=self.damping, dt=dt_sub)
+
+                if self.enable_velocity_update:
+                    self.solve_constraints_v()
+
+                self.update_x(dt_sub)
+
             elif self.solver_type == 5:
                 #contemporary
+                self.copy_to_duplicates()
+                self.compute_y(self.g, dt_sub)
                 self.solve_constraints_euler_pgs_x(dt_sub)
+                self.compute_velocity(damping=self.damping, dt=dt_sub)
 
-            self.compute_velocity(damping=self.damping, dt=dt_sub)
+                if self.enable_velocity_update:
+                    self.solve_constraints_v()
 
-            if self.enable_velocity_update:
-                self.solve_constraints_v()
+                self.update_x(dt_sub)
 
-            self.update_x(dt_sub)
