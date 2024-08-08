@@ -8,6 +8,8 @@ import random
 import framework.utilities.graph as graph_utils
 import networkx as nx
 import time
+import copy
+from collections import Counter
 
 from framework.utilities.graph_coloring import GraphColoring
 
@@ -93,6 +95,9 @@ class MeshTaichiWrapper:
         # self.mesh_name = model_path[len("../models/OBJ/"):]
         self.mesh_name = model_name
 
+        ###############################################################################################################
+        # euler graph
+
         duplicates = np.zeros(self.num_verts, dtype=int)
         path_np = np.array([])
         # print(path_np)
@@ -109,7 +114,7 @@ class MeshTaichiWrapper:
                 print("Constructing an Euler graph...")
 
                 start = time.time()
-                graph = graph_utils.construct_graph(self.num_verts, self.eid_np)
+                graph = graph_utils.construct_graph(self.eid_np)
                 graph = nx.eulerize(graph)
 
                 if nx.is_eulerian(graph):
@@ -220,12 +225,140 @@ class MeshTaichiWrapper:
             # print(self.verts.dup)
             self.init_l0_euler()
 
+        ################################################################################################################
+        # phantom color graph
+
+        self.max_color = 20
+        self.cracking_threshold = 6
+        self.phantom_len = self.num_edges
+        self.edge_color_field = ti.field(dtype=ti.i32, shape=(self.phantom_len, 3))
+        self.edge_color_prefix_sum_field = ti.field(dtype=ti.i32, shape=self.max_color)
+        self.edge_color_np = self.edge_color_field.to_numpy()
+        self.edge_color_prefix_sum_np = self.edge_color_prefix_sum_field.to_numpy()
+
+        if is_static is False:
+            dir = model_dir[:-len("models/OBJ")] + "color_graph"
+            if not os.path.exists(dir):
+                print("The ""color_graph"" dictionary does not exist.")
+                print("It will be made and then located in your path...")
+                os.mkdir(dir)
+
+            precomputed_origin_graph_file = dir + "/" + model_name[:-len(".obj")] + "_origin_graph.edgelist"
+            precomputed_phantom_graph_file = dir + "/" + model_name[:-len(".obj")] + "_phantom_graph.edgelist"
+            precomputed_phantom_origin_numpy_file = dir + "/" + model_name[:-len(".obj")] + "_phantom_origin.npy"
+
+            # If some files are not in the correct directory path, we have to make all the files and export them!
+            if not (os.path.isfile(precomputed_origin_graph_file) or
+                    os.path.isfile(precomputed_phantom_graph_file) or
+                    os.path.isfile(precomputed_phantom_origin_numpy_file)):
+                print("Constructing an phantom graph...")
+                original_graph = graph_utils.construct_graph(self.eid_np)
+
+                # extract vertex which degree is not lower than the threshold, and sorting those in descending order
+                degree_vertices_list = list(original_graph.degree()) # [(vertex, degree), ...]
+                sorted_degree_vertices_list = sorted(degree_vertices_list, key=lambda x: x[1], reverse=True)
+                filtered_degree_vertices_list = [vertex for vertex, degree in sorted_degree_vertices_list
+                                                 if degree >= self.cracking_threshold]
+
+                # deep copy phantom coloring graph from the original graph
+                phantom_graph = copy.deepcopy(original_graph)
+                phantom_index = -1 # the phantom index starts from -1!
+                phantom_original = {} # { phantom vertex index: original vertex index, ... }
+
+                # crack those vertices by editing the graph edge information
+                # ...by replacing an original vertex with several phantom vertices!!!
+                for vertex in filtered_degree_vertices_list:
+                    neighbors = list(phantom_graph.neighbors(vertex))
+                    phantom_graph.remove_node(vertex)
+                    for neighbor in neighbors:
+                        phantom_graph.add_edge(phantom_index, neighbor)
+                        phantom_original[phantom_index] = vertex
+                        phantom_index -= 1
+
+                # executing edge coloring on the phantom graph
+                # print("Executing phantom coloring... It might take a long time...")
+                # start = time.time()
+                # edge_colors = {}
+                # for edge in phantom_graph.edges():
+                #     available_colors = set(range(len(phantom_graph.edges())))
+                #     for neighbor in list(phantom_graph.edges(edge[0])) + list(phantom_graph.edges(edge[1])):
+                #         if neighbor in edge_colors:
+                #             available_colors.discard(edge_colors[neighbor])
+                #     edge_colors[edge] = min(available_colors)
+                # end = time.time()
+                # print("Phantom Coloring Elapsed time:", round(end - start, 5), "sec.")
+
+                # executing edge coloring on the original graph
+                print("Executing original coloring... It might take a long time...")
+                start = time.time()
+                edge_colors = {}
+                for edge in original_graph.edges():
+                    available_colors = set(range(len(original_graph.edges())))
+                    for neighbor in list(original_graph.edges(edge[0])) + list(original_graph.edges(edge[1])):
+                        if neighbor in edge_colors:
+                            available_colors.discard(edge_colors[neighbor])
+                    edge_colors[edge] = min(available_colors)
+                end = time.time()
+                print("Phantom Coloring Elapsed time:", round(end - start, 5), "sec.")
+                sorted_edge_colors = dict(sorted(edge_colors.items(), key=lambda x: x[1]))
+
+                print("Original Edge length :", self.phantom_len)
+                print("Length of colors :", len(sorted_edge_colors))
+
+                edge_color_temp = []
+                for edge, color in sorted_edge_colors.items():
+                    v1 = edge[0] if edge[0] >= 0 else phantom_original[edge[0]]
+                    v2 = edge[1] if edge[1] >= 0 else phantom_original[edge[1]]
+                    c = color
+                    edge_color_temp.append([v1, v2, c])
+                self.edge_color_np = np.array(edge_color_temp, dtype=int)
+                print("\nEdge-Color Field")
+                print(self.edge_color_np)
+
+                kind_of_color = self.edge_color_np[:, 2]
+                color_values, color_first_index = np.unique(kind_of_color, return_index=True)
+                prefix_sum_temp = list(color_first_index)
+
+                self.edge_color_prefix_sum_np = np.full(self.max_color, fill_value=self.phantom_len - 1, dtype=int)
+                self.edge_color_prefix_sum_np[:len(prefix_sum_temp)] = prefix_sum_temp
+                print(self.edge_color_prefix_sum_np)
+
+                # export the result into the directory
+                # print("Exporting the graphs and the numpy file...")
+                # nx.write_edgelist(original_graph, precomputed_origin_graph_file)
+                # nx.write_edgelist(phantom_graph, precomputed_phantom_graph_file)
+                # np.save(precomputed_phantom_origin_numpy_file, phantom_original_numpy)
+                # print("Export complete...")
+
+            # # otherwise, we can just import the files from the directory!
+            # else:
+            #     print("Importing a precomputed phantom coloring graph...")
+            #     phantom_graph = nx.read_edgelist(precomputed_phantom_graph_file, create_using=nx.MultiGraph)
+            #     phantom_original_numpy = np.load(precomputed_phantom_origin_numpy_file)
+
+        self.edge_color_field.from_numpy(self.edge_color_np)
+        self.edge_color_prefix_sum_field.from_numpy(self.edge_color_prefix_sum_np)
+
+        self.l0_phantom = ti.field(dtype=ti.f32, shape=l0_len)
+        self.init_l0_phantom()
+
+
+
+        ################################################################################################################
+
         self.bending_indices = ti.field(dtype=ti.i32)
         self.bending_constraint_count = 0
         self.bending_l0 = ti.field(dtype=ti.f32)
         self.initBendingIndices()
         self.render_bending_vert = ti.Vector.field(3, dtype=ti.f32, shape=(len(self.mesh.verts),))
         self.init_render_bending_vert()
+
+    @ti.kernel
+    def init_l0_phantom(self):
+        for i in range(self.phantom_len):
+            v0, v1 = self.edge_color_field[i,0], self.edge_color_field[i,1]
+            x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
+            self.l0_phantom[i] = x01.norm()
 
     @ti.kernel
     def init_l0_euler(self):
