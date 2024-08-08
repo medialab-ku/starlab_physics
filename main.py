@@ -69,18 +69,20 @@ def show_options():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 5)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 6)
         if solver_type_ui == 0:
-            w.text("solver type: Jacobi")
+            w.text("solver type: XPBD Jacobi")
         elif solver_type_ui == 1:
-            w.text("solver type: Jacobi(DOT)")
+            w.text("solver type: PD(diag)")
         elif solver_type_ui == 2:
-            w.text("solver type: Gauss Seidel")
+            w.text("solver type: Jacobi(DOT)")
         elif solver_type_ui == 3:
-            w.text("solver type: euler(Graph Coloring)")
+            w.text("solver type: Gauss Seidel")
         elif solver_type_ui == 4:
-            w.text("solver type: euler(Linear Solve)")
+            w.text("solver type: euler(Graph Coloring)")
         elif solver_type_ui == 5:
+            w.text("solver type: euler(Linear Solve)")
+        elif solver_type_ui == 6:
             w.text("solver type: Parallel Gauss Seidel")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)

@@ -491,7 +491,7 @@ class MeshTaichiWrapper:
 
 
     @ti.kernel
-    def computeAABB_faces(self, padding: float):
+    def computeAABB_faces(self, padding: float) -> (ti.math.vec3, ti.math.vec3):
 
         aabb_min = ti.math.vec3(1e5)
         aabb_max = ti.math.vec3(-1e5)
@@ -502,10 +502,10 @@ class MeshTaichiWrapper:
 
             f.aabb_min -= padding * ones
             f.aabb_max += padding * ones
-        #     ti.atomic_max(aabb_max, f.aabb_max)
-        #     ti.atomic_min(aabb_min, f.aabb_min)
-        #
-        # return aabb_min, aabb_max
+            ti.atomic_max(aabb_max, f.aabb_max)
+            ti.atomic_min(aabb_min, f.aabb_min)
+
+        return aabb_min, aabb_max
     def export(self, scene_name, frame, is_static = False):
         if is_static:
             directory = os.path.join("../results/", scene_name, "StaticMesh_ID_")
