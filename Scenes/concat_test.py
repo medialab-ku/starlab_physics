@@ -4,7 +4,7 @@ import taichi as ti
 from pathlib import Path
 
 enable_profiler = False
-ti.init(arch=ti.cuda, device_memory_GB=8, kernel_profiler=enable_profiler)
+ti.init(arch=ti.cuda, device_memory_GB=8, default_fp=ti.f64, kernel_profiler=enable_profiler)
 
 model_path = Path(__file__).resolve().parent.parent / "models"
 OBJ = "OBJ"

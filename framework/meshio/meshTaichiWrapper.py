@@ -27,9 +27,9 @@ class MeshTaichiWrapper:
         # print(model_dir + "/" + model_name)
 
         self.mesh = patcher.load_mesh(model_dir + "/" + model_name, relations=["FV", "EV", "FE"])
-        self.mesh.verts.place({'fixed': ti.f32,
-                               'm_inv': ti.f32,
-                               'hii': ti.f32,
+        self.mesh.verts.place({'fixed': float,
+                               'm_inv': float,
+                               'hii': float,
                                'gii': ti.math.vec3,
                                'x0': ti.math.vec3,
                                'x': ti.math.vec3,
@@ -38,9 +38,9 @@ class MeshTaichiWrapper:
                                'dx': ti.math.vec3,
                                'dv': ti.math.vec3,
                                'dup': ti.i32,
-                               'nc': ti.f32})
-        self.mesh.edges.place({'l0': ti.f32,
-                               'hij': ti.f32})
+                               'nc': float})
+        self.mesh.edges.place({'l0': float,
+                               'hij': float})
         self.mesh.faces.place({'aabb_min': ti.math.vec3,
                                'aabb_max': ti.math.vec3,
                                'morton_code': ti.uint32})
@@ -64,7 +64,7 @@ class MeshTaichiWrapper:
         self.face_edge_indices = ti.field(dtype=ti.int32, shape=len(self.mesh.faces) * 3)
         self.init_face_edge_indices()
 
-        self.colors = ti.Vector.field(n=3, dtype=ti.f32, shape=len(self.mesh.verts))
+        self.colors = ti.Vector.field(n=3, dtype=float, shape=len(self.mesh.verts))
         self.init_color()
         # self.colors.fill(0.1)
         self.verts = self.mesh.verts
@@ -196,24 +196,24 @@ class MeshTaichiWrapper:
 
         print(round(path_len / self.num_edges, 3))
         # print(path_len - 1)
-        self.x_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
-        self.dx_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
-        self.v_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
-        self.y_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
-        self.g_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len)
+        self.x_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        self.v_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        self.y_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        self.g_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
 
-        self.m_inv_euler = ti.field(dtype=ti.f32, shape=path_len)
-        self.fixed_euler = ti.field(dtype=ti.f32, shape=path_len)
+        self.m_inv_euler = ti.field(dtype=float, shape=path_len)
+        self.fixed_euler = ti.field(dtype=float, shape=path_len)
 
-        self.a_euler = ti.field(dtype=ti.f32, shape=path_len) # top 1st off-diagonal elements
-        self.b_euler = ti.field(dtype=ti.f32, shape=path_len) # diag elements
-        self.c_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
-        self.c_tilde_euler = ti.field(dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
-        self.d_tilde_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=path_len) # bottom 1st off-diagonal elements
+        self.a_euler = ti.field(dtype=float, shape=path_len) # top 1st off-diagonal elements
+        self.b_euler = ti.field(dtype=float, shape=path_len) # diag elements
+        self.c_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        self.c_tilde_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        self.d_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=path_len) # bottom 1st off-diagonal elements
 
-        self.l0_euler = ti.field(dtype=ti.f32, shape=l0_len)
-        self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=l0_len)
-        self.colors_edge_euler = ti.Vector.field(n=3, dtype=ti.f32, shape=l0_len)
+        self.l0_euler = ti.field(dtype=float, shape=l0_len)
+        self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=float, shape=l0_len)
+        self.colors_edge_euler = ti.Vector.field(n=3, dtype=float, shape=l0_len)
         self.path_euler = ti.field(dtype=ti.i32, shape=path_len)
         self.edge_indices_euler = ti.field(dtype=ti.i32, shape=2 * l0_len)
 
@@ -226,9 +226,9 @@ class MeshTaichiWrapper:
 
         self.bending_indices = ti.field(dtype=ti.i32)
         self.bending_constraint_count = 0
-        self.bending_l0 = ti.field(dtype=ti.f32)
+        self.bending_l0 = ti.field(dtype=float)
         self.initBendingIndices()
-        self.render_bending_vert = ti.Vector.field(3, dtype=ti.f32, shape=(len(self.mesh.verts),))
+        self.render_bending_vert = ti.Vector.field(3, dtype=float, shape=(len(self.mesh.verts),))
         self.init_render_bending_vert()
 
     @ti.kernel
@@ -475,7 +475,7 @@ class MeshTaichiWrapper:
             v.x += self.trans
 
     @ti.kernel
-    def computeAABB(self, padding: ti.f32) -> (ti.math.vec3, ti.math.vec3):
+    def computeAABB(self, padding: float) -> (ti.math.vec3, ti.math.vec3):
         aabb_min = ti.math.vec3(1e5)
         aabb_max = ti.math.vec3(-1e5)
 
@@ -491,7 +491,7 @@ class MeshTaichiWrapper:
 
 
     @ti.kernel
-    def computeAABB_faces(self, padding: ti.f32):
+    def computeAABB_faces(self, padding: float):
 
         aabb_min = ti.math.vec3(1e5)
         aabb_max = ti.math.vec3(-1e5)

@@ -55,40 +55,40 @@ class Solver:
         self.vt_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
         self.vt_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
         self.vt_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        self.vt_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
-        self.vt_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
+        self.vt_st_pair_g = ti.Vector.field(n=3, dtype=float, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
+        self.vt_st_pair_schur = ti.field(dtype=float, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
 
         self.tv_st_pair_cache_size = 40
         self.tv_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_st, self.vt_st_pair_cache_size))
         self.tv_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_st)
         self.tv_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size, 2))
         self.tv_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_st)
-        self.tv_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size, 4))
-        self.tv_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size))
+        self.tv_st_pair_g = ti.Vector.field(n=3, dtype=float, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size, 4))
+        self.tv_st_pair_schur = ti.field(dtype=float, shape=(self.max_num_verts_st, self.tv_st_pair_cache_size))
 
         self.vt_dy_pair_cache_size = 40
         self.vt_dy_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_dy_pair_cache_size))
         self.vt_dy_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
         self.vt_dy_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
         self.vt_dy_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        self.vt_dy_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
-        self.vt_dy_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
+        self.vt_dy_pair_g = ti.Vector.field(n=3, dtype=float, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
+        self.vt_dy_pair_schur = ti.field(dtype=float, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
 
         # self.ee_st_pair_cache_size = 40
         # self.ee_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
         # self.ee_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
         # self.ee_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size, 2))
         # self.ee_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
-        # self.ee_st_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size, 4))
-        # self.ee_st_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
+        # self.ee_st_pair_g = ti.Vector.field(n=3, dtype=float, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size, 4))
+        # self.ee_st_pair_schur = ti.field(dtype=float, shape=(self.max_num_edges_dy, self.ee_st_pair_cache_size))
         #
         # self.ee_dy_pair_cache_size = 40
         # self.ee_dy_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size))
         # self.ee_dy_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
         # self.ee_dy_pair = ti.field(dtype=ti.int32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size, 2))
         # self.ee_dy_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_edges_dy)
-        # self.ee_dy_pair_g = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size, 4))
-        # self.ee_dy_pair_schur = ti.field(dtype=ti.f32, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size))
+        # self.ee_dy_pair_g = ti.Vector.field(n=3, dtype=float, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size, 4))
+        # self.ee_dy_pair_schur = ti.field(dtype=float, shape=(self.max_num_edges_dy, self.ee_dy_pair_cache_size))
 
         # self.frame = ti.field(dtype=ti.i32, shape=1)
         # self.frame[0] = 0
@@ -96,12 +96,12 @@ class Solver:
         # self.max_num_anim = 40
         # self.num_animation = ti.field(dtype=ti.i32, shape=4)   # maximum number of handle set
         # self.cur_animation = ti.field(dtype=ti.i32, shape=4)   # maximum number of handle set
-        # self.anim_rotation_mat = ti.Matrix.field(4, 4, dtype=ti.f32, shape=4)
+        # self.anim_rotation_mat = ti.Matrix.field(4, 4, dtype=float, shape=4)
         #
-        # self.anim_local_origin = ti.Vector.field(3, dtype=ti.f32, shape=4)
+        # self.anim_local_origin = ti.Vector.field(3, dtype=float, shape=4)
         # self.active_anim_frame = ti.field(dtype=ti.i32, shape=(4, self.max_num_anim)) # maximum number of animation
-        # self.action_anim = ti.Vector.field(6, dtype=ti.f32, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
-        # self.anim_x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.max_num_verts_dynamic)
+        # self.action_anim = ti.Vector.field(6, dtype=float, shape=(4, self.max_num_anim)) # maximum number of animation, a animation consist (vx,vy,vz,rx,ry,rz)
+        # self.anim_x = ti.Vector.field(n=3, dtype=float, shape=self.max_num_verts_dynamic)
 
         self.sewing_pairs = ti.Vector.field(n=2, dtype=ti.int32, shape=(self.max_num_verts_dy))
         self.sewing_pairs_num = ti.field(dtype=ti.int32, shape=())
@@ -114,7 +114,7 @@ class Solver:
             self.mesh_st.reset()
 
     @ti.kernel
-    def compute_y(self, g: ti.math.vec3, dt: ti.f32):
+    def compute_y(self, g: ti.math.vec3, dt: float):
         for v in self.mesh_dy.verts:
             v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
 
@@ -147,7 +147,10 @@ class Solver:
 
 
     @ti.kernel
-    def solve_spring_constraints_jacobi_x(self, compliance_stretch: ti.f32, compliance: ti.f32):
+    def solve_spring_constraints_jacobi_x(self, compliance_stretch: float, compliance: float):
+
+        self.mesh_dy.verts.dx.fill(0.0)
+        self.mesh_dy.verts.nc.fill(0.0)
 
         for i in range(self.max_num_edges_dy):
 
@@ -192,8 +195,12 @@ class Solver:
                 self.mesh_dy.verts.nc[v0] += 1.0
                 self.mesh_dy.verts.nc[v1] += 1.0
 
+        for v in self.mesh_dy.verts:
+            if v.nc > 0:
+                v.y += v.fixed * (v.dx / v.nc)
+
     @ti.kernel
-    def solve_stretch_constraints_gauss_seidel_x(self, compliance_stretch: ti.f32):
+    def solve_stretch_constraints_gauss_seidel_x(self, compliance_stretch: float):
 
         ti.loop_config(serialize=True)
         for i in range(self.max_num_edges_dy):
@@ -218,28 +225,27 @@ class Solver:
             # self.mesh_dy.verts.nc[v1] += 1.0
 
     @ti.kernel
-    def compute_grad_and_hessian_stretch_constraints_jacobi_DOT_x(self, compliance_stretch: ti.f32):
+    def compute_grad_and_hessian_stretch_constraints_jacobi_DOT_x(self, compliance_stretch: float):
 
         for i in range(self.max_num_edges_dy):
             bi = i
             l0 = self.mesh_dy.edges.l0[bi]
             v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
-            x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
-            lij = x10.norm()
+            x01 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            lij = x01.norm()
 
             C = (lij - l0)
-            nabla_C = x10.normalized()
+            nabla_C = x01.normalized()
             schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] +
                      self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1])
 
             k = 1e8
             ld = k * C / (k * schur + 1.0)
 
-            p0 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
-            p1 = self.mesh_dy.verts.y[v1] + self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
+            p01 = x01 - schur * ld * nabla_C
 
-            self.mesh_dy.verts.gii[v0] += self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * compliance_stretch * (self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1] - p0 + p1)
-            self.mesh_dy.verts.gii[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * compliance_stretch * (self.mesh_dy.verts.y[v1] - self.mesh_dy.verts.y[v0] - p1 + p0)
+            self.mesh_dy.verts.gii[v0] += self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * compliance_stretch * (x01 - p01)
+            self.mesh_dy.verts.gii[v1] -= self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * compliance_stretch * (x01 - p01)
 
             self.mesh_dy.verts.hii[v0] += self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * compliance_stretch
             self.mesh_dy.verts.hii[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * compliance_stretch
@@ -247,9 +253,36 @@ class Solver:
             self.mesh_dy.verts.nc[v0] += 1.0
             self.mesh_dy.verts.nc[v1] += 1.0
 
+        for i in range(self.max_num_edges_dy):
+            v0, v1 = self.mesh_dy.edge_indices[2 * i], self.mesh_dy.edge_indices[2 * i + 1]
+            m_inv0, m_inv1 = self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.fixed[v1] * \
+                             self.mesh_dy.verts.m_inv[v1]
+            g0, g1 = self.mesh_dy.verts.gii[v0], self.mesh_dy.verts.gii[v1]
+            h0, h1 = self.mesh_dy.verts.hii[v0], self.mesh_dy.verts.hii[v1]
+
+            det = h0 * h1 - m_inv0 * m_inv1 * compliance_stretch * compliance_stretch
+
+            self.mesh_dy.verts.dx[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
+            self.mesh_dy.verts.dx[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
+
+        for v in self.mesh_dy.verts:
+            v.y += (v.dx / v.nc)
+
 
     @ti.kernel
-    def solve_jacobi_DOT_x(self, compliance_stretch: ti.f32):
+    def solve_jacobi_DOT_x(self, compliance_stretch: float):
+
+        for i in range(self.max_num_edges_dy):
+            v0, v1 = self.mesh_dy.edge_indices[2 * i], self.mesh_dy.edge_indices[2 * i + 1]
+            m_inv0, m_inv1 = self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1]
+            g0, g1 = self.mesh_dy.verts.gii[v0], self.mesh_dy.verts.gii[v1]
+            h0, h1 = self.mesh_dy.verts.hii[v0], self.mesh_dy.verts.hii[v1]
+
+            det = h0 * h1 - m_inv0 * m_inv1 * compliance_stretch * compliance_stretch
+
+            self.mesh_dy.verts.dx[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
+            self.mesh_dy.verts.dx[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
+
         for i in range(self.max_num_edges_dy):
             v0, v1 = self.mesh_dy.edge_indices[2 * i], self.mesh_dy.edge_indices[2 * i + 1]
             m_inv0, m_inv1 = self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0], self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1]
@@ -262,7 +295,7 @@ class Solver:
             self.mesh_dy.verts.dx[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
 
     @ti.kernel
-    def solve_bending_constraints_gauss_seidel_x(self, compliance_bending: ti.f32):
+    def solve_bending_constraints_gauss_seidel_x(self, compliance_bending: float):
 
         ti.loop_config(serialize=True)
         for i in range(self.max_num_edges_dy):
@@ -337,7 +370,7 @@ class Solver:
 
 
     @ti.kernel
-    def solve_collision_constraints_x(self, compliance_col: ti.f32):
+    def solve_collision_constraints_x(self, compliance_col: float):
 
         self.vt_st_pair_num.fill(0)
         self.tv_st_pair_num.fill(0)
@@ -384,7 +417,7 @@ class Solver:
         #                     collision_constraints_x.__ee_dy(compliance_col, eid, ejd, self.mesh_dy, d, self.ee_dy_pair_cache_size, self.ee_dy_pair, self.ee_dy_pair_num, self.ee_dy_pair_g, self.ee_dy_pair_schur)
 
     @ti.kernel
-    def solve_collision_constraints_v(self, mu: ti.f32):
+    def solve_collision_constraints_v(self, mu: float):
 
         for i in range(2 * self.max_num_verts_dy + self.max_num_verts_st):
 
@@ -433,7 +466,7 @@ class Solver:
         #             collision_constraints_v.__ee_dy(ei_d, ej_d, self.mesh_dy, g0, g1, g2, g3, schur, mu)
 
     @ti.kernel
-    def update_x(self, dt: ti.f32):
+    def update_x(self, dt: float):
 
         for v in self.mesh_dy.verts:
             # if v.id != 0:
@@ -456,7 +489,7 @@ class Solver:
 
 
     @ti.kernel
-    def compute_velocity(self, damping: ti.f32, dt: ti.f32):
+    def compute_velocity(self, damping: float, dt: float):
         for v in self.mesh_dy.verts:
             v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
 
@@ -472,14 +505,13 @@ class Solver:
 
     def solve_constraints_jacobi_x(self, dt):
 
-        self.init_variables()
+        # self.init_variables()
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
-
         self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
 
-        self.update_dx()
+        # self.update_dx()
 
         if self.enable_collision_handling:
 
@@ -500,9 +532,9 @@ class Solver:
         self.mesh_dy.verts.hii.fill(1.0)
         self.compute_grad_and_hessian_stretch_constraints_jacobi_DOT_x(compliance_stretch)
 
-        self.solve_jacobi_DOT_x(compliance_stretch)
+        # self.solve_jacobi_DOT_x(compliance_stretch)
 
-        self.update_jacobi_DOT_dx()
+        # self.update_jacobi_DOT_dx()
 
         if self.enable_collision_handling:
 
@@ -559,7 +591,7 @@ class Solver:
         self.solve_stretch_constraints_euler_x(compliance_stretch, size1, 1)
 
         self.mesh_dy.verts.y.fill(0.0)
-        # self.aggregate_duplicates()
+        self.aggregate_duplicates()
 
     #ls: linear solve
     def solve_constraints_euler_ls_x(self, dt):
@@ -644,7 +676,7 @@ class Solver:
             self.mesh_dy.fixed_euler[i] = self.mesh_dy.verts.fixed[vid]
 
     @ti.kernel
-    def solve_stretch_constraints_euler_x(self, compliance_stretch: ti.f32, size: ti.int32, offset: ti.i32):
+    def solve_stretch_constraints_euler_x(self, compliance_stretch: float, size: ti.int32, offset: ti.i32):
 
         path_len = self.mesh_dy.path_euler.shape[0]
         # print(self.mesh_dy.l0_euler.shape[0])
@@ -665,23 +697,29 @@ class Solver:
             self.mesh_dy.y_euler[v1] += self.mesh_dy.fixed_euler[v1] * self.mesh_dy.m_inv_euler[v1] * ld * nabla_C
 
     @ti.kernel
-    def compute_grad_and_hessian_stretch_constraints_euler_x(self, compliance_stretch: ti.f32):
+    def compute_grad_and_hessian_stretch_constraints_euler_x(self, compliance_stretch: float):
 
-        path_len = self.mesh_dy.path_euler.shape[0]
-        for i in range(path_len - 1):
-            l0 = self.mesh_dy.l0_euler[i]
-            x10 = self.mesh_dy.y_euler[i] - self.mesh_dy.y_euler[i + 1]
-            lij = x10.norm()
+        for i in range(self.max_num_edges_dy):
+            bi = i
+            l0 = self.mesh_dy.edges.l0[bi]
+            v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
+            x01 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            lij = x01.norm()
+
             C = (lij - l0)
-            nabla_C = x10.normalized()
+            nabla_C = x01.normalized()
+            schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] +
+                     self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1])
 
-            self.mesh_dy.a_euler[i + 0] -= self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch
-            self.mesh_dy.b_euler[i + 0] += self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch
-            self.mesh_dy.b_euler[i + 1] += self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i + 1] * compliance_stretch
-            self.mesh_dy.c_euler[i + 1] -= self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch
+            k = 1e8
+            ld = k * C / (k * schur + 1.0)
+            p01 = x01 - schur * ld * nabla_C
 
-            self.mesh_dy.g_euler[i] -= self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch * C * nabla_C
-            self.mesh_dy.g_euler[i + 1] += self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch * C * nabla_C
+            self.mesh_dy.verts.gii[v0] += self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * compliance_stretch * (x01 - p01)
+            self.mesh_dy.verts.gii[v1] -= self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * compliance_stretch * (x01 - p01)
+
+            self.mesh_dy.verts.hii[v0] += self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * compliance_stretch
+            self.mesh_dy.verts.hii[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * compliance_stretch
 
     @ti.kernel
     def compute_global_hessian_euler_x(self):
@@ -700,7 +738,12 @@ class Solver:
     def solve_ls_thomas_euler_x(self, a: ti.template(), b: ti.template(), c: ti.template(), d: ti.template(),
                                                                       c_tilde: ti.template(), d_tilde: ti.template(), dx: ti.template()):
 
+
+
         numVerts = b.shape[0]
+        #
+        # for i in range(numVerts):
+        #     dx[i] = d[i] / b[i]
         c_tilde[0] = c[0] / b[0]
 
         ti.loop_config(serialize=True)
@@ -790,7 +833,7 @@ class Solver:
 
 
     @ti.kernel
-    def solve_sewing_constraints_x(self, compliance: ti.f32):
+    def solve_sewing_constraints_x(self, compliance: float):
         for i in range(self.sewing_pairs_num[None]):
             v1_id = self.sewing_pairs[i][0]
             v2_id = self.sewing_pairs[i][1]
