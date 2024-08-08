@@ -28,7 +28,7 @@ class Solver:
 
         self.solver_type = 0
 
-        self.enable_velocity_update = False
+        self.enable_velocity_update = True
         self.enable_collision_handling = True
         self.enable_move_obstacle = False
         self.export_mesh = False
@@ -199,14 +199,16 @@ class Solver:
                 self.mesh_dy.verts.nc[v1] += 1.0
 
     @ti.kernel
-    def solve_spring_constraints_pd_diag_x(self, g: ti.math.vec3, dt: float, compliance_stretch: float, compliance_bending: float):
+    def solve_spring_constraints_pd_diag_x(self, g: ti.math.vec3, dt: float, compliance_stretch: float, compliance_bending: float,
+                                           enable_collision: bool, cell_size_st: ti.math.vec3, origin_st: ti.math.vec3, cell_size_dy: ti.math.vec3, origin_dy: ti.math.vec3,
+                                           damping: float, compliance_col: float,
+                                           enable_velocity_update: bool, mu: float):
 
         for v in self.mesh_dy.verts:
             v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
 
         self.mesh_dy.verts.gii.fill(0.0)
         self.mesh_dy.verts.hii.fill(1.0)
-
         # self.mesh_dy.verts.nc.fill(0.0)
 
         for i in range(self.max_num_edges_dy):
@@ -265,6 +267,132 @@ class Solver:
         # for v in self.mesh_dy.verts:
         #     if v.nc > 0:
         #         v.y += v.fixed * (v.dx / v.nc)
+
+        self.vt_st_candidates_num.fill(0)
+        self.tv_st_candidates_num.fill(0)
+        self.vt_dy_candidates_num.fill(0)
+        size = ti.cast(enable_collision, int) * (2 * self.max_num_verts_dy + self.max_num_verts_st)
+        # print(size)
+        for i in range(size):
+            if i < self.max_num_verts_dy:
+                vid = i
+                y = self.mesh_dy.verts.y[vid]
+                aabb_min = y - self.padding * ti.math.vec3(1.0)
+                aabb_max = y + self.padding * ti.math.vec3(1.0)
+                self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, vid,
+                                                      self.vt_st_candidates, self.vt_st_candidates_num)
+
+            elif i < 2 * self.max_num_verts_dy:
+                vid = i - self.max_num_verts_dy
+                y = self.mesh_dy.verts.y[vid]
+                aabb_min = y - self.padding * ti.math.vec3(1.0)
+                aabb_max = y + self.padding * ti.math.vec3(1.0)
+                self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid,
+                                                      self.vt_dy_candidates, self.vt_dy_candidates_num)
+
+            else:
+                vid = i - 2 * self.max_num_verts_dy
+                x = self.mesh_st.verts.x[vid]
+                aabb_min = x - self.padding * ti.math.vec3(1.0)
+                aabb_max = x + self.padding * ti.math.vec3(1.0)
+                self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid, self.tv_st_candidates, self.tv_st_candidates_num)
+
+    # self.ee_st_candidates_num.fill(0)
+    # self.ee_dy_candidates_num.fill(0)
+    #
+    # for i in range(2 * self.max_num_edges_dy):
+    #     if i < self.max_num_edges_dy:
+    #         ii = i
+    #         v0, v1 = self.mesh_dy.edge_indices[2 * ii], self.mesh_dy.edge_indices[2 * ii + 1]
+    #         aabb_min = ti.math.min(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) - self.padding * ti.math.vec3(1.0)
+    #         aabb_max = ti.math.max(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) + self.padding * ti.math.vec3(1.0)
+    #         self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, ii, self.ee_st_candidates, self.ee_st_candidates_num)
+    #     else:
+    #         ii = i - self.max_num_edges_dy
+    #         v0, v1 = self.mesh_dy.edge_indices[2 * ii], self.mesh_dy.edge_indices[2 * ii + 1]
+    #         aabb_min = ti.math.min(self.mesh_dy.verts.y[v0], self.mesh_dy.verts.y[v1]) - self.padding * ti.math.vec3(1.0)
+    #         aabb_max = ti.math.max(self.mesh_dy.verts.y[v0],self.mesh_dy.verts.y[v1]) + self.padding * ti.math.vec3(1.0)
+    #         self.lbvh_dy.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, ii, self.ee_dy_candidates, self.ee_dy_candidates_num)
+
+        self.vt_st_pair_num.fill(0)
+        self.tv_st_pair_num.fill(0)
+        self.vt_dy_pair_num.fill(0)
+        # self.ee_st_pair_num.fill(0)
+        # self.ee_dy_pair_num.fill(0)
+
+        # self.mesh_dy.verts.dx.fill(0.0)
+        # self.mesh_dy.verts.nc.fill(0.0)
+        # compliance_vt_st = 1e5 * dt * dt
+        d = self.dHat
+        size = ti.cast(enable_collision, int) * (2 * self.max_num_verts_dy + self.max_num_verts_st)
+        for i in range(size):
+
+            if i < self.max_num_verts_dy:
+                vid = i
+                for j in range(self.vt_st_candidates_num[vid]):
+                    fi_s = self.vt_st_candidates[vid, j]
+                    pd_collision_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
+
+            elif i < 2 * self.max_num_verts_dy:
+                vid = i - self.max_num_verts_dy
+                # for j in range(self.vt_dy_candidates_num[vid]):
+                #     fi_d = self.vt_dy_candidates[vid, j]
+                #     if self.is_in_face(vid, fi_d) != True:
+                #         pd_collision_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
+            else:
+                vis = i - 2 * self.max_num_verts_dy
+                for j in range(self.tv_st_candidates_num[vis]):
+                    fi_d = self.tv_st_candidates[vis, j]
+                    pd_collision_x.__tv_st(compliance_col, fi_d, vis, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
+
+        for v in self.mesh_dy.verts:
+            # if v.nc > 0:
+            v.y -= (v.gii / v.hii)
+            v.v = (1.0 - damping) * (v.y - v.x) / dt
+
+        self.mesh_dy.verts.dv.fill(0.0)
+        self.mesh_dy.verts.nc.fill(0.0)
+        size = ti.cast(enable_velocity_update, int) * ti.cast(enable_collision, int) * (2 * self.max_num_verts_dy + self.max_num_verts_st)
+
+        # print(size)
+        for i in range(size):
+            if i < self.max_num_verts_dy:
+                vid = i
+                # for vid in range(self.max_num_verts_dy):
+                for j in range(self.vt_st_pair_num[vid]):
+                    fi_s, dtype = self.vt_st_pair[vid, j, 0], self.vt_st_pair[vid, j, 1]
+                    g0, g1, g2, g3 = self.vt_st_pair_g[vid, j, 0], self.vt_st_pair_g[vid, j, 1], self.vt_st_pair_g[
+                        vid, j, 2], self.vt_st_pair_g[vid, j, 3]
+                    schur = self.vt_st_pair_schur[vid, j]
+                    collision_constraints_v.__vt_st(vid, fi_s, dtype, self.mesh_dy, self.mesh_st, g0, g1, g2, g3, schur, mu)
+
+            elif i < 2 * self.max_num_verts_dy:
+                vid = i - self.max_num_verts_dy
+                for j in range(self.vt_dy_pair_num[vid]):
+                    fi_d, dtype = self.vt_dy_pair[vid, j, 0], self.vt_dy_pair[vid, j, 1]
+                    g0, g1, g2, g3 = self.vt_dy_pair_g[vid, j, 0], self.vt_dy_pair_g[vid, j, 1], self.vt_dy_pair_g[
+                        vid, j, 2], self.vt_dy_pair_g[vid, j, 3]
+                    schur = self.vt_dy_pair_schur[vid, j]
+                    collision_constraints_v.__vt_dy(vid, fi_d, dtype, self.mesh_dy, g0, g1, g2, g3, schur, mu)
+
+            else:
+                vis = i - 2 * self.max_num_verts_dy
+                for j in range(self.tv_st_pair_num[vis]):
+                    fi_d, dtype = self.tv_st_pair[vis, j, 0], self.tv_st_pair[vis, j, 1]
+                    g0, g1, g2, g3 = self.tv_st_pair_g[vis, j, 0], self.tv_st_pair_g[vis, j, 1], self.tv_st_pair_g[
+                        vis, j, 2], self.tv_st_pair_g[vis, j, 3]
+                    schur = self.tv_st_pair_schur[vis, j]
+                    collision_constraints_v.__tv_st(fi_d, vis, dtype, self.mesh_dy, self.mesh_st, g0, g1, g2, g3, schur, mu)
+
+        for v in self.mesh_dy.verts:
+            if v.nc > 0:
+                v.v += (v.dv / v.nc)
+        # for v in self.mesh_dy.verts:
+        #     v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
+
+        for v in self.mesh_dy.verts:
+            # if v.id != 0:
+            v.x += dt * v.v
 
 
 
@@ -450,20 +578,20 @@ class Solver:
 
             if i < self.max_num_verts_dy:
                 vid = i
-                for j in range(self.vt_st_candidates_num[vid]):
-                    fi_s = self.vt_st_candidates[vid, j]
-                    collision_constraints_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d,
-                                                    self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num,
-                                                    self.vt_st_pair_g, self.vt_st_pair_schur)
+                # for j in range(self.vt_st_candidates_num[vid]):
+                #     fi_s = self.vt_st_candidates[vid, j]
+                #     collision_constraints_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d,
+                #                                     self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num,
+                #                                     self.vt_st_pair_g, self.vt_st_pair_schur)
 
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
-                for j in range(self.vt_dy_candidates_num[vid]):
-                    fi_d = self.vt_dy_candidates[vid, j]
-                    if self.is_in_face(vid, fi_d) != True:
-                        collision_constraints_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size,
-                                                        self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g,
-                                                        self.vt_dy_pair_schur)
+                # for j in range(self.vt_dy_candidates_num[vid]):
+                #     fi_d = self.vt_dy_candidates[vid, j]
+                #     if self.is_in_face(vid, fi_d) != True:
+                #         collision_constraints_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size,
+                #                                         self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g,
+                #                                         self.vt_dy_pair_schur)
             else:
                 vis = i - 2 * self.max_num_verts_dy
                 for j in range(self.tv_st_candidates_num[vis]):
@@ -729,7 +857,6 @@ class Solver:
         self.solve_spring_constraints_jacobi_x(self.g, dt, compliance_stretch, compliance_bending)
 
         # self.update_dx()
-
         if self.enable_collision_handling:
             compliance_collision = 1e8
             self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision)
@@ -745,12 +872,15 @@ class Solver:
         # self.init_variables()
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
-        self.solve_spring_constraints_pd_diag_x(self.g, dt, compliance_stretch, compliance_bending)
+        compliance_collision = 1e1 * compliance_stretch
+
+        self.solve_spring_constraints_pd_diag_x(self.g, dt, compliance_stretch, compliance_bending,
+                                                self.enable_collision_handling, self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, compliance_collision, self.enable_velocity_update, self.mu)
 
         # self.update_dx()
-        if self.enable_collision_handling:
-            compliance_collision = 1e8 * dt * dt
-            self.broadphase_pd_diag_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision)
+        # if self.enable_collision_handling:
+        #     compliance_collision = 1e8 * dt * dt
+        #     self.broadphase_pd_diag_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision)
 
             # self.init_variables()
 
@@ -1096,8 +1226,8 @@ class Solver:
             # aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB(padding=self.padding)
             self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
             if self.mesh_st != None:
-                self.mesh_st.computeAABB_faces(padding=self.padding)
-                aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
+                aabb_min_st, aabb_max_st = self.mesh_st.computeAABB_faces(padding=self.padding)
+                # aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
                 self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
 
         for _ in range(n_substeps):
@@ -1114,8 +1244,8 @@ class Solver:
                 # self.compute_y(self.g, dt_sub)
                 self.solve_pd_diag_x(dt_sub)
                 # self.compute_velocity(damping=self.damping, dt=dt_sub)
-                if self.enable_velocity_update:
-                    self.solve_constraints_v()
+                # if self.enable_velocity_update:
+                #     self.solve_constraints_v()
             elif self.solver_type == 2:
                 # contemporary
                 self.solve_constraints_jacobi_DOT_x(dt_sub)
