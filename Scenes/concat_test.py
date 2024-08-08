@@ -39,7 +39,7 @@ scale_list.append(3.0)
 mesh_dy = MeshTaichiWrapper(model_dir, "plane.obj", offsets=[0], scale=6.0, trans=ti.math.vec3(0, 0.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
 
 #static mesh
-mesh_st = MeshTaichiWrapper(model_dir, "square.obj",  offsets=[0], scale=1.5, trans=ti.math.vec3(0.0, -20.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-
+# mesh_st = MeshTaichiWrapper(model_dir, "square.obj",  offsets=[0], scale=1.5, trans=ti.math.vec3(0.0, -20.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = MeshTaichiWrapper(model_dir, "sphere1K.obj",  offsets=[0], scale=5, trans=ti.math.vec3(0.0, -5.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 # if you wan to use another mesh as a static object...
 # mesh_st = MeshTaichiWrapper(str(model_path / "OBJ/your-obj-name.obj"),  offsets=[0], scale=12.0, trans=ti.math.vec3(0.0, 0.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)

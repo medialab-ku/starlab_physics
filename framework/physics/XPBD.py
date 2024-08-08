@@ -549,18 +549,18 @@ class Solver:
                 for j in range(self.vt_st_candidates_num[vid]):
                     fi_s = self.vt_st_candidates[vid, j]
                     pd_collision_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num, self.vt_st_pair_g, self.vt_st_pair_schur)
-
-            elif i < 2 * self.max_num_verts_dy:
-                vid = i - self.max_num_verts_dy
-                for j in range(self.vt_dy_candidates_num[vid]):
-                    fi_d = self.vt_dy_candidates[vid, j]
-                    if self.is_in_face(vid, fi_d) != True:
-                        pd_collision_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
-            else:
-                vis = i - 2 * self.max_num_verts_dy
-                for j in range(self.tv_st_candidates_num[vis]):
-                    fi_d = self.tv_st_candidates[vis, j]
-                    pd_collision_x.__tv_st(compliance_col, fi_d, vis, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
+            #
+            # elif i < 2 * self.max_num_verts_dy:
+            #     vid = i - self.max_num_verts_dy
+            #     for j in range(self.vt_dy_candidates_num[vid]):
+            #         fi_d = self.vt_dy_candidates[vid, j]
+            #         if self.is_in_face(vid, fi_d) != True:
+            #             pd_collision_x.__vt_dy(vid, fi_d, self.mesh_dy, d, self.vt_st_pair_cache_size, self.vt_dy_pair, self.vt_dy_pair_num, self.vt_dy_pair_g, self.vt_dy_pair_schur)
+            # else:
+            #     vis = i - 2 * self.max_num_verts_dy
+            #     for j in range(self.tv_st_candidates_num[vis]):
+            #         fi_d = self.tv_st_candidates[vis, j]
+            #         pd_collision_x.__tv_st(compliance_col, fi_d, vis, self.mesh_dy, self.mesh_st, d, self.vt_st_pair_cache_size, self.tv_st_pair, self.tv_st_pair_num, self.tv_st_pair_g, self.tv_st_pair_schur)
 
         for v in self.mesh_dy.verts:
             # if v.nc > 0:
@@ -749,7 +749,7 @@ class Solver:
 
         # self.update_dx()
         if self.enable_collision_handling:
-            compliance_collision = 1e8
+            compliance_collision = 1e8 * dt * dt
             self.broadphase_pd_diag_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision)
 
             # self.init_variables()

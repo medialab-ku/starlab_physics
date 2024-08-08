@@ -54,9 +54,12 @@ def __vt_st(compliance, vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_cache_size, vt
     if d < dHat:
 
         schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0)
-        ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-        mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
-        mesh_dy.verts.nc[v0] += 1
+        k = 1e8
+        ld = k * (dHat - d) / (k * schur + 1.0)
+        p0 = mesh_dy.verts.y[v0] + mesh_dy.verts.m_inv[v0] * ld * g0
+        mesh_dy.verts.gii[v0] += mesh_dy.verts.m_inv[v0] * compliance * (mesh_dy.verts.y[v0] - p0)
+        mesh_dy.verts.hii[v0] += mesh_dy.verts.m_inv[v0] * compliance
+        # mesh_dy.verts.nc[v0] += 1
 
         if vt_st_pair_num[vi_d] < vt_st_cache_size:
             vt_st_pair[vi_d, vt_st_pair_num[vi_d], 0] = fi_s
