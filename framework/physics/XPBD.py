@@ -517,14 +517,14 @@ class Solver:
             # self.mesh_dy.verts.nc[v1] += 1.0
 
     @ti.kernel
-    def broadphase_lbvh(self, cell_size_st: ti.math.vec3, origin_st: ti.math.vec3, cell_size_dy: ti.math.vec3, origin_dy: ti.math.vec3, damping:float, dt:float, compliance_col: float):
+    def broadphase_lbvh(self, cell_size_st: ti.math.vec3, origin_st: ti.math.vec3, cell_size_dy: ti.math.vec3, origin_dy: ti.math.vec3, damping:float, dt:float, compliance_col: float, enable_collision: bool):
 
         self.vt_st_candidates_num.fill(0)
         self.tv_st_candidates_num.fill(0)
         self.vt_dy_candidates_num.fill(0)
 
-
-        for i in range(2 * self.max_num_verts_dy + self.max_num_verts_st):
+        size = ti.cast(enable_collision, int) * (2 * self.max_num_verts_dy + self.max_num_verts_st)
+        for i in range(size):
 
             if i < self.max_num_verts_dy:
                 vid = i
@@ -857,9 +857,9 @@ class Solver:
         self.solve_spring_constraints_jacobi_x(self.g, dt, compliance_stretch, compliance_bending)
 
         # self.update_dx()
-        if self.enable_collision_handling:
-            compliance_collision = 1e8
-            self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision)
+        # if self.enable_collision_handling:
+        compliance_collision = 1e8
+        self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision)
 
             # self.init_variables()
 
@@ -1236,8 +1236,8 @@ class Solver:
                 # self.compute_y(self.g, dt_sub)
                 self.solve_constraints_jacobi_x(dt_sub)
                 # self.compute_velocity(damping=self.damping, dt=dt_sub)
-                if self.enable_velocity_update:
-                    self.solve_constraints_v()
+                # if self.enable_velocity_update:
+                #     self.solve_constraints_v()
 
                 # self.update_x(dt_sub)
             elif self.solver_type == 1:
