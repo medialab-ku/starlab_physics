@@ -412,14 +412,15 @@ class Solver:
     @ti.kernel
     def caching_particles(self):
         for I in ti.grouped(self.grid_particles_num):
-            self.grid_particles_num[I]=0
-        for i in ti.grouped(self.particle_neighbours) :
-            self.particle_neighbours[i]=-1
+            self.grid_particles_num[I] = 0
+
+        for i in ti.grouped(self.particle_neighbours):
+            self.particle_neighbours[i] = -1
 
         for pi in self.y_p:
             grid_index = self.pos_to_index(self.y_p[pi])
             counter = ti.atomic_add(self.grid_particles_num[grid_index],1)
-            self.grid_particle_cache[grid_index,counter] = pi
+            self.grid_particle_cache[grid_index, counter] = pi
 
 
     def init_variables(self):
@@ -434,9 +435,8 @@ class Solver:
 
     def solve_constraints_jacobi_x(self, dt):
 
-        self.init_variables()
+        # self.init_variables()
         self.caching_particles()
-
         # compliance_stretch = self.stiffness_bending * dt * dt
         # compliance_bending = self.stiffness_stretch * dt * dt
         # self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
@@ -581,9 +581,8 @@ class Solver:
         self.num_particle_neighbours.fill(0)
 
         for vi in ti.ndrange(self.num_particles):
-
             self.c_dens[vi] = -1.0
-            nabla_C_ii = ti.Vector([0.0,0.0,0.0])
+            nabla_C_ii = ti.math.vec3(0.0)
             self.schur_p[vi] = 1e-4
             self.lambda_dens[vi] =0.0
             xi = self.y_p[vi]
@@ -611,8 +610,6 @@ class Solver:
 
             self.schur_p[vi] += nabla_C_ii.dot(nabla_C_ii)
 
-
-
             if self.c_dens[vi] > 0.0 :
                 self.lambda_dens[vi] = -self.c_dens[vi] / self.schur_p[vi]
 
@@ -638,8 +635,6 @@ class Solver:
             #         # self.dx_p[vj] += self.lambda_dens[vi] * nabla_C_ji
             #         self.dx_p[vj] += (self.lambda_dens[vi]) * nabla_C_ji
             #         self.nc_p[vj] += 1
-
-
 
 
     def forward(self, n_substeps):
