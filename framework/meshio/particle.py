@@ -25,10 +25,10 @@ class Particle:
 
         self.x0 = ti.Vector.field(n=3, dtype=float)
         self.y = ti.Vector.field(n=3, dtype=float)
-        self.dx = ti.Vector.field(n=3, dtype=float)
+        # self.dx = ti.Vector.field(n=3, dtype=float)
         self.x = ti.Vector.field(n=3, dtype=float)
-        self.c_den = ti.Vector.field(n=3, dtype=float)
-        self.ld_den = ti.Vector.field(n=3, dtype=float)
+        # self.c_den = ti.Vector.field(n=3, dtype=float)
+        # self.ld_den = ti.Vector.field(n=3, dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
         self.m_inv = ti.field(dtype=float)
 
@@ -37,8 +37,8 @@ class Particle:
         # self.lambda_dens = ti.field(dtype=ti.float32, shape=(self.num_particles))
         # self.y = ti.Vector.field(n=3, dtype=float)
 
-        particle_snode = ti.root.dense(ti.i, self.num_particles).place(self.x0, self.y, self.dx, self.x, self.v, self.m_inv)
-        particle_snode.place(self.c_den, self.ld_den)
+        particle_snode = ti.root.dense(ti.i, self.num_particles).place(self.x0, self.y, self.x, self.v, self.m_inv)
+        # particle_snode.place(self.c_den, self.ld_den)
 
         # self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
         # self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)

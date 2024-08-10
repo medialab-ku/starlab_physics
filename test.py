@@ -67,17 +67,21 @@ position_deltas = ti.Vector.field(dim, float)
 board_states = ti.Vector.field(2, float)
 #
 ti.root.dense(ti.i, num_particles).place(old_positions, positions, velocities)
+
 grid_snode = ti.root.dense(ti.ij, grid_size)
 grid_snode.place(grid_num_particles)
-
-# print(grid_num_particles.shape)
-
 grid_snode.dense(ti.k, max_num_particles_per_cell).place(grid2particles)
+# print(grid2particles.shape)
+
 nb_node = ti.root.dense(ti.i, num_particles)
 nb_node.place(particle_num_neighbors)
 nb_node.dense(ti.j, max_num_neighbors).place(particle_neighbors)
 ti.root.dense(ti.i, num_particles).place(lambdas, position_deltas)
+
+print(particle_neighbors.shape)
+
 ti.root.place(board_states)
+# print(board_states.shape)
 # old_positions = ti.Vector.field(dim, float, shape=num_particles)
 # positions = ti.Vector.field(dim, float, shape=num_particles)
 # velocities = ti.Vector.field(dim, float, shape=num_particles)
@@ -204,7 +208,6 @@ def substep():
     # Eq (8) ~ (11)
     for p_i in positions:
         pos_i = positions[p_i]
-
         grad_i = ti.Vector([0.0, 0.0])
         sum_gradient_sqr = 0.0
         density_constraint = 0.0
