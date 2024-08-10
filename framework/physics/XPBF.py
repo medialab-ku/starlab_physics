@@ -132,6 +132,8 @@ class Solver:
     def compute_y(self, dt: float):
         # for v in self.mesh_dy.verts:
         #     v.y = v.x + v.fixed * v.v * dt + self.g * dt * dt
+
+        ti.block_local(self.y_p, self.x_p, self.v_p)
         for i in self.v_p:
             self.v_p[i] = self.v_p[i] + self.g * dt
             self.y_p[i] = self.x_p[i] + self.v_p[i] * dt
@@ -143,6 +145,7 @@ class Solver:
         # for v in self.mesh_dy.verts:
         #     # if v.id != 0:
         #     v.x += dt * v.v
+        ti.block_local(self.y_p, self.x_p, self.v_p)
         for i in self.x_p:
             new_x = self.confine_boundary(self.y_p[i])
             self.v_p[i] = (1.0 - damping) * (new_x - self.x_p[i]) / dt
@@ -331,7 +334,8 @@ class Solver:
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
-            # self.solve_constraints_jacobi_x(dt_sub)
+
+            self.solve_constraints_jacobi_x(dt_sub)
 
             # if self.enable_velocity_update:
             #     self.solve_constraints_v()
