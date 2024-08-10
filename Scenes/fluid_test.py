@@ -6,17 +6,24 @@ from pathlib import Path
 enable_profiler = False
 ti.init(arch=ti.cuda, device_memory_GB=8, kernel_profiler=enable_profiler, default_fp=ti.float32)
 
-gravity = ti.math.vec3(0.0, -9.8, 0.0)
-dt = 0.03
-grid_size = ti.math.vec3(7, 7, 7)
-# particle_radius = 0.02
-
 model_path = Path(__file__).resolve().parent.parent / "models"
 model_dir = str(model_path) + "/VTK"
-# print(model_dir)
+# model_dir = model_dir + "/cube87K.vtk"
 
-model_dir = model_dir + "/cube87K.vtk"
-particles_dy = Particle(model_dir, trans=ti.math.vec3(0, 0.0, 0.0), scale=ti.math.vec3(1.0, 1.0, 1.0) * 5,)
+particle_names = []
+trans = []
+scale = []
+rot = []
+
+particle_names.append("cube87K.vtk")
+particle_names.append("cube87K.vtk")
+trans.append([0.0, -5.0, 0.0])
+trans.append([0.0, 5.0, 0.0])
+# scale.append(1.0)
+scale.append(3.0)
+scale.append(3.0)
+
+particles_dy = Particle(model_dir, particle_names, translations=trans, scales=scale,)
 
 model_dir = model_dir + "/cuboid224_170K.vtk"
 particles_st = None

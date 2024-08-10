@@ -52,16 +52,16 @@ class Solver:
         self.particle_cache_size = 500
         self.nb_particle_cache_size = 500
 
-        self.grid_particles_num = ti.field(dtype=int, shape=self.grid_size)
-        self.grid_particle_cache = ti.field(dtype=int, shape=(self.grid_size[0], self.grid_size[1], self.grid_size[2], self.particle_cache_size))
-
-        self.num_particle_neighbours = ti.field(dtype=int, shape=(self.num_particles))
-        self.particle_neighbours = ti.field(dtype=int, shape=(self.num_particles, self.nb_particle_cache_size))
-        self.particle_neighbours_gradients = ti.Vector.field(3,dtype=float, shape=(self.num_particles, self.nb_particle_cache_size))
-
-        self.c_dens = ti.field(dtype=float, shape=(self.num_particles))
-        self.schur_p = ti.field(dtype=float, shape=(self.num_particles))
-        self.lambda_dens = ti.field(dtype=float, shape=(self.num_particles))
+        # self.grid_particles_num = ti.field(dtype=int, shape=self.grid_size)
+        # self.grid_particle_cache = ti.field(dtype=int, shape=(self.grid_size[0], self.grid_size[1], self.grid_size[2], self.particle_cache_size))
+        #
+        # self.num_particle_neighbours = ti.field(dtype=int, shape=(self.num_particles))
+        # self.particle_neighbours = ti.field(dtype=int, shape=(self.num_particles, self.nb_particle_cache_size))
+        # self.particle_neighbours_gradients = ti.Vector.field(3,dtype=float, shape=(self.num_particles, self.nb_particle_cache_size))
+        #
+        # self.c_dens = ti.field(dtype=float, shape=(self.num_particles))
+        # self.schur_p = ti.field(dtype=float, shape=(self.num_particles))
+        # self.lambda_dens = ti.field(dtype=float, shape=(self.num_particles))
 
         self.aabb_x0 = ti.Vector.field(n=3, dtype=float, shape=8)
         self.aabb_index0 = ti.field(dtype=int, shape=24)
@@ -331,7 +331,7 @@ class Solver:
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
-            self.solve_constraints_jacobi_x(dt_sub)
+            # self.solve_constraints_jacobi_x(dt_sub)
 
             # if self.enable_velocity_update:
             #     self.solve_constraints_v()

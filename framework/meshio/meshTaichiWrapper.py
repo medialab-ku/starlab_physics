@@ -6,7 +6,6 @@ import os
 import numpy as np
 import random
 from framework.utilities.graph_coloring import GraphColoring
-
 @ti.data_oriented
 class MeshTaichiWrapper:
     def __init__(self,
