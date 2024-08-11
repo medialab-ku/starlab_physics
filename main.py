@@ -245,8 +245,7 @@ while window.running:
     # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
     # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
 
-
-    scene.particles(sim.particle_dy.x, radius=sim.particle_rad, color=(0, 0, 1))
+    scene.particles(sim.particle_dy.x, radius=sim.particle_rad, per_vertex_color=sim.particle_dy.color)
     # scene.particles(sim., radius=sim.particle_rad, color=(1, 0, 0))
     # canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
