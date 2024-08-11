@@ -49,15 +49,25 @@ class Solver:
             self.max_num_faces_st = len(self.mesh_st.faces)
 
         self.lbvh_dy = LBVH_CELL(len(self.mesh_dy.faces))
-
         self.vt_st_pair_cache_size = 40
-        self.vt_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
-        self.vt_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
-        self.vt_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
-        self.vt_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        self.vt_st_candidates = ti.field(dtype=int)
+        self.vt_st_candidates_num = ti.field(dtype=int)
+        self.vt_st_pair = ti.field(dtype=int)
+        self.vt_st_pair_num = ti.field(dtype=int)
+
+        test = ti.root.dense(ti.i, self.max_num_verts_dy).place(self.vt_st_candidates_num,  self.vt_st_pair_num)
+        test2 = test.dense(ti.j, self.vt_st_pair_cache_size)
+        test2.place(self.vt_st_candidates)
+        test2.dense(ti.k, 2).place(self.vt_st_pair)
+        print(self.vt_st_pair.shape)
+
+        # self.vt_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
+        # self.vt_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+        # self.vt_st_pair = ti.field(dtype=ti.int32, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 2))
+        # self.vt_st_pair_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_dy)
+
         self.vt_st_pair_g = ti.Vector.field(n=3, dtype=float, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size, 4))
         self.vt_st_pair_schur = ti.field(dtype=float, shape=(self.max_num_verts_dy, self.vt_st_pair_cache_size))
-
         self.tv_st_pair_cache_size = 40
         self.tv_st_candidates = ti.field(dtype=ti.int32, shape=(self.max_num_verts_st, self.vt_st_pair_cache_size))
         self.tv_st_candidates_num = ti.field(dtype=ti.int32, shape=self.max_num_verts_st)
@@ -578,11 +588,11 @@ class Solver:
 
             if i < self.max_num_verts_dy:
                 vid = i
-                # for j in range(self.vt_st_candidates_num[vid]):
-                #     fi_s = self.vt_st_candidates[vid, j]
-                #     collision_constraints_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d,
-                #                                     self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num,
-                #                                     self.vt_st_pair_g, self.vt_st_pair_schur)
+                for j in range(self.vt_st_candidates_num[vid]):
+                    fi_s = self.vt_st_candidates[vid, j]
+                    collision_constraints_x.__vt_st(compliance_col, vid, fi_s, self.mesh_dy, self.mesh_st, d,
+                                                    self.vt_st_pair_cache_size, self.vt_st_pair, self.vt_st_pair_num,
+                                                    self.vt_st_pair_g, self.vt_st_pair_schur)
 
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
@@ -859,7 +869,7 @@ class Solver:
         # self.update_dx()
         # if self.enable_collision_handling:
         compliance_collision = 1e8
-        self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision)
+        self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision, self.enable_collision_handling)
 
             # self.init_variables()
 

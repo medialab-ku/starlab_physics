@@ -23,7 +23,6 @@ class LBVH_CELL:
         self.grid_res[2] = 32
         self.cell_size = ti.math.vec3(0)
         self.origin = ti.math.vec3(0)
-
         self.num_cells = self.grid_res[0] * self.grid_res[1] * self.grid_res[2]
         print("# cells: ", self.num_cells)
         self.cell_centers = ti.Vector.field(n=3, dtype=float, shape=self.num_cells)
@@ -34,6 +33,8 @@ class LBVH_CELL:
         self.cell_ids_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.cell_morton_codes_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.num_faces_in_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
+
+
         self.prefix_sum_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.prefix_sum_cell_temp = ti.field(dtype=ti.i32, shape=self.num_cells)
 
@@ -607,6 +608,7 @@ class LBVH_CELL:
         # ti.loop_config(serialize=True)
 
         # ti.loop_config(block_dim=64, block_dim_adaptive=True)
+
         for fid in range(self.num_leafs):
             I = self.num_leafs - 1 - fid
             cell_id = self.face_cell_ids[I]
@@ -686,19 +688,13 @@ class LBVH_CELL:
 
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
-        # self.origin = aabb_min_g
-        # self.cell_size = self.assign_cell_centers(aabb_min_g, aabb_max_g)
-        # self.prefix_sum_cell.fill(0)
 
         self.assign_face_cell_ids(mesh, aabb_min_g, aabb_max_g)
-        # self.prefix_sum_executer_cell_Blelloch.run(self.prefix_sum_cell)
         self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
+        # self.prefix_sum_executer_cell_Blelloch.run(self.prefix_sum_cell)
+
         self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
         self.counting_sort_cells(mesh)
-        # if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
-        #     print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
-
-        # self.assign_leaf_cell_nodes(mesh)
         self.compute_bvh_aabbs_cells()
 
     @ti.func
