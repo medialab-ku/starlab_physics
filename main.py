@@ -84,12 +84,12 @@ def show_options():
         # if mesh_export is True:
         #     frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
-        # w.text("")
+        w.text("")
         # w.text("dynamic mesh stats.")
-        # verts_str = "# verts: " + str(sim.max_num_verts_dy)
+        particles_str = "# particles: " + str(sim.num_particles)
         # edges_str = "# edges: " + str(sim.max_num_edges_dy)
         # faces_str = "# faces: " + str(sim.max_num_faces_dy)
-        # w.text(verts_str)
+        w.text(particles_str)
         # w.text(edges_str)
         # w.text(faces_str)
         # w.text("")
@@ -246,6 +246,7 @@ while window.running:
     # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
 
     scene.particles(sim.particle_dy.x, radius=sim.particle_rad, per_vertex_color=sim.particle_dy.color)
+    scene.particles(sim.particle_st.x, radius=sim.particle_rad, color=(0.5, 0.5, 0.5))
     # scene.particles(sim., radius=sim.particle_rad, color=(1, 0, 0))
     # canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 

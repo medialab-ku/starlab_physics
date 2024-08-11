@@ -48,6 +48,7 @@ class Solver:
         self.cell_size = (self.bd_max - self.bd_min)[0] / self.grid_size[0]
         # self.cell_size_recpr = 1.0 / self.cell_size
         print(self.cell_size)
+
         self.particle_rad = 0.2 * self.cell_size
         self.x_p = self.particle_dy.x
         self.y_p = self.particle_dy.y
@@ -57,12 +58,17 @@ class Solver:
         self.cell_cache_size = 100
         self.nb_cache_size = 50
 
-        self.grid_num_particles = ti.field(int)
-        self.particles2grid = ti.field(int)
+        self.x_st = self.particle_st.x0
+
+        self.grid_num_particles_dy = ti.field(int)
+        self.grid_num_particles_st = ti.field(int)
+        self.particles2grid_dy = ti.field(int)
+        self.particles2grid_st = ti.field(int)
 
         grid_snode = ti.root.dense(ti.ijk, (4, 4, 4)).dense(ti.ijk, (4, 4, 4)).dense(ti.ijk, (4, 4, 4))
-        grid_snode.place(self.grid_num_particles)
-        grid_snode.dense(ti.l,  self.cell_cache_size).place(self.particles2grid)
+        grid_snode.place(self.grid_num_particles_dy, self.grid_num_particles_st)
+        grid_snode.dense(ti.l,  self.cell_cache_size).place(self.particles2grid_dy, self.particles2grid_st)
+
         # print(self.grid2particles.shape)
         self.particle_num_neighbors = ti.field(int)
         self.particle_neighbors = ti.field(int)
@@ -86,7 +92,7 @@ class Solver:
     @ti.kernel
     def test(self, y: ti.math.vec3, origin: ti.math.vec3, cell_size: float):
         test = (y - origin) / cell_size
-        print(self.particles2grid[ti.math.ivec3(0), 0])
+        print(self.particles2grid_dy[ti.math.ivec3(0), 0])
         print(ti.cast(test, int))
         # print(ti.cast(test, int))
 
@@ -185,32 +191,24 @@ class Solver:
     @ti.kernel
     def search_neighbours(self):
 
-        for I in ti.grouped(self.grid_num_particles):
-            self.grid_num_particles[I] = 0
+        for I in ti.grouped(self.grid_num_particles_dy):
+            self.grid_num_particles_dy[I] = 0
 
-        # for I in ti.grouped(self.particle_neighbors):
-        #     self.particle_neighbors[I] = -1
+        for I in ti.grouped(self.grid_num_particles_st):
+            self.grid_num_particles_st[I] = 0
 
-        # self.nc.fill(0.0)
-        # self.dx.fill(0.0)
+
         for pi in self.y_p:
             cell_id = self.pos_to_cell_id(self.x_p[pi])
-
-            # for i in ti.static(range(3)):
-            #     if cell_id[i] < 0 or cell_id[i] >= self.grid_size[0]: print("fuck")
-            counter = ti.atomic_add(self.grid_num_particles[cell_id], 1)
+            counter = ti.atomic_add(self.grid_num_particles_dy[cell_id], 1)
             if counter < self.cell_cache_size:
-                self.particles2grid[cell_id, counter] = pi
+                self.particles2grid_dy[cell_id, counter] = pi
 
-            #             if nb_i < self.nb_cache_size and pj != pi and (pos_i - self.y_p[pj]).norm() < 3.0 * self.particle_rad:
-            #                 self.particle_neighbors[pi, nb_i] = pj
-            #                 nb_i += 1
-            #
-            # self.particle_num_neighbors[pi] = nb_i
-
-
-            # else:
-            #     print("fuck")
+        for pi in self.x_st:
+            cell_id = self.pos_to_cell_id(self.x_st[pi])
+            counter = ti.atomic_add(self.grid_num_particles_st[cell_id], 1)
+            if counter < self.cell_cache_size:
+                self.particles2grid_st[cell_id, counter] = pi
 
     @ti.func
     def pos_to_cell_id(self, y: ti.math.vec3) -> ti.math.ivec3:
@@ -249,8 +247,8 @@ class Solver:
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
                 if self.is_in_grid(cell_to_check):
-                    for j in range(self.grid_num_particles[cell_to_check]):
-                        pj = self.particles2grid[cell_to_check, j]
+                    for j in range(self.grid_num_particles_dy[cell_to_check]):
+                        pj = self.particles2grid_dy[cell_to_check, j]
                         if pi != pj:
                             pos_j = self.y_p[pj]
                             xji = pos_j - pos_i
@@ -267,6 +265,22 @@ class Solver:
 
                                 self.nc[pi] += 1
                                 self.nc[pj] += 1
+
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.is_in_grid(cell_to_check):
+                    for j in range(self.grid_num_particles_st[cell_to_check]):
+                        pj = self.particles2grid_st[cell_to_check, j]
+                        # if pi != pj:
+                        pos_j = self.x_st[pj]
+                        xji = pos_j - pos_i
+
+                        if xji.norm() < 2 * self.particle_rad:
+                            dir = ti.math.normalize(xji)
+                            # proj0 = pos_i - self.particle_rad * dir
+                            self.dx[pi] += (- self.particle_rad * dir)
+                            self.nc[pi] += 1
+
 
         for pi in self.y_p:
             if self.nc[pi] > 0:

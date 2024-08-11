@@ -15,19 +15,29 @@ trans = []
 scale = []
 rot = []
 
-particle_names.append("cube87K.vtk")
-particle_names.append("cube87K.vtk")
-trans.append([0.0, -5.0, 0.0])
+particle_names.append("cube.vtk")
+# particle_names.append("cube.vtk")
+# trans.append([0.0, -5.0, 0.0])
 trans.append([0.0, 5.0, 0.0])
 # scale.append(1.0)
-scale.append(3.0)
-scale.append(3.0)
+scale.append(5.0)
+# scale.append(5.0)
 
 particles_dy = Particle(model_dir, particle_names, translations=trans, scales=scale,)
-
-model_dir = model_dir + "/cuboid224_170K.vtk"
+# model_dir = model_dir + "/cuboid224_170K.vtk"
 particles_st = None
-# particles_st = Particle(model_dir, trans=ti.math.vec3(0, 50.0, 0.0), scale=ti.math.vec3(1.0, 1.0, 1.0) * 20,)
+particle_names.clear()
+trans.clear()
+scale.clear()
+
+particle_names.append("cube.vtk")
+# particle_names.append("cube.vtk")
+trans.append([0.0, -5.0, 0.0])
+# trans.append([0.0, 5.0, 0.0])
+# scale.append(1.0)
+scale.append(5.0)
+# scale.append(5.0)
+particles_st = Particle(model_dir, particle_names, translations=trans, scales=scale,)
 
 # model_names = []
 # trans_list = []
