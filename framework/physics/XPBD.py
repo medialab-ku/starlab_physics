@@ -26,7 +26,7 @@ class Solver:
         self.mu = 0.8
         self.padding = 0.05
 
-        self.solver_type = 4
+        self.solver_type = 0
 
         self.enable_velocity_update = False
         self.enable_collision_handling = False
@@ -512,25 +512,49 @@ class Solver:
         self.mesh_dy.verts.y.fill(0.0)
         self.aggregate_duplicates()
 
+    def solve_constraints_original_coloring_x(self, dt):
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
+
+        for i in range(len(self.mesh_dy.original_edge_color_prefix_sum_np)):
+            if self.mesh_dy.original_edge_color_prefix_sum_np[i] >= self.mesh_dy.num_edges:
+                break
+
+            if i < len(self.mesh_dy.original_edge_color_prefix_sum_np) - 1:
+                current_offset = self.mesh_dy.original_edge_color_prefix_sum_np[i]
+                next_offset = self.mesh_dy.original_edge_color_prefix_sum_np[i + 1]
+                if current_offset < next_offset:
+                    self.solve_stretch_constraints_original_parallel_gauss_seidel_x(compliance_stretch, current_offset,
+                                                                                   next_offset)
+            elif i == len(self.mesh_dy.original_edge_color_prefix_sum_np) - 1:
+                current_offset = self.mesh_dy.original_edge_color_prefix_sum_np[i]
+                next_offset = len(self.mesh_dy.num_edges)
+                if current_offset < next_offset:
+                    self.solve_stretch_constraints_original_parallel_gauss_seidel_x(compliance_stretch, current_offset,
+                                                                                   next_offset)
+
     def solve_constraints_phantom_coloring_x(self, dt):
         self.init_variables()
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
-        for i in range(len(self.mesh_dy.edge_color_prefix_sum_np)):
-            if i < len(self.mesh_dy.edge_color_prefix_sum_np) - 1:
-                current_offset = self.mesh_dy.edge_color_prefix_sum_np[i]
-                next_offset = self.mesh_dy.edge_color_prefix_sum_np[i + 1]
+        for i in range(len(self.mesh_dy.phantom_edge_color_prefix_sum_np)):
+            if self.mesh_dy.phantom_edge_color_prefix_sum_np[i] >= self.mesh_dy.phantom_len:
+                break
+
+            if i < len(self.mesh_dy.phantom_edge_color_prefix_sum_np) - 1:
+                current_offset = self.mesh_dy.phantom_edge_color_prefix_sum_np[i]
+                next_offset = self.mesh_dy.phantom_edge_color_prefix_sum_np[i + 1]
                 if current_offset < next_offset:
-                    self.solve_stretch_constraints_parallel_gauss_seidel_x(compliance_stretch, current_offset,
-                                                                           next_offset)
-            elif i == len(self.mesh_dy.edge_color_prefix_sum_np) - 1:
-                current_offset = self.mesh_dy.edge_color_prefix_sum_np[i]
-                next_offset = len(self.mesh_dy.edge_color_np)
+                    self.solve_stretch_constraints_phantom_parallel_gauss_seidel_x(compliance_stretch, current_offset,
+                                                                                   next_offset)
+            elif i == len(self.mesh_dy.phantom_edge_color_prefix_sum_np) - 1:
+                current_offset = self.mesh_dy.phantom_edge_color_prefix_sum_np[i]
+                next_offset = len(self.mesh_dy.phantom_len)
                 if current_offset < next_offset:
-                    self.solve_stretch_constraints_parallel_gauss_seidel_x(compliance_stretch, current_offset,
-                                                                           next_offset)
+                    self.solve_stretch_constraints_phantom_parallel_gauss_seidel_x(compliance_stretch, current_offset,
+                                                                                   next_offset)
 
         self.update_dx()
 
@@ -563,11 +587,32 @@ class Solver:
             self.mesh_dy.fixed_euler[i] = self.mesh_dy.verts.fixed[vid]
 
     @ti.kernel
-    def solve_stretch_constraints_parallel_gauss_seidel_x(self, compliance_stretch: ti.f32, current_offset: ti.i32,
-                                                          next_offset: ti.i32):
+    def solve_stretch_constraints_original_parallel_gauss_seidel_x(self, compliance_stretch: ti.f32, current_offset: ti.i32,
+                                                                   next_offset: ti.i32):
+        # ti.loop_config(serialize=True)
         for i in range(current_offset, next_offset):
-            v0, v1 = (self.mesh_dy.edge_color_field[i,0],
-                      self.mesh_dy.edge_color_field[i,1])
+            v0, v1 = (self.mesh_dy.original_edge_color_field[i,0],
+                      self.mesh_dy.original_edge_color_field[i,1])
+            l0 = self.mesh_dy.l0_original[i]
+            x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            lij = x10.norm()
+
+            C = (lij - l0)
+            nabla_C = x10.normalized()
+            schur = (self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] +
+                     self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1])
+            ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
+
+            self.mesh_dy.verts.y[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
+            self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
+
+    @ti.kernel
+    def solve_stretch_constraints_phantom_parallel_gauss_seidel_x(self, compliance_stretch: ti.f32, current_offset: ti.i32,
+                                                                  next_offset: ti.i32):
+        # ti.loop_config(serialize=True)
+        for i in range(current_offset, next_offset):
+            v0, v1 = (self.mesh_dy.phantom_edge_color_field[i,0],
+                      self.mesh_dy.phantom_edge_color_field[i,1])
             l0 = self.mesh_dy.l0_phantom[i]
             x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
             lij = x10.norm()
@@ -578,8 +623,6 @@ class Solver:
                      self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1])
             ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
-            # we can directly apply constraints to the predicted position of vertex
-            # Hence, we don't need to use the update_dx() function
             self.mesh_dy.verts.y[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
             self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
             self.mesh_dy.verts.nc[v0] += 1.0
@@ -766,6 +809,8 @@ class Solver:
             elif self.solver_type == 3:
                 self.solve_constraints_euler_ls_x(dt_sub)
             elif self.solver_type == 4:
+                self.solve_constraints_original_coloring_x(dt_sub)
+            elif self.solver_type == 5:
                 self.solve_constraints_phantom_coloring_x(dt_sub)
 
 

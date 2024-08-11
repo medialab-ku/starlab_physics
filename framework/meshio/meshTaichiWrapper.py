@@ -231,10 +231,15 @@ class MeshTaichiWrapper:
         self.max_color = 20
         self.cracking_threshold = 6
         self.phantom_len = self.num_edges
-        self.edge_color_field = ti.field(dtype=ti.i32, shape=(self.phantom_len, 3))
-        self.edge_color_prefix_sum_field = ti.field(dtype=ti.i32, shape=self.max_color)
-        self.edge_color_np = self.edge_color_field.to_numpy()
-        self.edge_color_prefix_sum_np = self.edge_color_prefix_sum_field.to_numpy()
+
+        self.original_edge_color_field = ti.field(dtype=ti.i32, shape=(self.phantom_len, 3))
+        self.original_edge_color_prefix_sum_field = ti.field(dtype=ti.i32, shape=self.max_color)
+        self.original_edge_color_np = self.original_edge_color_field.to_numpy()
+        self.original_edge_color_prefix_sum_np = self.original_edge_color_prefix_sum_field.to_numpy()
+        self.phantom_edge_color_field = ti.field(dtype=ti.i32, shape=(self.phantom_len, 3))
+        self.phantom_edge_color_prefix_sum_field = ti.field(dtype=ti.i32, shape=self.max_color)
+        self.phantom_edge_color_np = self.phantom_edge_color_field.to_numpy()
+        self.phantom_edge_color_prefix_sum_np = self.phantom_edge_color_prefix_sum_field.to_numpy()
 
         if is_static is False:
             dir = model_dir[:-len("models/OBJ")] + "color_graph"
@@ -251,19 +256,70 @@ class MeshTaichiWrapper:
             if not (os.path.isfile(precomputed_origin_graph_file) or
                     os.path.isfile(precomputed_phantom_graph_file) or
                     os.path.isfile(precomputed_phantom_origin_numpy_file)):
-                print("Constructing an phantom graph...")
+                print("Constructing an original graph...")
                 original_graph = graph_utils.construct_graph(self.eid_np)
 
+                # executing edge coloring on the original graph
+                print("Executing original coloring... It might take a long time...")
+                start = time.time()
+                original_edge_colors = {}
+
+                for edge in original_graph.edges():
+                    v0 = int(edge[0])
+                    v1 = int(edge[1])
+                    if v0 > v1:
+                        v0, v1 = v1, v0
+                    sorted_edge = (v0, v1)
+                    available_colors = set(range(len(original_graph.edges())))
+                    neighbors = list(set(original_graph.edges(v0)) | set(original_graph.edges(v1)))
+
+                    for neighbor in neighbors:
+                        vn0 = int(neighbor[0])
+                        vn1 = int(neighbor[1])
+                        if vn0 > vn1:
+                            vn0, vn1 = vn1, vn0
+                        neighbor_sorted = (vn0, vn1)
+
+                        if neighbor_sorted in original_edge_colors:
+                            available_colors.discard(original_edge_colors[neighbor_sorted])
+
+                    original_edge_colors[sorted_edge] = min(available_colors)
+
+                end = time.time()
+                print("Original Coloring Elapsed time:", round(end - start, 5), "sec.")
+                sorted_original_edge_colors = dict(sorted(original_edge_colors.items(), key=lambda x: x[1]))
+
+                original_edge_color_temp = []
+                for edge, color in sorted_original_edge_colors.items():
+                    v0 = int(edge[0])
+                    v1 = int(edge[1])
+                    c = color
+                    original_edge_color_temp.append([v0, v1, c])
+                self.original_edge_color_np = np.array(original_edge_color_temp, dtype=int)
+                print("Original Edge-Color Field")
+                print(self.original_edge_color_np)
+
+                kind_of_color = self.original_edge_color_np[:, 2]
+                color_values, color_first_index = np.unique(kind_of_color, return_index=True)
+                original_prefix_sum_temp = list(color_first_index)
+
+                self.original_edge_color_prefix_sum_np = np.full(self.max_color, fill_value=self.num_edges, dtype=int)
+                self.original_edge_color_prefix_sum_np[:len(original_prefix_sum_temp)] = original_prefix_sum_temp
+                print(self.original_edge_color_prefix_sum_np)
+
+
+                # executing edge coloring on the phantom graph
                 # extract vertex which degree is not lower than the threshold, and sorting those in descending order
-                degree_vertices_list = list(original_graph.degree()) # [(vertex, degree), ...]
+                print("Constructing a phantom graph...")
+                degree_vertices_list = list(original_graph.degree())  # [(vertex, degree), ...]
                 sorted_degree_vertices_list = sorted(degree_vertices_list, key=lambda x: x[1], reverse=True)
                 filtered_degree_vertices_list = [vertex for vertex, degree in sorted_degree_vertices_list
                                                  if degree >= self.cracking_threshold]
 
                 # deep copy phantom coloring graph from the original graph
                 phantom_graph = copy.deepcopy(original_graph)
-                phantom_index = -1 # the phantom index starts from -1!
-                phantom_original = {} # { phantom vertex index: original vertex index, ... }
+                phantom_index = -1  # the phantom index starts from -1!
+                phantom_original = {}  # { phantom vertex index: original vertex index, ... }
 
                 # crack those vertices by editing the graph edge information
                 # ...by replacing an original vertex with several phantom vertices!!!
@@ -276,52 +332,70 @@ class MeshTaichiWrapper:
                         phantom_index -= 1
 
                 # executing edge coloring on the phantom graph
-                # print("Executing phantom coloring... It might take a long time...")
-                # start = time.time()
-                # edge_colors = {}
-                # for edge in phantom_graph.edges():
-                #     available_colors = set(range(len(phantom_graph.edges())))
-                #     for neighbor in list(phantom_graph.edges(edge[0])) + list(phantom_graph.edges(edge[1])):
-                #         if neighbor in edge_colors:
-                #             available_colors.discard(edge_colors[neighbor])
-                #     edge_colors[edge] = min(available_colors)
-                # end = time.time()
-                # print("Phantom Coloring Elapsed time:", round(end - start, 5), "sec.")
-
-                # executing edge coloring on the original graph
-                print("Executing original coloring... It might take a long time...")
+                print("Executing phantom coloring... It might take a long time...")
                 start = time.time()
                 edge_colors = {}
-                for edge in original_graph.edges():
-                    available_colors = set(range(len(original_graph.edges())))
-                    for neighbor in list(original_graph.edges(edge[0])) + list(original_graph.edges(edge[1])):
-                        if neighbor in edge_colors:
-                            available_colors.discard(edge_colors[neighbor])
-                    edge_colors[edge] = min(available_colors)
+
+                for edge in phantom_graph.edges():
+                    v0 = int(edge[0])
+                    v1 = int(edge[1])
+                    v0_original = v0 if v0 >= 0 else int(phantom_original[v0])
+                    v1_original = v1 if v1 >= 0 else int(phantom_original[v1])
+                    if v0_original > v1_original:
+                        v0_original, v1_original = v1_original, v0_original
+                    sorted_edge = (v0_original, v1_original)
+
+                    available_colors = set(range(len(phantom_graph.edges())))
+                    neighbors = list(set(phantom_graph.edges(v0)) | set(phantom_graph.edges(v1)))
+
+                    for neighbor in neighbors:
+                        vn0 = int(neighbor[0])
+                        vn1 = int(neighbor[1])
+                        vn0_original = vn0 if vn0 >= 0 else int(phantom_original[vn0])
+                        vn1_original = vn1 if vn1 >= 0 else int(phantom_original[vn1])
+                        if vn0_original > vn1_original:
+                            vn0_original, vn1_original = vn1_original, vn0_original
+                        neighbor_sorted = (vn0_original, vn1_original)
+
+                        if neighbor_sorted in edge_colors:
+                            available_colors.discard(edge_colors[neighbor_sorted])
+
+                    edge_colors[sorted_edge] = min(available_colors)
+
                 end = time.time()
                 print("Phantom Coloring Elapsed time:", round(end - start, 5), "sec.")
-                sorted_edge_colors = dict(sorted(edge_colors.items(), key=lambda x: x[1]))
+                sorted_phantom_edge_colors = dict(sorted(edge_colors.items(), key=lambda x: x[1]))
 
-                print("Original Edge length :", self.phantom_len)
-                print("Length of colors :", len(sorted_edge_colors))
-
-                edge_color_temp = []
-                for edge, color in sorted_edge_colors.items():
-                    v1 = edge[0] if edge[0] >= 0 else phantom_original[edge[0]]
-                    v2 = edge[1] if edge[1] >= 0 else phantom_original[edge[1]]
+                phantom_edge_color_temp = []
+                for edge, color in sorted_phantom_edge_colors.items():
+                    v0 = int(edge[0])
+                    v1 = int(edge[1])
                     c = color
-                    edge_color_temp.append([v1, v2, c])
-                self.edge_color_np = np.array(edge_color_temp, dtype=int)
-                print("\nEdge-Color Field")
-                print(self.edge_color_np)
+                    phantom_edge_color_temp.append([v0, v1, c])
+                self.phantom_edge_color_np = np.array(phantom_edge_color_temp, dtype=int)
+                print("Phantom Edge-Color Field")
+                print(self.phantom_edge_color_np)
 
-                kind_of_color = self.edge_color_np[:, 2]
+                kind_of_color = self.phantom_edge_color_np[:, 2]
                 color_values, color_first_index = np.unique(kind_of_color, return_index=True)
-                prefix_sum_temp = list(color_first_index)
+                phantom_prefix_sum_temp = list(color_first_index)
 
-                self.edge_color_prefix_sum_np = np.full(self.max_color, fill_value=self.phantom_len - 1, dtype=int)
-                self.edge_color_prefix_sum_np[:len(prefix_sum_temp)] = prefix_sum_temp
-                print(self.edge_color_prefix_sum_np)
+                self.phantom_edge_color_prefix_sum_np = np.full(self.max_color, fill_value=self.phantom_len, dtype=int)
+                self.phantom_edge_color_prefix_sum_np[:len(phantom_prefix_sum_temp)] = phantom_prefix_sum_temp
+                print(self.phantom_edge_color_prefix_sum_np)
+
+                print("Checking the integrity of phantom coloring...")
+                is_exist = False
+                for p_data in self.phantom_edge_color_np:
+                    p_edge = (int(p_data[0]), int(p_data[1]))
+                    for o_data in self.original_edge_color_np:
+                        o_edge = (int(o_data[0]), int(o_data[1]))
+                        if p_edge == o_edge:
+                            is_exist = True
+                            break
+                    if not is_exist:
+                        print("This phantom coloring is not corresponding to the original coloring!!!")
+                        break
 
                 # export the result into the directory
                 # print("Exporting the graphs and the numpy file...")
@@ -336,12 +410,16 @@ class MeshTaichiWrapper:
             #     phantom_graph = nx.read_edgelist(precomputed_phantom_graph_file, create_using=nx.MultiGraph)
             #     phantom_original_numpy = np.load(precomputed_phantom_origin_numpy_file)
 
-        self.edge_color_field.from_numpy(self.edge_color_np)
-        self.edge_color_prefix_sum_field.from_numpy(self.edge_color_prefix_sum_np)
+        self.original_edge_color_field.from_numpy(self.original_edge_color_np)
+        self.original_edge_color_prefix_sum_field.from_numpy(self.original_edge_color_prefix_sum_np)
+        self.phantom_edge_color_field.from_numpy(self.phantom_edge_color_np)
+        self.phantom_edge_color_prefix_sum_field.from_numpy(self.phantom_edge_color_prefix_sum_np)
 
-        self.l0_phantom = ti.field(dtype=ti.f32, shape=l0_len)
+        self.l0_original = ti.field(dtype=ti.f32, shape=self.num_edges)
+        self.l0_phantom = ti.field(dtype=ti.f32, shape=self.phantom_len)
+        self.x_phantom = ti.field(dtype=ti.f32, shape=self.phantom_len)
+        self.init_l0_original()
         self.init_l0_phantom()
-
 
 
         ################################################################################################################
@@ -354,9 +432,16 @@ class MeshTaichiWrapper:
         self.init_render_bending_vert()
 
     @ti.kernel
+    def init_l0_original(self):
+        for i in range(self.num_edges):
+            v0, v1 = self.original_edge_color_field[i,0], self.original_edge_color_field[i,1]
+            x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
+            self.l0_original[i] = x01.norm()
+
+    @ti.kernel
     def init_l0_phantom(self):
         for i in range(self.phantom_len):
-            v0, v1 = self.edge_color_field[i,0], self.edge_color_field[i,1]
+            v0, v1 = self.phantom_edge_color_field[i,0], self.phantom_edge_color_field[i,1]
             x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
             self.l0_phantom[i] = x01.norm()
 
