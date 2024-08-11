@@ -31,8 +31,8 @@ particle_color = 0x068587
 boundary_color = 0xEBACA2
 num_particles_x = 60
 num_particles = num_particles_x * 20
-max_num_particles_per_cell = 100
-max_num_neighbors = 100
+max_num_particles_per_cell = 50
+max_num_neighbors = 50
 time_delta = 1.0 / 20.0
 epsilon = 1e-5
 particle_radius = 3.0
@@ -176,8 +176,8 @@ def prologue():
     # clear neighbor lookup table
     for I in ti.grouped(grid_num_particles):
         grid_num_particles[I] = 0
-    for I in ti.grouped(particle_neighbors):
-        particle_neighbors[I] = -1
+    # for I in ti.grouped(particle_neighbors):
+    #     particle_neighbors[I] = -1
 
     # update grid
     for p_i in positions:
@@ -237,8 +237,8 @@ def substep():
         pos_delta_i = ti.Vector([0.0, 0.0])
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
-            if p_j < 0:
-                break
+            # if p_j < 0:
+            #     break
             lambda_j = lambdas[p_j]
             pos_ji = pos_i - positions[p_j]
             scorr_ij = compute_scorr(pos_ji)
