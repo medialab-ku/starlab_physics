@@ -15,7 +15,7 @@ trans = []
 scale = []
 rot = []
 
-particle_names.append("cube.vtk")
+particle_names.append("cube1K.vtk")
 # particle_names.append("cube.vtk")
 # trans.append([0.0, -5.0, 0.0])
 trans.append([0.0, 5.0, 0.0])
@@ -35,7 +35,7 @@ particle_names.append("cube.vtk")
 trans.append([0.0, -5.0, 0.0])
 # trans.append([0.0, 5.0, 0.0])
 # scale.append(1.0)
-scale.append(5.0)
+scale.append(2.0)
 # scale.append(5.0)
 particles_st = Particle(model_dir, particle_names, translations=trans, scales=scale,)
 

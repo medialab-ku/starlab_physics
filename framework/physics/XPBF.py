@@ -278,7 +278,7 @@ class Solver:
                         if xji.norm() < 2 * self.particle_rad:
                             dir = ti.math.normalize(xji)
                             # proj0 = pos_i - self.particle_rad * dir
-                            self.dx[pi] += (- self.particle_rad * dir)
+                            self.dx[pi] += ((xji.norm() - 2 * self.particle_rad) * dir)
                             self.nc[pi] += 1
 
 
