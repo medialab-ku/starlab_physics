@@ -188,51 +188,19 @@ class Solver:
         for I in ti.grouped(self.grid_num_particles):
             self.grid_num_particles[I] = 0
 
-        for I in ti.grouped(self.particle_neighbors):
-            self.particle_neighbors[I] = -1
+        # for I in ti.grouped(self.particle_neighbors):
+        #     self.particle_neighbors[I] = -1
 
-        self.nc.fill(0.0)
-        self.dx.fill(0.0)
-
+        # self.nc.fill(0.0)
+        # self.dx.fill(0.0)
         for pi in self.y_p:
             cell_id = self.pos_to_cell_id(self.x_p[pi])
 
             # for i in ti.static(range(3)):
             #     if cell_id[i] < 0 or cell_id[i] >= self.grid_size[0]: print("fuck")
-
             counter = ti.atomic_add(self.grid_num_particles[cell_id], 1)
             if counter < self.cell_cache_size:
                 self.particles2grid[cell_id, counter] = pi
-
-        for pi in self.y_p:
-            pos_i = self.y_p[pi]
-            cell_id = self.pos_to_cell_id(pos_i)
-            nb_i = 0
-            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
-                cell_to_check = cell_id + offs
-                if self.is_in_grid(cell_to_check):
-                    for j in range(self.grid_num_particles[cell_to_check]):
-                        pj = self.particles2grid[cell_to_check, j]
-
-                        pos_j = self.y_p[pj]
-                        xji = pos_j - pos_i
-
-                        if xji.norm() < 2 * self.particle_rad:
-                            dir = ti.math.normalize(xji)
-                            center = 0.5 * (pos_i + pos_j)
-
-                            proj0 = center + self.particle_rad * dir
-                            proj1 = center - self.particle_rad * dir
-
-                            self.dx[pi] += (proj0 - pos_i)
-                            self.dx[pj] += (proj1 - pos_j)
-
-                            self.nc[pi] += 1
-                            self.nc[pj] += 1
-
-        for pi in self.y_p:
-            if self.nc[pi] > 0:
-                self.y_p[pi] += (self.dx[pi] / self.nc[pi])
 
             #             if nb_i < self.nb_cache_size and pj != pi and (pos_i - self.y_p[pj]).norm() < 3.0 * self.particle_rad:
             #                 self.particle_neighbors[pi, nb_i] = pj
@@ -270,61 +238,94 @@ class Solver:
 
     @ti.kernel
     def solve_pressure_constraints_x(self):
+
+        self.dx.fill(0.0)
+        self.nc.fill(0.0)
+
+        for pi in self.y_p:
+            pos_i = self.y_p[pi]
+            cell_id = self.pos_to_cell_id(pos_i)
+            nb_i = 0
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.is_in_grid(cell_to_check):
+                    for j in range(self.grid_num_particles[cell_to_check]):
+                        pj = self.particles2grid[cell_to_check, j]
+                        if pi != pj:
+                            pos_j = self.y_p[pj]
+                            xji = pos_j - pos_i
+
+                            if xji.norm() < 2 * self.particle_rad:
+                                dir = ti.math.normalize(xji)
+                                center = 0.5 * (pos_i + pos_j)
+
+                                proj0 = center - self.particle_rad * dir
+                                proj1 = center + self.particle_rad * dir
+
+                                self.dx[pi] += (proj0 - pos_i)
+                                self.dx[pj] += (proj1 - pos_j)
+
+                                self.nc[pi] += 1
+                                self.nc[pj] += 1
+
+        for pi in self.y_p:
+            if self.nc[pi] > 0:
+                self.y_p[pi] += (self.dx[pi] / self.nc[pi])
         # self.num_particle_neighbours.fill(0)
-        h = 1.1 * self.particle_rad
-        for p_i in self.y_p:
-            pos_i = self.y_p[p_i]
-            grad_i = ti.math.vec3(0.0)
-            sum_gradient_sqr = 0.0
-            density_constraint = 0.0
-
-            for j in range(self.particle_num_neighbors[p_i]):
-                p_j = self.particle_neighbors[p_i, j]
-                # if p_j < 0:
-                #     break
-                pos_ji = pos_i - self.y_p[p_j]
-                grad_j = self.spiky_gradient(pos_ji, h)
-                grad_i += grad_j
-                sum_gradient_sqr += grad_j.dot(grad_j)
-                # Eq(2)
-                density_constraint += self.poly6_value(pos_ji.norm(), h)
-
-            # Eq(1)
-            density_constraint = density_constraint - 1.0
-
-            sum_gradient_sqr += grad_i.dot(grad_i)
-            self.ld[p_i] = (-density_constraint) / (sum_gradient_sqr + 1e2)
-
-        for p_i in self.y_p:
-            pos_i = self.y_p[p_i]
-            lambda_i = self.ld[p_i]
-
-            pos_delta_i = ti.math.vec3(0.0)
-            for j in range(self.particle_num_neighbors[p_i]):
-                p_j = self.particle_neighbors[p_i, j]
-                if p_j < 0:
-                    break
-                lambda_j = self.ld[p_j]
-                pos_ji = pos_i - self.y_p[p_j]
-                # scorr_ij = compute_scorr(pos_ji)
-                pos_delta_i += (lambda_i + lambda_j) * self.spiky_gradient(pos_ji, h)
-
-            # pos_delta_i /= rho0
-            self.dx[p_i] = pos_delta_i
-        # apply position deltas
-        for p_i in self.y_p:
-            self.y_p[p_i] += self.dx[p_i]
+        # h = 1.1 * self.particle_rad
+        # for p_i in self.y_p:
+        #     pos_i = self.y_p[p_i]
+        #     grad_i = ti.math.vec3(0.0)
+        #     sum_gradient_sqr = 0.0
+        #     density_constraint = 0.0
+        #
+        #     for j in range(self.particle_num_neighbors[p_i]):
+        #         p_j = self.particle_neighbors[p_i, j]
+        #         # if p_j < 0:
+        #         #     break
+        #         pos_ji = pos_i - self.y_p[p_j]
+        #         grad_j = self.spiky_gradient(pos_ji, h)
+        #         grad_i += grad_j
+        #         sum_gradient_sqr += grad_j.dot(grad_j)
+        #         # Eq(2)
+        #         density_constraint += self.poly6_value(pos_ji.norm(), h)
+        #
+        #     # Eq(1)
+        #     density_constraint = density_constraint - 1.0
+        #
+        #     sum_gradient_sqr += grad_i.dot(grad_i)
+        #     self.ld[p_i] = (-density_constraint) / (sum_gradient_sqr + 1e2)
+        #
+        # for p_i in self.y_p:
+        #     pos_i = self.y_p[p_i]
+        #     lambda_i = self.ld[p_i]
+        #
+        #     pos_delta_i = ti.math.vec3(0.0)
+        #     for j in range(self.particle_num_neighbors[p_i]):
+        #         p_j = self.particle_neighbors[p_i, j]
+        #         if p_j < 0:
+        #             break
+        #         lambda_j = self.ld[p_j]
+        #         pos_ji = pos_i - self.y_p[p_j]
+        #         # scorr_ij = compute_scorr(pos_ji)
+        #         pos_delta_i += (lambda_i + lambda_j) * self.spiky_gradient(pos_ji, h)
+        #
+        #     # pos_delta_i /= rho0
+        #     self.dx[p_i] = pos_delta_i
+        # # apply position deltas
+        # for p_i in self.y_p:
+        #     self.y_p[p_i] += self.dx[p_i]
 
     def forward(self, n_substeps):
 
-        # self.load_sewing_pairs()
+        # self.load_sewing_pairs()s
         dt_sub = self.dt / n_substeps
-
+        self.search_neighbours()
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
-            self.search_neighbours()
-            # self.solve_pressure_constraints_x()
+            # self.search_neighbours()
+            self.solve_pressure_constraints_x()
 
             # if self.enable_velocity_update:
             #     self.solve_constraints_v()
