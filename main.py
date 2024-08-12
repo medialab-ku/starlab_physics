@@ -112,7 +112,7 @@ def load_animation():
         icAnimation = animation_raw[ic]
         listLen = len(icAnimation)
         # print(listLen)
-        assert listLen % 7 == 0,str(ic)+"th Animation SETTING ERROR!! ======"
+        assert listLen % 7 == 0, str(ic) + "th Animation SETTING ERROR!! ======"
 
         num_animation = listLen // 7
 
@@ -224,9 +224,7 @@ while window.running:
     # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
 
     scene.particles(sim.particle.x, radius=sim.particle_rad, per_vertex_color=sim.particle.color)
-
     scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
-
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
