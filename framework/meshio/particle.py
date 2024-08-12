@@ -17,7 +17,7 @@ class Particle:
                  is_static=[],
                  radius=0.01,rho0=[]):
 
-        num_sets = len(model_names)
+        self.num_sets = len(model_names)
         self.num_particles = 0
 
         self.offsets = [0]
@@ -29,7 +29,7 @@ class Particle:
         # print(points.shape)
         # points.reshape(0, 3)
         self.num_static = 0
-        for i in range(num_sets):
+        for i in range(self.num_sets):
             model_path = model_dir + "/" + model_names[i]
             p = meshio.read(model_path)
             pos_temp = np.array(p.points, dtype=np.float32)
@@ -55,6 +55,8 @@ class Particle:
 
             self.offsets.append(self.num_particles)
             rest_density.extend([rho0[i]] * pos_temp.shape[0])
+
+
 
         rest_density=np.array(rest_density)
 
@@ -136,20 +138,27 @@ class Particle:
     #     for i in range(self.num_particles):
     #         self.x[i] += self.trans
 
-    # def export(self, scene_name, mesh_id, frame):
-    #     directory = os.path.join("results/", scene_name, "Particle_ID_" + str(mesh_id))
-    #
-    #     try :
-    #         if not os.path.exists(directory):
-    #             os.makedirs(directory)
-    #     except OSError:
-    #         print("Error: Failed to create folder" + directory)
-    #
-    #     x_np = self.x.to_numpy()
-    #     print(x_np.shape)
-    #     file_name = "Particle_vtk_" + str(frame) + ".vtk"
-    #     file_path = os.path.join(directory, file_name)
-    #
-    #     print("exporting ", file_path.__str__())
-    #     meshio.write_points_cells(file_path,x_np,self.vtkcells)
-    #     print("done")
+    def export(self, scene_name, mesh_id, frame):
+        directory = os.path.join("results/", scene_name, "Particle_ID_" + str(mesh_id))
+
+        try :
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+        except OSError:
+            print("Error: Failed to create folder" + directory)
+
+        x_np = self.x.to_numpy()
+
+        cursor = self.offsets[mesh_id]
+        offset = self.offsets[mesh_id+1] if mesh_id < self.num_sets-1 else x_np.shape[0]
+
+        x_np = x_np[cursor:offset,:]
+        print(mesh_id,cursor,offset,x_np.shape)
+        file_name = str(frame) + ".vtk"
+        file_path = os.path.join(directory, file_name)
+
+        self.vtkcells = [("vertex", np.array([[i,] for i in range(x_np.shape[0]) ]))]
+
+        print("exporting ", file_path.__str__())
+        meshio.write_points_cells(file_path,x_np,self.vtkcells)
+        print("done")
