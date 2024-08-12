@@ -7,7 +7,7 @@ import os
 from framework.physics import XPBF
 from framework.utilities import selection_tool as st
 
-sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, radius=8e-2)
+sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -33,11 +33,6 @@ dHat_ui = sim.particle_rad
 
 damping_ui = sim.damping
 
-# YM_ui = sim.stiffness_bending
-# YM_b_ui = sim.stiffness_stretch
-#
-# friction_coeff_ui = sim.mu
-
 mesh_export = False
 frame_cpu = 0
 
@@ -46,11 +41,8 @@ def show_options():
     global n_substep
     global dt_ui
     global damping_ui
-    # global YM_ui
-    # global YM_b_ui
     global sim
     global dHat_ui
-    # global friction_coeff_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
     global mesh_export
@@ -58,20 +50,14 @@ def show_options():
 
     old_dt = dt_ui
     old_dHat = dHat_ui
-    # old_friction_coeff = dHat_ui
     old_damping = damping_ui
-    # YM_old = YM_ui
-    # YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         dHat_ui = w.slider_float("particle rad.", dHat_ui, 0.001, 0.101)
-        # friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
-        # YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e8)
-        # YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
@@ -85,21 +71,13 @@ def show_options():
         #     frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
         w.text("")
-        # w.text("dynamic mesh stats.")
-        particles_str = "# particles: " + str(sim.num_particles)
-        # edges_str = "# edges: " + str(sim.max_num_edges_dy)
-        # faces_str = "# faces: " + str(sim.max_num_faces_dy)
-        w.text(particles_str)
-        # w.text(edges_str)
-        # w.text(faces_str)
-        # w.text("")
-        # w.text("static mesh stats.")
-        # verts_str = "# verts: " + str(sim.max_num_verts_st)
-        # edges_str = "# edges: " + str(sim.max_num_edges_st)
-        # faces_str = "# faces: " + str(sim.max_num_faces_st)
-        # w.text(verts_str)
-        # w.text(edges_str)
-        # w.text(faces_str)
+        particles_dy_str = "# dynamic particles: " + str(sim.num_particles_dy)
+        w.text(particles_dy_str)
+
+        w.text("")
+        particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
+        w.text(particles_st_str)
+
 
 
     if not old_dt == dt_ui:
@@ -246,9 +224,6 @@ while window.running:
     # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
 
     scene.particles(sim.particle.x, radius=sim.particle_rad, per_vertex_color=sim.particle.color)
-    # scene.particles(sim.particle_st.x, radius=sim.particle_rad, color=(0.5, 0.5, 0.5))
-    # scene.particles(sim., radius=sim.particle_rad, color=(1, 0, 0))
-    # canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
 

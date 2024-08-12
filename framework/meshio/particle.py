@@ -42,7 +42,6 @@ class Particle:
             if is_static[i] is True:
                 m_inv_temp = np.zeros(pos_temp.shape[0])
                 self.num_static += pos_temp.shape[0]
-                print("test")
             else:
                 m_inv_temp = np.ones(pos_temp.shape[0])
 
@@ -83,7 +82,7 @@ class Particle:
         self.v.fill(0.)
 
     def init_color(self, is_static):
-        print(self.offsets)
+        # print(self.offsets)
         for i in range(len(self.offsets) - 1):
             size = self.offsets[i + 1] - self.offsets[i]
             if is_static[i] is True:

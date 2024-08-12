@@ -8,47 +8,32 @@ from ..collision.lbvh_cell import LBVH_CELL
 class Solver:
     def __init__(self,
                  particle,
-                 # particle_st,
-                 radius,
                  g,
                  dt):
 
         self.particle = particle
-        # self.particle_st = particle_st
         self.g = g
         self.dt = dt
-        # self.radius = radius
+
         self.damping = 0.001
         self.padding = 0.05
 
         self.enable_velocity_update = False
-        self.enable_collision_handling = False
-        self.enable_move_obstacle = False
         self.export_mesh = False
 
         self.num_particles = self.particle.num_particles
         self.num_particles_dy = self.particle.num_dynamic
-        self.particle_rad = radius
-        # self.cell_size = 1.5 * self.particle_rad
-        # self.cell_size_recpr = 1.0 / self.cell_size
-
         self.kernel_radius = 1.1
         self.spiky_grad_factor = -45.0 / ti.math.pi
         self.poly6_factor = 315.0 / 64.0 / ti.math.pi
 
-        # self.bd = np.array([20.0, 20.0, 20.0])
         self.bd_max = ti.math.vec3(10.0)
         self.bd_min = -self.bd_max
 
-        # self.boundary = (self.bd[0], self.bd[1], self.bd[2])
         self.grid_size = (64, 64, 64)
 
-        # self.bd = np.floor(self.bd / self.cell_size).astype(int) + 1
-        # self.grid_size = (self.bd[0], self.bd[1], self.bd[2])
-        self.cell_size = (self.bd_max - self.bd_min)[0] / self.grid_size[0]
-        # self.cell_size_recpr = 1.0 / self.cell_size
-        print(self.cell_size)
 
+        self.cell_size = (self.bd_max - self.bd_min)[0] / self.grid_size[0]
         self.particle_rad = 0.2 * self.cell_size
         self.x_p = self.particle.x
         self.y_p = self.particle.y
@@ -58,18 +43,14 @@ class Solver:
         self.cell_cache_size = 100
         self.nb_cache_size = 50
 
-        # self.x_st = self.particle_st.x0
 
         self.grid_num_particles = ti.field(int)
-        # self.grid_num_particles_st = ti.field(int)
         self.particles2grid = ti.field(int)
-        # self.particles2grid_st = ti.field(int)
 
         grid_snode = ti.root.dense(ti.ijk, (4, 4, 4)).dense(ti.ijk, (4, 4, 4)).dense(ti.ijk, (4, 4, 4))
         grid_snode.place(self.grid_num_particles)
         grid_snode.dense(ti.l,  self.cell_cache_size).place(self.particles2grid)
 
-        # print(self.grid2particles.shape)
         self.particle_num_neighbors = ti.field(int)
         self.particle_neighbors = ti.field(int)
         self.ld = ti.field(float)
@@ -81,20 +62,9 @@ class Solver:
         nb_node.dense(ti.j, self.nb_cache_size).place(self.particle_neighbors)
         ti.root.dense(ti.i, self.num_particles).place(self.ld, self.dx, self.nc)
 
-        # print(ld.shape)
-
         self.aabb_x0 = ti.Vector.field(n=3, dtype=float, shape=8)
         self.aabb_index0 = ti.field(dtype=int, shape=24)
         self.init_grid(self.bd_min, self.bd_max)
-
-        origin = - ti.math.vec3(10.0)
-        # self.test(ti.math.vec3(0.), origin=origin, cell_size=float(self.cell_size))
-    @ti.kernel
-    def test(self, y: ti.math.vec3, origin: ti.math.vec3, cell_size: float):
-        test = (y - origin) / cell_size
-        print(self.particles2grid[ti.math.ivec3(0), 0])
-        print(ti.cast(test, int))
-        # print(ti.cast(test, int))
 
 
     @ti.kernel
@@ -141,8 +111,6 @@ class Solver:
 
     def reset(self):
         self.particle.reset()
-        # if self.particle_st != None:
-        #     self.particle_st.reset()
 
     @ti.func
     def confine_boundary(self, p):
@@ -177,23 +145,9 @@ class Solver:
         ti.block_local(self.m_inv_p, self.v_p, self.x_p, self.y_p)
         for i in range(self.num_particles_dy):
             new_x = self.confine_boundary(self.y_p[i])
-            # if self.m_inv_p[i] > 0.0:
             self.v_p[i] = (1.0 - damping) * (new_x - self.x_p[i]) / dt
-            # else:
-            #     self.v_p[i] = ti.math.vec3(0.0)
             self.x_p[i] = new_x
 
-
-    @ti.kernel
-    def compute_velocity(self, damping: ti.f32, dt: ti.f32):
-        # for v in self.mesh_dy.verts:
-        #     v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
-        pass
-
-    @ti.func
-    def is_in_grid(self, c):
-        # @c: Vector(i32)
-        return 0 <= c[0] and c[0] < self.grid_size[0] and 0 <= c[1] and c[1] < self.grid_size[1] and 0 <= c[2] and c[2] < self.grid_size[2]
     @ti.kernel
     def search_neighbours(self):
 
@@ -230,6 +184,15 @@ class Solver:
 
         return result
 
+    @ti.func
+    def is_in_grid(self, c):
+        # @c: Vector(i32)
+
+        is_in_grid = True
+        for i in ti.static(range(3)):
+            is_in_grid = is_in_grid and (0 <= c[i] < self.grid_size[i])
+
+        return is_in_grid
     @ti.kernel
     def solve_pressure_constraints_x(self):
 
@@ -238,7 +201,6 @@ class Solver:
         k = 1e8
 
         ti.block_local(self.dx, self.nc, self.grid_num_particles, self.particles2grid)
-
         for pi in range(self.num_particles_dy):
             pos_i = self.y_p[pi]
             inv_mi = self.m_inv_p[pi]
@@ -331,17 +293,11 @@ class Solver:
 
     def forward(self, n_substeps):
 
-        # self.load_sewing_pairs()s
         dt_sub = self.dt / n_substeps
         self.search_neighbours()
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
-            # self.search_neighbours()
             self.solve_pressure_constraints_x()
-
-            # if self.enable_velocity_update:
-            #     self.solve_constraints_v()
-
             self.update_state(self.damping, dt_sub)
-            # self.compute_velocity(damping=self.damping, dt=dt_sub)
+
