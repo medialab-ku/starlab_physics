@@ -27,6 +27,8 @@ class Solver:
 
         self.corr_deltaQ_coeff = 0.3
         self.corrK=0.1
+
+
         self.spiky_grad_factor = -45.0 / ti.math.pi
         self.poly6_factor = 315.0 / 64.0 / ti.math.pi
 
@@ -214,7 +216,7 @@ class Solver:
         return is_in_grid
 
     @ti.kernel
-    def solve_pressure_constraints_x(self):
+    def solve_pressure_constraints_x_col(self):
 
         self.dx.fill(0.0)
         self.nc.fill(0.0)
@@ -311,7 +313,7 @@ class Solver:
         #     self.y_p[p_i] += self.dx[p_i]
 
     @ti.kernel
-    def solve_pressure_constraints_x_In_prog(self):
+    def solve_pressure_constraints_x(self):
 
         self.dx.fill(0.0)
         self.nc.fill(0.0)
@@ -349,8 +351,8 @@ class Solver:
                                 schur += C_i_nabla_j.dot(C_i_nabla_j)
             schur += C_i_nabla_i.dot(C_i_nabla_i)
 
-            # self.ld[pi] = -C_dens / schur if(C_dens > 0.0) else 0.0
-            self.ld[pi] = -C_dens / schur
+            self.ld[pi] = -C_dens / schur if(C_dens > 0.0) else 0.0
+            # self.ld[pi] = -C_dens / schur
 
         for pi in self.y_p:
             pos_i = self.y_p[pi]
@@ -366,8 +368,8 @@ class Solver:
                 xij = pos_i - pos_j
                 scorr = self.compute_scorr(xij)
 
-                delta_x_agg += (ld_i + ld_j + scorr) * self.spiky_gradient(xij,self.kernel_radius)
-                # delta_x_agg -= (ld_i + ld_j ) * self.spiky_gradient(xji,self.kernel_radius)
+                delta_x_agg += (ld_i + ld_j ) * self.spiky_gradient(xij,self.kernel_radius)
+                # delta_x_agg += (ld_i + ld_j + scorr) * self.spiky_gradient(xij,self.kernel_radius)
 
             self.dx[pi] = delta_x_agg / (self.particle_num_neighbors[pi] + 1e-4)
             self.y_p[pi]+=self.dx[pi]
@@ -379,6 +381,6 @@ class Solver:
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
-            self.solve_pressure_constraints_x_In_prog()
+            self.solve_pressure_constraints_x()
             self.update_state(self.damping, dt_sub)
 
