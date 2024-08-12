@@ -3,7 +3,7 @@ import framework.collision.distance as di
 
 
 @ti.func
-def __vt_st(compliance, vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_cache_size, vt_st_pair, vt_st_pair_num, vt_st_pair_g, vt_st_pair_schur):
+def __vt_st(compliance, vi_d, fi_s, mesh_dy, mesh_st, dHat):
 
     v0 = vi_d
     v1 = mesh_st.face_indices[3 * fi_s + 0]
@@ -57,16 +57,16 @@ def __vt_st(compliance, vi_d, fi_s, mesh_dy, mesh_st, dHat, vt_st_cache_size, vt
         ld = compliance * (dHat - d) / (compliance * schur + 1.0)
         mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
         mesh_dy.verts.nc[v0] += 1
-
-        if vt_st_pair_num[vi_d] < vt_st_cache_size:
-            vt_st_pair[vi_d, vt_st_pair_num[vi_d], 0] = fi_s
-            vt_st_pair[vi_d, vt_st_pair_num[vi_d], 1] = dtype
-            vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 0] = g0
-            vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 1] = g1
-            vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 2] = g2
-            vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 3] = g3
-            vt_st_pair_schur[vi_d, vt_st_pair_num[vi_d]] = schur
-            ti.atomic_add(vt_st_pair_num[vi_d], 1)
+        #
+        # if vt_st_pair_num[vi_d] < vt_st_cache_size:
+        #     vt_st_pair[vi_d, vt_st_pair_num[vi_d], 0] = fi_s
+        #     vt_st_pair[vi_d, vt_st_pair_num[vi_d], 1] = dtype
+        #     vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 0] = g0
+        #     vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 1] = g1
+        #     vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 2] = g2
+        #     vt_st_pair_g[vi_d, vt_st_pair_num[vi_d], 3] = g3
+        #     vt_st_pair_schur[vi_d, vt_st_pair_num[vi_d]] = schur
+        #     ti.atomic_add(vt_st_pair_num[vi_d], 1)
 
 @ti.func
 def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv_st_pair, tv_st_pair_num, tv_st_pair_g, tv_st_pair_schur):

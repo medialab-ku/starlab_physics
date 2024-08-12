@@ -87,7 +87,7 @@ def show_options():
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
-        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.301)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e8)
@@ -260,22 +260,24 @@ while window.running:
         sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
     if sim.solver_type <= 2:
-        scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
-        scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+        # scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
+        # scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+        scene.particles(sim.mesh_dy.verts.x, radius=sim.dHat,  per_vertex_color=sim.mesh_dy.colors)
     else:
         scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
         scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
         # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.02,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
     if sim.mesh_st != None:
-        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
-        scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
+        # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
+        # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
+        scene.particles(sim.mesh_st.verts.x, radius=sim.dHat, color=(0.5, 0.5, 0.5))
 
     g_selector.renderTestPos()
 
     #draw selected particles
     scene.particles(g_selector.renderTestPosition, radius=0.02, color=(1, 0, 1))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
-
+    scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
