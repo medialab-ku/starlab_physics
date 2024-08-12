@@ -48,7 +48,6 @@ class Solver:
         self.cell_cache_size = 500
         self.nb_cache_size = 1000
 
-
         self.grid_num_particles = ti.field(int)
         self.particles2grid = ti.field(int)
 
