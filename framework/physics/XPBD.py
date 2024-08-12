@@ -118,6 +118,10 @@ class Solver:
         for v in self.mesh_dy.verts:
             v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
 
+        for i in range(self.mesh_dy.num_verts):
+            self.mesh_dy.y_original[i] = (self.mesh_dy.verts.x[i] +
+                                          self.mesh_dy.verts.fixed[i] * (self.mesh_dy.verts.v[i] * dt + self.g * dt * dt))
+
         path_len = self.mesh_dy.path_euler.shape[0]
         # print(path_len)
         for i in range(path_len):
@@ -540,7 +544,7 @@ class Solver:
         compliance_bending = self.stiffness_bending * dt * dt
 
         for i in range(len(self.mesh_dy.phantom_edge_color_prefix_sum_np)):
-            if self.mesh_dy.phantom_edge_color_prefix_sum_np[i] >= self.mesh_dy.phantom_len:
+            if self.mesh_dy.phantom_edge_color_prefix_sum_np[i] >= self.mesh_dy.num_edges:
                 break
 
             if i < len(self.mesh_dy.phantom_edge_color_prefix_sum_np) - 1:
@@ -551,12 +555,21 @@ class Solver:
                                                                                    next_offset)
             elif i == len(self.mesh_dy.phantom_edge_color_prefix_sum_np) - 1:
                 current_offset = self.mesh_dy.phantom_edge_color_prefix_sum_np[i]
-                next_offset = len(self.mesh_dy.phantom_len)
+                next_offset = len(self.mesh_dy.num_edges)
                 if current_offset < next_offset:
                     self.solve_stretch_constraints_phantom_parallel_gauss_seidel_x(compliance_stretch, current_offset,
                                                                                    next_offset)
 
-        self.update_dx()
+        self.solve_phantom_constraints(compliance_stretch)
+
+    @ti.kernel
+    def solve_phantom_constraints(self, compliance_stretch: ti.f32):
+        dup_len = self.mesh_dy.phantom_dup_count_field.shape[0]
+
+        for i in range(dup_len):
+            vid = self.mesh_dy.phantom_dup_count_field[i, 0]
+            dup = self.mesh_dy.phantom_dup_count_field[i, 1]
+            self.mesh_dy.verts.y[vid] = self.mesh_dy.y_original[vid] + (self.mesh_dy.verts.dx[vid] / dup)
 
     @ti.kernel
     def aggregate_duplicates(self):
@@ -625,8 +638,8 @@ class Solver:
 
             self.mesh_dy.verts.y[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
             self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
-            self.mesh_dy.verts.nc[v0] += 1.0
-            self.mesh_dy.verts.nc[v1] += 1.0
+            self.mesh_dy.verts.dx[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
+            self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
 
     @ti.kernel
     def solve_stretch_constraints_euler_x(self, compliance_stretch: ti.f32, size: ti.int32, offset: ti.i32):

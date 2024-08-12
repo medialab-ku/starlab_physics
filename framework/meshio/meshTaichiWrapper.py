@@ -9,7 +9,7 @@ import framework.utilities.graph as graph_utils
 import networkx as nx
 import time
 import copy
-from collections import Counter
+from collections import Counter, defaultdict
 
 from framework.utilities.graph_coloring import GraphColoring
 
@@ -226,20 +226,22 @@ class MeshTaichiWrapper:
             self.init_l0_euler()
 
         ################################################################################################################
-        # phantom color graph
+        # original and phantom color graph
 
         self.max_color = 20
         self.cracking_threshold = 6
-        self.phantom_len = self.num_edges
+        self.max_phantom_count = 10000
 
-        self.original_edge_color_field = ti.field(dtype=ti.i32, shape=(self.phantom_len, 3))
+        self.original_edge_color_field = ti.field(dtype=ti.i32, shape=(self.num_edges, 3))
         self.original_edge_color_prefix_sum_field = ti.field(dtype=ti.i32, shape=self.max_color)
         self.original_edge_color_np = self.original_edge_color_field.to_numpy()
         self.original_edge_color_prefix_sum_np = self.original_edge_color_prefix_sum_field.to_numpy()
-        self.phantom_edge_color_field = ti.field(dtype=ti.i32, shape=(self.phantom_len, 3))
+        self.phantom_edge_color_field = ti.field(dtype=ti.i32, shape=(self.num_edges, 3))
         self.phantom_edge_color_prefix_sum_field = ti.field(dtype=ti.i32, shape=self.max_color)
         self.phantom_edge_color_np = self.phantom_edge_color_field.to_numpy()
         self.phantom_edge_color_prefix_sum_np = self.phantom_edge_color_prefix_sum_field.to_numpy()
+
+        self.phantom_dup_count_np = np.zeros(shape=(self.max_phantom_count, 2), dtype=int)
 
         if is_static is False:
             dir = model_dir[:-len("models/OBJ")] + "color_graph"
@@ -311,6 +313,7 @@ class MeshTaichiWrapper:
                 # executing edge coloring on the phantom graph
                 # extract vertex which degree is not lower than the threshold, and sorting those in descending order
                 print("Constructing a phantom graph...")
+
                 degree_vertices_list = list(original_graph.degree())  # [(vertex, degree), ...]
                 sorted_degree_vertices_list = sorted(degree_vertices_list, key=lambda x: x[1], reverse=True)
                 filtered_degree_vertices_list = [vertex for vertex, degree in sorted_degree_vertices_list
@@ -319,10 +322,11 @@ class MeshTaichiWrapper:
                 # deep copy phantom coloring graph from the original graph
                 phantom_graph = copy.deepcopy(original_graph)
                 phantom_index = -1  # the phantom index starts from -1!
-                phantom_original = {}  # { phantom vertex index: original vertex index, ... }
 
                 # crack those vertices by editing the graph edge information
                 # ...by replacing an original vertex with several phantom vertices!!!
+
+                phantom_original = {}
                 for vertex in filtered_degree_vertices_list:
                     neighbors = list(phantom_graph.neighbors(vertex))
                     phantom_graph.remove_node(vertex)
@@ -330,6 +334,11 @@ class MeshTaichiWrapper:
                         phantom_graph.add_edge(phantom_index, neighbor)
                         phantom_original[phantom_index] = vertex
                         phantom_index -= 1
+
+                phantom_dup_count_temp = defaultdict(int)
+                for v_p, v_n in phantom_original.items():
+                    phantom_dup_count_temp[v_n] += 1
+                self.phantom_dup_count_np = np.array(list(phantom_dup_count_temp.items()), dtype=int)
 
                 # executing edge coloring on the phantom graph
                 print("Executing phantom coloring... It might take a long time...")
@@ -380,22 +389,22 @@ class MeshTaichiWrapper:
                 color_values, color_first_index = np.unique(kind_of_color, return_index=True)
                 phantom_prefix_sum_temp = list(color_first_index)
 
-                self.phantom_edge_color_prefix_sum_np = np.full(self.max_color, fill_value=self.phantom_len, dtype=int)
+                self.phantom_edge_color_prefix_sum_np = np.full(self.max_color, fill_value=self.num_edges, dtype=int)
                 self.phantom_edge_color_prefix_sum_np[:len(phantom_prefix_sum_temp)] = phantom_prefix_sum_temp
                 print(self.phantom_edge_color_prefix_sum_np)
 
-                print("Checking the integrity of phantom coloring...")
-                is_exist = False
-                for p_data in self.phantom_edge_color_np:
-                    p_edge = (int(p_data[0]), int(p_data[1]))
-                    for o_data in self.original_edge_color_np:
-                        o_edge = (int(o_data[0]), int(o_data[1]))
-                        if p_edge == o_edge:
-                            is_exist = True
-                            break
-                    if not is_exist:
-                        print("This phantom coloring is not corresponding to the original coloring!!!")
-                        break
+                # print("Checking the integrity of phantom coloring...")
+                # is_exist = False
+                # for p_data in self.phantom_edge_color_np:
+                #     p_edge = (int(p_data[0]), int(p_data[1]))
+                #     for o_data in self.original_edge_color_np:
+                #         o_edge = (int(o_data[0]), int(o_data[1]))
+                #         if p_edge == o_edge:
+                #             is_exist = True
+                #             break
+                #     if not is_exist:
+                #         print("This phantom coloring is not corresponding to the original coloring!!!")
+                #         break
 
                 # export the result into the directory
                 # print("Exporting the graphs and the numpy file...")
@@ -415,9 +424,12 @@ class MeshTaichiWrapper:
         self.phantom_edge_color_field.from_numpy(self.phantom_edge_color_np)
         self.phantom_edge_color_prefix_sum_field.from_numpy(self.phantom_edge_color_prefix_sum_np)
 
+        self.phantom_dup_count_field = ti.field(dtype=ti.i32, shape=(self.phantom_dup_count_np.shape[0], 2))
+        self.phantom_dup_count_field.from_numpy(self.phantom_dup_count_np)
+
         self.l0_original = ti.field(dtype=ti.f32, shape=self.num_edges)
-        self.l0_phantom = ti.field(dtype=ti.f32, shape=self.phantom_len)
-        self.x_phantom = ti.field(dtype=ti.f32, shape=self.phantom_len)
+        self.l0_phantom = ti.field(dtype=ti.f32, shape=self.num_edges)
+        self.y_original = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_verts)
         self.init_l0_original()
         self.init_l0_phantom()
 
@@ -440,7 +452,7 @@ class MeshTaichiWrapper:
 
     @ti.kernel
     def init_l0_phantom(self):
-        for i in range(self.phantom_len):
+        for i in range(self.num_edges):
             v0, v1 = self.phantom_edge_color_field[i,0], self.phantom_edge_color_field[i,1]
             x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
             self.l0_phantom[i] = x01.norm()
@@ -590,6 +602,8 @@ class MeshTaichiWrapper:
         self.v_euler.fill(0.0)
 
         self.init_l0_euler()
+        self.init_l0_original()
+        self.init_l0_phantom()
 
     @ti.kernel
     def initFaceIndices(self):

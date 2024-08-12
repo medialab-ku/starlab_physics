@@ -255,7 +255,7 @@ while window.running:
     # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
     # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
     # sim.mesh_dy.colors_edge_euler.fill(ti.math.vec3([1.0, 0.0, 0.0]))
-    # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.1,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
+    # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
     if sim.mesh_st != None:
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
