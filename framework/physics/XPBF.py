@@ -351,8 +351,8 @@ class Solver:
                                 schur += C_i_nabla_j.dot(C_i_nabla_j)
             schur += C_i_nabla_i.dot(C_i_nabla_i)
 
-            self.ld[pi] = -C_dens / schur if(C_dens > 0.0) else 0.0
-            # self.ld[pi] = -C_dens / schur
+            # self.ld[pi] = -C_dens / schur if(C_dens > 0.0) else 0.0
+            self.ld[pi] = -C_dens / schur
 
         for pi in self.y_p:
             pos_i = self.y_p[pi]
@@ -368,8 +368,8 @@ class Solver:
                 xij = pos_i - pos_j
                 scorr = self.compute_scorr(xij)
 
-                delta_x_agg += (ld_i + ld_j ) * self.spiky_gradient(xij,self.kernel_radius)
-                # delta_x_agg += (ld_i + ld_j + scorr) * self.spiky_gradient(xij,self.kernel_radius)
+                # delta_x_agg += (ld_i + ld_j ) * self.spiky_gradient(xij,self.kernel_radius)
+                delta_x_agg += (ld_i + ld_j + scorr) * self.spiky_gradient(xij,self.kernel_radius)
 
             self.dx[pi] = delta_x_agg / (self.particle_num_neighbors[pi] + 1e-4)
             self.y_p[pi]+=self.dx[pi]
