@@ -7,7 +7,7 @@ import os
 from framework.physics import XPBF
 from framework.utilities import selection_tool as st
 
-sim = XPBF.Solver(scene1.particles_dy, scene1.particles_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, radius=8e-2)
+sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, radius=8e-2)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -245,8 +245,8 @@ while window.running:
     # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
     # scene.particles(g_selector.renderTestPosition, radius=0.01, color=(1, 0, 1))
 
-    scene.particles(sim.particle_dy.x, radius=sim.particle_rad, per_vertex_color=sim.particle_dy.color)
-    scene.particles(sim.particle_st.x, radius=sim.particle_rad, color=(0.5, 0.5, 0.5))
+    scene.particles(sim.particle.x, radius=sim.particle_rad, per_vertex_color=sim.particle.color)
+    # scene.particles(sim.particle_st.x, radius=sim.particle_rad, color=(0.5, 0.5, 0.5))
     # scene.particles(sim., radius=sim.particle_rad, color=(1, 0, 0))
     # canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 

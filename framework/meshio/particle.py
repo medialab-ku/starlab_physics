@@ -14,6 +14,7 @@ class Particle:
                  translations=[],
                  scales=[],
                  rotations=[],
+                 is_static=[],
                  radius=0.01):
 
         num_sets = len(model_names)
@@ -21,8 +22,10 @@ class Particle:
 
         self.offsets = [0]
         points = np.empty((0, 3))
-        print(points.shape)
+        m_inv_np = np.empty((0))
+        # print(points.shape)
         # points.reshape(0, 3)
+        self.num_static = 0
         for i in range(num_sets):
             model_path = model_dir + "/" + model_names[i]
             p = meshio.read(model_path)
@@ -36,21 +39,21 @@ class Particle:
             pos_temp = scale(pos_temp, scales[i])
             pos_temp = np.apply_along_axis(lambda row: translate(row, translations[i]), 1, pos_temp)
 
+            if is_static[i] is True:
+                m_inv_temp = np.zeros(pos_temp.shape[0])
+                self.num_static += pos_temp.shape[0]
+                print("test")
+            else:
+                m_inv_temp = np.ones(pos_temp.shape[0])
+
             points = np.append(points, pos_temp, axis=0)
+            m_inv_np = np.append(m_inv_np, m_inv_temp, axis=0)
+
             self.num_particles += pos_temp.shape[0]
             self.offsets.append(self.num_particles)
 
-
-
-
-
-        # print(points.shape)
-
-        # self.num_particles = points.shape[0]
-
-        # self.vtkcells = p.cells
-        # print(self.num_particles)
-
+        self.num_dynamic = self.num_particles - self.num_static
+        # print(self.num_static)
         self.x0 = ti.Vector.field(n=3, dtype=float)
         self.y = ti.Vector.field(n=3, dtype=float)
         self.dx = ti.Vector.field(n=3, dtype=float)
@@ -61,79 +64,36 @@ class Particle:
         self.m_inv = ti.field(dtype=float)
         self.color = ti.Vector.field(n=3, dtype=float)
 
-        # self.c_dens = ti.field(dtype=ti.float32, shape=(self.num_particles))
-        # self.schur_p = ti.field(dtype=ti.float32, shape=(self.num_particles))
-        # self.lambda_dens = ti.field(dtype=ti.float32, shape=(self.num_particles))
-        # self.y = ti.Vector.field(n=3, dtype=float)
-
         particle_snode = ti.root.dense(ti.i, self.num_particles).place(self.x0, self.y, self.dx, self.x, self.v, self.m_inv, self.color)
         particle_snode.place(self.c_den, self.ld_den)
 
-        # self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
-        # self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
-        # self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
-        # self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_particles)
-        # self.m_inv = ti.field(dtype=float, shape=self.num_particles)
-
 
         self.x.from_numpy(points)
+        self.m_inv.from_numpy(m_inv_np)
+        # self.m_inv.fill(-1.0)
         self.v.fill(0.0)
         self.x0.copy_from(self.x)
 
-        self.init_color()
-
-        # self.nc = ti.field(dtype=ti.int32, shape=self.num_particles)
-        # self.m_inv = ti.field(dtype=float, shape=self.num_particles)
-
-        # self.x = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
-        # self.x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
-        # self.y = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
-        # self.x.from_numpy(points)
-        #
-        # self.v = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_particles)
-        # self.v.fill(0.0)
-        # self.nc = ti.field(dtype=ti.int32, shape=self.num_particles)
-        # self.m_inv = ti.field(dtype=ti.f32, shape=self.num_particles)
-
-        #
-        # self.x = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
-        # self.x0 = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
-        # self.y = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
-        # self.x.from_numpy(points)
-        #
-        # self.v = ti.Vector.field(n=3, dtype=ti.f64, shape=self.num_particles)
-        # self.v.fill(0.0)
-        # self.nc = ti.field(dtype=ti.int32, shape=self.num_particles)
-        # self.m_inv = ti.field(dtype=ti.f32, shape=self.num_particles)
-
-
-        self.m_inv.fill(1.0)
-        # self.trans = trans
-        # self.rot = rot
-        # self.scale = scale
+        self.init_color(is_static=is_static)
         self.radius = radius
-        # self.setCenterToOrigin()
-        # self.applyTransform()
         self.x0.copy_from(self.x)
 
     def reset(self):
         self.x.copy_from(self.x0)
         self.v.fill(0.)
 
-    def init_color(self):
-        # print(self.offsets)
-        for i in range(len(self.offsets)):
-            r = random.randrange(0, 255) / 256
-            g = random.randrange(0, 255) / 256
-            b = random.randrange(0, 255) / 256
-            size = 0
-            if i < len(self.offsets) - 1:
-                size = self.offsets[i + 1] - self.offsets[i]
-
+    def init_color(self, is_static):
+        print(self.offsets)
+        for i in range(len(self.offsets) - 1):
+            size = self.offsets[i + 1] - self.offsets[i]
+            if is_static[i] is True:
+                self.init_colors(self.offsets[i], size, color=ti.math.vec3(0.5, 0.5, 0.5))
             else:
-                size = self.num_particles - self.offsets[i]
-            #
-            self.init_colors(self.offsets[i], size, color=ti.math.vec3(r, g, b))
+                r = random.randrange(0, 255) / 256
+                g = random.randrange(0, 255) / 256
+                b = random.randrange(0, 255) / 256
+
+                self.init_colors(self.offsets[i], size, color=ti.math.vec3(r, g, b))
 
     @ti.kernel
     def init_colors(self, offset: ti.i32, size: ti.i32, color: ti.math.vec3):
