@@ -7,7 +7,7 @@ import os
 from framework.physics import XPBF
 from framework.utilities import selection_tool as st
 
-sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03)
+sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.030)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -25,7 +25,7 @@ LOOKAt_ORIGIN = True
 #selector
 # g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
 
-n_substep = 20
+n_substep = 10
 frame_end = 100
 
 dt_ui = sim.dt

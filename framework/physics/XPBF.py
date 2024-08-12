@@ -1,7 +1,7 @@
 import csv
 import taichi as ti
 import numpy as np
-from ..physics import collision_constraints_x, collision_constraints_v#, solve_pressure_constraints_x
+from ..physics import collision_constraints_x, collision_constraints_v, solve_pressure_constraints_x
 from ..collision.lbvh_cell import LBVH_CELL
 
 @ti.data_oriented
@@ -24,10 +24,13 @@ class Solver:
         self.num_particles = self.particle.num_particles
         self.num_particles_dy = self.particle.num_dynamic
         self.kernel_radius = 1.1
+
+        self.corr_deltaQ_coeff = 0.3
+        self.corrK=0.1
         self.spiky_grad_factor = -45.0 / ti.math.pi
         self.poly6_factor = 315.0 / 64.0 / ti.math.pi
 
-        self.bd_max = ti.math.vec3(10.0)
+        self.bd_max = ti.math.vec3(40.0)
         self.bd_min = -self.bd_max
 
         self.grid_size = (64, 64, 64)
@@ -40,8 +43,8 @@ class Solver:
         self.v_p = self.particle.v
         self.m_inv_p = self.particle.m_inv
 
-        self.cell_cache_size = 100
-        self.nb_cache_size = 50
+        self.cell_cache_size = 500
+        self.nb_cache_size = 1000
 
 
         self.grid_num_particles = ti.field(int)
@@ -152,6 +155,10 @@ class Solver:
     def search_neighbours(self):
 
         self.grid_num_particles.fill(0)
+        self.particles2grid.fill(-1)
+
+        self.particle_num_neighbors.fill(0)
+        self.particle_neighbors.fill(-1)
 
         ti.block_local(self.x_p, self.grid_num_particles, self.particles2grid)
         for pi in self.x_p:
@@ -159,6 +166,8 @@ class Solver:
             counter = ti.atomic_add(self.grid_num_particles[cell_id], 1)
             if counter < self.cell_cache_size:
                 self.particles2grid[cell_id, counter] = pi
+            else :
+                print("cache over",cell_id)
 
     @ti.func
     def pos_to_cell_id(self, y: ti.math.vec3) -> ti.math.ivec3:
@@ -185,6 +194,16 @@ class Solver:
         return result
 
     @ti.func
+    def compute_scorr(self,pos_ji):
+        # Eq (13)
+        h = self.kernel_radius
+        x = self.poly6_value(pos_ji.norm(), h) / self.poly6_value(self.corr_deltaQ_coeff * h, h)
+        x = x * x
+        x = x * x
+        return -self.corrK * x
+
+
+    @ti.func
     def is_in_grid(self, c):
         # @c: Vector(i32)
 
@@ -193,6 +212,7 @@ class Solver:
             is_in_grid = is_in_grid and (0 <= c[i] < self.grid_size[i])
 
         return is_in_grid
+
     @ti.kernel
     def solve_pressure_constraints_x(self):
 
@@ -242,7 +262,6 @@ class Solver:
             #                 self.dx[pi] += ((xji.norm() - 2 * self.particle_rad) * dir)
             #                 self.nc[pi] += 1
 
-
         for pi in self.y_p:
             if self.nc[pi] > 0:
                 self.y_p[pi] += (self.dx[pi] / self.nc[pi])
@@ -291,6 +310,68 @@ class Solver:
         # for p_i in self.y_p:
         #     self.y_p[p_i] += self.dx[p_i]
 
+    @ti.kernel
+    def solve_pressure_constraints_x_In_prog(self):
+
+        self.dx.fill(0.0)
+        self.nc.fill(0.0)
+
+        ti.block_local(self.dx, self.nc, self.grid_num_particles, self.particles2grid)
+        for pi in self.y_p:
+            C_dens = -1.0
+            schur = 1e2
+            C_i_nabla_i = ti.Vector([0.0,0.0,0.0])
+            pos_i = self.y_p[pi]
+            cell_id = self.pos_to_cell_id(pos_i)
+
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.is_in_grid(cell_to_check):
+                    for j in range(self.grid_num_particles[cell_to_check]):
+                        pj = self.particles2grid[cell_to_check, j]
+
+                        if pi == pj :
+                            continue
+                        pos_j = self.y_p[pj]
+                        xji = pos_j - pos_i
+
+                        if xji.norm() < self.kernel_radius * 1.03 + 1e-4 :
+
+                            count = ti.atomic_add(self.particle_num_neighbors[pi],1)
+                            if(count >= self.nb_cache_size) :
+                                # print("neighbor over!!",count)
+                                self.particle_num_neighbors[pi] = self.nb_cache_size
+                            else:
+                                self.particle_neighbors[pi,count] = pj
+                                C_dens += self.poly6_value(xji.norm(),self.kernel_radius)
+                                C_i_nabla_j = -self.spiky_gradient(xji,self.kernel_radius)
+                                C_i_nabla_i -=C_i_nabla_j
+                                schur += C_i_nabla_j.dot(C_i_nabla_j)
+            schur += C_i_nabla_i.dot(C_i_nabla_i)
+
+            # self.ld[pi] = -C_dens / schur if(C_dens > 0.0) else 0.0
+            self.ld[pi] = -C_dens / schur
+
+        for pi in self.y_p:
+            pos_i = self.y_p[pi]
+            ld_i = self.ld[pi]
+            delta_x_agg = ti.Vector([0.0,0.0,0.0])
+            for j in range(self.particle_num_neighbors[pi]):
+                pj = self.particle_neighbors[pi, j]
+                if(pj < 0) :
+                    break
+
+                ld_j = self.ld[pj]
+                pos_j = self.y_p[pj]
+                xij = pos_i - pos_j
+                scorr = self.compute_scorr(xij)
+
+                delta_x_agg += (ld_i + ld_j + scorr) * self.spiky_gradient(xij,self.kernel_radius)
+                # delta_x_agg -= (ld_i + ld_j ) * self.spiky_gradient(xji,self.kernel_radius)
+
+            self.dx[pi] = delta_x_agg / (self.particle_num_neighbors[pi] + 1e-4)
+            self.y_p[pi]+=self.dx[pi]
+
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
@@ -298,6 +379,6 @@ class Solver:
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
-            self.solve_pressure_constraints_x()
+            self.solve_pressure_constraints_x_In_prog()
             self.update_state(self.damping, dt_sub)
 
