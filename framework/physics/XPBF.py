@@ -44,6 +44,7 @@ class Solver:
         self.y_p = self.particle.y
         self.v_p = self.particle.v
         self.m_inv_p = self.particle.m_inv
+        self.rho0 = self.particle.rho0
 
         self.cell_cache_size = 500
         self.nb_cache_size = 1000
@@ -320,7 +321,7 @@ class Solver:
 
         ti.block_local(self.dx, self.nc, self.grid_num_particles, self.particles2grid)
         for pi in self.y_p:
-            C_dens = -1.0
+            C_dens = 0.0
             schur = 1e2
             C_i_nabla_i = ti.Vector([0.0,0.0,0.0])
             pos_i = self.y_p[pi]
@@ -349,8 +350,9 @@ class Solver:
                                 C_i_nabla_j = -self.spiky_gradient(xji,self.kernel_radius)
                                 C_i_nabla_i -=C_i_nabla_j
                                 schur += C_i_nabla_j.dot(C_i_nabla_j)
-            schur += C_i_nabla_i.dot(C_i_nabla_i)
 
+            schur += C_i_nabla_i.dot(C_i_nabla_i)
+            C_dens = C_dens/self.rho0[pi] - 1.0
             # self.ld[pi] = -C_dens / schur if(C_dens > 0.0) else 0.0
             self.ld[pi] = -C_dens / schur
 
@@ -372,7 +374,7 @@ class Solver:
                 delta_x_agg += (ld_i + ld_j + scorr) * self.spiky_gradient(xij,self.kernel_radius)
 
             self.dx[pi] = delta_x_agg / (self.particle_num_neighbors[pi] + 1e-4)
-            self.y_p[pi]+=self.dx[pi]
+            self.y_p[pi]+=self.dx[pi]/self.rho0[pi]
 
     def forward(self, n_substeps):
 

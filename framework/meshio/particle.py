@@ -15,13 +15,16 @@ class Particle:
                  scales=[],
                  rotations=[],
                  is_static=[],
-                 radius=0.01):
+                 radius=0.01,rho0=[]):
 
         num_sets = len(model_names)
         self.num_particles = 0
 
         self.offsets = [0]
         points = np.empty((0, 3))
+
+        rest_density = []
+
         m_inv_np = np.empty((0))
         # print(points.shape)
         # points.reshape(0, 3)
@@ -49,7 +52,11 @@ class Particle:
             m_inv_np = np.append(m_inv_np, m_inv_temp, axis=0)
 
             self.num_particles += pos_temp.shape[0]
+
             self.offsets.append(self.num_particles)
+            rest_density.extend([rho0[i]] * pos_temp.shape[0])
+
+        rest_density=np.array(rest_density)
 
         self.num_dynamic = self.num_particles - self.num_static
         # print(self.num_static)
@@ -63,7 +70,9 @@ class Particle:
         self.m_inv = ti.field(dtype=float)
         self.color = ti.Vector.field(n=3, dtype=float)
 
-        particle_snode = ti.root.dense(ti.i, self.num_particles).place(self.x0, self.y, self.dx, self.x, self.v, self.m_inv, self.color)
+        self.rho0 = ti.field(dtype=float)
+
+        particle_snode = ti.root.dense(ti.i, self.num_particles).place(self.x0, self.y, self.dx, self.x, self.v, self.m_inv, self.color,self.rho0)
         particle_snode.place(self.c_den, self.ld_den)
 
 
@@ -75,6 +84,7 @@ class Particle:
 
         self.init_color(is_static=is_static)
         self.radius = radius
+        self.rho0.from_numpy(rest_density)
         self.x0.copy_from(self.x)
 
     def reset(self):

@@ -15,31 +15,35 @@ trans = []
 scale = []
 rot = []
 is_static = []
+rho0 = []
 
 
 particle_names.append("cube87K.vtk")
 particle_names.append("cube87K.vtk")
 # particle_names.append("cube.vtk")
 # particle_names.append("cube.vtk")
-particle_names.append("cube.vtk")
+# particle_names.append("cube.vtk")
 trans.append([-20.0, -20.0, 0.0])
 trans.append([-20.0, 20.0, 0.0])
 # trans.append([0.0, 5.0, 0.0])
 # trans.append([5.0, 5.0, 5.0])
-trans.append([5.0, -5.0, 0.0])
+# trans.append([5.0, -5.0, 0.0])
 # scale.append(5.0)
 scale.append(20.0)
 scale.append(20.0)
 # scale.append(5.0)
 # scale.append(5.0)
-scale.append(8.0)
+# scale.append(8.0)
 is_static.append(False)
 is_static.append(False)
 # is_static.append(False)
 # is_static.append(False)
-is_static.append(True)
+# is_static.append(True)
 
-particles_dy = Particle(model_dir, particle_names, translations=trans, scales=scale, is_static=is_static)
+rho0.append(1.0)
+rho0.append(1.0)
+
+particles_dy = Particle(model_dir, particle_names, translations=trans, scales=scale, is_static=is_static,rho0 = rho0)
 # model_dir = model_dir + "/cuboid224_170K.vtk"
 particles_st = None
 particle_names.clear()
