@@ -1,14 +1,14 @@
 import taichi as ti
 import json
 
-from Scenes import fluid_test as scene1
+from Scenes import fem_test as scene1
 import os
 
-from framework.physics import XPBF
+from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 
-sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.020)
-
+# sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.020)
+sim = XPBFEM.Solver(scene1.mesh_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.020)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -29,7 +29,7 @@ n_substep = 5
 frame_end = 100
 
 dt_ui = sim.dt
-dHat_ui = sim.particle_rad
+dHat_ui = sim.dHat
 
 damping_ui = sim.damping
 
@@ -70,13 +70,13 @@ def show_options():
         # if mesh_export is True:
         #     frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
-        w.text("")
-        particles_dy_str = "# dynamic particles: " + str(sim.num_particles_dy)
-        w.text(particles_dy_str)
+        # w.text("")
+        # particles_dy_str = "# dynamic particles: " + str(sim.num_particles_dy)
+        # w.text(particles_dy_str)
 
-        w.text("")
-        particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
-        w.text(particles_st_str)
+        # w.text("")
+        # particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
+        # w.text(particles_st_str)
 
 
 
@@ -227,8 +227,9 @@ while window.running:
     #     for i in range(sim.particle.num_sets):
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
 
-
-    scene.particles(sim.particle.x, radius=sim.particle_rad, per_vertex_color=sim.particle.color)
+    scene.particles(sim.x, radius=sim.padding, color=(1.0, 0.0, 0.0))
+    scene.mesh(sim.x, indices=sim.faces, color=(1.0, 1.0, 0.0))
+    scene.mesh(sim.x, indices=sim.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
     scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
