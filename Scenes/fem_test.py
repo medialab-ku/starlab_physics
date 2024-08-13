@@ -9,11 +9,11 @@ model_path = Path(__file__).resolve().parent.parent / "models"
 model_dir = str(model_path) + "/MSH"
 
 model_name_list = []
-model_name_list.append("cube.msh")
+model_name_list.append("sphere19K.msh")
 # model_name_list.append("tet.msh")
 
 scale_list = []
-scale_list.append(10.0)
+scale_list.append(30.0)
 # scale_list.append(5.0)
 
 trans_list = []

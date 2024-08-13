@@ -9,7 +9,7 @@ from framework.utilities import selection_tool as st
 
 # sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.020)
 sim = XPBFEM.Solver(scene1.mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
-window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
+window = ti.ui.Window("XPBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
@@ -32,6 +32,9 @@ dt_ui = sim.dt
 dHat_ui = sim.dHat
 damping_ui = sim.damping
 
+YM_ui = sim.YM
+PR_ui = sim.PR
+
 mesh_export = False
 frame_cpu = 0
 
@@ -42,6 +45,8 @@ def show_options():
     global damping_ui
     global sim
     global dHat_ui
+    global YM_ui
+    global PR_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
     global mesh_export
@@ -50,13 +55,17 @@ def show_options():
     old_dt = dt_ui
     old_dHat = dHat_ui
     old_damping = damping_ui
+    YM_old = YM_ui
+    PR_old = PR_ui
 
-    with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
+    with gui.sub_window("XPBD Settings", 0., 0., 0.4, 0.35) as w:
 
-        dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
-        n_substep = w.slider_int("# sub", n_substep, 1, 100)
-        dHat_ui = w.slider_float("particle rad.", dHat_ui, 0.001, 0.101)
-        damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
+        dt_ui = w.slider_float("Time Step Size", dt_ui, 0.001, 0.101)
+        n_substep = w.slider_int("# Substepping", n_substep, 1, 100)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.001, 0.101)
+        damping_ui = w.slider_float("Damping Ratio", damping_ui, 0.0, 1.0)
+        YM_ui = w.slider_float("Young's Modulus", YM_ui, 0.0, 1e8)
+        PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
@@ -69,10 +78,11 @@ def show_options():
         # if mesh_export is True:
         #     frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
-        # w.text("")
-        # particles_dy_str = "# dynamic particles: " + str(sim.num_particles_dy)
-        # w.text(particles_dy_str)
-
+        w.text("stats.")
+        verts_str = "# verts: " + str(sim.num_verts)
+        w.text(verts_str)
+        tets_str = "# tets: " + str(sim.num_tets)
+        w.text(tets_str)
         # w.text("")
         # particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
         # w.text(particles_st_str)
@@ -88,11 +98,11 @@ def show_options():
     # if not old_friction_coeff == friction_coeff_ui:
     #     sim.mu = friction_coeff_ui
     #
-    # if not YM_old == YM_ui:
-    #     sim.stiffness_bending = YM_ui
-    #
-    # if not YM_b_old == YM_b_ui:
-    #     sim.stiffness_stretch = YM_b_ui
+    if not YM_old == YM_ui:
+        sim.YM = YM_ui
+
+    if not PR_old == PR_ui:
+        sim.PR = PR_ui
 
     if not old_damping == damping_ui:
         sim.damping = damping_ui
@@ -226,7 +236,7 @@ while window.running:
     #     for i in range(sim.particle.num_sets):
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
 
-    scene.particles(sim.x, radius=sim.padding, color=(1.0, 0.0, 0.0))
+    # scene.particles(sim.x, radius=sim.padding, color=(1.0, 0.0, 0.0))
     scene.mesh(sim.x, indices=sim.faces, per_vertex_color=sim.tet_mesh.color)
     scene.mesh(sim.x, indices=sim.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
     scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
