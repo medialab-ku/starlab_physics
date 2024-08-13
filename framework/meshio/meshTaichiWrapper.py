@@ -9,6 +9,7 @@ import framework.utilities.graph as graph_utils
 import networkx as nx
 import time
 import copy
+import json
 from collections import Counter, defaultdict
 
 from framework.utilities.graph_coloring import GraphColoring
@@ -229,7 +230,7 @@ class MeshTaichiWrapper:
         # original and phantom color graph
 
         self.max_color = 20
-        self.cracking_threshold = 6
+        self.cracking_threshold = 5
         self.max_phantom_count = 10000
 
         self.original_edge_color_field = ti.field(dtype=ti.i32, shape=(self.num_edges, 3))
@@ -244,20 +245,44 @@ class MeshTaichiWrapper:
         self.phantom_dup_count_np = np.zeros(shape=(self.max_phantom_count, 2), dtype=int)
 
         if is_static is False:
-            dir = model_dir[:-len("models/OBJ")] + "color_graph"
+            dir = model_dir[:-len("models/OBJ")] + "color_graph" + "/" + model_name[:-len(".obj")]
             if not os.path.exists(dir):
-                print("The ""color_graph"" dictionary does not exist.")
+                print("The dictionary does not exist.")
                 print("It will be made and then located in your path...")
                 os.mkdir(dir)
 
-            precomputed_origin_graph_file = dir + "/" + model_name[:-len(".obj")] + "_origin_graph.edgelist"
-            precomputed_phantom_graph_file = dir + "/" + model_name[:-len(".obj")] + "_phantom_graph.edgelist"
-            precomputed_phantom_origin_numpy_file = dir + "/" + model_name[:-len(".obj")] + "_phantom_origin.npy"
+            precomputed_original_graph_file = dir + "/" + model_name[:-len(".obj")] + "_original_graph.npy"
+            precomputed_original_graph_edgelist = dir + "/" + model_name[:-len(".obj")] + "_original_graph.edgelist"
+            precomputed_original_prefix_sum_file = dir + "/" + model_name[:-len(".obj")] + "_original_prefix_sum.npy"
+            precomputed_phantom_graph_file = dir + "/" + model_name[:-len(".obj")] + "_phantom_graph.npy"
+            precomputed_phantom_prefix_sum_file = dir + "/" + model_name[:-len(".obj")] + "_phantom_prefix_sum.npy"
+            precomputed_phantom_clique_file = dir + "/" + model_name[:-len(".obj")] + "_phantom_clique.npy"
+            phantom_info_json = dir + "/" + model_name[:-len(".obj")] + "_phantom_info.json"
 
-            # If some files are not in the correct directory path, we have to make all the files and export them!
-            if not (os.path.isfile(precomputed_origin_graph_file) or
-                    os.path.isfile(precomputed_phantom_graph_file) or
-                    os.path.isfile(precomputed_phantom_origin_numpy_file)):
+            is_original_file_exist = (os.path.isfile(precomputed_original_graph_file) and
+                    os.path.isfile(precomputed_original_prefix_sum_file))
+
+            is_phantom_file_exist = (os.path.isfile(precomputed_phantom_graph_file) and
+                    os.path.isfile(precomputed_phantom_prefix_sum_file) and
+                    os.path.isfile(precomputed_phantom_clique_file) and
+                    os.path.isfile(phantom_info_json))
+
+            is_cracking_threshold_identical = False
+            if os.path.isfile(phantom_info_json):
+                with open(phantom_info_json, "r") as f:
+                    data = json.load(f)
+                if data["cracking_threshold"] == self.cracking_threshold:
+                    is_cracking_threshold_identical = True
+                    print("The threshold value in the JSON file is identical to your value!")
+                else:
+                    print("The threshold value in the JSON file is not identical to your value...")
+
+
+            # If some files are not in the correct directory path, or the threshold value is not identical
+            # we have to make all the files and export them!
+            if not is_original_file_exist:
+                print("The original color graph does not exist.")
+                print("It will be made and then located in your path...")
                 print("Constructing an original graph...")
                 original_graph = graph_utils.construct_graph(self.eid_np)
 
@@ -273,7 +298,7 @@ class MeshTaichiWrapper:
                         v0, v1 = v1, v0
                     sorted_edge = (v0, v1)
                     available_colors = set(range(len(original_graph.edges())))
-                    neighbors = list(set(original_graph.edges(v0)) | set(original_graph.edges(v1)))
+                    neighbors = list(set(original_graph.edges(edge[0])) | set(original_graph.edges(edge[1])))
 
                     for neighbor in neighbors:
                         vn0 = int(neighbor[0])
@@ -309,10 +334,22 @@ class MeshTaichiWrapper:
                 self.original_edge_color_prefix_sum_np[:len(original_prefix_sum_temp)] = original_prefix_sum_temp
                 print(self.original_edge_color_prefix_sum_np)
 
+                # export the result into the directory
+                print("Exporting the original numpy file...")
+                np.save(precomputed_original_graph_file, self.original_edge_color_np)
+                np.save(precomputed_original_prefix_sum_file, self.original_edge_color_prefix_sum_np)
+                nx.write_edgelist(original_graph, precomputed_original_graph_edgelist)
+                print("Export complete!")
 
-                # executing edge coloring on the phantom graph
-                # extract vertex which degree is not lower than the threshold, and sorting those in descending order
+
+            # executing edge coloring on the phantom graph
+            # extract vertex which degree is not lower than the threshold, and sorting those in descending order
+            if not is_phantom_file_exist or not is_cracking_threshold_identical:
                 print("Constructing a phantom graph...")
+
+                original_graph = nx.read_edgelist(precomputed_original_graph_edgelist, create_using=nx.MultiGraph)
+                self.original_edge_color_np = np.load(precomputed_original_graph_file)
+                self.original_edge_color_prefix_sum_np = np.load(precomputed_original_prefix_sum_file)
 
                 degree_vertices_list = list(original_graph.degree())  # [(vertex, degree), ...]
                 sorted_degree_vertices_list = sorted(degree_vertices_list, key=lambda x: x[1], reverse=True)
@@ -355,7 +392,7 @@ class MeshTaichiWrapper:
                     sorted_edge = (v0_original, v1_original)
 
                     available_colors = set(range(len(phantom_graph.edges())))
-                    neighbors = list(set(phantom_graph.edges(v0)) | set(phantom_graph.edges(v1)))
+                    neighbors = list(set(phantom_graph.edges(edge[0])) | set(phantom_graph.edges(edge[1])))
 
                     for neighbor in neighbors:
                         vn0 = int(neighbor[0])
@@ -393,37 +430,46 @@ class MeshTaichiWrapper:
                 self.phantom_edge_color_prefix_sum_np[:len(phantom_prefix_sum_temp)] = phantom_prefix_sum_temp
                 print(self.phantom_edge_color_prefix_sum_np)
 
-                # print("Checking the integrity of phantom coloring...")
-                # is_exist = False
-                # for p_data in self.phantom_edge_color_np:
-                #     p_edge = (int(p_data[0]), int(p_data[1]))
-                #     for o_data in self.original_edge_color_np:
-                #         o_edge = (int(o_data[0]), int(o_data[1]))
-                #         if p_edge == o_edge:
-                #             is_exist = True
-                #             break
-                #     if not is_exist:
-                #         print("This phantom coloring is not corresponding to the original coloring!!!")
-                #         break
+                print("Checking the integrity of phantom coloring...")
+                start = time.time()
+                is_exist = False
+                for p_data in self.phantom_edge_color_np:
+                    p_edge = (int(p_data[0]), int(p_data[1]))
+                    for o_data in self.original_edge_color_np:
+                        o_edge = (int(o_data[0]), int(o_data[1]))
+                        if p_edge == o_edge:
+                            is_exist = True
+                            break
+                    if not is_exist:
+                        print("This phantom edges are not corresponding to the original edges!!!")
+                        break
+                end = time.time()
+                print("Checking Integrity Elapsed time:", round(end - start, 5), "sec.")
 
-                # export the result into the directory
-                # print("Exporting the graphs and the numpy file...")
-                # nx.write_edgelist(original_graph, precomputed_origin_graph_file)
-                # nx.write_edgelist(phantom_graph, precomputed_phantom_graph_file)
-                # np.save(precomputed_phantom_origin_numpy_file, phantom_original_numpy)
-                # print("Export complete...")
+                # exporting the phantom file
+                print("Exporting precomputed phantom coloring files...")
+                np.save(precomputed_phantom_graph_file, self.phantom_edge_color_np)
+                np.save(precomputed_phantom_prefix_sum_file, self.phantom_edge_color_prefix_sum_np)
+                np.save(precomputed_phantom_clique_file, self.phantom_dup_count_np)
+                data = {"cracking_threshold": self.cracking_threshold}
+                with open(phantom_info_json, "w") as f:
+                    json.dump(data, f, indent=4)
+                print("Export complete!")
 
-            # # otherwise, we can just import the files from the directory!
-            # else:
-            #     print("Importing a precomputed phantom coloring graph...")
-            #     phantom_graph = nx.read_edgelist(precomputed_phantom_graph_file, create_using=nx.MultiGraph)
-            #     phantom_original_numpy = np.load(precomputed_phantom_origin_numpy_file)
+            # otherwise, we can just import the files from the directory!
+            if is_original_file_exist and is_phantom_file_exist and is_cracking_threshold_identical:
+                print("Importing precomputed coloring graph files...")
+                self.original_edge_color_np = np.load(precomputed_original_graph_file)
+                self.original_edge_color_prefix_sum_np = np.load(precomputed_original_prefix_sum_file)
+                self.phantom_edge_color_np = np.load(precomputed_phantom_graph_file)
+                self.phantom_edge_color_prefix_sum_np = np.load(precomputed_phantom_prefix_sum_file)
+                self.phantom_dup_count_np = np.load(precomputed_phantom_clique_file)
+                print("Import complete!")
 
         self.original_edge_color_field.from_numpy(self.original_edge_color_np)
         self.original_edge_color_prefix_sum_field.from_numpy(self.original_edge_color_prefix_sum_np)
         self.phantom_edge_color_field.from_numpy(self.phantom_edge_color_np)
         self.phantom_edge_color_prefix_sum_field.from_numpy(self.phantom_edge_color_prefix_sum_np)
-
         self.phantom_dup_count_field = ti.field(dtype=ti.i32, shape=(self.phantom_dup_count_np.shape[0], 2))
         self.phantom_dup_count_field.from_numpy(self.phantom_dup_count_np)
 
@@ -432,7 +478,6 @@ class MeshTaichiWrapper:
         self.y_original = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_verts)
         self.init_l0_original()
         self.init_l0_phantom()
-
 
         ################################################################################################################
 
