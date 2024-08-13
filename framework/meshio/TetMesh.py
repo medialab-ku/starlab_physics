@@ -1,8 +1,7 @@
 import numpy as np
 import taichi as ti
 import meshio
-import gmshparser
-
+import random
 import os
 import igl
 
@@ -11,54 +10,66 @@ class TetMeshWrapper:
 
     def __init__(self,
                  model_dir,
-                 model_name,
-                 trans=ti.math.vec3(0, 0, 0),
+                 model_name_list=[],
+                 trans_list=[],
                  rot=ti.math.vec3(0, 0, 0),
-                 scale=1.0,
+                 scale_list=[],
                  density=1.0,
                  is_static=False):
 
-        model_path = model_dir + "/" + model_name
-        test = gmshparser.parse(model_path)
+        num_verts = 0
+        num_tetras = 0
+        x_np = np.empty((0, 3), dtype=float)
+        tet_indices_np = np.empty((0, 4), dtype=int)
+        offsets = [0]
+        for i in range(len(model_name_list)):
+            model_path = model_dir + "/" + model_name_list[i]
+            mesh = meshio.read(model_path)
+            scale_lf = lambda x, sc: sc * x
+            trans_lf = lambda x, trans: x + trans
 
-        # print(test)
-        # print(model_dir + "/" + model_name)
-        mesh = meshio.read(model_path)
-        num_verts = mesh.points.shape[0]
-        x_np = np.array(mesh.points, dtype=float)
+            x_np_temp = np.array(mesh.points, dtype=float)
+            center = x_np_temp.sum(axis=0) / x_np_temp.shape[0]
+            # print(center)
+            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np_temp)
+            x_np_temp = scale_lf(x_np_temp, scale_list[i])
+            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, trans_list[i]), 1, x_np_temp)
+            x_np = np.append(x_np, x_np_temp, axis=0)
 
-        scale_lf = lambda x, sc: sc * x
+            tet_indices_np_temp = np.array(mesh.cells[0].data, dtype=int) + num_verts
+            offset = num_verts * np.ones(shape=4, dtype=int)
+            # tet_indices_np_temp = np.apply_along_axis(lambda row: trans_lf(row, offset), 1, tet_indices_np_temp)
+            tet_indices_np = np.append(tet_indices_np, tet_indices_np_temp, axis=0)
+            num_verts += mesh.points.shape[0]
+            num_tetras += mesh.cells[0].data.shape[0]
+            offsets.append(num_verts)
 
-        trans_lf = lambda x, trans: x + trans
-
-        center = x_np.sum(axis=0) / x_np.shape[0]
-
-        x_np = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np)
-        x_np = scale_lf(x_np, scale)
-        x_np = np.apply_along_axis(lambda row: trans_lf(row, trans), 1, x_np)
+        # print(offsets)
 
         self.y = ti.Vector.field(n=3, dtype=float)
         self.x = ti.Vector.field(n=3, dtype=float)
         self.x0 = ti.Vector.field(n=3, dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
+        self.color = ti.Vector.field(n=3, dtype=float)
+
+        # print(x_np)
+
         dnode = ti.root.dense(ti.i, num_verts)
         dnode.place(self.y, self.x, self.v)
-        dnode.place(self.x0)
+        dnode.place(self.x0, self.color)
+
+        self.init_color(offsets)
 
         self.x.from_numpy(x_np)
         self.x0.copy_from(self.x)
-
         self.v.fill(0.0)
 
-        tet_indices_np = np.array(mesh.cells[0].data, dtype=int)
-        num_tetras = tet_indices_np.shape[0]
         self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=int)
         self.tet_indices = ti.field(dtype=int)
         node = ti.root.dense(ti.i, num_tetras)
         node.place(self.Dm_inv)
         ti.root.dense(ti.ij, (num_tetras, 4)).place(self.tet_indices)
         self.tet_indices.from_numpy(tet_indices_np)
-        # print(mesh.cells)
 
         f = self.list_faces(tet_indices_np)
         _, indxs, count = np.unique(f, axis=0, return_index=True, return_counts=True)
@@ -67,16 +78,14 @@ class TetMeshWrapper:
         surface_indices_np.astype(int)
         num_faces = surface_indices_np.shape[0]
         # print(surface_indices_np)
-        # print(surface_indices_np.reshape(3 * num_faces))
 
         self.surface_indices = ti.field(dtype=int)
         ti.root.dense(ti.i, 3 * num_faces).place(self.surface_indices)
         self.surface_indices.from_numpy(surface_indices_np.reshape(3 * num_faces))
 
-        # print(mesh)
-
     def reset(self):
         self.x.copy_from(self.x0)
+        self.v.fill(0.0)
 
     def list_faces(self, t):
         t.sort(axis=1)
@@ -89,23 +98,21 @@ class TetMeshWrapper:
             i = i + n_t
         return f
 
-    def extract_unique_triangles(self, t):
-        _, indxs, count = np.unique(t, axis=0, return_index=True, return_counts=True)
-        return t[indxs[count == 1]]
+    def init_color(self, offsets):
+        # print(self.offsets)
+        for i in range(len(offsets) - 1):
+            size = offsets[i + 1] - offsets[i]
+            # if is_static[i] is True:
+            #     self.init_colors(self.offsets[i], size, color=ti.math.vec3(0.5, 0.5, 0.5))
+            # else:
+            r = random.randrange(0, 255) / 256
+            g = random.randrange(0, 255) / 256
+            b = random.randrange(0, 255) / 256
 
-    def get_surface_id(self):
-        # https://stackoverflow.com/questions/66607716/how-to-extract-surface-triangles-from-a-tetrahedral-mesh
-        tid_np = self.tetra_indices.to_numpy()
-        tid_np = np.reshape(tid_np, (len(self.tet_mesh.cells), 4))
+            self.init_colors(offsets[i], size, color=ti.math.vec3(r, g, b))
 
-        # print("tid")
-        # print(tid_np)
-        # print(tid_np.shape)
+    @ti.kernel
+    def init_colors(self, offset: ti.i32, size: ti.i32, color: ti.math.vec3):
 
-        f = self.list_faces(tid_np)
-        _, indxs, count = np.unique(f, axis=0, return_index=True, return_counts=True)
-
-        return f[indxs[count == 1]]
-
-
-
+        for i in range(size):
+            self.color[i + offset] = color

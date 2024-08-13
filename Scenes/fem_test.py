@@ -8,8 +8,20 @@ ti.init(arch=ti.cuda, device_memory_GB=8, kernel_profiler=enable_profiler, defau
 model_path = Path(__file__).resolve().parent.parent / "models"
 model_dir = str(model_path) + "/MSH"
 
+model_name_list = []
+model_name_list.append("cube.msh")
+model_name_list.append("cube.msh")
+
+scale_list = []
+scale_list.append(5.0)
+scale_list.append(5.0)
+
+trans_list = []
+trans_list.append([0.0, 10.0, 0.0])
+trans_list.append([0.0, 0.0, 0.0])
+
 #dynamic mesh
-mesh_dy = tm(str(model_dir), "cube.msh", scale=5.0, trans=ti.math.vec3(0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = tm(str(model_dir), model_name_list, scale_list=scale_list, trans_list=trans_list, rot=ti.math.vec3(0.0, 0.0, 0.0))
 #static mesh
 # mesh_st = MeshTaichiWrapper(model_dir, "SMPL_APose.obj",  offsets=[0], scale=12.0, trans=ti.math.vec3(0.0, 0.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
 

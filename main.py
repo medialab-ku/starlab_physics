@@ -228,7 +228,7 @@ while window.running:
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
 
     scene.particles(sim.x, radius=sim.padding, color=(1.0, 0.0, 0.0))
-    scene.mesh(sim.x, indices=sim.faces, color=(1.0, 1.0, 0.0))
+    scene.mesh(sim.x, indices=sim.faces, per_vertex_color=sim.tet_mesh.color)
     scene.mesh(sim.x, indices=sim.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
     scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
