@@ -8,7 +8,7 @@ from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 
 # sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.020)
-sim = XPBFEM.Solver(scene1.mesh_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.020)
+sim = XPBFEM.Solver(scene1.mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()

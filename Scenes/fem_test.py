@@ -9,16 +9,16 @@ model_path = Path(__file__).resolve().parent.parent / "models"
 model_dir = str(model_path) + "/MSH"
 
 model_name_list = []
-model_name_list.append("tet.msh")
-model_name_list.append("tet.msh")
+model_name_list.append("cube.msh")
+# model_name_list.append("tet.msh")
 
 scale_list = []
-scale_list.append(5.0)
-scale_list.append(5.0)
+scale_list.append(10.0)
+# scale_list.append(5.0)
 
 trans_list = []
-trans_list.append([0.0, 10.0, 0.0])
 trans_list.append([0.0, 0.0, 0.0])
+# trans_list.append([0.0, 0.0, 0.0])
 
 #dynamic mesh
 mesh_dy = tm(str(model_dir), model_name_list, scale_list=scale_list, trans_list=trans_list, rot=ti.math.vec3(0.0, 0.0, 0.0))

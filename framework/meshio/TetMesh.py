@@ -87,12 +87,12 @@ class TetMeshWrapper:
         self.surface_indices = ti.field(dtype=int)
         ti.root.dense(ti.i, 3 * num_faces).place(self.surface_indices)
         self.surface_indices.from_numpy(surface_indices_np.reshape(3 * num_faces))
-
         self.init()
 
     def reset(self):
         self.x.copy_from(self.x0)
         self.v.fill(0.0)
+        self.init()
 
     def list_faces(self, t):
         t.sort(axis=1)
@@ -124,19 +124,59 @@ class TetMeshWrapper:
         for i in range(size):
             self.color[i + offset] = color
 
+    @ti.func
+    def ssvd(self, F):
+        U, sig, V = ti.svd(F)
+        if U.determinant() < 0:
+            for i in ti.static(range(3)): U[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        if V.determinant() < 0:
+            for i in ti.static(range(3)): V[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        return U, sig, V
     @ti.kernel
     def init(self):
         self.M.fill(0.0)
         for i in self.invDm:
-            Dm_i = ti.Matrix.cols([self.y[self.tet_indices[i, j]] - self.y[self.tet_indices[i, 3]] for j in ti.static(range(3))])
+            Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
+            # print(Dm_i)
             self.invDm[i] = Dm_i.inverse()
             V0_i = ti.abs(Dm_i.determinant()) / 6.0
-
+            # print(V0_i)
+            self.V0[i] = V0_i
+            # Ds = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
+            # B = self.invDm[i]
+            # F = Ds @ B
+            # print(F)
+            # U, _, V = self.ssvd(F)
+            # R = U @ V.transpose()
+            # print(R)
+            # com = ti.math.vec3(0.0)
+            # for j in ti.static(range(3)):
+            #     com += self.x[self.tet_indices[i, j]]
+            # com *= 0.25
+            # print(com)
+            # Dm = ti.math.inverse(self.invDm[i])
+            # Ds_proj = R @ Dm
+            # print(Ds_proj)
+            #
+            # proj03 = ti.math.vec3(Ds_proj[0, 0], Ds_proj[0, 1], Ds_proj[0, 2])
+            # proj13 = ti.math.vec3(Ds_proj[1, 0], Ds_proj[1, 1], Ds_proj[1, 2])
+            # proj23 = ti.math.vec3(Ds_proj[2, 0], Ds_proj[2, 1], Ds_proj[2, 2])
+            #
+            # proj3 = com - 0.25 * (proj03 + proj13 + proj23)
+            #
+            # proj0 = proj03 + proj3
+            # proj1 = proj13 + proj3
+            # proj2 = proj23 + proj3
+            #
+            # print(proj0, proj1, proj2, proj3)
             for j in ti.static(range(4)):
                 self.M[self.tet_indices[i, j]] += 0.25 * V0_i
 
-            self.V0[i] = ti.abs(Dm_i.determinant()) / 6.0
+            self.V0[i] = V0_i / 6.0
 
         for i in self.invM:
             self.invM[i] = 1.0 / self.M[i]
 
+            # print(self.M[i])
