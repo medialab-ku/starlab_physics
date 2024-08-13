@@ -253,7 +253,7 @@ class Solver:
                 xji0 = self.x[j] - pos_i
                 Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
                 for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                    Li[I] = Vj_nabla_Wji[I[0]] * xji0[I[1]]
+                    Li[I] += Vj_nabla_Wji[I[0]] * xji0[I[1]]
 
                 self.L[i] = ti.math.inverse(Li)
 
@@ -351,19 +351,35 @@ class Solver:
             if self.nc[pi] > 0:
                 self.y[pi] += (self.dx[pi] / self.nc[pi])
 
+    @ti.func
+    def ssvd(self, F):
+        U, sig, V = ti.svd(F)
+        if U.determinant() < 0:
+            for i in ti.static(range(3)): U[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        if V.determinant() < 0:
+            for i in ti.static(range(3)): V[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        return U, sig, V
     @ti.kernel
     def solve_constraints_fem_x(self):
 
+        ti.block_local(self.y, self.L)
         for i in range(self.num_particles_dy):
             # pos_i = self.y_p[pi]
             Di = ti.math.mat3(0.0)
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
-                xji = self.y[j] - self.y[i]
+                xji = (self.y[j] - self.y[i])
+                Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji, self.kernel_radius)
+                for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
+                    Di[I] += Vj_nabla_Wji[I[0]] * xji[I[1]]
 
-            self.F[i] = Di @ self.L[i]
-            # U, S, V = ti.svd(self.F, dt=float)
-            # R = U @ V.transpose()
+            F = Di @ self.L[i]
+            U, sig, V = self.ssvd(F)
+            R = U @ V.transpose()
+
+
 
     @ti.kernel
     def solve_constraints_pressure_x(self):
