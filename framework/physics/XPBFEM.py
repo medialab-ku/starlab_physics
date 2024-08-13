@@ -8,12 +8,16 @@ class Solver:
                  tet_mesh,
                  mesh_st=None,
                  g=ti.math.vec3(0.0, -9.81, 0.0),
+                 YM=1e5,
+                 PR=0.2,
                  dHat=1e-4,
                  dt=0.03):
 
         self.tet_mesh = tet_mesh
         self.mesh_st = mesh_st
         self.g = g
+        self.YM = YM
+        self.PR = PR
         self.dHat = dHat
         self.dt = dt
 
@@ -25,9 +29,15 @@ class Solver:
 
         self.y = self.tet_mesh.y
         self.x = self.tet_mesh.x
+        self.dx = self.tet_mesh.dx
+        self.nc = self.tet_mesh.nc
         self.v = self.tet_mesh.v
+        self.invM = self.tet_mesh.invM
+        self.invDm = self.tet_mesh.invDm
 
         self.faces = self.tet_mesh.surface_indices
+        self.tetras = self.tet_mesh.tet_indices
+
         self.bd_max = ti.math.vec3(40.0)
         self.bd_min = -self.bd_max
 
@@ -127,6 +137,56 @@ class Solver:
 
             self.y[i] = self.confine_boundary(self.y[i])
 
+    @ti.func
+    def ssvd(self, F):
+        U, sig, V = ti.svd(F)
+        if U.determinant() < 0:
+            for i in ti.static(range(3)): U[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        if V.determinant() < 0:
+            for i in ti.static(range(3)): V[i, 2] *= -1
+            sig[2, 2] = -sig[2, 2]
+        return U, sig, V
+
+    @ti.kernel
+    def solve_constraints_fem_x(self, YM: float, PR: float):
+
+        self.dx.fill(0.0)
+        self.nc.fill(0.0)
+
+        for i in self.invDm:
+            Ds = ti.Matrix.cols([self.y[self.tetras[i, j]] - self.y[self.tetras[i, 3]] for j in ti.static(range(3))])
+            B = self.invDm[i]
+            F = Ds @ B
+            U, _, V = self.ssvd(F)
+            R = U @ V.transpose()
+            com = ti.math.vec3(0.0)
+
+            Ds_proj = R @ Ds
+
+            proj03 = ti.math.vec3(Ds_proj[0, 0], Ds_proj[0, 1], Ds_proj[0, 2])
+            proj13 = ti.math.vec3(Ds_proj[1, 0], Ds_proj[1, 1], Ds_proj[1, 2])
+            proj23 = ti.math.vec3(Ds_proj[2, 0], Ds_proj[2, 1], Ds_proj[2, 2])
+
+            for j in ti.static(range(3)):
+                com += self.y[self.tetras[i, j]]
+            com *= 0.25
+
+            proj3 = com - 0.25 * (proj03 + proj13 + proj23)
+
+            proj0 = proj03 + proj3
+            proj1 = proj13 + proj3
+            proj2 = proj23 + proj3
+
+            self.dx[self.tetras[i, 0]] += (proj0 - self.y[self.tetras[i, 0]])
+            self.dx[self.tetras[i, 1]] += (proj1 - self.y[self.tetras[i, 1]])
+            self.dx[self.tetras[i, 2]] += (proj2 - self.y[self.tetras[i, 2]])
+            self.dx[self.tetras[i, 3]] += (proj3 - self.y[self.tetras[i, 3]])
+
+        for i in self.dx:
+            self.y[i] += (self.dx[i] / self.nc[i])
+            # nabla_Ci0 = ti.math.vec3(H[0, 0])
+
 
     @ti.kernel
     def update_state(self, damping: float, dt: float):
@@ -141,9 +201,8 @@ class Solver:
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
-
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            # self.solve_constraints_fem_x()
+            self.solve_constraints_fem_x(self.YM, self.PR)
             self.update_state(self.damping, dt_sub)
 

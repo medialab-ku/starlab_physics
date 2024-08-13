@@ -30,7 +30,6 @@ frame_end = 100
 
 dt_ui = sim.dt
 dHat_ui = sim.dHat
-
 damping_ui = sim.damping
 
 mesh_export = False

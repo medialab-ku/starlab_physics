@@ -35,7 +35,6 @@ class TetMeshWrapper:
             x_np_temp = scale_lf(x_np_temp, scale_list[i])
             x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, trans_list[i]), 1, x_np_temp)
             x_np = np.append(x_np, x_np_temp, axis=0)
-
             tet_indices_np_temp = np.array(mesh.cells[0].data, dtype=int) + num_verts
             offset = num_verts * np.ones(shape=4, dtype=int)
             # tet_indices_np_temp = np.apply_along_axis(lambda row: trans_lf(row, offset), 1, tet_indices_np_temp)
@@ -48,14 +47,18 @@ class TetMeshWrapper:
 
         self.y = ti.Vector.field(n=3, dtype=float)
         self.x = ti.Vector.field(n=3, dtype=float)
+        self.dx = ti.Vector.field(n=3, dtype=float)
+        self.nc = ti.field(dtype=float)
         self.x0 = ti.Vector.field(n=3, dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
+        self.invM = ti.field(dtype=float)
+        self.M = ti.field(dtype=float)
         self.color = ti.Vector.field(n=3, dtype=float)
 
         # print(x_np)
 
         dnode = ti.root.dense(ti.i, num_verts)
-        dnode.place(self.y, self.x, self.v)
+        dnode.place(self.y, self.dx, self.nc, self.x, self.v, self.invM, self.M)
         dnode.place(self.x0, self.color)
 
         self.init_color(offsets)
@@ -64,10 +67,12 @@ class TetMeshWrapper:
         self.x0.copy_from(self.x)
         self.v.fill(0.0)
 
-        self.Dm_inv = ti.Matrix.field(n=3, m=3, dtype=int)
+        self.invDm = ti.Matrix.field(n=3, m=3, dtype=int)
+        self.V0 = ti.field(dtype=int)
         self.tet_indices = ti.field(dtype=int)
+
         node = ti.root.dense(ti.i, num_tetras)
-        node.place(self.Dm_inv)
+        node.place(self.invDm, self.V0)
         ti.root.dense(ti.ij, (num_tetras, 4)).place(self.tet_indices)
         self.tet_indices.from_numpy(tet_indices_np)
 
@@ -116,3 +121,20 @@ class TetMeshWrapper:
 
         for i in range(size):
             self.color[i + offset] = color
+
+    @ti.kernel
+    def init(self):
+        self.M.fill(0.0)
+        for i in self.invDm:
+            Dm_i = ti.Matrix.cols([self.y[self.tet_indices[i][j]] - self.y[self.tet_indices[i][3]] for j in ti.static(range(3))])
+            self.invDm[i] = Dm_i.inverse()
+            V0_i = ti.abs(Dm_i.determinant()) / 6.0
+
+            for j in ti.static(range(4)):
+                self.M[self.tet_indices[i][j]] += 0.25 * V0_i
+
+            self.V0[i] = ti.abs(Dm_i.determinant()) / 6.0
+
+        for i in self.invM:
+            self.invM[i] = 1.0 / self.M[i]
+
