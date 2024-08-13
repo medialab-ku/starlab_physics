@@ -187,7 +187,6 @@ class Solver:
             self.y[i] += (self.dx[i] / self.nc[i])
             # nabla_Ci0 = ti.math.vec3(H[0, 0])
 
-
     @ti.kernel
     def update_state(self, damping: float, dt: float):
 
@@ -196,7 +195,6 @@ class Solver:
             new_x = self.confine_boundary(self.y[i])
             self.v[i] = (1.0 - damping) * (new_x - self.x[i]) / dt
             self.x[i] = new_x
-
 
     def forward(self, n_substeps):
 

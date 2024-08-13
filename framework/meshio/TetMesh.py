@@ -67,8 +67,8 @@ class TetMeshWrapper:
         self.x0.copy_from(self.x)
         self.v.fill(0.0)
 
-        self.invDm = ti.Matrix.field(n=3, m=3, dtype=int)
-        self.V0 = ti.field(dtype=int)
+        self.invDm = ti.Matrix.field(n=3, m=3, dtype=float)
+        self.V0 = ti.field(dtype=float)
         self.tet_indices = ti.field(dtype=int)
 
         node = ti.root.dense(ti.i, num_tetras)
@@ -87,6 +87,8 @@ class TetMeshWrapper:
         self.surface_indices = ti.field(dtype=int)
         ti.root.dense(ti.i, 3 * num_faces).place(self.surface_indices)
         self.surface_indices.from_numpy(surface_indices_np.reshape(3 * num_faces))
+
+        self.init()
 
     def reset(self):
         self.x.copy_from(self.x0)
@@ -110,9 +112,9 @@ class TetMeshWrapper:
             # if is_static[i] is True:
             #     self.init_colors(self.offsets[i], size, color=ti.math.vec3(0.5, 0.5, 0.5))
             # else:
-            r = random.randrange(0, 255) / 256
-            g = random.randrange(0, 255) / 256
-            b = random.randrange(0, 255) / 256
+            r = float(random.randrange(0, 255) / 256)
+            g = float(random.randrange(0, 255) / 256)
+            b = float(random.randrange(0, 255) / 256)
 
             self.init_colors(offsets[i], size, color=ti.math.vec3(r, g, b))
 
@@ -126,12 +128,12 @@ class TetMeshWrapper:
     def init(self):
         self.M.fill(0.0)
         for i in self.invDm:
-            Dm_i = ti.Matrix.cols([self.y[self.tet_indices[i][j]] - self.y[self.tet_indices[i][3]] for j in ti.static(range(3))])
+            Dm_i = ti.Matrix.cols([self.y[self.tet_indices[i, j]] - self.y[self.tet_indices[i, 3]] for j in ti.static(range(3))])
             self.invDm[i] = Dm_i.inverse()
             V0_i = ti.abs(Dm_i.determinant()) / 6.0
 
             for j in ti.static(range(4)):
-                self.M[self.tet_indices[i][j]] += 0.25 * V0_i
+                self.M[self.tet_indices[i, j]] += 0.25 * V0_i
 
             self.V0[i] = ti.abs(Dm_i.determinant()) / 6.0
 
