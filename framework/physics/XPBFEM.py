@@ -221,41 +221,22 @@ class Solver:
             Dm = ti.math.inverse(B)
             Ds_proj = R @ Dm
 
-            proj03 = self.M[self.tetras[i, 0]] * ti.math.vec3(Ds_proj[0, 0], Ds_proj[1, 0], Ds_proj[2, 0])
-            proj13 = self.M[self.tetras[i, 1]] * ti.math.vec3(Ds_proj[0, 1], Ds_proj[1, 1], Ds_proj[2, 1])
-            proj23 = self.M[self.tetras[i, 2]] * ti.math.vec3(Ds_proj[0, 2], Ds_proj[1, 2], Ds_proj[2, 2])
-
-            com = ti.math.vec3(0.0)
-            m = 0.0
-
-            for j in ti.static(range(4)):
-                com += self.M[self.tetras[i, j]] * self.y[self.tetras[i, j]]
-                m += self.M[self.tetras[i, j]]
-
-            com /= m
-
-            proj3 = com - (proj03 + proj13 + proj23) / m
-            proj0 = proj03 / self.M[self.tetras[i, 0]] + proj3
-            proj1 = proj13 / self.M[self.tetras[i, 1]] + proj3
-            proj2 = proj23 / self.M[self.tetras[i, 2]] + proj3
+            proj03 = ti.math.vec3(Ds_proj[0, 0], Ds_proj[1, 0], Ds_proj[2, 0])
+            proj13 = ti.math.vec3(Ds_proj[0, 1], Ds_proj[1, 1], Ds_proj[2, 1])
+            proj23 = ti.math.vec3(Ds_proj[0, 2], Ds_proj[1, 2], Ds_proj[2, 2])
 
             weight = self.V0[i] * compliance_str
-            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight * (proj0 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]])
-            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight * (proj1 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 1]])
-            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight * (proj2 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 2]])
+            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight * (proj03 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]])
+            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight * (proj13 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 1]])
+            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight * (proj23 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 2]])
 
             # self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight * (proj3 - self.y[self.tetras[i, 3]])
-            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj0 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]])
-            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj1 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 1]])
-            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj2 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 2]])
+            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj03 + proj13 + proj23 + 3 * self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]] - self.y[self.tetras[i, 1]] - self.y[self.tetras[i, 2]])
 
             self.nc[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight
             self.nc[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight
             self.nc[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight
-
-            self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight
-            self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight
-            self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight
+            self.nc[self.tetras[i, 3]] += 3 * self.invM[self.tetras[i, 3]] * weight
 
         for i in self.dx:
             self.y[i] += (self.dx[i] / self.nc[i])
