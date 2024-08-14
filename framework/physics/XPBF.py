@@ -260,7 +260,7 @@ class Solver:
                 rho += wji0
                 # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
                 for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                    Li[I] += xji0[I[0]] * xji0[I[1]]
+                    Li[I] += wji0 * xji0[I[0]] * xji0[I[1]]
 
                 self.L[i] = ti.math.inverse(Li)
             self.rho0[i] = rho
@@ -383,6 +383,7 @@ class Solver:
             for i in ti.static(range(3)): V[i, 2] *= -1
             sig[2, 2] = -sig[2, 2]
         return U, sig, V
+
     @ti.kernel
     def solve_constraints_fem_x(self):
 
@@ -400,7 +401,7 @@ class Solver:
                 wji0 = self.poly6_value(yji.norm(), self.kernel_radius)
                 # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
                 for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                    Dsi[I] += yji[I[0]] * x0ji[I[1]]
+                    Dsi[I] += wji0 * yji[I[0]] * x0ji[I[1]]
 
             F = Dsi @ self.L[i]
             U, sig, V = self.ssvd(F)
@@ -408,17 +409,17 @@ class Solver:
 
             wii0 = self.poly6_value(0.0, self.kernel_radius)
             com = yi
-            m = 1.0
+            m = wii0
             sum = ti.math.vec3(0.0)
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
                 yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
                 wji0 = self.poly6_value(yji.norm(), self.kernel_radius)
-                pji = R @ x0ji
+                pji = wji0 * R @ x0ji
                 sum += pji
-                m += 1.0
-                com += self.y[j]
+                m += wji0
+                com += wji0 * self.y[j]
 
             com /= m
             pi = com - sum / m
@@ -437,7 +438,6 @@ class Solver:
 
         for i in range(self.num_particles_dy):
             self.y[i] += (self.dx[i] / self.nc[i])
-
         #
         #     for nj in range(self.particle_num_neighbors_rest[i]):
         #         j = self.particle_neighbors[i, nj]
@@ -445,9 +445,6 @@ class Solver:
         #         pji = R @ x0ji
         #
         # for i in range(self.num_particles_dy):
-
-
-
 
     @ti.kernel
     def solve_constraints_pressure_x(self):
@@ -513,6 +510,6 @@ class Solver:
             self.compute_y(dt_sub)
             self.search_neighbours()
             self.solve_constraints_pressure_x()
-            self.solve_constraints_fem_x()
+            # self.solve_constraints_fem_x()
             self.update_state(self.damping, dt_sub)
 

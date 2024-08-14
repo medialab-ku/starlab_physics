@@ -7,7 +7,7 @@ import os
 from framework.physics import XPBF
 from framework.utilities import selection_tool as st
 
-sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, 0.0, 0.0), dt=0.020)
+sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -29,6 +29,7 @@ n_substep = 5
 frame_end = 100
 
 dt_ui = sim.dt
+g_ui = sim.g[1]
 dHat_ui = sim.particle_rad
 
 damping_ui = sim.damping
@@ -40,6 +41,7 @@ def show_options():
 
     global n_substep
     global dt_ui
+    global g_ui
     global damping_ui
     global sim
     global dHat_ui
@@ -49,12 +51,14 @@ def show_options():
     global frame_end
 
     old_dt = dt_ui
+    old_g = g_ui
     old_dHat = dHat_ui
     old_damping = damping_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
+        g_ui = w.slider_float("g", g_ui, -20.0, 20.0)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         dHat_ui = w.slider_float("particle rad.", dHat_ui, 0.001, 0.101)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
@@ -78,7 +82,8 @@ def show_options():
         particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
         w.text(particles_st_str)
 
-
+    if not old_g == g_ui:
+        sim.g[1] = g_ui
 
     if not old_dt == dt_ui:
         sim.dt = dt_ui
