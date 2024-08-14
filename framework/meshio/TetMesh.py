@@ -44,7 +44,6 @@ class TetMeshWrapper:
             offsets.append(num_verts)
 
         # print(offsets)
-
         self.y = ti.Vector.field(n=3, dtype=float)
         self.x = ti.Vector.field(n=3, dtype=float)
         self.dx = ti.Vector.field(n=3, dtype=float)
