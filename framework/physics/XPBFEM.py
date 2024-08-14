@@ -238,11 +238,61 @@ class Solver:
             self.nc[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight
             self.nc[self.tetras[i, 3]] += 3 * self.invM[self.tetras[i, 3]] * weight
 
+        ti.block_local(self.y, self.dx, self.nc)
+        for i in self.dx:
+            self.y[i] += (self.dx[i] / self.nc[i])
+
+
+
+    @ti.func
+    def volume_projection(self, sigma: ti.math.mat3) -> ti.math.mat3:
+
+        for i in ti.static(range(3)):
+            sigma[i, i] = 1.0
+
+        return sigma
+
+    @ti.kernel
+    def solve_pd_fem_volume_x(self, compliance_vol: float):
+
+        self.dx.fill(0.0)
+        self.nc.fill(1.0)
+
+        ti.block_local(self.invDm, self.dx, self.nc)
+        for i in self.invDm:
+            Ds = ti.Matrix.cols([self.y[self.tetras[i, j]] - self.y[self.tetras[i, 3]] for j in ti.static(range(3))])
+            B = self.invDm[i]
+            F = Ds @ B
+            U, sigma, V = self.ssvd(F)
+            sigma = self.volume_projection(sigma)
+            R = U @ sigma @ V.transpose()
+
+            Dm = ti.math.inverse(B)
+            Ds_proj = R @ Dm
+
+            proj03 = ti.math.vec3(Ds_proj[0, 0], Ds_proj[1, 0], Ds_proj[2, 0])
+            proj13 = ti.math.vec3(Ds_proj[0, 1], Ds_proj[1, 1], Ds_proj[2, 1])
+            proj23 = ti.math.vec3(Ds_proj[0, 2], Ds_proj[1, 2], Ds_proj[2, 2])
+
+            weight = self.V0[i] * compliance_vol
+            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight * (proj03 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]])
+            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight * (proj13 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 1]])
+            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight * (proj23 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 2]])
+
+            # self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight * (proj3 - self.y[self.tetras[i, 3]])
+            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj03 + proj13 + proj23 + 3 * self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]] - self.y[self.tetras[i, 1]] - self.y[self.tetras[i, 2]])
+
+            self.nc[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight
+            self.nc[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight
+            self.nc[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight
+            self.nc[self.tetras[i, 3]] += 3 * self.invM[self.tetras[i, 3]] * weight
+
+        ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:
             self.y[i] += (self.dx[i] / self.nc[i])
 
     @ti.kernel
-    def solve_constraints_fem_volume_x(self, compliance_vol: float):
+    def solve_xpbd_fem_volume_x(self, compliance_vol: float):
 
         self.dx.fill(0.0)
         self.nc.fill(0.0)
@@ -318,10 +368,9 @@ class Solver:
         ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
 
         compliance_str = 2.0 * mu * dtSq
-
-        # self.nc.copy_from(self.M)
         self.solve_pd_fem_stretch_x(compliance_str)
-        # self.solve_xpbd_fem_stretch_x(compliance_str)
+        compliance_vol = ld * dtSq
+        self.solve_pd_fem_volume_x(compliance_vol)
 
     def forward(self, n_substeps):
 
