@@ -982,18 +982,6 @@ class Solver:
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
         self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
-        # self.update_dx()
-
-        # self.update_dx()
-        # if self.enable_collision_handling:
-        # compliance_collision = 1e8
-        # self.broadphase_lbvh(self.lbvh_st.cell_size, self.lbvh_st.origin, self.lbvh_dy.cell_size, self.lbvh_dy.origin, self.damping, dt, compliance_collision, self.enable_collision_handling)
-
-            # self.init_variables()
-
-        compliance_collision = 1e8
-        self.solve_collision_constraints_x(compliance_collision, self.dHat)
-        # self.update_dx()
 
     def solve_pd_diag_x(self, dt):
 
@@ -1366,82 +1354,10 @@ class Solver:
 
     def forward(self, n_substeps):
 
-        # self.load_sewing_pairs()
         dt_sub = self.dt / n_substeps
-
-        self.search_neighbours()
-        # if self.enable_collision_handling:
-
-            # aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB_faces(padding=self.padding)
-            # # aabb_min_dy, aabb_max_dy = self.mesh_dy.computeAABB(padding=self.padding)
-            # self.lbvh_dy.build(self.mesh_dy, aabb_min_dy, aabb_max_dy)
-            # if self.mesh_st != None:
-            #     aabb_min_st, aabb_max_st = self.mesh_st.computeAABB_faces(padding=self.padding)
-            #     # aabb_min_st, aabb_max_st = self.mesh_st.computeAABB(padding=self.padding)
-            #     self.lbvh_st.build(self.mesh_st, aabb_min_st, aabb_max_st)
-
         for _ in range(n_substeps):
-            # self.copy_to_duplicates()
             self.compute_y(self.g, dt_sub)
-            if self.solver_type == 0:
-            #     # self.compute_y(self.g, dt_sub)
-                self.solve_constraints_jacobi_x(dt_sub)
-
-            #     self.compute_velocity(damping=self.damping, dt=dt_sub)
-            #     # if self.enable_velocity_update:
-            #     #     self.solve_constraints_v()
-            #
-            #     # self.update_x(dt_sub)
-            # elif self.solver_type == 1:
-            #     # self.compute_y(self.g, dt_sub)
-            #     self.solve_pd_diag_x(dt_sub)
-            #     # self.compute_velocity(damping=self.damping, dt=dt_sub)
-            #     # if self.enable_velocity_update:
-            #     #     self.solve_constraints_v()
-            # elif self.solver_type == 2:
-            #     # contemporary
-            #     self.solve_constraints_jacobi_DOT_x(dt_sub)
-            #
-            # elif self.solver_type == 3:
-            #     self.solve_constraints_gauss_seidel_x(dt_sub)
-            #     self.compute_velocity(damping=self.damping, dt=dt_sub)
-            #     if self.enable_velocity_update:
-            #         self.solve_constraints_v()
-            #
-            #     self.update_x(dt_sub)
-            #
-            # elif self.solver_type == 4:
-            #     self.copy_to_duplicates()
-            #     self.compute_y(self.g, dt_sub)
-            #     self.solve_constraints_euler_pgs_x(dt_sub)
-            #     self.compute_velocity(damping=self.damping, dt=dt_sub)
-            #
-            #     if self.enable_velocity_update:
-            #         self.solve_constraints_v()
-            #
-            #     self.update_x(dt_sub)
-            #
-            # elif self.solver_type == 5:
-            #     self.copy_to_duplicates()
-            #     self.compute_y(self.g, dt_sub)
-            #     self.solve_constraints_euler_ls_x(dt_sub)
-            #     self.compute_velocity(damping=self.damping, dt=dt_sub)
-            #
-            #     if self.enable_velocity_update:
-            #         self.solve_constraints_v()
-            #
-            #     self.update_x(dt_sub)
-            #
-            # elif self.solver_type == 6:
-            #     #contemporary
-            #     self.copy_to_duplicates()
-            #     self.compute_y(self.g, dt_sub)
-            #     self.solve_constraints_euler_pgs_x(dt_sub)
-            #     self.compute_velocity(damping=self.damping, dt=dt_sub)
-            #
-            #     if self.enable_velocity_update:
-            #         self.solve_constraints_v()
-            #     self.update_x(dt_sub)
+            self.solve_constraints_jacobi_x(dt_sub)
             self.compute_velocity(damping=self.damping, dt=dt_sub)
             self.update_x(dt=dt_sub)
 
