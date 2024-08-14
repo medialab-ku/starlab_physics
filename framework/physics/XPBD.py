@@ -399,7 +399,7 @@ class Solver:
         #     v.x += dt * v.v
         for i in self.x_p:
             new_x = self.confine_boundary(self.y_p[i])
-            self.v_p[i] = (1-self.damping)*(new_x - self.x_p[i]) / dt
+            self.v_p[i] = (1.0 - self.damping)*(new_x - self.x_p[i]) / dt
             self.x_p[i] = new_x
 
 
@@ -441,9 +441,7 @@ class Solver:
         # compliance_bending = self.stiffness_stretch * dt * dt
         # self.solve_spring_constraints_x(compliance_stretch, compliance_bending)
         self.solve_pressure_constraints_x()
-
         self.update_dx()
-
         #
         # if self.enable_collision_handling:
         #
@@ -474,8 +472,8 @@ class Solver:
         #         v.y += v.fixed * (v.dx / v.nc)
 
         for pi in self.y_p:
-            if self.nc_p[pi] > 0:
-                self.y_p[pi] = self.y_p[pi] + self.dx_p[pi] / self.nc_p[pi]
+            # if self.nc_p[pi] > 0:
+            self.y_p[pi] = self.y_p[pi] + self.dx_p[pi]
                 # self.y_p[pi] = self.y_p[pi] + self.dx_p[pi]
 
 
@@ -497,61 +495,25 @@ class Solver:
                 v.v += v.fixed * v.dv
 
 
-    def load_sewing_pairs(self):
-        data = []
-
-        with open('animation/sewing.csv', 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            data = list(reader)
-
-        data_np = np.array(data, dtype=np.int32)
-        self.copy_sewing_pairs_to_taichi_field(data_np, len(data_np))
-        self.sewing_pairs_num[None] = len(data_np)
-        # print(self.sewing_pairs)
-
-    @ti.kernel
-    def copy_sewing_pairs_to_taichi_field(self, data_np: ti.types.ndarray(), length: ti.i32):
-        for i in range(length):
-            self.sewing_pairs[i] = ti.Vector([data_np[i, 0], data_np[i, 1]])
-
-
-    @ti.kernel
-    def solve_sewing_constraints_x(self, compliance: ti.f32):
-        for i in range(self.sewing_pairs_num[None]):
-            v1_id = self.sewing_pairs[i][0]
-            v2_id = self.sewing_pairs[i][1]
-            v1_y = self.mesh_dy.verts.y[v1_id]
-            v2_y = self.mesh_dy.verts.y[v2_id]
-
-            C = (v2_y - v1_y).norm()
-            nabla_C = (v1_y - v2_y).normalized()
-            schur = (self.mesh_dy.verts.fixed[v1_id] * self.mesh_dy.verts.m_inv[v1_id] + self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id])
-            ld = compliance * C / (compliance * schur + 1.0)
-
-            self.mesh_dy.verts.dx[v1_id] -= self.mesh_dy.verts.fixed[v1_id] * self.mesh_dy.verts.m_inv[v1_id] * ld * nabla_C
-            self.mesh_dy.verts.dx[v2_id] += self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id] * ld * nabla_C
-            self.mesh_dy.verts.nc[v1_id] += 1.0
-            self.mesh_dy.verts.nc[v2_id] += 1.0
-
     @ti.func
     def pos_to_index(self,y):
         world_ori = ti.Vector( [self.boundary[0] / 2.0 , 0, self.boundary[2] / 2.0])
         return int((y + world_ori )*self.cell_size_recpr)
 
-    @ti.func
-    def flatten_cell_id(self,cid_3D):
-        cx = cid_3D[0]
-        cy = cid_3D[1]
-        cz = cid_3D[2]
-        cnx = self.grid_size[0]
-        cny = self.grid_size[1]
-        cnz = self.grid_size[2]
-
-        return cnx * cny * cz + cnx * cy + cx
+    # @ti.func
+    # def flatten_cell_id(self,cid_3D):
+    #     cx = cid_3D[0]
+    #     cy = cid_3D[1]
+    #     cz = cid_3D[2]
+    #     cnx = self.grid_size[0]
+    #     cny = self.grid_size[1]
+    #     cnz = self.grid_size[2]
+    #
+    #     return cnx * cny * cz + cnx * cy + cx
 
     @ti.func
     def spiky_gradient(self,r, h):
-        result = ti.Vector([0.0, 0.0, 0.0])
+        result = ti.math.vec3(0.0)
         r_len = r.norm()
         if 0 < r_len and r_len < h:
             x = (h - r_len) / (h * h * h)
@@ -570,7 +532,7 @@ class Solver:
     @ti.func
     def check_grid_in(self,gid):
 
-        check_min = (gid[0]<0 )or (gid[1]<0) or (gid[2]<0)
+        check_min = (gid[0]<0)or (gid[1]<0) or (gid[2]<0)
         check_max = (gid[0]>self.grid_size[0]-1) or (gid[1]>self.grid_size[1]-1) or (gid[2]>self.grid_size[2]-1)
 
         return check_max or check_min
@@ -584,7 +546,7 @@ class Solver:
             self.c_dens[vi] = -1.0
             nabla_C_ii = ti.math.vec3(0.0)
             self.schur_p[vi] = 1e-4
-            self.lambda_dens[vi] =0.0
+            self.lambda_dens[vi] = 0.0
             xi = self.y_p[vi]
 
             center_cell = self.pos_to_index(self.y_p[vi])
@@ -610,18 +572,16 @@ class Solver:
 
             self.schur_p[vi] += nabla_C_ii.dot(nabla_C_ii)
 
-            if self.c_dens[vi] > 0.0 :
+            if self.c_dens[vi] > 0.0:
                 self.lambda_dens[vi] = -self.c_dens[vi] / self.schur_p[vi]
 
         for vi in ti.ndrange(self.num_particles):
             for j in range(self.num_particle_neighbours[vi]):
                 vj = self.particle_neighbours[vi, j]
-
                 nabla_C_ji = self.particle_neighbours_gradients[vi, j]
-
                 # self.dx_p[vj] += self.lambda_dens[vi] * nabla_C_ji
                 self.dx_p[vj] += (self.lambda_dens[vi] + self.lambda_dens[vj]) * nabla_C_ji
-                self.nc_p[vj] += 1
+                # self.nc_p[vj] += 1
 
             # self.lambda_dens[vi] = -self.c_dens[vi] / self.schur_p[vi]
 

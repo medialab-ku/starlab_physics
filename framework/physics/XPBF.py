@@ -40,6 +40,7 @@ class Solver:
         self.kernel_radius = 1.0
         # self.particle_rad = 0.2 * self.kernel_radius
         self.x = self.particle.x
+        self.x0 = self.particle.x0
         self.y = self.particle.y
         self.v = self.particle.v
         self.V0 = self.particle.V0
@@ -185,9 +186,9 @@ class Solver:
         self.grid_num_particles.fill(0)
         self.particle_num_neighbors.fill(0)
 
-        ti.block_local(self.x, self.grid_num_particles, self.particles2grid)
-        for pi in self.x:
-            cell_id = self.pos_to_cell_id(self.x[pi])
+        ti.block_local(self.y, self.grid_num_particles, self.particles2grid)
+        for pi in self.y:
+            cell_id = self.pos_to_cell_id(self.y[pi])
             counter = ti.atomic_add(self.grid_num_particles[cell_id], 1)
 
             if counter < self.cell_cache_size:
@@ -232,30 +233,45 @@ class Solver:
     def init_V0_and_L(self):
 
         #init rest volume V0
-        ti.block_local(self.L, self.x, self.rho0)
-        for i in range(self.num_particles_dy):
-            pos_i = self.x[i]
-            Vi0 = 0.0
-            for nj in range(self.particle_num_neighbors_rest[i]):
-                j = self.particle_neighbors[i, nj]
-                xji0 = self.x[j] - pos_i
-                Vi0 += self.poly6_value(xji0.norm(), self.kernel_radius)
-
-            self.V0[i] = (1.0 / Vi0)
+        # ti.block_local(self.L, self.x, self.rho0)
+        # for i in range(self.num_particles_dy):
+        #     pos_i = self.x[i]
+        #     Vi0 = 0.0
+        #     for nj in range(self.particle_num_neighbors_rest[i]):
+        #         j = self.particle_neighbors[i, nj]
+        #         xji0 = self.x[j] - pos_i
+        #         Vi0 += self.poly6_value(xji0.norm(), self.kernel_radius)
+        #     self.V0[i] = (1.0 / Vi0)
 
         # init correction, L
         ti.block_local(self.L, self.x)
         for i in range(self.num_particles_dy):
-            pos_i = self.x[i]
+            x0i = self.x[i]
             Li = ti.math.mat3(0.0)
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
-                xji0 = self.x[j] - pos_i
-                Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
+                xji0 = self.x[j] - x0i
+                wji0 = self.poly6_value(xji0.norm(), self.kernel_radius)
+                # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
                 for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                    Li[I] += Vj_nabla_Wji[I[0]] * xji0[I[1]]
+                    Li[I] += wji0 * xji0[I[0]] * xji0[I[1]]
 
                 self.L[i] = ti.math.inverse(Li)
+
+        x0i = self.x[0]
+        Ds = ti.math.mat3(0.0)
+        for nj in range(self.particle_num_neighbors_rest[0]):
+            j = self.particle_neighbors[0, nj]
+            xji0 = self.x[j] - x0i
+            wji0 = self.poly6_value(xji0.norm(), self.kernel_radius)
+            # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
+            for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
+                Ds[I] += wji0 * xji0[I[0]] * xji0[I[1]]
+
+        F = Ds @ self.L[0]
+
+        print(F)
+
 
 
 
@@ -363,21 +379,66 @@ class Solver:
         return U, sig, V
     @ti.kernel
     def solve_constraints_fem_x(self):
+        self.dx.fill(0.0)
+        self.nc.fill(0.0)
 
         ti.block_local(self.y, self.L)
         for i in range(self.num_particles_dy):
-            # pos_i = self.y_p[pi]
-            Di = ti.math.mat3(0.0)
+            x0i, yi = self.x0[i], self.y[i]
+            Dsi = ti.math.mat3(0.0)
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
-                xji = (self.y[j] - self.y[i])
-                Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji, self.kernel_radius)
+                yji = self.y[j] - yi
+                x0ji = self.x0[j] - x0i
+                wji0 = self.poly6_value(yji.norm(), self.kernel_radius)
+                # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
                 for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                    Di[I] += Vj_nabla_Wji[I[0]] * xji[I[1]]
+                    Dsi[I] += wji0 * yji[I[0]] * x0ji[I[1]]
 
-            F = Di @ self.L[i]
+            F = Dsi @ self.L[i]
             U, sig, V = self.ssvd(F)
             R = U @ V.transpose()
+
+            wii0 = self.poly6_value(0.0, self.kernel_radius)
+            com = wii0 * yi
+            m = wii0
+            sum = ti.math.vec3(0.0)
+            for nj in range(self.particle_num_neighbors_rest[i]):
+                j = self.particle_neighbors[i, nj]
+                yji = self.y[j] - yi
+                x0ji = self.x0[j] - x0i
+                wji0 = self.poly6_value(yji.norm(), self.kernel_radius)
+                pji = wji0 * R @ x0ji
+                sum += pji
+                m += wji0
+                com += wji0 * self.y[j]
+
+            com /= m
+            pi = com - sum / m
+            self.dx[i] += (pi - self.y[i])
+            self.nc[i] += 1.0
+
+            for nj in range(self.particle_num_neighbors_rest[i]):
+                j = self.particle_neighbors[i, nj]
+                yji = self.y[j] - yi
+                x0ji = self.x0[j] - x0i
+                wji0 = self.poly6_value(yji.norm(), self.kernel_radius)
+                # pji = wji0 * R @ x0ji
+                pj = pi + R @ x0ji
+                self.dx[j] += (pj - self.y[j])
+                self.nc[j] += 1.0
+
+        for i in range(self.num_particles_dy):
+            self.y[i] += (self.dx[i] / self.nc[i])
+
+        #
+        #     for nj in range(self.particle_num_neighbors_rest[i]):
+        #         j = self.particle_neighbors[i, nj]
+        #         x0ji = (self.x0[j] - self.x0[i])
+        #         pji = R @ x0ji
+        #
+        # for i in range(self.num_particles_dy):
+
 
 
 
@@ -438,11 +499,11 @@ class Solver:
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
-        self.search_neighbours()
 
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             self.solve_constraints_fem_x()
-            self.solve_constraints_pressure_x()
+            # self.search_neighbours()
+            # self.solve_constraints_pressure_x()
             self.update_state(self.damping, dt_sub)
 
