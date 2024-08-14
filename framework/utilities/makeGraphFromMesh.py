@@ -3,7 +3,7 @@ import taichi as ti
 import networkx as nx
 import numpy as np
 import framework.utilities.graph as graph_utils
-from framework.meshio.meshTaichiWrapper import MeshTaichiWrapper
+from framework.meshio.TriMesh import TriMeshWrapper
 import os
 from pathlib import Path
 import time
@@ -111,5 +111,5 @@ for model_type in model_directories:
         elif model_type == "OBJ":
             # model[0] : file name, model[1] : file extension
             # call "is_static=True" to prevent constructing graph in the MeshTaichiWrapper object
-            mesh = MeshTaichiWrapper(model_dir, model_name=(model[0] + model[1]), offsets=[0], scale=10.0, trans=ti.math.vec3(0, 0.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+            mesh = TriMeshWrapper(model_dir, model_name=(model[0] + model[1]), offsets=[0], scale=10.0, trans=ti.math.vec3(0, 0.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
             make_graph(precomputed_graph, mesh.eid_np)

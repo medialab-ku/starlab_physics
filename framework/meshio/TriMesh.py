@@ -12,7 +12,7 @@ import time
 from framework.utilities.graph_coloring import GraphColoring
 
 @ti.data_oriented
-class MeshTaichiWrapper:
+class TriMeshWrapper:
     def __init__(self,
                  model_dir,
                  model_name,
