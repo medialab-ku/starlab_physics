@@ -29,6 +29,7 @@ n_substep = 5
 frame_end = 100
 
 dt_ui = sim.dt
+solver_type_ui = sim.solver_type
 dHat_ui = sim.dHat
 damping_ui = sim.damping
 
@@ -42,6 +43,7 @@ def show_options():
 
     global n_substep
     global dt_ui
+    global solver_type_ui
     global damping_ui
     global sim
     global dHat_ui
@@ -53,12 +55,19 @@ def show_options():
     global frame_end
 
     old_dt = dt_ui
+    old_solver_type_ui = solver_type_ui
     old_dHat = dHat_ui
     old_damping = damping_ui
     YM_old = YM_ui
     PR_old = PR_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.4, 0.35) as w:
+
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 1)
+        if solver_type_ui == 0:
+            w.text("solver type: XPBD Jacobi")
+        elif solver_type_ui == 1:
+            w.text("solver type: PD diag")
 
         dt_ui = w.slider_float("Time Step Size", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# Substepping", n_substep, 1, 100)
@@ -94,6 +103,9 @@ def show_options():
 
     if not old_dHat == dHat_ui:
         sim.particle_rad = dHat_ui
+
+    if not old_solver_type_ui == solver_type_ui:
+        sim.solver_type = solver_type_ui
 
     # if not old_friction_coeff == friction_coeff_ui:
     #     sim.mu = friction_coeff_ui

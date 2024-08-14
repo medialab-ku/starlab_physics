@@ -23,20 +23,23 @@ class Solver:
 
         self.damping = 0.001
         self.padding = 0.05
-
+        self.solver_type = 0
         self.enable_velocity_update = False
         self.export_mesh = False
 
         self.y = self.tet_mesh.y
         self.x = self.tet_mesh.x
         self.dx = self.tet_mesh.dx
+        # self.hii = self.tet_mesh.hii
         self.nc = self.tet_mesh.nc
         self.v = self.tet_mesh.v
+
         self.num_verts = self.tet_mesh.x.shape[0]
 
         self.M = self.tet_mesh.M
         self.invM = self.tet_mesh.invM
         self.invDm = self.tet_mesh.invDm
+        self.V0 = self.tet_mesh.V0
 
         self.faces = self.tet_mesh.surface_indices
         self.tetras = self.tet_mesh.tet_indices
@@ -154,7 +157,7 @@ class Solver:
         return U, sig, V
 
     @ti.kernel
-    def solve_constraints_fem_stretch_x(self, compliance_str: float):
+    def solve_xpbd_fem_stretch_x(self, compliance_str: float):
 
         self.dx.fill(0.0)
         self.nc.fill(0.0)
@@ -200,7 +203,55 @@ class Solver:
 
         for i in self.dx:
             self.y[i] += (self.dx[i] / self.nc[i])
-            # nabla_Ci0 = ti.math.vec3(H[0, 0])
+
+    @ti.kernel
+    def solve_pd_fem_stretch_x(self, compliance_str: float):
+
+        self.dx.fill(0.0)
+        self.nc.fill(1.0)
+
+        ti.block_local(self.invDm, self.dx, self.nc)
+        for i in self.invDm:
+            Ds = ti.Matrix.cols([self.y[self.tetras[i, j]] - self.y[self.tetras[i, 3]] for j in ti.static(range(3))])
+            B = self.invDm[i]
+            F = Ds @ B
+            U, _, V = self.ssvd(F)
+            R = U @ V.transpose()
+
+            Dm = ti.math.inverse(B)
+            Ds_proj = R @ Dm
+
+            proj03 = self.M[self.tetras[i, 0]] * ti.math.vec3(Ds_proj[0, 0], Ds_proj[1, 0], Ds_proj[2, 0])
+            proj13 = self.M[self.tetras[i, 1]] * ti.math.vec3(Ds_proj[0, 1], Ds_proj[1, 1], Ds_proj[2, 1])
+            proj23 = self.M[self.tetras[i, 2]] * ti.math.vec3(Ds_proj[0, 2], Ds_proj[1, 2], Ds_proj[2, 2])
+
+            com = ti.math.vec3(0.0)
+            m = 0.0
+
+            for j in ti.static(range(4)):
+                com += self.M[self.tetras[i, j]] * self.y[self.tetras[i, j]]
+                m += self.M[self.tetras[i, j]]
+
+            com /= m
+
+            proj3 = com - (proj03 + proj13 + proj23) / m
+            proj0 = proj03 / self.M[self.tetras[i, 0]] + proj3
+            proj1 = proj13 / self.M[self.tetras[i, 1]] + proj3
+            proj2 = proj23 / self.M[self.tetras[i, 2]] + proj3
+
+            weight = self.V0[i] * compliance_str
+            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight * (proj0 - self.y[self.tetras[i, 0]])
+            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight * (proj1 - self.y[self.tetras[i, 1]])
+            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight * (proj2 - self.y[self.tetras[i, 2]])
+            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight * (proj3 - self.y[self.tetras[i, 3]])
+
+            self.nc[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight
+            self.nc[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight
+            self.nc[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight
+            self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight
+
+        for i in self.dx:
+            self.y[i] += (self.dx[i] / self.nc[i])
 
     @ti.kernel
     def solve_constraints_fem_volume_x(self, compliance_vol: float):
@@ -267,16 +318,33 @@ class Solver:
         ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
 
         compliance_str = 2.0 * mu * dtSq
-        self.solve_constraints_fem_stretch_x(compliance_str)
+        self.solve_xpbd_fem_stretch_x(compliance_str)
+        #
+        # compliance_vol = ld * dtSq
+        # self.solve_constraints_fem_volume_x(compliance_vol)
 
-        compliance_vol = ld * dtSq
-        self.solve_constraints_fem_volume_x(compliance_vol)
+    def solve_PD_diag(self, dt):
+
+        dtSq = dt ** 2
+        mu = self.YM / 2.0 * (1.0 + self.PR)
+        ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
+
+        compliance_str = 2.0 * mu * dtSq
+
+        # self.nc.copy_from(self.M)
+        self.solve_pd_fem_stretch_x(compliance_str)
+        # self.solve_xpbd_fem_stretch_x(compliance_str)
 
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            self.solve_constraints_jacobi(dt_sub)
+
+            if self.solver_type == 0:
+                self.solve_constraints_jacobi(dt_sub)
+            elif self.solver_type == 1:
+                self.solve_PD_diag(dt_sub)
+
             self.update_state(self.damping, dt_sub)
 

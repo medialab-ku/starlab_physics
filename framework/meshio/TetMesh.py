@@ -49,6 +49,7 @@ class TetMeshWrapper:
         self.x = ti.Vector.field(n=3, dtype=float)
         self.dx = ti.Vector.field(n=3, dtype=float)
         self.nc = ti.field(dtype=float)
+        # self.hii = ti.field(dtype=float)
         self.x0 = ti.Vector.field(n=3, dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
         self.invM = ti.field(dtype=float)
