@@ -124,18 +124,47 @@ class TetMeshWrapper:
         for i in range(size):
             self.color[i + offset] = color
 
-    @ti.func
-    def ssvd(self, F):
-        U, sig, V = ti.svd(F)
-        if U.determinant() < 0:
-            for i in ti.static(range(3)): U[i, 2] *= -1
-            sig[2, 2] = -sig[2, 2]
-        if V.determinant() < 0:
-            for i in ti.static(range(3)): V[i, 2] *= -1
-            sig[2, 2] = -sig[2, 2]
-        return U, sig, V
+    # @ti.func
+    # def volume_projection(self, sigma: ti.math.mat3) -> ti.math.mat3:
+    #
+    #     singular_values = ti.math.vec3(sigma[0, 0], sigma[1, 1], sigma[2, 2])
+    #     nabla_c = ti.math.vec3(0.0)
+    #     count = 0
+    #     count_max = 30
+    #     threshold = 1e-4
+    #
+    #     c = singular_values[0] * singular_values[1] * singular_values[2] - 1.0
+    #     while abs(c) > threshold:
+    #
+    #         if count > count_max: break
+    #         c = singular_values[0] * singular_values[1] * singular_values[2] - 1.0
+    #         nabla_c[0] = singular_values[1] * singular_values[2]
+    #         nabla_c[1] = singular_values[0] * singular_values[2]
+    #         nabla_c[2] = singular_values[0] * singular_values[1]
+    #         ld = c / (nabla_c.dot(nabla_c) + 1e-3)
+    #         singular_values -= ld * nabla_c
+    #         count += 1
+    #
+    #     print(count)
+    #     print(singular_values)
+    #     print(singular_values[0] * singular_values[1] * singular_values[2])
+    #
+    #     for i in ti.static(range(3)):
+    #         sigma[i, i] = singular_values[i]
+    #
+    #     return sigma
+
     @ti.kernel
     def init(self):
+
+        # test = ti.math.mat3(0.0)
+        # test[0, 0] = 1.0
+        # test[1, 1] = 2.0
+        # test[2, 2] = 3.0
+        #
+        # projection = self.volume_projection(test)
+        # print(projection[0, 0] * projection[1, 1] * projection[2, 2])
+
         self.M.fill(0.0)
         for i in self.invDm:
             Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])

@@ -242,13 +242,32 @@ class Solver:
         for i in self.dx:
             self.y[i] += (self.dx[i] / self.nc[i])
 
-
-
     @ti.func
     def volume_projection(self, sigma: ti.math.mat3) -> ti.math.mat3:
 
+        singular_values = ti.math.vec3(sigma[0, 0], sigma[1, 1], sigma[2, 2])
+        nabla_c = ti.math.vec3(0.0)
+        # print(singular_values)
+        count = 0
+        count_max = 20
+        threshold = 1e-4
+        c = singular_values[0] * singular_values[1] * singular_values[2] - 1.0
+        while abs(c) > threshold:
+
+            if count > count_max: break
+            c = singular_values[0] * singular_values[1] * singular_values[2] - 1.0
+            nabla_c[0] = singular_values[1] * singular_values[2]
+            nabla_c[1] = singular_values[0] * singular_values[2]
+            nabla_c[2] = singular_values[0] * singular_values[1]
+            ld = c / (nabla_c.dot(nabla_c) + 1e-3)
+            singular_values -= ld * nabla_c
+
+            singular_values = ti.math.clamp(singular_values, 0.0, 3.0)
+
+            count += 1
+
         for i in ti.static(range(3)):
-            sigma[i, i] = 1.0
+            sigma[i, i] = singular_values[i]
 
         return sigma
 
@@ -264,8 +283,8 @@ class Solver:
             B = self.invDm[i]
             F = Ds @ B
             U, sigma, V = self.ssvd(F)
-            sigma = self.volume_projection(sigma)
-            R = U @ sigma @ V.transpose()
+            sigma_proj = self.volume_projection(sigma)
+            R = U @ sigma_proj @ V.transpose()
 
             Dm = ti.math.inverse(B)
             Ds_proj = R @ Dm
