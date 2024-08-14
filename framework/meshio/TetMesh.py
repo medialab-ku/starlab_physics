@@ -139,38 +139,9 @@ class TetMeshWrapper:
         self.M.fill(0.0)
         for i in self.invDm:
             Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
-            # print(Dm_i)
             self.invDm[i] = Dm_i.inverse()
             V0_i = ti.abs(Dm_i.determinant()) / 6.0
-            # print(V0_i)
             self.V0[i] = V0_i
-            # Ds = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
-            # B = self.invDm[i]
-            # F = Ds @ B
-            # print(F)
-            # U, _, V = self.ssvd(F)
-            # R = U @ V.transpose()
-            # print(R)
-            # com = ti.math.vec3(0.0)
-            # for j in ti.static(range(3)):
-            #     com += self.x[self.tet_indices[i, j]]
-            # com *= 0.25
-            # print(com)
-            # Dm = ti.math.inverse(self.invDm[i])
-            # Ds_proj = R @ Dm
-            # print(Ds_proj)
-            #
-            # proj03 = ti.math.vec3(Ds_proj[0, 0], Ds_proj[0, 1], Ds_proj[0, 2])
-            # proj13 = ti.math.vec3(Ds_proj[1, 0], Ds_proj[1, 1], Ds_proj[1, 2])
-            # proj23 = ti.math.vec3(Ds_proj[2, 0], Ds_proj[2, 1], Ds_proj[2, 2])
-            #
-            # proj3 = com - 0.25 * (proj03 + proj13 + proj23)
-            #
-            # proj0 = proj03 + proj3
-            # proj1 = proj13 + proj3
-            # proj2 = proj23 + proj3
-            #
-            # print(proj0, proj1, proj2, proj3)
             for j in ti.static(range(4)):
                 self.M[self.tet_indices[i, j]] += 0.25 * V0_i
 

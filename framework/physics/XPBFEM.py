@@ -240,14 +240,21 @@ class Solver:
             proj2 = proj23 / self.M[self.tetras[i, 2]] + proj3
 
             weight = self.V0[i] * compliance_str
-            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight * (proj0 - self.y[self.tetras[i, 0]])
-            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight * (proj1 - self.y[self.tetras[i, 1]])
-            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight * (proj2 - self.y[self.tetras[i, 2]])
-            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight * (proj3 - self.y[self.tetras[i, 3]])
+            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight * (proj0 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]])
+            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight * (proj1 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 1]])
+            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight * (proj2 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 2]])
+
+            # self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight * (proj3 - self.y[self.tetras[i, 3]])
+            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj0 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 0]])
+            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj1 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 1]])
+            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj2 - proj3 + self.y[self.tetras[i, 3]] - self.y[self.tetras[i, 2]])
 
             self.nc[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight
             self.nc[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight
             self.nc[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight
+
+            self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight
+            self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight
             self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * weight
 
         for i in self.dx:
