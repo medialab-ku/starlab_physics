@@ -3,7 +3,7 @@ import taichi as ti
 import networkx as nx
 import numpy as np
 import framework.utilities.graph as graph_utils
-from framework.meshio.TriMesh import TriMeshWrapper
+from framework.meshio.TriMesh_old import TriMeshWrapper
 import os
 from pathlib import Path
 import time

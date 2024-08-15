@@ -1,4 +1,4 @@
-from framework.meshio.TriMesh import TriMeshWrapper
+from framework.meshio.TriMesh_old import TriMeshWrapper
 from framework.meshio.concat import concat_mesh
 import taichi as ti
 from pathlib import Path
