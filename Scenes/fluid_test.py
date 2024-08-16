@@ -17,7 +17,6 @@ rot = []
 is_static = []
 rho0 = []
 
-
 particle_names.append("cube.vtk")
 particle_names.append("sphere5K.vtk")
 # particle_names.append("cube.vtk")

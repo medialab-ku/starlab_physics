@@ -237,49 +237,30 @@ class Solver:
     def init_V0_and_L(self):
 
         #init rest volume V0
-        # ti.block_local(self.L, self.x, self.rho0)
-        # for i in range(self.num_particles_dy):
-        #     pos_i = self.x[i]
-        #     Vi0 = 0.0
-        #     for nj in range(self.particle_num_neighbors_rest[i]):
-        #         j = self.particle_neighbors[i, nj]
-        #         xji0 = self.x[j] - pos_i
-        #         Vi0 += self.poly6_value(xji0.norm(), self.kernel_radius)
-        #     self.V0[i] = (1.0 / Vi0)
+        ti.block_local(self.L, self.x, self.rho0)
+        for i in range(self.num_particles_dy):
+            pos_i = self.x[i]
+            Vi0 = 0.0
+            for nj in range(self.particle_num_neighbors_rest[i]):
+                j = self.particle_neighbors[i, nj]
+                xji0 = self.x[j] - pos_i
+                Vi0 += self.poly6_value(xji0.norm(), self.kernel_radius)
+            self.V0[i] = (1.0 / Vi0)
 
         # init correction, L
         ti.block_local(self.L, self.x)
         for i in range(self.num_particles_dy):
             x0i = self.x[i]
-            rho = self.poly6_value(0.0, self.kernel_radius)
             Li = ti.math.mat3(0.0)
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
                 xji0 = self.x[j] - x0i
                 wji0 = self.poly6_value(xji0.norm(), self.kernel_radius)
-                rho += wji0
-                # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
-                for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                    Li[I] += wji0 * xji0[I[0]] * xji0[I[1]]
+                Li += self.V0[j] * wji0 * self.outer_product(xji0, xji0)
+                # for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
+                #     Li[I] += self.V0[j] * wji0 * xji0[I[0]] * xji0[I[1]]
 
-                self.L[i] = ti.math.inverse(Li)
-            self.rho0[i] = rho
-        # x0i = self.x[0]
-        # Ds = ti.math.mat3(0.0)
-        # for nj in range(self.particle_num_neighbors_rest[0]):
-        #     j = self.particle_neighbors[0, nj]
-        #     xji0 = self.x[j] - x0i
-        #     wji0 = self.poly6_value(xji0.norm(), self.kernel_radius)
-        #     # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
-        #     for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-        #         Ds[I] += xji0[I[0]] * xji0[I[1]]
-        #
-        # F = Ds @ self.L[0]
-        #
-        # print(F)
-
-
-
+            self.L[i] = ti.math.inverse(Li)
 
     @ti.func
     def pos_to_cell_id(self, y: ti.math.vec3) -> ti.math.ivec3:
@@ -290,7 +271,10 @@ class Solver:
     def outer_product(self, u: ti.math.vec3, v: ti.math.vec3) -> ti.math.mat3:
 
         uvT = ti.math.mat3(0.0)
-        # uvT.col()
+        for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
+            uvT[I] += u[I[0]] * v[I[1]]
+
+        return uvT
 
 
     @ti.func
@@ -398,29 +382,29 @@ class Solver:
                 j = self.particle_neighbors[i, nj]
                 yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
-                wji0 = self.poly6_value(x0ji.norm(), self.kernel_radius)
+                V0wji0 = self.V0[j] * self.poly6_value(x0ji.norm(), self.kernel_radius)
                 # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
-                for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                    Dsi[I] += wji0 * yji[I[0]] * x0ji[I[1]]
+                Dsi += V0wji0 * self.outer_product(yji, x0ji)
+                # for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
+                #     Dsi[I] += V0wji0 * yji[I[0]] * x0ji[I[1]]
 
             F = Dsi @ self.L[i]
             U, sig, V = self.ssvd(F)
             R = U @ V.transpose()
 
-            wii0 = self.poly6_value(0.0, self.kernel_radius)
+            wii0 = self.V0[i] * self.poly6_value(0.0, self.kernel_radius)
             com = wii0 * yi
             m = wii0
             sum = ti.math.vec3(0.0)
 
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
-                yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
-                wji0 = self.poly6_value(x0ji.norm(), self.kernel_radius)
-                pji = wji0 * R @ x0ji
+                V0wji0 = self.V0[j] * self.poly6_value(x0ji.norm(), self.kernel_radius)
+                pji = V0wji0 * R @ x0ji
                 sum += pji
-                m += wji0
-                com += wji0 * self.y[j]
+                m += V0wji0
+                com += V0wji0 * self.y[j]
 
             com /= m
             pi = com - sum / m
@@ -429,23 +413,14 @@ class Solver:
 
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
-                yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
-                wji0 = self.poly6_value(x0ji.norm(), self.kernel_radius)
-                # pji = wji0 * R @ x0ji
                 pj = pi + R @ x0ji
                 self.dx[j] += (pj - self.y[j])
                 self.nc[j] += 1.0
 
         for i in range(self.num_particles_dy):
             self.y[i] += (self.dx[i] / self.nc[i])
-        #
-        #     for nj in range(self.particle_num_neighbors_rest[i]):
-        #         j = self.particle_neighbors[i, nj]
-        #         x0ji = (self.x0[j] - self.x0[i])
-        #         pji = R @ x0ji
-        #
-        # for i in range(self.num_particles_dy):
+
 
     @ti.kernel
     def solve_constraints_pressure_x(self):
@@ -481,7 +456,7 @@ class Solver:
                                 schur += ti.math.dot(nabla_Cij, nabla_Cij)
 
             schur += nabla_Cii.dot(nabla_Cii)
-            C_dens = ti.max(rho_i / self.rho0[pi] - 1.0, 0.0)
+            C_dens = ti.max(rho_i - 1.0, 0.0)
             # if C_dens < 0.0:
             #     C_dens = 0.0
             k = 1e8
@@ -500,7 +475,7 @@ class Solver:
                 scorr = self.compute_scorr(xij)
                 dx_i += (ld_i + ld_j) * self.spiky_gradient(xij, self.kernel_radius)
 
-            dx_i /= self.rho0[pi]
+            # dx_i /= self.rho0[pi]
             self.y[pi] += dx_i
 
     def forward(self, n_substeps):
@@ -508,8 +483,8 @@ class Solver:
         dt_sub = self.dt / n_substeps
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
+            self.solve_constraints_fem_x()
             # self.search_neighbours()
             # self.solve_constraints_pressure_x()
-            self.solve_constraints_fem_x()
             self.update_state(self.damping, dt_sub)
 
