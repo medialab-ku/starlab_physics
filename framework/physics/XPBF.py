@@ -14,7 +14,8 @@ class Solver:
         self.particle = particle
         self.g = g
         self.dt = dt
-
+        self.YM = 1e5
+        self.PR = 0.2
         self.damping = 0.001
         self.padding = 0.05
 
@@ -23,6 +24,8 @@ class Solver:
 
         self.num_particles = self.particle.num_particles
         self.num_particles_dy = self.particle.num_dynamic
+
+        self.solver_type = 0
 
         self.corr_deltaQ_coeff = 0.3
         self.corrK = 0.1
@@ -157,29 +160,6 @@ class Solver:
                 p[i] = boundary_max[i] - 1e-4 * ti.random()
 
         return p
-
-    @ti.kernel
-    def compute_y(self, dt: float):
-
-        ti.block_local(self.m_inv_p, self.v, self.x, self.y)
-        for i in self.y:
-            if self.m_inv_p[i] > 0.0:
-                self.v[i] = self.v[i] + self.g * dt
-                self.y[i] = self.x[i] + self.v[i] * dt
-            else:
-                self.y[i] = self.x[i]
-
-            self.y[i] = self.confine_boundary(self.y[i])
-
-
-    @ti.kernel
-    def update_state(self, damping: float, dt: float):
-
-        ti.block_local(self.m_inv_p, self.v, self.x, self.y)
-        for i in range(self.num_particles_dy):
-            new_x = self.confine_boundary(self.y[i])
-            self.v[i] = (1.0 - damping) * (new_x - self.x[i]) / dt
-            self.x[i] = new_x
 
     @ti.kernel
     def search_neighbours(self):
@@ -369,7 +349,7 @@ class Solver:
         return U, sig, V
 
     @ti.kernel
-    def solve_constraints_fem_x(self):
+    def solve_xpbd_fem_stretch_constraints_x(self, compliance_str: float):
 
         self.dx.fill(0.0)
         self.nc.fill(0.0)
@@ -408,6 +388,7 @@ class Solver:
 
             com /= m
             pi = com - sum / m
+
             self.dx[i] += (pi - self.y[i])
             self.nc[i] += 1.0
 
@@ -421,6 +402,43 @@ class Solver:
         for i in range(self.num_particles_dy):
             self.y[i] += (self.dx[i] / self.nc[i])
 
+    @ti.kernel
+    def solve_pd_fem_stretch_x(self, compliance_str: float):
+
+        self.dx.fill(0.0)
+        self.nc.fill(1.0)
+
+        ti.block_local(self.y, self.L)
+        for i in range(self.num_particles_dy):
+            x0i, yi = self.x0[i], self.y[i]
+            Dsi = ti.math.mat3(0.0)
+            wi = compliance_str * self.V0[i]
+            for nj in range(self.particle_num_neighbors_rest[i]):
+                j = self.particle_neighbors[i, nj]
+                yji = self.y[j] - yi
+                x0ji = self.x0[j] - x0i
+                V0wji0 = self.V0[j] * self.poly6_value(x0ji.norm(), self.kernel_radius)
+                Dsi += V0wji0 * self.outer_product(yji, x0ji)
+
+            F = Dsi @ self.L[i]
+            U, sig, V = self.ssvd(F)
+            R = U @ V.transpose()
+
+            for nj in range(self.particle_num_neighbors_rest[i]):
+                j = self.particle_neighbors[i, nj]
+                x0ji = self.x0[j] - x0i
+                yji = self.y[j] - yi
+                dxji = R @ x0ji - yji
+
+                self.dx[j] += wi * dxji
+                self.dx[i] -= wi * dxji
+
+                self.nc[i] += wi
+                self.nc[j] += wi
+
+
+        for i in range(self.num_particles_dy):
+            self.y[i] += (self.dx[i] / self.nc[i])
 
     @ti.kernel
     def solve_constraints_pressure_x(self):
@@ -475,16 +493,47 @@ class Solver:
                 scorr = self.compute_scorr(xij)
                 dx_i += (ld_i + ld_j) * self.spiky_gradient(xij, self.kernel_radius)
 
-            # dx_i /= self.rho0[pi]
             self.y[pi] += dx_i
+
+    @ti.kernel
+    def compute_y(self, dt: float):
+
+        ti.block_local(self.m_inv_p, self.v, self.x, self.y)
+        for i in self.y:
+            if self.m_inv_p[i] > 0.0:
+                self.v[i] = self.v[i] + self.g * dt
+                self.y[i] = self.x[i] + self.v[i] * dt
+            else:
+                self.y[i] = self.x[i]
+
+            self.y[i] = self.confine_boundary(self.y[i])
+
+    @ti.kernel
+    def update_state(self, damping: float, dt: float):
+
+        ti.block_local(self.m_inv_p, self.v, self.x, self.y)
+        for i in range(self.num_particles_dy):
+            new_x = self.confine_boundary(self.y[i])
+            self.v[i] = (1.0 - damping) * (new_x - self.x[i]) / dt
+            self.x[i] = new_x
 
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            self.solve_constraints_fem_x()
-            # self.search_neighbours()
-            # self.solve_constraints_pressure_x()
+            self.search_neighbours()
+
+            if self.solver_type == 0:
+                dtSq = dt_sub ** 2
+                compliance_str = self.YM * dtSq
+                self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
+                # self.solve_constraints_pressure_x()
+            elif self.solver_type == 1:
+                dtSq = dt_sub ** 2
+                compliance_str = self.YM * dtSq
+                self.solve_pd_fem_stretch_x(compliance_str)
+                # self.solve_constraints_pressure_x()
+
             self.update_state(self.damping, dt_sub)
 

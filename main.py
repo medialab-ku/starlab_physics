@@ -29,11 +29,13 @@ n_substep = 5
 frame_end = 100
 
 dt_ui = sim.dt
+solver_type_ui = sim.solver_type
 g_ui = sim.g[1]
 dHat_ui = sim.particle_rad
 
 damping_ui = sim.damping
-
+YM_ui = sim.YM
+PR_ui = sim.PR
 mesh_export = False
 frame_cpu = 0
 
@@ -41,27 +43,42 @@ def show_options():
 
     global n_substep
     global dt_ui
+    global solver_type_ui
     global g_ui
     global damping_ui
     global sim
     global dHat_ui
+    global YM_ui
+    global PR_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
     global mesh_export
     global frame_end
 
     old_dt = dt_ui
+    old_solver_type_ui = solver_type_ui
     old_g = g_ui
     old_dHat = dHat_ui
     old_damping = damping_ui
+    YM_old = YM_ui
+    PR_old = PR_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
+
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 1)
+        if solver_type_ui == 0:
+            w.text("solver type: XPBD Jacobi")
+        elif solver_type_ui == 1:
+            w.text("solver type: PD diag")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         g_ui = w.slider_float("g", g_ui, -20.0, 20.0)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         dHat_ui = w.slider_float("particle rad.", dHat_ui, 0.001, 0.101)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
+
+        YM_ui = w.slider_float("Young's Modulus", YM_ui, 0.0, 1e8)
+        PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
@@ -82,6 +99,9 @@ def show_options():
         particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
         w.text(particles_st_str)
 
+    if not old_solver_type_ui == solver_type_ui:
+        sim.solver_type = solver_type_ui
+
     if not old_g == g_ui:
         sim.g[1] = g_ui
 
@@ -93,7 +113,13 @@ def show_options():
 
     # if not old_friction_coeff == friction_coeff_ui:
     #     sim.mu = friction_coeff_ui
-    #
+
+    if not YM_old == YM_ui:
+        sim.YM = YM_ui
+
+    if not PR_old == PR_ui:
+        sim.PR = PR_ui
+
     # if not YM_old == YM_ui:
     #     sim.stiffness_bending = YM_ui
     #
