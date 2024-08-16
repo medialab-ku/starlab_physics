@@ -220,11 +220,11 @@ class Solver:
         ti.block_local(self.L, self.x, self.rho0)
         for i in range(self.num_particles_dy):
             pos_i = self.x[i]
-            Vi0 = 0.0
+            Vi0 = self.cubic_spline_kernel(0.0, self.kernel_radius)
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
                 xji0 = self.x[j] - pos_i
-                Vi0 += self.poly6_value(xji0.norm(), self.kernel_radius)
+                Vi0 += self.cubic_spline_kernel(xji0.norm(), self.kernel_radius)
             self.V0[i] = (1.0 / Vi0)
 
         # init correction, L
@@ -235,11 +235,8 @@ class Solver:
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
                 xji0 = self.x[j] - x0i
-                wji0 = self.poly6_value(xji0.norm(), self.kernel_radius)
+                wji0 = self.cubic_spline_kernel(xji0.norm(), self.kernel_radius)
                 Li += self.V0[j] * wji0 * self.outer_product(xji0, xji0)
-                # for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                #     Li[I] += self.V0[j] * wji0 * xji0[I[0]] * xji0[I[1]]
-
             self.L[i] = ti.math.inverse(Li)
 
     @ti.func
@@ -269,6 +266,40 @@ class Solver:
             result = r * g_factor / r_len
 
         return result
+
+    @ti.func
+    def cubic_spline_kernel(self, r_norm, h):
+
+        rh = r_norm / h
+        w = 0.0
+        alpha = ti.math.pi * (h ** 3)
+        if 0.0 <= rh < 1.0:
+            w = 1.0 - 1.5 * (rh ** 2) + 0.75 * (rh ** 3)
+        elif 1.0 <= rh < 2.0:
+            w = 0.25 * (2.0 - rh) ** 3
+        elif rh >= 2.0:
+            w = 0.0
+
+        w /= alpha
+        return w
+
+    @ti.func
+    def cubic_spline_kernel_gradient(self, r, h):
+
+        rh = r.norm() / h
+        w = 0.0
+        alpha = ti.math.pi * (h ** 3)
+        dir = ti.math.normalize(r) / (h ** 2)
+        if 0.0 <= rh < 1.0:
+            w = (-3.0 * rh + 2.25 * (rh ** 2)) * dir
+        elif 1.0 <= rh < 2.0:
+            w = -0.75 * (2.0 - rh) ** 2 * dir
+        elif rh >= 2.0:
+            w = ti.math.vec3(0.0)
+
+        w /= alpha
+
+        return w
 
     @ti.func
     def poly6_value(self, s, h):
@@ -362,7 +393,7 @@ class Solver:
                 j = self.particle_neighbors[i, nj]
                 yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
-                V0wji0 = self.V0[j] * self.poly6_value(x0ji.norm(), self.kernel_radius)
+                V0wji0 = self.V0[j] * self.cubic_spline_kernel(x0ji.norm(), self.kernel_radius)
                 Dsi += V0wji0 * self.outer_product(yji, x0ji)
 
             F = Dsi @ self.L[i]
@@ -399,7 +430,7 @@ class Solver:
                 j = self.particle_neighbors[i, nj]
                 yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
-                V0wji0 = self.V0[j] * self.poly6_value(x0ji.norm(), self.kernel_radius)
+                V0wji0 = self.V0[j] * self.cubic_spline_kernel(x0ji.norm(), self.kernel_radius)
                 Dsi += V0wji0 * self.outer_product(yji, x0ji)
 
             F = Dsi @ self.L[i]
@@ -457,8 +488,6 @@ class Solver:
 
             schur += nabla_Cii.dot(nabla_Cii)
             C_dens = ti.max(rho_i - 1.0, 0.0)
-            # if C_dens < 0.0:
-            #     C_dens = 0.0
             k = 1e8
             self.ld[pi] = -k * C_dens / (k * schur + 1.0)
 
@@ -548,8 +577,7 @@ class Solver:
 
                 compliance_str = 2.0 * mu * dtSq
                 self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
-
-                self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
+                # self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
                 # self.solve_constraints_pressure_x()
             elif self.solver_type == 1:
                 dtSq = dt_sub ** 2
