@@ -167,9 +167,9 @@ class Solver:
         self.grid_num_particles.fill(0)
         self.particle_num_neighbors.fill(0)
 
-        ti.block_local(self.y, self.grid_num_particles, self.particles2grid)
-        for pi in self.y:
-            cell_id = self.pos_to_cell_id(self.y[pi])
+        ti.block_local(self.x, self.grid_num_particles, self.particles2grid)
+        for pi in self.x:
+            cell_id = self.pos_to_cell_id(self.x[pi])
             counter = ti.atomic_add(self.grid_num_particles[cell_id], 1)
 
             if counter < self.cell_cache_size:
@@ -363,40 +363,22 @@ class Solver:
                 yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
                 V0wji0 = self.V0[j] * self.poly6_value(x0ji.norm(), self.kernel_radius)
-                # Vj_nabla_Wji = self.V0[j] * self.spiky_gradient(xji0, self.kernel_radius)
                 Dsi += V0wji0 * self.outer_product(yji, x0ji)
-                # for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-                #     Dsi[I] += V0wji0 * yji[I[0]] * x0ji[I[1]]
 
             F = Dsi @ self.L[i]
             U, sig, V = self.ssvd(F)
             R = U @ V.transpose()
 
-            wii0 = self.V0[i] * self.poly6_value(0.0, self.kernel_radius)
-            com = wii0 * yi
-            m = wii0
-            sum = ti.math.vec3(0.0)
-
             for nj in range(self.particle_num_neighbors_rest[i]):
                 j = self.particle_neighbors[i, nj]
                 x0ji = self.x0[j] - x0i
-                V0wji0 = self.V0[j] * self.poly6_value(x0ji.norm(), self.kernel_radius)
-                pji = V0wji0 * R @ x0ji
-                sum += pji
-                m += V0wji0
-                com += V0wji0 * self.y[j]
+                yji = self.y[j] - yi
+                dxji = R @ x0ji - yji
 
-            com /= m
-            pi = com - sum / m
+                self.dx[j] += (compliance_str / (compliance_str + 1.)) * dxji
+                self.dx[i] -= (compliance_str / (compliance_str + 1.)) * dxji
 
-            self.dx[i] += (pi - self.y[i])
-            self.nc[i] += 1.0
-
-            for nj in range(self.particle_num_neighbors_rest[i]):
-                j = self.particle_neighbors[i, nj]
-                x0ji = self.x0[j] - x0i
-                pj = pi + R @ x0ji
-                self.dx[j] += (pj - self.y[j])
+                self.nc[i] += 1.0
                 self.nc[j] += 1.0
 
         for i in range(self.num_particles_dy):
@@ -496,6 +478,40 @@ class Solver:
             self.y[pi] += dx_i
 
     @ti.kernel
+    def solve_xpbd_collision_constraints_x(self, distance_threshold: float):
+
+        self.dx.fill(0.0)
+        self.nc.fill(0.0)
+
+        ti.block_local(self.grid_num_particles, self.particles2grid, self.dx, self.nc)
+        for pi in range(self.num_particles):
+            pos_i = self.y[pi]
+            cell_id = self.pos_to_cell_id(pos_i)
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.is_in_grid(cell_to_check):
+                    for j in range(self.grid_num_particles[cell_to_check]):
+                        pj = self.particles2grid[cell_to_check, j]
+                        if pi == pj:
+                            continue
+                        pos_j = self.y[pj]
+                        xji = pos_j - pos_i
+                        if xji.norm() < distance_threshold:
+                            pji = distance_threshold * ti.math.normalize(xji)
+                            dxji = pji - xji
+                            self.dx[pi] -= dxji
+                            self.dx[pj] += dxji
+
+                            self.nc[pi] += 1
+                            self.nc[pj] += 1
+
+        ti.block_local(self.y, self.dx, self.nc)
+        for pi in range(self.num_particles):
+            if self.nc[pi] > 0:
+                self.y[pi] += self.dx[pi] / self.nc[pi]
+
+
+    @ti.kernel
     def compute_y(self, dt: float):
 
         ti.block_local(self.m_inv_p, self.v, self.x, self.y)
@@ -520,19 +536,31 @@ class Solver:
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
+
+        self.search_neighbours()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
-            self.search_neighbours()
-
             if self.solver_type == 0:
                 dtSq = dt_sub ** 2
-                compliance_str = self.YM * dtSq
+
+                mu = self.YM / 2.0 * (1.0 + self.PR)
+                ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
+
+                compliance_str = 2.0 * mu * dtSq
                 self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
+
+                self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
                 # self.solve_constraints_pressure_x()
             elif self.solver_type == 1:
                 dtSq = dt_sub ** 2
-                compliance_str = self.YM * dtSq
+
+                mu = self.YM / 2.0 * (1.0 + self.PR)
+                ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
+
+                compliance_str = 2.0 * mu * dtSq
                 self.solve_pd_fem_stretch_x(compliance_str)
+
+                # compliance_vol = mu * dtSq
                 # self.solve_constraints_pressure_x()
 
             self.update_state(self.damping, dt_sub)

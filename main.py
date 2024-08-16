@@ -7,7 +7,7 @@ import os
 from framework.physics import XPBF
 from framework.utilities import selection_tool as st
 
-sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
+sim = XPBF.Solver(scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -257,7 +257,6 @@ while window.running:
     # if run_sim :
     #     for i in range(sim.particle.num_sets):
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
-
 
     scene.particles(sim.particle.x, radius=sim.particle_rad, per_vertex_color=sim.particle.color)
     scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
