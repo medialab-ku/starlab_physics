@@ -16,6 +16,7 @@ class Solver:
         self.dt = dt
         self.YM = 1e5
         self.PR = 0.2
+        self.ZE = 1.0
         self.damping = 0.001
         self.padding = 0.05
 
@@ -287,9 +288,10 @@ class Solver:
     def cubic_spline_kernel_gradient(self, r, h):
 
         rh = r.norm() / h
-        w = 0.0
+        w = ti.math.vec3(0.0)
+
         alpha = ti.math.pi * (h ** 3)
-        dir = ti.math.normalize(r) / (h ** 2)
+        dir = ti.math.normalize(r) / h
         if 0.0 <= rh < 1.0:
             w = (-3.0 * rh + 2.25 * (rh ** 2)) * dir
         elif 1.0 <= rh < 2.0:
@@ -416,7 +418,7 @@ class Solver:
             self.y[i] += (self.dx[i] / self.nc[i])
 
     @ti.kernel
-    def solve_pd_fem_stretch_x(self, compliance_str: float):
+    def solve_pd_fem_stretch_x(self, compliance_str: float, alpha: float):
 
         self.dx.fill(0.0)
         self.nc.fill(1.0)
@@ -449,6 +451,19 @@ class Solver:
                 self.nc[i] += wi
                 self.nc[j] += wi
 
+            # wi = alpha * self.V0[i]
+            # for nj in range(self.particle_num_neighbors_rest[i]):
+            #     j = self.particle_neighbors[i, nj]
+            #     x0ji = self.x0[j] - x0i
+            #     yji = self.y[j] - yi
+            #     dxji = F @ x0ji - yji
+            #
+            #     self.dx[j] += wi * dxji
+            #     self.dx[i] -= wi * dxji
+            #
+            #     self.nc[i] += wi
+            #     self.nc[j] += wi
+
 
         for i in range(self.num_particles_dy):
             self.y[i] += (self.dx[i] / self.nc[i])
@@ -458,7 +473,7 @@ class Solver:
 
         ti.block_local(self.grid_num_particles, self.particles2grid, self.rho0)
         for pi in range(self.num_particles):
-            rho_i = self.poly6_value(0.0, self.kernel_radius)
+            rho_i = self.cubic_spline_kernel(0.0, self.kernel_radius)
             schur = 1e2
             nabla_Cii = ti.math.vec3(0.0)
             pos_i = self.y[pi]
@@ -481,7 +496,7 @@ class Solver:
                             else:
                                 self.particle_neighbors[pi, count] = pj
 
-                                rho_i += self.poly6_value(xji.norm(), self.kernel_radius)
+                                rho_i += self.cubic_spline_kernel(xji.norm(), self.kernel_radius)
                                 nabla_Cij = -self.spiky_gradient(xji, self.kernel_radius)
                                 nabla_Cii -= nabla_Cij
                                 schur += ti.math.dot(nabla_Cij, nabla_Cij)
@@ -562,6 +577,15 @@ class Solver:
             self.v[i] = (1.0 - damping) * (new_x - self.x[i]) / dt
             self.x[i] = new_x
 
+    @ti.kernel
+    def randomize(self):
+
+        for pi in range(self.num_particles_dy):
+            x0 = ti.math.clamp(30 * ti.random(), -20., 20.)
+            x1 = ti.math.clamp(30 * ti.random(), -20., 20.)
+            x2 = ti.math.clamp(30 * ti.random(), -20., 20.)
+            self.x[pi] = ti.math.vec3(x0, x1, x2)
+
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
@@ -576,20 +600,19 @@ class Solver:
                 ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
 
                 compliance_str = 2.0 * mu * dtSq
-                self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
+                # self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
                 # self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
-                # self.solve_constraints_pressure_x()
+                self.solve_constraints_pressure_x()
             elif self.solver_type == 1:
                 dtSq = dt_sub ** 2
 
                 mu = self.YM / 2.0 * (1.0 + self.PR)
                 ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
-
                 compliance_str = 2.0 * mu * dtSq
-                self.solve_pd_fem_stretch_x(compliance_str)
 
+                self.solve_pd_fem_stretch_x(compliance_str, self.ZE)
+                self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
                 # compliance_vol = mu * dtSq
                 # self.solve_constraints_pressure_x()
-
             self.update_state(self.damping, dt_sub)
 

@@ -36,6 +36,7 @@ dHat_ui = sim.particle_rad
 damping_ui = sim.damping
 YM_ui = sim.YM
 PR_ui = sim.PR
+ZE_ui = sim.ZE
 mesh_export = False
 frame_cpu = 0
 
@@ -50,6 +51,7 @@ def show_options():
     global dHat_ui
     global YM_ui
     global PR_ui
+    global ZE_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
     global mesh_export
@@ -62,6 +64,7 @@ def show_options():
     old_damping = damping_ui
     YM_old = YM_ui
     PR_old = PR_ui
+    ZE_old = ZE_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
@@ -79,6 +82,7 @@ def show_options():
 
         YM_ui = w.slider_float("Young's Modulus", YM_ui, 0.0, 1e8)
         PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 1e8)
+        ZE_ui = w.slider_float("Zero Energy", ZE_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
@@ -119,6 +123,9 @@ def show_options():
 
     if not PR_old == PR_ui:
         sim.PR = PR_ui
+
+    if not ZE_old == ZE_ui:
+        sim.ZE = PR_ui
 
     # if not YM_old == YM_ui:
     #     sim.stiffness_bending = YM_ui
@@ -184,6 +191,10 @@ while window.running:
 
         if window.event.key == ' ':
             run_sim = not run_sim
+
+        if window.event.key == 't':
+            sim.randomize()
+            run_sim = False
 
         if window.event.key == 'r':
             frame_cpu = 0
