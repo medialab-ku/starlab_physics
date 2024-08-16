@@ -20,23 +20,20 @@ camera.up(0, 1, 0)
 run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
-
-forward_once = False
-
 #selector
-g_selector = st.SelectionTool(sim.max_num_verts_dy, sim.mesh_dy.verts.x, window, camera)
+g_selector = st.SelectionTool(sim.num_verts_dy, sim.mesh_dy.x, window, camera)
 
 n_substep = 20
 frame_end = 100
 
 dt_ui = sim.dt
-solver_type_ui = sim.solver_type
+solver_type_ui = sim.selected_solver_type
 dHat_ui = sim.dHat
 
 damping_ui = sim.damping
 
-YM_ui = sim.stiffness_stretch
-YM_b_ui = sim.stiffness_bending
+YM_ui = sim.stiffness_bending
+YM_b_ui = sim.stiffness_stretch
 
 friction_coeff_ui = sim.mu
 
@@ -56,7 +53,6 @@ def show_options():
     global friction_coeff_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
-    global forward_once
     global mesh_export
     global frame_end
 
@@ -69,25 +65,15 @@ def show_options():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 6)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 1)
         if solver_type_ui == 0:
-            w.text("solver type: XPBD Jacobi")
+            w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
-            w.text("solver type: PD(diag)")
-        elif solver_type_ui == 2:
-            w.text("solver type: Jacobi(DOT)")
-        elif solver_type_ui == 3:
             w.text("solver type: Gauss Seidel")
-        elif solver_type_ui == 4:
-            w.text("solver type: euler(Graph Coloring)")
-        elif solver_type_ui == 5:
-            w.text("solver type: euler(Linear Solve)")
-        elif solver_type_ui == 6:
-            w.text("solver type: Parallel Gauss Seidel")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
-        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.301)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e8)
@@ -96,28 +82,27 @@ def show_options():
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
 
-        # LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
-        forward_once = w.checkbox("run once", forward_once)
+        LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
         # sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
-        sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
-        mesh_export = w.checkbox("export mesh", mesh_export)
+        # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
+        # mesh_export = w.checkbox("export mesh", mesh_export)
 
         if mesh_export is True:
             frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
         w.text("")
         w.text("dynamic mesh stats.")
-        verts_str = "# verts: " + str(sim.max_num_verts_dy)
-        edges_str = "# edges: " + str(sim.max_num_edges_dy)
-        faces_str = "# faces: " + str(sim.max_num_faces_dy)
+        verts_str = "# verts: " + str(sim.num_verts_dy)
+        edges_str = "# edges: " + str(sim.num_edges_dy)
+        faces_str = "# faces: " + str(sim.num_faces_dy)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
         w.text("")
         w.text("static mesh stats.")
-        verts_str = "# verts: " + str(sim.max_num_verts_st)
-        edges_str = "# edges: " + str(sim.max_num_edges_st)
-        faces_str = "# faces: " + str(sim.max_num_faces_st)
+        verts_str = "# verts: " + str(sim.num_verts_st)
+        edges_str = "# edges: " + str(sim.num_edges_st)
+        faces_str = "# faces: " + str(sim.num_faces_st)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
@@ -126,7 +111,7 @@ def show_options():
         sim.dt = dt_ui
 
     if not old_solver_type_ui == solver_type_ui:
-        sim.solver_type = solver_type_ui
+        sim.selected_solver_type = solver_type_ui
 
     if not old_dHat == dHat_ui:
         sim.dHat = dHat_ui
@@ -135,10 +120,10 @@ def show_options():
         sim.mu = friction_coeff_ui
 
     if not YM_old == YM_ui:
-        sim.stiffness_stretch = YM_ui
+        sim.stiffness_bending = YM_ui
 
     if not YM_b_old == YM_b_ui:
-        sim.stiffness_bending = YM_b_ui
+        sim.stiffness_stretch = YM_b_ui
 
     if not old_damping == damping_ui:
         sim.damping = damping_ui
@@ -196,6 +181,7 @@ while window.running:
         # if window.event.key == 'u':
         #     g_selector.remove_all_sewing()
 
+
         if window.event.key == ' ':
             run_sim = not run_sim
 
@@ -234,6 +220,7 @@ while window.running:
         if window.event.key == ti.ui.TAB:
             g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
 
+
     if window.get_event(ti.ui.RELEASE):
         if window.event.key == ti.ui.LMB:
             g_selector.LMB_mouse_pressed = False
@@ -249,35 +236,28 @@ while window.running:
         sim.forward(n_substeps=n_substep)
         frame_cpu += 1
 
-    if forward_once:
-        sim.forward(n_substeps=n_substep)
-        frame_cpu += 1
-        forward_once = False
-
     show_options()
 
     if mesh_export and run_sim and frame_cpu < frame_end:
         sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
-    if sim.solver_type <= 2:
-        # scene.mesh(sim.mesh_dy.verts.x,  indices=sim.mesh_dy.face_indices, per_vertex_color=sim.mesh_dy.colors)
-        # scene.mesh(sim.mesh_dy.verts.x, indices=sim.mesh_dy.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
-        scene.particles(sim.mesh_dy.verts.x, radius=sim.dHat,  per_vertex_color=sim.mesh_dy.colors)
-    else:
-        scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
-        scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
-        # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.02,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
+    scene.mesh(sim.mesh_dy.x, indices=sim.mesh_dy.face_indices_flatten, per_vertex_color=sim.mesh_dy.colors)
+    scene.mesh(sim.mesh_dy.x, indices=sim.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+
+    # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
+    # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
+    # sim.mesh_dy.colors_edge_euler.fill(ti.math.vec3([1.0, 0.0, 0.0]))
+    # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
     if sim.mesh_st != None:
-        # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(0, 0.0, 0.0), show_wireframe=True)
-        # scene.mesh(sim.mesh_st.verts.x, indices=sim.mesh_st.face_indices, color=(1, 1.0, 1.0))
-        scene.particles(sim.mesh_st.verts.x, radius=sim.dHat, color=(0.5, 0.5, 0.5))
+        scene.mesh(sim.mesh_st.x, indices=sim.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+        scene.mesh(sim.mesh_st.x, indices=sim.mesh_st.face_indices_flatten, per_vertex_color=sim.mesh_st.colors)
 
     g_selector.renderTestPos()
 
     #draw selected particles
     scene.particles(g_selector.renderTestPosition, radius=0.02, color=(1, 0, 1))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
-    scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
+
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()

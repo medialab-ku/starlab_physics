@@ -1,6 +1,7 @@
-from framework.meshio.TriMesh_old import TriMeshWrapper
+from framework.meshio.TriMesh import TriMesh
 from framework.meshio.concat import concat_mesh
 import taichi as ti
+import numpy as np
 from pathlib import Path
 
 enable_profiler = False
@@ -11,35 +12,42 @@ OBJ = "OBJ"
 model_dir = str(model_path) + "/OBJ"
 # print(model_dir)
 
-model_names = []
-trans_list = []
-scale_list = []
-
-concat_model_name = "concat.obj"
+# model_names = []
+# trans_list = []
+# scale_list = []
 #
-model_names.append("poncho_8K.obj")
-trans_list.append([0.0, 7.0, 0.0])
-scale_list.append(3.4)
+# concat_model_name = "concat.obj"
 # #
-model_names.append("poncho_8K.obj")
-trans_list.append([0.0, 7.5, 0.0])
-scale_list.append(3.0)
-
-model_names.append("poncho_8K.obj")
-trans_list.append([0.0, 8.0, 0.0])
-scale_list.append(3.0)
+# model_names.append("poncho_8K.obj")
+# trans_list.append([0.0, 7.0, 0.0])
+# scale_list.append(3.4)
+# # #
+# model_names.append("poncho_8K.obj")
+# trans_list.append([0.0, 7.5, 0.0])
+# scale_list.append(3.0)
+#
+# model_names.append("poncho_8K.obj")
+# trans_list.append([0.0, 8.0, 0.0])
+# scale_list.append(3.0)
 
 # append more meshes
 # model_names.append("your-obj-name.obj")
 # trans_list.append([x, y, z])
 # scale_list.append(size)
 
-# offsets = concat_mesh(concat_model_name, model_dir, model_names, trans_list, scale_list)
-#dynamic mesh
-mesh_dy = TriMeshWrapper(model_dir, "poncho_8K.obj", offsets=[0], scale=3.4, trans=ti.math.vec3(0, 7.0, 0), rot=ti.math.vec3(0.0, 0.0, 0.0))
+mesh_dy = TriMesh(
+    model_dir,
+    model_name_list=["plane.obj"],
+    trans_list=[(0.0, 5.0, 0.0)],
+    scale_list=[10.0],
+    rot_list=[], # (axis.x, axis.y, axis.z, radian)
+    is_static=False)
 
-#static mesh
-# mesh_st = MeshTaichiWrapper(model_dir, "square.obj",  offsets=[0], scale=1.5, trans=ti.math.vec3(0.0, -20.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-mesh_st = TriMeshWrapper(model_dir, "SMPL_APose.obj", offsets=[0], scale=12, trans=ti.math.vec3(0.0, 0.0, 0.0), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
-# if you wan to use another mesh as a static object...
-# mesh_st = MeshTaichiWrapper(str(model_path / "OBJ/your-obj-name.obj"),  offsets=[0], scale=12.0, trans=ti.math.vec3(0.0, 0.0, 0.01), rot=ti.math.vec3(0.0, 0.0, 0.0), is_static=True)
+mesh_st = TriMesh(
+    model_dir,
+    model_name_list=["square.obj"],
+    trans_list=[(0.0, -20.0, 0.0)],
+    scale_list=[1.5],
+    rot_list=[],
+    is_static=True
+)

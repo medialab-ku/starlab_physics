@@ -29,7 +29,7 @@ class GraphColoring:
         self.max_num_colors = 100
         self.available_colors = ti.field(dtype=ti.int32, shape=self.max_num_colors)  # temporary
 
-        # these data will be ultimately used in XPBD.py
+        # these data will be ultimately used in XPBD_old.py
         self.sorted_edges_sequence_for_color = self.edge_indices_sequence
         self.sorted_edges_sequence_np = self.sorted_edges_sequence_for_color.to_numpy()
         self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.max_num_colors)
