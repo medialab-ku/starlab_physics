@@ -2,6 +2,7 @@ import taichi as ti
 import numpy as np
 import json
 import csv
+from pathlib import Path
 
 @ti.data_oriented
 class SelectionTool :
@@ -193,9 +194,10 @@ class SelectionTool :
         # print("total selection count : ", count_sum)
         # print("==========================")
 
-        print(self.selected_indices_cpu)
-
-        with open('../animation/handle.json', 'w', encoding='utf-8') as f:
+        # print(self.selected_indices_cpu)
+        model_path = str(Path(__file__).resolve().parent.parent) + "/animation/handle.json"
+        print(model_path)
+        with open(model_path, 'w', encoding='utf-8') as f:
             json.dump(self.selected_indices_cpu, f, ensure_ascii=False, indent=4)
 
 
@@ -209,7 +211,9 @@ class SelectionTool :
         #             print("nononoonononoonononoonononoonononoonononoonononoonononoonononoonononoonononoo",testRead[i+1][j],self.selected_indices_cpu[i+1][j])
 
     def import_selection(self):
-        with open('../animation/handle.json') as f:
+        model_path = str(Path(__file__).resolve().parent.parent) + "/animation/handle.json"
+
+        with open(model_path) as f:
             self.selected_indices_cpu = json.load(f)
         self.selected_indices_cpu = {int(k): v for k, v in self.selected_indices_cpu.items()}
 
