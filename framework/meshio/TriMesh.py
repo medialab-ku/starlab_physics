@@ -105,6 +105,7 @@ class TriMesh:
         self.l0 = ti.field(dtype=float, shape=self.num_edges)
         self.eid_field = ti.field(dtype=int, shape=(self.num_edges, 2))
 
+
         # initialize the edge fields
         self.l0.fill(0.0)
         self.eid_field.from_numpy(self.e_np)
