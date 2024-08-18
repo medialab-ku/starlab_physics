@@ -1,4 +1,6 @@
 import csv
+from telnetlib import SEND_URL
+
 import taichi as ti
 import numpy as np
 from ..physics import collision_constraints_x, collision_constraints_v, solve_pressure_constraints_x
@@ -534,7 +536,7 @@ class Solver:
 
         self.dx.fill(0.0)
         self.nc.fill(0.0)
-
+        self.m_inv.fill(1.0)
         ti.block_local(self.grid_num_particles, self.particles2grid, self.dx, self.nc)
         for pi in range(self.num_particles):
             pos_i = self.y[pi]
@@ -549,13 +551,17 @@ class Solver:
                         pos_j = self.y[pj]
                         xji = pos_j - pos_i
                         if xji.norm() < distance_threshold:
-                            pji = distance_threshold * ti.math.normalize(xji)
-                            dxji = pji - xji
-                            self.dx[pi] -= dxji
-                            self.dx[pj] += dxji
+                            C = (xji.norm() - distance_threshold)
+                            nabla_C = ti.math.normalize(xji)
+                            schur = (self.is_fixed[pi] * self.m_inv[pi] + self.is_fixed[pj] * self.m_inv[pj])
+                            k = 1e8
+                            ld = -(k * C) / (k * schur + 1.0)
 
-                            self.nc[pi] += 1
-                            self.nc[pj] += 1
+                            self.dx[pi] -= self.is_fixed[pi] * self.m_inv[pi] * ld * nabla_C
+                            self.dx[pj] += self.is_fixed[pj] * self.m_inv[pj] * ld * nabla_C
+
+                            self.nc[pi] += 1.0
+                            self.nc[pj] += 1.0
 
         ti.block_local(self.y, self.dx, self.nc)
         for pi in range(self.num_particles):
@@ -605,17 +611,17 @@ class Solver:
     def forward(self, n_substeps):
 
         dt_sub = self.dt / n_substeps
+        self.search_neighbours()
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             if self.solver_type == 0:
-                # self.search_neighbours()
                 # self.solve_constraints_pressure_x()
                 dtSq = dt_sub ** 2
                 mu = self.YM / 2.0 * (1.0 + self.PR)
                 ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
                 compliance_str = 2.0 * mu * dtSq
-                self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
-                # self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
+                # self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
+                self.solve_xpbd_collision_constraints_x(2 * self.particle_rad)
 
             elif self.solver_type >= 1:
                 dtSq = dt_sub ** 2
