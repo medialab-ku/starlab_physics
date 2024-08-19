@@ -16,10 +16,10 @@ class Solver:
         self.particle = particle
         self.g = g
         self.dt = dt
-        self.YM = 1e5
+        self.YM = 2
         self.PR = 0.2
         self.ZE = 1.0
-        self.damping = 0.001
+        self.damping = 0.0
         self.padding = 0.05
 
         self.enable_velocity_update = False
@@ -53,6 +53,7 @@ class Solver:
         self.F = self.particle.F
         self.L = self.particle.L
         self.m_inv = self.particle.m_inv
+        self.m = self.particle.m
         self.is_fixed = self.particle.is_fixed
         self.rho0 = self.particle.rho0
         self.rho0.fill(1.0)
@@ -240,13 +241,19 @@ class Solver:
                 j = self.particle_neighbors[i, nj]
                 xji0 = self.x[j] - x0i
 
-                if solver_type <=1:
+                if solver_type <= 1:
                     wji0 = self.cubic_spline_kernel(xji0.norm(), self.kernel_radius)
                     Li += self.V0[j] * wji0 * self.outer_product(xji0, xji0)
                 else:
                     Li += self.V0[j] * self.outer_product(xji0, self.spiky_gradient(xji0, self.kernel_radius))
             self.L[i] = ti.math.inverse(Li)
 
+        for i in range(self.num_particles):
+            wii = self.poly6_value(0.0, self.kernel_radius)
+            self.rho0[i] = wii
+
+        # print(self.poly6_value(0.0, self.kernel_radius))
+        # print(self.poly6_value(self.kernel_radius, self.kernel_radius))
 
     @ti.func
     def pos_to_cell_id(self, y: ti.math.vec3) -> ti.math.ivec3:
@@ -264,12 +271,11 @@ class Solver:
 
 
     @ti.func
-    def spiky_gradient(self, r, h):
+    def spiky_gradient(self, r, h) -> ti.math.vec3:
 
         result = ti.math.vec3(0.0)
-
         r_len = r.norm()
-        if 0 < r_len and r_len < h:
+        if 0 < r_len and r_len <= h:
             x = (h - r_len) / (h * h * h)
             g_factor = self.spiky_grad_factor * x * x
             result = r * g_factor / r_len
@@ -314,7 +320,7 @@ class Solver:
     @ti.func
     def poly6_value(self, s, h):
         result = 0.0
-        if 0 < s and s < h:
+        if 0 <= s and s <= h:
             x = (h * h - s * s) / (h * h * h)
             result = self.poly6_factor * x * x * x
 
@@ -484,13 +490,19 @@ class Solver:
     @ti.kernel
     def solve_constraints_pressure_x(self):
 
-        ti.block_local(self.grid_num_particles, self.particles2grid, self.rho0)
+        self.dx.fill(0.0)
+        self.nc.fill(0.0)
+
+        kernel_radius = 2.5 * self.particle_rad
+        # self.m_inv.fill(1.0)
+        ti.block_local(self.grid_num_particles, self.particles2grid, self.dx, self.nc)
         for pi in range(self.num_particles):
-            rho_i = 0.0
-            schur = 0.0
-            nabla_Cii = ti.math.vec3(0.0)
             pos_i = self.y[pi]
             cell_id = self.pos_to_cell_id(pos_i)
+            C = 0.0
+            schur = 0.0
+            self.nc[pi] += 1
+            nabla_Cii = ti.math.vec3(0.0)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
                 if self.is_in_grid(cell_to_check):
@@ -500,43 +512,45 @@ class Solver:
                             continue
                         pos_j = self.y[pj]
                         xji = pos_j - pos_i
-                        if xji.norm() < self.kernel_radius * 1.03 + 1e-4:
-                            count = ti.atomic_add(self.particle_num_neighbors[pi],1)
-                            if count >= self.nb_cache_size:
-                                # print("neighbor over!!",count)
-                                self.particle_num_neighbors[pi] = self.nb_cache_size
-                            else:
-                                self.particle_neighbors[pi, count] = pj
+                        if xji.norm() < kernel_radius:
+                            C += self.m[pj] * self.poly6_value(xji.norm(), kernel_radius) / self.m[pi]
+                            nabla_Cji = self.m[pj] * self.spiky_gradient(xji, kernel_radius) / self.m[pi]
+                            nabla_Cii -= nabla_Cji
+                            schur += nabla_Cji.dot(nabla_Cji) / self.m[pj]
+                            self.nc[pj] += 1
 
-                                rho_i += self.cubic_spline_kernel(xji.norm(), self.kernel_radius)
-                                nabla_Cij = -self.spiky_gradient(xji, self.kernel_radius)
-                                nabla_Cii -= nabla_Cij
-                                schur += ti.math.dot(nabla_Cij, nabla_Cij)
+            schur += nabla_Cii.dot(nabla_Cii) / self.m[pi]
+            k = 1e8
+            ld = -(k * C) / (k * schur + 1.0)
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.is_in_grid(cell_to_check):
+                    for j in range(self.grid_num_particles[cell_to_check]):
+                        pj = self.particles2grid[cell_to_check, j]
+                        if pi == pj:
+                            continue
+                        pos_j = self.y[pj]
+                        xji = pos_j - pos_i
+                        if xji.norm() < kernel_radius:
+                            nabla_Cji = self.m[pj] * self.spiky_gradient(xji, kernel_radius) / self.m[pi]
+                            # self.dx[pi] -= self.m_inv[pi] * ld * nabla_Cji
+                            self.dx[pj] += self.m_inv[pj] * ld * nabla_Cji
+                            # self.nc[pi] += 1.0
+                            # self.nc[pj] += 1.0
 
-            schur += nabla_Cii.dot(nabla_Cii)
-            C_dens = ti.max(self.V0[pi] * rho_i - 1.0, 0.0)
-            self.ld[pi] = -C_dens / (schur + 1e-4)
+            self.dx[pi] += self.m_inv[pi] * ld * nabla_Cii
 
-        for pi in range(self.num_particles_dy):
-            pos_i = self.y[pi]
-            ld_i = self.ld[pi]
-            dx_i = ti.math.vec3(0.0)
-
-            for j in range(self.particle_num_neighbors[pi]):
-                pj = self.particle_neighbors[pi, j]
-                ld_j = self.ld[pj]
-                pos_j = self.y[pj]
-                xij = pos_i - pos_j
-                scorr = self.compute_scorr(xij)
-                dx_i += (ld_i + ld_j) * self.spiky_gradient(xij, self.kernel_radius)
-            self.y[pi] += dx_i
+        ti.block_local(self.y, self.dx, self.nc)
+        for pi in range(self.num_particles):
+            if self.nc[pi] > 0:
+                self.y[pi] += self.dx[pi] / self.nc[pi]
 
     @ti.kernel
     def solve_xpbd_collision_constraints_x(self, distance_threshold: float):
 
         self.dx.fill(0.0)
         self.nc.fill(0.0)
-        self.m_inv.fill(1.0)
+        # self.m_inv.fill(1.0)
         ti.block_local(self.grid_num_particles, self.particles2grid, self.dx, self.nc)
         for pi in range(self.num_particles):
             pos_i = self.y[pi]
@@ -612,16 +626,23 @@ class Solver:
 
         dt_sub = self.dt / n_substeps
         self.search_neighbours()
+
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             if self.solver_type == 0:
+
+                self.solve_constraints_pressure_x()
                 # self.solve_constraints_pressure_x()
                 dtSq = dt_sub ** 2
-                mu = self.YM / 2.0 * (1.0 + self.PR)
+                k = 0
+                if self.YM >= 0:
+                    k = ti.math.pow(10.0, self.YM)
+                mu = k / 2.0 * (1.0 + self.PR)
                 ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
                 compliance_str = 2.0 * mu * dtSq
-                # self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
-                self.solve_xpbd_collision_constraints_x(2 * self.particle_rad)
+                self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
+                # self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
+                # self.solve_constraints_pressure_x()
 
             elif self.solver_type >= 1:
                 dtSq = dt_sub ** 2

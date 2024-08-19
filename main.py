@@ -25,7 +25,7 @@ LOOKAt_ORIGIN = True
 #selector
 g_selector = st.SelectionTool(sim.num_particles_dy, sim.x, window, camera)
 
-n_substep = 5
+n_substep = 20
 frame_end = 100
 
 dt_ui = sim.dt
@@ -82,8 +82,8 @@ def show_options():
         dHat_ui = w.slider_float("particle rad.", dHat_ui, 0.001, 0.101)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
 
-        YM_ui = w.slider_float("Young's Modulus", YM_ui, 0.0, 1e8)
-        PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 1e8)
+        YM_ui = w.slider_int("Young's Modulus", YM_ui, -1, 5)
+        PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 0.49)
         ZE_ui = w.slider_float("Zero Energy", ZE_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)

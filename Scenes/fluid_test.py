@@ -18,7 +18,7 @@ is_static = []
 rho0 = []
 
 particle_names.append("cube.vtk")
-particle_names.append("sphere5K.vtk")
+particle_names.append("cube.vtk")
 # particle_names.append("cube.vtk")
 # particle_names.append("cube.vtk")
 # particle_names.append("cube.vtk")
@@ -45,8 +45,8 @@ is_static.append(False)
 # is_static.append(False)
 # is_static.append(True)
 
-rho0.append(1.0)
-rho0.append(1.0)
+rho0.append(1)
+rho0.append(1e3)
 # rho0.append(1000.0)
 
 particles = Particle(model_dir, particle_names, translations=trans, scales=scale, is_static=is_static, rho0=rho0)

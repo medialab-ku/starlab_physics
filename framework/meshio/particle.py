@@ -26,7 +26,8 @@ class Particle:
 
         rest_density = []
         m_inv_np = np.empty((0))
-        # m_np = np.empty((0))
+        # m = np.empty((0))
+        m_np = np.empty((0))
         self.num_static = 0
         for i in range(num_sets):
             model_path = model_dir + "/" + model_names[i]
@@ -41,13 +42,16 @@ class Particle:
 
             if is_static[i] is True:
                 m_inv_temp = np.zeros(pos_temp.shape[0])
+                m_temp = np.zeros(pos_temp.shape[0])
                 self.num_static += pos_temp.shape[0]
             else:
                 m_inv_temp = (1.0 / rho0[i]) * np.ones(pos_temp.shape[0])
+                m_temp = rho0[i] * np.ones(pos_temp.shape[0])
 
             # m_temp = rho0[i] * np.ones(pos_temp.shape[0])
             points = np.append(points, pos_temp, axis=0)
             m_inv_np = np.append(m_inv_np, m_inv_temp, axis=0)
+            m_np = np.append(m_np, m_temp, axis=0)
             # m_np = np.append(m_np, m_inv_temp, axis=0)
 
             self.num_particles += pos_temp.shape[0]
@@ -70,16 +74,18 @@ class Particle:
         self.ld_den = ti.Vector.field(n=3, dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
         self.m_inv = ti.field(dtype=float)
+        self.m = ti.field(dtype=float)
         self.is_fixed = ti.field(dtype=float)
         # self.m = ti.field(dtype=float)
         self.color = ti.Vector.field(n=3, dtype=float)
 
         self.rho0 = ti.field(dtype=float)
         particle_snode = ti.root.dense(ti.i, self.num_particles).place(self.x0)
-        particle_snode.place(self.V0, self.F, self.L, self.dx, self.y, self.x, self.v, self.m_inv, self.is_fixed, self.color, self.rho0)
+        particle_snode.place(self.V0, self.F, self.L, self.dx, self.y, self.x, self.v, self.m_inv, self.m, self.is_fixed, self.color, self.rho0)
         particle_snode.place(self.c_den, self.ld_den)
         self.x.from_numpy(points)
         self.m_inv.from_numpy(m_inv_np)
+        self.m.from_numpy(m_np)
         self.is_fixed.fill(1.0)
         # self.m_inv.fill(-1.0)
         self.v.fill(0.0)
