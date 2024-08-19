@@ -119,7 +119,7 @@ class Solver:
 
             ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
-            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.fixed[v0] * ld * nabla_C
+            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * ld * nabla_C
             self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * ld * nabla_C
             self.mesh_dy.nc[v0] += 1.0
             self.mesh_dy.nc[v1] += 1.0
@@ -139,7 +139,7 @@ class Solver:
 
             ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
-            self.mesh_dy.y[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.fixed[v0] * ld * nabla_C
+            self.mesh_dy.y[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * ld * nabla_C
             self.mesh_dy.y[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * ld * nabla_C
 
     ####################################################################################################################
