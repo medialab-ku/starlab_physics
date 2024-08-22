@@ -208,15 +208,15 @@ class Solver:
                         xji = pos_j - pos_i
                         if xji.norm() < self.kernel_radius * 1.03 + 1e-4:
                             count = ti.atomic_add(self.particle_num_neighbors_rest[pi], 1)
-                            if count >= self.nb_cache_size:
-                                # print("neighbor over!!",count)
-                                self.particle_num_neighbors_rest[pi] = self.nb_cache_size
-                            else:
-                                self.particle_neighbors[pi, count] = pj
+                            if count < self.nb_cache_size:
+                            #     # print("neighbor over!!",count)
+                            #     self.particle_neighbors_rest[pi] = self.nb_cache_size
+                            # else:
+                                self.particle_neighbors_rest[pi, count] = pj
 
         for pi in range(self.num_particles_dy):
             if self.particle_num_neighbors_rest[pi] < 3:
-                print("fuck")
+                print("you need more neighbours...")
 
     @ti.kernel
     def init_V0_and_L(self, solver_type: int):
@@ -444,7 +444,7 @@ class Solver:
             Dsi = ti.math.mat3(0.0)
             wi = compliance_str * self.V0[i]
             for nj in range(self.particle_num_neighbors_rest[i]):
-                j = self.particle_neighbors[i, nj]
+                j = self.particle_neighbors_rest[i, nj]
                 yji = self.y[j] - yi
                 x0ji = self.x0[j] - x0i
                 # if solver_type == 1:
@@ -460,15 +460,16 @@ class Solver:
             R = U @ V.transpose()
 
             for nj in range(self.particle_num_neighbors_rest[i]):
-                j = self.particle_neighbors[i, nj]
+                j = self.particle_neighbors_rest[i, nj]
                 x0ji = self.x0[j] - x0i
                 yji = self.y[j] - yi
                 dxji = R @ x0ji - yji
 
-                self.dx[j] += wi * dxji
-                self.dx[i] -= wi * dxji
-                self.nc[i] += wi
-                self.nc[j] += wi
+                self.dx[j] += (wi / self.m[j]) * dxji
+                self.dx[i] -= (wi / self.m[i]) * dxji
+
+                self.nc[i] += (wi / self.m[i])
+                self.nc[j] += (wi / self.m[j])
 
             # wi = alpha * self.V0[i]
             # for nj in range(self.particle_num_neighbors_rest[i]):
@@ -640,7 +641,8 @@ class Solver:
                 mu = k / 2.0 * (1.0 + self.PR)
                 ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
                 compliance_str = 2.0 * mu * dtSq
-                self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
+                # self.solve_pd_fem_stretch_x(compliance_str, 1, self.ZE)
+                # self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
                 # self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
                 # self.solve_constraints_pressure_x()
 
