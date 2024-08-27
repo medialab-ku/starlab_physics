@@ -31,8 +31,8 @@ particle_color = ti.math.vec3(1.0, 1.0, 1.0)
 # print(particle_color)
 boundary_particle_color = 0xFFC433
 # boundary_color = 0x068587
-num_particles_x = 100
-num_particles = num_particles_x * 20
+num_particles_x = 105
+num_particles = num_particles_x * 15
 max_num_particles_per_cell = 50
 max_num_neighbors = 50
 time_delta = 1.0 / 20.0
@@ -45,9 +45,10 @@ h_ = 1.1
 # mass = 1.0
 # rho0 = 1.0
 lambda_epsilon = 100.0
-pbf_num_iters = 5
-mass_ratio = 1.0
+pbf_num_iters = 20
+mass_ratio = 10.0
 PR = 1e2
+solver_type = 1
 use_heatmap = False
 corr_deltaQ_coeff = 0.3
 corrK = 0.001
@@ -119,11 +120,6 @@ boundary_positions_window = ti.Vector.field(dim, float, shape=num_boundary_parti
 # num_boundary_particles_x = 40
 # num_boundary_particles = 10 * num_boundary_particles_x
 # ti.root.dense(ti.i, num_boundary_particles).place(boundary_positions, boundary_positions_window)
-
-test = ti.Vector.field(2, float, shape=2)
-test[0] = ti.math.vec2(0.5)
-test[1] = ti.math.vec2(1.0)
-
 # board_states = ti.Vector.field(2, float)
 @ti.func
 def poly6_value(s, h):
@@ -205,6 +201,9 @@ def prologue(mass_ratio: float):
         elif material_type[i] == 1:
             # positions[i] -= offs
             mass[i] = mass_ratio
+
+        elif material_type[i] == 2:
+            mass[i] = (mass_ratio ** 2)
             # rho0[i] = mass[i] * poly6_value(0.0, h_)
 
     for p_i in positions:
@@ -378,12 +377,19 @@ def epilogue():
 
 def run_pbf():
     prologue(mass_ratio)
-    for _ in range(pbf_num_iters):
-        substep()
+    if solver_type == 0:
+        for _ in range(pbf_num_iters):
+            substep()
+            k = PR * time_delta ** 2
+            substep_fem(k)
 
-    for _ in range(pbf_num_iters):
-        k = PR * time_delta ** 2
-        substep_fem(k)
+    elif solver_type == 1:
+        for _ in range(pbf_num_iters):
+            substep()
+
+        for _ in range(pbf_num_iters):
+            k = PR * time_delta ** 2
+            substep_fem(k)
 
     epilogue()
 
@@ -436,21 +442,20 @@ def init_particles(mass_ratio: float):
         x = i % num_particles_x
         y = i // num_particles_x
         # mass[i] = 1.0
-        if 0 <= y <= 9:
+        if 0 <= y < 5:
             colors[i] = ti.math.vec3(255.0, 128.0, 0.0) / 255.0
             material_type[i] = 1
             positions[i] = ti.Vector([x, y]) * delta + offs + off_test
 
-        elif 10 <= y <= 19:
+        elif 5 <= y < 10:
             colors[i] = ti.math.vec3(0.0, 128.0, 255.0) / 255.0
             material_type[i] = 0
+            positions[i] = ti.Vector([x, y]) * delta + offs
+        else:
+            colors[i] = ti.math.vec3(255.0, 0.0, 128.0) / 255.0
+            material_type[i] = 2
             positions[i] = ti.Vector([x, y]) * delta + offs - off_test
-
         x0[i] = positions[i]
-        # else:
-        #     colors[i] = ti.math.vec3(255.0, 0.0, 128.0) / 255.0
-        #     material_type[i] = 2
-
         # positions[i] = ti.Vector([x, y]) * delta + offs
     # delta = h_ * 0.7
     # offs = ti.Vector([.0, boundary[1] * 0.1])
@@ -466,7 +471,7 @@ def init_particles(mass_ratio: float):
             # rho0[i] = mass[i] * poly6_value(0.0, h_)
 
         elif material_type[i] == 2:
-            mass[i] = 3.0
+            mass[i] = 10 * mass_ratio
             # rho0[i] = mass[i] * poly6_value(0.0, h_)
 
     velocities.fill(0.0)
@@ -526,8 +531,8 @@ def switch_material():
     # print(boundary)
     for i in range(num_particles):
         if material_type[i] == 0:
-            material_type[i] = 1
-        elif material_type[i] == 1:
+            material_type[i] = 2
+        elif material_type[i] == 2:
             material_type[i] = 0
 
     # for i in range(num_particles):
@@ -570,6 +575,7 @@ def main():
         global pbf_num_iters
         global mass_ratio
         global use_heatmap
+        global solver_type
         # global dt_ui
         # global g_ui
         # global damping_ui
@@ -586,6 +592,13 @@ def main():
 
             # dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
             # g_ui = w.slider_float("g", g_ui, -20.0, 20.0)
+            # pbf_num_iters = w.slider_int("# iter", pbf_num_iters, 1, 100)
+            solver_type = w.slider_int("solver type", solver_type, 0, 1)
+            if solver_type == 0:
+                w.text("locking")
+            elif solver_type == 1:
+                w.text("locking-free")
+
             pbf_num_iters = w.slider_int("# sub", pbf_num_iters, 1, 100)
             mass_ratio_old = w.slider_float("mass ratio", mass_ratio_old, 1, 100)
             PR_old = w.slider_float("PR", PR_old, 0.0, 1e5)

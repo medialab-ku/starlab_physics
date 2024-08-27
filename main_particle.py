@@ -4,10 +4,13 @@ import json
 from Scenes import fluid_test as scene1
 import os
 
+from Scenes.fluid_test import particles
 from framework.physics import XPBF
 from framework.utilities import selection_tool as st
+from framework.collision import SpatialHash as shash
 
-sim = XPBF.Solver(scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
+sh = shash.SpatialHash(grid_resolution=(64, 64, 64))
+sim = XPBF.Solver(scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020, sh=sh)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -23,14 +26,21 @@ run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 #selector
-g_selector = st.SelectionTool(sim.num_particles_dy, sim.x, window, camera)
+# g_selector = st.SelectionTool(sim.num_particles_dy, sim.x, window, camera)
 
 n_substep = 20
 frame_end = 100
 
+dt_ui = 0.01
+solver_type_ui = 1
+g_ui = -9.81
+
 dt_ui = sim.dt
 solver_type_ui = sim.solver_type
 g_ui = sim.g[1]
+
+
+dHat_ui = sim.particle_rad
 dHat_ui = sim.particle_rad
 
 damping_ui = sim.damping
@@ -174,12 +184,12 @@ while window.running:
 
         if window.event.key == 'x':  # export selection
             print("==== Vertex EXPORT!! ====")
-            g_selector.export_selection()
+            # g_selector.export_selection()
 
         if window.event.key == 'i':
             print("==== IMPORT!! ====")
-            g_selector.import_selection()
-            sim.set_fixed_vertices(g_selector.is_selected)
+            # g_selector.import_selection()
+            # sim.set_fixed_vertices(g_selector.is_selected)
         #     # load_animation()
         #
         # if window.event.key == 't':
@@ -201,7 +211,7 @@ while window.running:
         if window.event.key == 'r':
             frame_cpu = 0
             sim.reset()
-            g_selector.is_selected.fill(0.0)
+            # g_selector.is_selected.fill(0.0)
             # sim.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
 
@@ -226,30 +236,30 @@ while window.running:
         # if window.event.key == ti.ui.BACKSPACE:
         #     g_selector.is_selected.fill(0)
         #
-        if window.event.key == ti.ui.LMB:
-            g_selector.LMB_mouse_pressed = True
-            g_selector.mouse_click_pos[0], g_selector.mouse_click_pos[1] = window.get_cursor_pos()
-
-        if window.event.key == ti.ui.TAB:
-            g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
-
-
-    if window.get_event(ti.ui.RELEASE):
-        if window.event.key == ti.ui.LMB:
-            g_selector.LMB_mouse_pressed = False
-            g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
-            g_selector.Select()
-
-    if g_selector.LMB_mouse_pressed:
-        g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
-        g_selector.update_ti_rect_selection()
+    #     if window.event.key == ti.ui.LMB:
+    #         g_selector.LMB_mouse_pressed = True
+    #         g_selector.mouse_click_pos[0], g_selector.mouse_click_pos[1] = window.get_cursor_pos()
+    #
+    #     if window.event.key == ti.ui.TAB:
+    #         g_selector.MODE_SELECTION = not g_selector.MODE_SELECTION
+    #
+    #
+    # if window.get_event(ti.ui.RELEASE):
+    #     if window.event.key == ti.ui.LMB:
+    #         g_selector.LMB_mouse_pressed = False
+    #         g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
+    #         g_selector.Select()
+    #
+    # if g_selector.LMB_mouse_pressed:
+    #     g_selector.mouse_click_pos[2], g_selector.mouse_click_pos[3] = window.get_cursor_pos()
+    #     g_selector.update_ti_rect_selection()
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep)
+        sim.forward(n_substeps=1, n_iter=n_substep)
         frame_cpu += 1
 
-    show_options()
+    # show_options()
 
     # if mesh_export and run_sim and frame_cpu < frame_end:
     #     sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
@@ -262,12 +272,14 @@ while window.running:
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
 
     scene.particles(sim.particle.x, radius=sim.particle_rad, per_vertex_color=sim.particle.color)
-    scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
+    # scene.particles
+    # scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
 
-    g_selector.renderTestPos()
-    scene.particles(g_selector.renderTestPosition, radius=sim.particle_rad, color=(1, 0, 0))
-    canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
-
+    # g_selector.renderTestPos()
+    # scene.particles(g_selector.renderTestPosition, radius=sim.particle_rad, color=(1, 0, 0))
+    # canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
+    # scene.particles(particles.x0, radius=0.2, color=(1, 0, 0))
+    scene.lines(sh.bbox_vertices, width=1.0, indices=sh.bbox_edge_indices_flattened, color=(0, 0, 0))
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
