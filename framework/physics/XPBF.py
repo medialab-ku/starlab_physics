@@ -661,7 +661,7 @@ class Solver:
                 # self.solve_constraints_pressure_x(2 * self.particle_rad)
                 if self.particle_st != None:
                     self.solve_xpbd_collision_constraints_st_x(2 * self.particle_rad)
-                self.solve_constraints_pressure_x(2 * self.particle_rad)
+                # self.solve_constraints_pressure_x(2 * self.particle_rad)
 
             # for _ in range(n_iter):
                 dtSq = dt_sub ** 2
