@@ -28,6 +28,6 @@ scale.append(20.0)
 is_static.append(False)
 is_static.append(False)
 
-rho0.append(float(1e3))
+rho0.append(1.0)
 rho0.append(1.0)
 particles = Particle(model_dir, particle_names, translations=trans, scales=scale, is_static=is_static, rho0=rho0)

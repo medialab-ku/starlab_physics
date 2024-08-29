@@ -317,7 +317,7 @@ class Solver:
     def solve_xpbd_fem_stretch_constraints_x(self, compliance_str: float):
 
         self.dx.fill(0.0)
-        self.nc.fill(0.0)
+        self.nc.fill(1.0)
 
         ti.block_local(self.y, self.L)
         for i in range(self.num_particles_dy):
@@ -340,11 +340,11 @@ class Solver:
                 yji = self.y[j] - yi
                 dxji = R @ x0ji - yji
 
-                self.dx[j] += (compliance_str / (compliance_str + 1.)) * dxji
-                self.dx[i] -= (compliance_str / (compliance_str + 1.)) * dxji
+                self.dx[j] += compliance_str * dxji
+                self.dx[i] -= compliance_str * dxji
 
-                self.nc[i] += 1.0
-                self.nc[j] += 1.0
+                self.nc[i] += compliance_str
+                self.nc[j] += compliance_str
 
         for i in range(self.num_particles_dy):
             self.y[i] += (self.dx[i] / self.nc[i])
@@ -408,17 +408,19 @@ class Solver:
 
     @ti.kernel
     def solve_constraints_pressure_x(self):
-
         self.dx.fill(0.0)
         self.nc.fill(0.0)
-        distance_threshold = 10 * self.particle_rad
+
+        kernel_radius = 2.5 * self.particle_rad
+        # self.m_inv.fill(1.0)
+        # ti.block_local(self.grid_num_particles, self.particles2grid, self.dx, self.nc)
         for pi in range(self.num_particles):
             pos_i = self.y[pi]
             cell_id = self.sh.pos_to_cell_id(pos_i)
             C = 0.0
             schur = 0.0
-            nabla_Ci = ti.math.vec3(0.0)
-            self.nc[pi] += 1.0
+            self.nc[pi] += 1
+            nabla_Cii = ti.math.vec3(0.0)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
                 if self.sh.is_in_grid(cell_to_check):
@@ -428,18 +430,16 @@ class Solver:
                             continue
                         pos_j = self.y[pj]
                         xji = pos_j - pos_i
-                        if xji.norm() < distance_threshold:
-                            C += self.cubic_spline_kernel(xji.norm(), distance_threshold)
-                            nabla_C = self.cubic_spline_kernel_gradient(xji, distance_threshold)
-                            schur += self.is_fixed[pj] * self.m_inv[pj] * nabla_C.dot(nabla_C)
-                            nabla_Ci -= nabla_C
-                            self.nc[pj] += 1.0
+                        if xji.norm() < kernel_radius:
+                            C += self.m[pj] * self.poly6_value(xji.norm(), kernel_radius) / self.m[pi]
+                            nabla_Cji = self.m[pj] * self.spiky_gradient(xji, kernel_radius) / self.m[pi]
+                            nabla_Cii -= nabla_Cji
+                            schur += nabla_Cji.dot(nabla_Cji) / self.m[pj]
+                            self.nc[pj] += 1
 
-            schur += self.is_fixed[pi] * self.m_inv[pi] * nabla_Ci.dot(nabla_Ci)
+            schur += nabla_Cii.dot(nabla_Cii) / self.m[pi]
             k = 1e8
-            ld = (k * C) / (k * schur + 1.0)
-            self.dx[pi] += self.is_fixed[pi] * self.m_inv[pi] * ld * nabla_Ci
-
+            ld = -(k * C) / (k * schur + 1.0)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
                 if self.sh.is_in_grid(cell_to_check):
@@ -449,14 +449,20 @@ class Solver:
                             continue
                         pos_j = self.y[pj]
                         xji = pos_j - pos_i
-                        if xji.norm() < distance_threshold:
-                            nabla_C = self.cubic_spline_kernel_gradient(xji, distance_threshold)
-                            self.dx[pj] -= self.is_fixed[pj] * self.m_inv[pj] * ld * nabla_C
+                        if xji.norm() < kernel_radius:
+                            nabla_Cji = self.m[pj] * self.spiky_gradient(xji, kernel_radius) / self.m[pi]
+                            # self.dx[pi] -= self.m_inv[pi] * ld * nabla_Cji
+                            self.dx[pj] += self.m_inv[pj] * ld * nabla_Cji
+                            # self.nc[pi] += 1.0
+                            # self.nc[pj] += 1.0
+
+            self.dx[pi] += self.m_inv[pi] * ld * nabla_Cii
 
         ti.block_local(self.y, self.dx, self.nc)
         for pi in range(self.num_particles):
             if self.nc[pi] > 0:
                 self.y[pi] += self.dx[pi] / self.nc[pi]
+
 
     @ti.kernel
     def solve_xpbd_collision_constraints_x(self, distance_threshold: float):
@@ -544,24 +550,15 @@ class Solver:
         for _ in range(n_substeps):
             # self.sh.search_neighbours(self.x)
             self.compute_y(dt_sub)
-            # self.sh.search_neighbours(self.y)
+            for _ in range(n_iter):
+                # self.solve_xpbd_collision_constraints_x(2 * self.particle_rad)
+                self.solve_constraints_pressure_x()
 
             for _ in range(n_iter):
                 dtSq = dt_sub ** 2
                 mu = self.YM / 2.0 * (1.0 + self.PR)
                 compliance_str = 2.0 * mu * dtSq
                 self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
-
-            for _ in range(n_iter):
-                self.solve_constraints_pressure_x()
-            # self.solve_xpbd_collision_constraints_x(2.5 * self.particle_rad)
-            # self.solve_constraints_pressure_x()
-
-            # elif self.solver_type >= 1:
-            #     dtSq = dt_sub ** 2
-            #     mu = self.YM / 2.0 * (1.0 + self.PR)
-            #     ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
-            #     compliance_str = 2.0 * mu * dtSq
             #     self.solve_pd_fem_stretch_x(compliance_str, 1, self.ZE)
 
             self.update_state(self.damping, dt_sub)

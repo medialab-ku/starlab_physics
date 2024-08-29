@@ -254,7 +254,7 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep, n_iter=1)
+        sim.forward(n_substeps=n_substep, n_iter=2)
         frame_cpu += 1
 
     show_options()
