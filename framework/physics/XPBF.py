@@ -591,14 +591,19 @@ class Solver:
     def forward(self, n_substeps, n_iter):
         dt_sub = self.dt / n_substeps
 
-        self.sh_st.search_neighbours(self.particle_st.x0)
+        if self.particle_st != None:
+            self.sh_st.search_neighbours(self.particle_st.x0)
+
+        self.sh_dy.search_neighbours(self.particle_dy.x)
         for _ in range(n_substeps):
 
             self.compute_y(dt_sub)
 
             for _ in range(n_iter):
                 # self.solve_constraints_pressure_x(2 * self.particle_rad)
-                self.solve_xpbd_collision_constraints_st_x(2 * self.particle_rad)
+                if self.particle_st != None:
+                    self.solve_xpbd_collision_constraints_st_x(2 * self.particle_rad)
+                self.solve_xpbd_collision_constraints_x(2 * self.particle_rad)
 
             for _ in range(n_iter):
                 dtSq = dt_sub ** 2

@@ -270,7 +270,8 @@ while window.running:
     #     for i in range(sim.particle.num_sets):
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
     scene.particles(sim.particle_dy.x, radius=sim.particle_rad, per_vertex_color=sim.particle_dy.color)
-    scene.particles(sim.particle_st.x, radius=sim.particle_rad, per_vertex_color=sim.particle_st.color)
+    if sim.particle_st != None:
+        scene.particles(sim.particle_st.x, radius=sim.particle_rad, per_vertex_color=sim.particle_st.color)
     # scene.particles
     # scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
 
