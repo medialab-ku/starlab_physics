@@ -59,6 +59,7 @@ class Solver:
         self.L = self.particle.L
         self.m_inv = self.particle.m_inv
         self.m = self.particle.m
+        self.ld = self.particle.ld
         self.is_fixed = self.particle.is_fixed
         self.rho0 = self.particle.rho0
         self.rho0.fill(1.0)
@@ -408,18 +409,18 @@ class Solver:
 
     @ti.kernel
     def solve_constraints_pressure_x(self):
-        self.dx.fill(0.0)
-        self.nc.fill(0.0)
 
+        self.dx.fill(0.0)
+        # self.nc.fill(0.0)
+        self.particle.num_particle_neighbours.fill(0)
         kernel_radius = 2.5 * self.particle_rad
-        # self.m_inv.fill(1.0)
         # ti.block_local(self.grid_num_particles, self.particles2grid, self.dx, self.nc)
         for pi in range(self.num_particles):
             pos_i = self.y[pi]
             cell_id = self.sh.pos_to_cell_id(pos_i)
             C = 0.0
             schur = 0.0
-            self.nc[pi] += 1
+
             nabla_Cii = ti.math.vec3(0.0)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
@@ -430,38 +431,30 @@ class Solver:
                             continue
                         pos_j = self.y[pj]
                         xji = pos_j - pos_i
-                        if xji.norm() < kernel_radius:
-                            C += self.m[pj] * self.poly6_value(xji.norm(), kernel_radius) / self.m[pi]
-                            nabla_Cji = self.m[pj] * self.spiky_gradient(xji, kernel_radius) / self.m[pi]
+                        nb_i = self.particle.num_particle_neighbours[pi]
+                        if xji.norm() < kernel_radius and nb_i < self.particle.nb_cache_size:
+                            C += self.m[pj] * self.poly6_value(xji.norm(), kernel_radius)
+                            nabla_Cji = self.spiky_gradient(xji, kernel_radius)
                             nabla_Cii -= nabla_Cji
-                            schur += nabla_Cji.dot(nabla_Cji) / self.m[pj]
-                            self.nc[pj] += 1
+                            schur += nabla_Cji.dot(nabla_Cji)
+                            self.particle.particle_neighbours_ids[pi, nb_i] = pj
+                            self.particle.num_particle_neighbours[pi] += 1
 
-            schur += nabla_Cii.dot(nabla_Cii) / self.m[pi]
+            schur += nabla_Cii.dot(nabla_Cii)
             k = 1e8
-            ld = -(k * C) / (k * schur + 1.0)
-            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
-                cell_to_check = cell_id + offs
-                if self.sh.is_in_grid(cell_to_check):
-                    for j in range(self.sh.num_particles_in_cell[cell_to_check]):
-                        pj = self.sh.particle_ids_in_cell[cell_to_check, j]
-                        if pi == pj:
-                            continue
-                        pos_j = self.y[pj]
-                        xji = pos_j - pos_i
-                        if xji.norm() < kernel_radius:
-                            nabla_Cji = self.m[pj] * self.spiky_gradient(xji, kernel_radius) / self.m[pi]
-                            # self.dx[pi] -= self.m_inv[pi] * ld * nabla_Cji
-                            self.dx[pj] += self.m_inv[pj] * ld * nabla_Cji
-                            # self.nc[pi] += 1.0
-                            # self.nc[pj] += 1.0
+            self.ld[pi] = -(k * C) / (k * schur + 1.0)
 
-            self.dx[pi] += self.m_inv[pi] * ld * nabla_Cii
-
-        ti.block_local(self.y, self.dx, self.nc)
         for pi in range(self.num_particles):
-            if self.nc[pi] > 0:
-                self.y[pi] += self.dx[pi] / self.nc[pi]
+            pos_i = self.y[pi]
+            for j in range(self.particle.num_particle_neighbours[pi]):
+                pj = self.particle.particle_neighbours_ids[pi, j]
+                pos_j = self.y[pj]
+                xji = pos_j - pos_i
+                self.dx[pi] -= (self.ld[pi] + self.ld[pj]) * self.spiky_gradient(xji, kernel_radius)
+
+            # self.dx[pi] += self.ld[pi] * nabla_Cii
+            self.y[pi] += self.dx[pi]
+
 
 
     @ti.kernel

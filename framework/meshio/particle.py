@@ -73,7 +73,7 @@ class Particle:
         self.F = ti.Matrix.field(n=3, m=3, dtype=float)
         self.L = ti.Matrix.field(n=3, m=3, dtype=float)
         self.c_den = ti.Vector.field(n=3, dtype=float)
-        self.ld_den = ti.Vector.field(n=3, dtype=float)
+        self.ld = ti.Vector.field(n=3, dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
         self.m_inv = ti.field(dtype=float)
         self.m = ti.field(dtype=float)
@@ -85,7 +85,7 @@ class Particle:
         # particle_snode.place(self.V0, self.F, self.L, self.x0)
         particle_snode.place(self.dx, self.nc)
         particle_snode.place(self.y, self.x, self.v, self.m_inv, self.m, self.is_fixed, self.color, self.rho0)
-        particle_snode.place(self.c_den, self.ld_den)
+        particle_snode.place(self.c_den, self.ld)
 
         self.num_particle_neighbours_rest = ti.field(dtype=int)
         self.particle_neighbours_ids_rest = ti.field(dtype=int)
@@ -99,7 +99,7 @@ class Particle:
 
         particle_snode.place(self.num_particle_neighbours)
 
-        self.nb_cache_size = 20
+        self.nb_cache_size = 40
         particle_snode.dense(ti.j, self.nb_cache_size).place(self.particle_neighbours_ids)
 
         self.x.from_numpy(points)
