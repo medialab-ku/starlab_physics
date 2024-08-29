@@ -100,7 +100,7 @@ class Particle:
         self.particle_neighbours_ids = ti.field(dtype=int)
 
         particle_snode.place(self.type, self.V0, self.F, self.L, self.x0, self.num_particle_neighbours_rest)
-        self.particle_cache_size = 15
+        self.particle_cache_size = 50
         particle_snode.dense(ti.j, self.particle_cache_size).place(self.particle_neighbours_ids_rest)
 
         particle_snode.place(self.num_particle_neighbours)
@@ -120,6 +120,7 @@ class Particle:
         self.init_color(is_static=is_static)
         self.radius = radius
         self.rho0.from_numpy(rest_density)
+        # print(self.rho0)
         self.x0.copy_from(self.x)
 
     def reset(self):

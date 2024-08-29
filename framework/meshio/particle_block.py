@@ -22,10 +22,10 @@ def create_particle_block(size_x, size_y, size_z, radius):
 
     return x, x_id
 
-x, x_id = create_particle_block(100, 3, 100, 0.25)
+x, x_id = create_particle_block(80, 2, 80, 0.3)
 # print(x_id)
 cell_block = meshio.CellBlock(cell_type="vertex", data=x_id, tags=[])
 mesh = meshio.Mesh(points=x, cells=[cell_block])
 # print(mesh.cells)
-meshio.write("../../models/VTK/particle_block.vtk", mesh)
+meshio.write("../../models/VTK/very_thin_sheet.vtk", mesh)
 # meshio.read("particle_block.vtk")

@@ -88,19 +88,3 @@ class SpatialHash:
             counter = ti.atomic_add(self.num_particles_in_cell[cell_id], 1)
             if counter < self.cell_cache_size:
                 self.particle_ids_in_cell[cell_id, counter] = pi
-
-        # for pi in x:
-        #     cell_id = self.pos_to_cell_id(x[pi])
-        #     for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
-        #             cell_to_check = cell_id + offs
-        #             if self.is_in_grid(cell_to_check):
-        #                 for j in range(self.num_particles_in_cell[cell_to_check]):
-        #                     pj = self.particle_ids_in_cell[cell_to_check, j]
-        #                     if pi == pj:
-        #                         continue
-        #                     count = ti.atomic_add(self.particle_num_neighbors_rest[pi], 1)
-        #                         if count < self.nb_cache_size:
-        #                         #     # print("neighbor over!!",count)
-        #                         #     self.particle_neighbors_rest[pi] = self.nb_cache_size
-        #                         # else:
-        #                             self.particle_neighbors_rest[pi, count] = pj

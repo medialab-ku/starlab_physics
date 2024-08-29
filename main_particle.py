@@ -87,12 +87,12 @@ def show_options():
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         g_ui = w.slider_float("g", g_ui, -20.0, 20.0)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
-        dHat_ui = w.slider_float("particle rad.", dHat_ui, 0.001, 0.101)
+        dHat_ui = w.slider_float("particle rad.", dHat_ui, 0.001, 1.101)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
 
         YM_ui = w.slider_float("Young's Modulus", YM_ui, 0, 1e5)
         PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 0.49)
-        ZE_ui = w.slider_float("Zero Energy", ZE_ui, 0.0, 1e8)
+        # ZE_ui = w.slider_float("Zero Energy", ZE_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
@@ -254,7 +254,7 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep, n_iter=2)
+        sim.forward(n_substeps=n_substep, n_iter=1)
         frame_cpu += 1
 
     show_options()
