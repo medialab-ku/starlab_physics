@@ -100,7 +100,7 @@ class Particle:
         self.particle_neighbours_ids = ti.field(dtype=int)
 
         particle_snode.place(self.type, self.V0, self.F, self.L, self.x0, self.num_particle_neighbours_rest)
-        self.particle_cache_size = 50
+        self.particle_cache_size = 15
         particle_snode.dense(ti.j, self.particle_cache_size).place(self.particle_neighbours_ids_rest)
 
         particle_snode.place(self.num_particle_neighbours)
