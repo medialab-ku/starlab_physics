@@ -16,19 +16,21 @@ scale = []
 rot = []
 is_static = []
 rho0 = []
-# particle_names.append("stackedcube13.vtk")
 particle_names.append("very_thin_sheet.vtk")
-particle_names.append("smpl_neutral.vtk")
-# particle_names.append("particle_block.vtk")
-# particle_names.append("cube.vtk")
-# particle_names.append("cube.vtk")
 trans.append([0, 35.0, 0.0])
-trans.append([0, 0.0, 0.0])
 scale.append(2.0)
-scale.append(20.0)
 is_static.append(False)
-is_static.append(True)
-
 rho0.append(1.0)
-rho0.append(2.0)
-particles = Particle(model_dir, particle_names, translations=trans, scales=scale, is_static=is_static, rho0=rho0)
+
+particles_dy = Particle(model_dir, particle_names, translations=trans, scales=scale, is_static=is_static, rho0=rho0)
+particle_names.clear()
+trans.clear()
+scale.clear()
+is_static.clear()
+
+particle_names.append("smpl_neutral.vtk")
+trans.append([0, 0.0, 0.0])
+scale.append(20.0)
+is_static.append(True)
+rho0.append(1.0)
+particles_st = Particle(model_dir, particle_names, translations=trans, scales=scale, is_static=is_static, rho0=rho0)

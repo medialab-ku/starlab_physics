@@ -4,13 +4,14 @@ import json
 from Scenes import fluid_test as scene1
 import os
 
-from Scenes.fluid_test import particles
+# from Scenes.fluid_test import particles
 from framework.physics import XPBF
 from framework.utilities import selection_tool as st
 from framework.collision import SpatialHash as shash
 
-sh = shash.SpatialHash(grid_resolution=(64, 64, 64))
-sim = XPBF.Solver(scene1.particles, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020, sh=sh)
+sh_dy = shash.SpatialHash(grid_resolution=(64, 64, 64))
+sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
+sim = XPBF.Solver(scene1.particles_dy, scene1.particles_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020, sh_dy=sh_dy, sh_st=sh_st)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -268,7 +269,8 @@ while window.running:
     # if run_sim :
     #     for i in range(sim.particle.num_sets):
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
-    scene.particles(sim.particle.x, radius=sim.particle_rad, per_vertex_color=sim.particle.color)
+    scene.particles(sim.particle_dy.x, radius=sim.particle_rad, per_vertex_color=sim.particle_dy.color)
+    scene.particles(sim.particle_st.x, radius=sim.particle_rad, per_vertex_color=sim.particle_st.color)
     # scene.particles
     # scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
 
@@ -277,7 +279,7 @@ while window.running:
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     # scene.particles(particles.x0, radius=0.2, color=(1, 0, 0))
-    scene.lines(sh.bbox_vertices, width=1.0, indices=sh.bbox_edge_indices_flattened, color=(0, 0, 0))
+    scene.lines(sh_dy.bbox_vertices, width=1.0, indices=sh_dy.bbox_edge_indices_flattened, color=(0, 0, 0))
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()
