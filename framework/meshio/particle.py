@@ -28,6 +28,8 @@ class Particle:
         m_inv_np = np.empty((0))
         # m = np.empty((0))
         m_np = np.empty((0))
+        type_np = np.empty((0))
+        type = 0
         self.num_static = 0
         for i in range(num_sets):
             model_path = model_dir + "/" + model_names[i]
@@ -49,10 +51,13 @@ class Particle:
                 m_inv_temp = (1.0 / rho0[i]) * np.ones(pos_temp.shape[0])
                 m_temp = rho0[i] * np.ones(pos_temp.shape[0])
 
+            type_temp = type * np.ones(pos_temp.shape[0])
             # m_temp = rho0[i] * np.ones(pos_temp.shape[0])
             points = np.append(points, pos_temp, axis=0)
             m_inv_np = np.append(m_inv_np, m_inv_temp, axis=0)
             m_np = np.append(m_np, m_temp, axis=0)
+            type_np = np.append(type_np, type_temp, axis=0)
+            type += 1
             # m_np = np.append(m_np, m_inv_temp, axis=0)
 
             self.num_particles += pos_temp.shape[0]
@@ -64,6 +69,7 @@ class Particle:
 
         self.num_dynamic = self.num_particles - self.num_static
         # print(self.num_static)
+        self.type = ti.field(dtype=int)
         self.x0 = ti.Vector.field(n=3, dtype=float)
         self.y = ti.Vector.field(n=3, dtype=float)
         self.dx = ti.Vector.field(n=3, dtype=float)
@@ -73,7 +79,7 @@ class Particle:
         self.F = ti.Matrix.field(n=3, m=3, dtype=float)
         self.L = ti.Matrix.field(n=3, m=3, dtype=float)
         self.c_den = ti.Vector.field(n=3, dtype=float)
-        self.ld = ti.Vector.field(n=3, dtype=float)
+        self.ld = ti.field(dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
         self.m_inv = ti.field(dtype=float)
         self.m = ti.field(dtype=float)
@@ -93,7 +99,7 @@ class Particle:
         self.num_particle_neighbours = ti.field(dtype=int)
         self.particle_neighbours_ids = ti.field(dtype=int)
 
-        particle_snode.place(self.V0, self.F, self.L, self.x0, self.num_particle_neighbours_rest)
+        particle_snode.place(self.type, self.V0, self.F, self.L, self.x0, self.num_particle_neighbours_rest)
         self.particle_cache_size = 15
         particle_snode.dense(ti.j, self.particle_cache_size).place(self.particle_neighbours_ids_rest)
 
@@ -102,6 +108,7 @@ class Particle:
         self.nb_cache_size = 40
         particle_snode.dense(ti.j, self.nb_cache_size).place(self.particle_neighbours_ids)
 
+        self.type.from_numpy(type_np)
         self.x.from_numpy(points)
         self.m_inv.from_numpy(m_inv_np)
         self.m.from_numpy(m_np)

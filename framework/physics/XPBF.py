@@ -153,7 +153,7 @@ class Solver:
                             continue
                         xji0 = self.x0[pj] - pos_i
                         n = self.particle.num_particle_neighbours_rest[pi]
-                        if n < self.particle.particle_cache_size and xji0.norm() < self.kernel_radius:
+                        if n < self.particle.particle_cache_size and xji0.norm() < self.kernel_radius and self.particle.type[pi] == self.particle.type[pj]:
                             self.particle.particle_neighbours_ids_rest[pi, n] = pj
                             self.particle.num_particle_neighbours_rest[pi] += 1
 
@@ -410,8 +410,6 @@ class Solver:
     @ti.kernel
     def solve_constraints_pressure_x(self):
 
-        self.dx.fill(0.0)
-        # self.nc.fill(0.0)
         self.particle.num_particle_neighbours.fill(0)
         kernel_radius = 2.5 * self.particle_rad
         # ti.block_local(self.grid_num_particles, self.particles2grid, self.dx, self.nc)
@@ -420,7 +418,6 @@ class Solver:
             cell_id = self.sh.pos_to_cell_id(pos_i)
             C = 0.0
             schur = 0.0
-
             nabla_Cii = ti.math.vec3(0.0)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
@@ -446,14 +443,14 @@ class Solver:
 
         for pi in range(self.num_particles):
             pos_i = self.y[pi]
+            dx_i = ti.math.vec3(0.0)
             for j in range(self.particle.num_particle_neighbours[pi]):
                 pj = self.particle.particle_neighbours_ids[pi, j]
                 pos_j = self.y[pj]
                 xji = pos_j - pos_i
-                self.dx[pi] -= (self.ld[pi] + self.ld[pj]) * self.spiky_gradient(xji, kernel_radius)
+                dx_i -= (self.ld[pi] + self.ld[pj]) * self.spiky_gradient(xji, kernel_radius)
 
-            # self.dx[pi] += self.ld[pi] * nabla_Cii
-            self.y[pi] += self.dx[pi]
+            self.y[pi] += dx_i
 
 
 
@@ -541,18 +538,18 @@ class Solver:
         dt_sub = self.dt / n_substeps
         self.sh.search_neighbours(self.x)
         for _ in range(n_substeps):
-            # self.sh.search_neighbours(self.x)
+
             self.compute_y(dt_sub)
-            for _ in range(n_iter):
-                # self.solve_xpbd_collision_constraints_x(2 * self.particle_rad)
-                self.solve_constraints_pressure_x()
+
+            # for _ in range(n_iter):
+            #     self.solve_constraints_pressure_x()
 
             for _ in range(n_iter):
                 dtSq = dt_sub ** 2
                 mu = self.YM / 2.0 * (1.0 + self.PR)
                 compliance_str = 2.0 * mu * dtSq
                 self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
-            #     self.solve_pd_fem_stretch_x(compliance_str, 1, self.ZE)
+
 
             self.update_state(self.damping, dt_sub)
 

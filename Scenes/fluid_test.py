@@ -22,7 +22,7 @@ rho0 = []
 particle_names.append("cube.vtk")
 particle_names.append("cube.vtk")
 trans.append([0, 15.0, 0.0])
-trans.append([0, -15.0, 0.0])
+trans.append([0, 10.0, 0.0])
 scale.append(20.0)
 scale.append(20.0)
 is_static.append(False)
