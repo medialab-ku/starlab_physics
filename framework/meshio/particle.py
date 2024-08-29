@@ -105,7 +105,7 @@ class Particle:
 
         particle_snode.place(self.num_particle_neighbours)
 
-        self.nb_cache_size = 40
+        self.nb_cache_size = 50
         particle_snode.dense(ti.j, self.nb_cache_size).place(self.particle_neighbours_ids)
 
         self.type.from_numpy(type_np)

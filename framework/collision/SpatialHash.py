@@ -11,7 +11,7 @@ class SpatialHash:
         grid_node = ti.root.dense(ti.ijk, (4, 4, 4)).dense(ti.ijk, (4, 4, 4)).dense(ti.ijk, (4, 4, 4))
         grid_node.place(self.num_particles_in_cell)
         grid_node.dense(ti.l,  self.cell_cache_size).place(self.particle_ids_in_cell)
-        self.cell_size = 1.0
+        # self.cell_size = 1.0
         # self.num_particle_neighbors = ti.field(int)
         # self.nb_cache_size = 50
         # self.particle_neighbor_ids = ti.field(int)
@@ -19,11 +19,10 @@ class SpatialHash:
         self.bbox_vertices = ti.Vector.field(n=3, dtype=float, shape=8)
         self.bbox_edge_indices_flattened = ti.field(dtype=int, shape=24)
 
-        self.bbox_min = -ti.math.vec3(50.0)
-        self.bbox_max = ti.math.vec3(50.0)
+        self.bbox_min = -ti.math.vec3(4.0)
+        self.bbox_max = ti.math.vec3(4.0)
 
         self.cell_size = (self.bbox_max - self.bbox_min)[0] / self.grid_resolution[0]
-
         self.init_bbox(self.bbox_min, self.bbox_max)
 
     @ti.kernel

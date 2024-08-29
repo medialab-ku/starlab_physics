@@ -48,8 +48,7 @@ class Solver:
         self.grid_size = (64, 64, 64)
         self.cell_size = self.sh_dy.cell_size
         print(self.cell_size)
-
-        self.particle_rad = 0.4
+        self.particle_rad = 0.2 * self.cell_size
         print(self.particle_rad)
         self.kernel_radius = 1.1
         # self.particle_rad = 0.2 * self.kernel_radius
@@ -67,7 +66,7 @@ class Solver:
         self.ld = self.particle_dy.ld
         self.is_fixed = self.particle_dy.is_fixed
         self.rho0 = self.particle_dy.rho0
-        self.rho0.fill(1.0)
+        # self.rho0.fill(1.0)
         # self.m.fill(1.0)
         self.reset()
 
@@ -150,7 +149,7 @@ class Solver:
         flag = 0
         # print(self.poly6_value(0.3 * self.kernel_radius, self.kernel_radius))
         self.particle_dy.num_particle_neighbours_rest.fill(0)
-        test = self.kernel_radius
+        test = 0.05
         for pi in range(self.num_particles_dy):
             pos_i = self.x0[pi]
             cell_id = self.sh_dy.pos_to_cell_id(pos_i)
@@ -434,7 +433,7 @@ class Solver:
         for pi in range(self.num_particles):
             pos_i = self.y[pi]
             cell_id = self.sh_dy.pos_to_cell_id(pos_i)
-            C = 0.0
+            rho = 0.0
             schur = 1e-3
             nabla_Cii = ti.math.vec3(0.0)
             self.nc[pi] += 1.0
@@ -449,7 +448,7 @@ class Solver:
                         xji = pos_j - pos_i
                         nb_i = self.particle_dy.num_particle_neighbours[pi]
                         if xji.norm() < kernel_radius and nb_i < self.particle_dy.nb_cache_size:
-                            C += self.m[pj] * self.poly6_value(xji.norm(), kernel_radius)
+                            rho += self.m[pj] * self.poly6_value(xji.norm(), kernel_radius)
                             nabla_Cji = self.spiky_gradient(xji, kernel_radius)
                             nabla_Cii -= nabla_Cji
                             schur += nabla_Cji.dot(nabla_Cji)
@@ -457,10 +456,10 @@ class Solver:
                             self.particle_dy.particle_neighbours_ids[pi, nb_i] = pj
                             self.particle_dy.num_particle_neighbours[pi] += 1
 
-            C /= self.rho0[pi]
+            C = ti.math.max(rho / self.rho0[pi] - 1.0, 0.0)
             schur += nabla_Cii.dot(nabla_Cii)
             k = 1e8
-            self.ld[pi] = -C / schur
+            self.ld[pi] = -k * C / (k * schur + 1.0)
 
         for pi in range(self.num_particles):
             pos_i = self.y[pi]
@@ -473,8 +472,8 @@ class Solver:
 
             dx_i /= self.rho0[pi]
 
-            if self.nc[pi] > 0.0:
-                self.y[pi] += (dx_i / self.nc[pi])
+            # if self.nc[pi] > 0.0:
+            self.y[pi] += (dx_i)
 
 
 
@@ -589,28 +588,33 @@ class Solver:
                 self.is_fixed[pi] = 1.0
 
     def forward(self, n_substeps, n_iter):
-        dt_sub = self.dt / n_substeps
+        dt_sub = self.dt / (2 * n_substeps)
 
         if self.particle_st != None:
             self.sh_st.search_neighbours(self.particle_st.x0)
 
         self.sh_dy.search_neighbours(self.particle_dy.x)
         for _ in range(n_substeps):
-
             self.compute_y(dt_sub)
-
-            for _ in range(n_iter):
+            # for _ in range(n_iter):
                 # self.solve_constraints_pressure_x(2 * self.particle_rad)
-                if self.particle_st != None:
-                    self.solve_xpbd_collision_constraints_st_x(2 * self.particle_rad)
-                self.solve_xpbd_collision_constraints_x(2 * self.particle_rad)
+            if self.particle_st != None:
+                self.solve_xpbd_collision_constraints_st_x(2 * self.particle_rad)
+            self.solve_constraints_pressure_x(2 * self.particle_rad)
 
-            for _ in range(n_iter):
-                dtSq = dt_sub ** 2
-                mu = self.YM / 2.0 * (1.0 + self.PR)
-                compliance_str = 2.0 * mu * dtSq
-                self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
-
+            dtSq = dt_sub ** 2
+            mu = self.YM / 2.0 * (1.0 + self.PR)
+            compliance_str = 2.0 * mu * dtSq
+            self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
 
             self.update_state(self.damping, dt_sub)
+
+        # for _ in range(n_substeps):
+        #     self.compute_y(dt_sub)
+        #     dtSq = dt_sub ** 2
+        #     mu = self.YM / 2.0 * (1.0 + self.PR)
+        #     compliance_str = 2.0 * mu * dtSq
+        #     self.solve_xpbd_fem_stretch_constraints_x(compliance_str)
+        #
+        #     self.update_state(self.damping, dt_sub)
 
