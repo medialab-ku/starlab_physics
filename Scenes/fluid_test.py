@@ -17,14 +17,16 @@ rot = []
 is_static = []
 rho0 = []
 # particle_names.append("stackedcube13.vtk")
-# particle_names.append("cube.vtk")
-particle_names.append("particle_block.vtk")
-trans.append([0, 0.0, 0.0])
-trans.append([0, -20.0, 0.0])
-scale.append(2.0)
+# particle_names.append("particle_block.vtk")
+# particle_names.append("particle_block.vtk")
+particle_names.append("cube.vtk")
+particle_names.append("cube.vtk")
+trans.append([0, 15.0, 0.0])
+trans.append([0, -15.0, 0.0])
+scale.append(20.0)
 scale.append(20.0)
 is_static.append(False)
-is_static.append(True)
+is_static.append(False)
 
 rho0.append(float(1e3))
 rho0.append(1.0)

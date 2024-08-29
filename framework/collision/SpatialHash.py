@@ -69,14 +69,23 @@ class SpatialHash:
         test = (y - self.bbox_min) / self.cell_size
         return ti.cast(test, int)
 
+    @ti.func
+    def is_in_grid(self, c):
+        # @c: Vector(i32)
+
+        is_in_grid = True
+        for i in ti.static(range(3)):
+            is_in_grid = is_in_grid and (0 <= c[i] < self.grid_resolution[i])
+
+        return is_in_grid
+
+
     @ti.kernel
     def search_neighbours(self, x: ti.template()):
-
         self.num_particles_in_cell.fill(0)
         for pi in x:
             cell_id = self.pos_to_cell_id(x[pi])
             counter = ti.atomic_add(self.num_particles_in_cell[cell_id], 1)
-
             if counter < self.cell_cache_size:
                 self.particle_ids_in_cell[cell_id, counter] = pi
 

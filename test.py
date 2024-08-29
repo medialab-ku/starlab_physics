@@ -300,13 +300,13 @@ def substep():
             lambda_j = lambdas[p_j]
             pos_ji = pos_i - positions[p_j]
             scorr_ij = compute_scorr(pos_ji)
-            pos_delta_i += (lambda_i + lambda_j + scorr_ij) * spiky_gradient(pos_ji, h_)
+            pos_delta_i += (lambda_i + lambda_j) * spiky_gradient(pos_ji, h_)
 
         pos_delta_i /= rho0[p_i]
-        position_deltas[p_i] = pos_delta_i
+        # position_deltas[p_i] = pos_delta_i
     # apply position deltas
-    for i in positions:
-        positions[i] += position_deltas[i]
+    # for i in positions:
+        positions[p_i] += pos_delta_i
 
 
 @ti.func

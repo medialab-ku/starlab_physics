@@ -32,7 +32,7 @@ class Particle:
         for i in range(num_sets):
             model_path = model_dir + "/" + model_names[i]
             p = meshio.read(model_path)
-            print(p.cells[0].data)
+            # print(p.cells[0].data)
             pos_temp = np.array(p.points, dtype=np.float32)
             scale = lambda x, sc: sc * x
             translate = lambda x, trans: x + trans
@@ -80,7 +80,6 @@ class Particle:
         self.is_fixed = ti.field(dtype=float)
         # self.m = ti.field(dtype=float)
         self.color = ti.Vector.field(n=3, dtype=float)
-
         self.rho0 = ti.field(dtype=float)
         particle_snode = ti.root.dense(ti.i, self.num_particles)
         # particle_snode.place(self.V0, self.F, self.L, self.x0)
@@ -90,10 +89,18 @@ class Particle:
 
         self.num_particle_neighbours_rest = ti.field(dtype=int)
         self.particle_neighbours_ids_rest = ti.field(dtype=int)
-        particle_snode.place(self.V0, self.F, self.L, self.x0, self.num_particle_neighbours_rest)
 
-        self.particle_cache_size = 50
+        self.num_particle_neighbours = ti.field(dtype=int)
+        self.particle_neighbours_ids = ti.field(dtype=int)
+
+        particle_snode.place(self.V0, self.F, self.L, self.x0, self.num_particle_neighbours_rest)
+        self.particle_cache_size = 15
         particle_snode.dense(ti.j, self.particle_cache_size).place(self.particle_neighbours_ids_rest)
+
+        particle_snode.place(self.num_particle_neighbours)
+
+        self.nb_cache_size = 20
+        particle_snode.dense(ti.j, self.nb_cache_size).place(self.particle_neighbours_ids)
 
         self.x.from_numpy(points)
         self.m_inv.from_numpy(m_inv_np)
