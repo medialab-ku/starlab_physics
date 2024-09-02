@@ -37,7 +37,7 @@ model_dir = str(model_path) + "/OBJ"
 
 mesh_dy = TriMesh(
     model_dir,
-    model_name_list=["triangle.obj"],
+    model_name_list=["plane_64.obj"],
     trans_list=[(0.0, 5.0, 0.0)],
     scale_list=[10.0],
     rot_list=[], # (axis.x, axis.y, axis.z, radian)

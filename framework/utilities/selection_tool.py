@@ -180,10 +180,11 @@ class SelectionTool :
         count_sum = 0
 
         # print("==== selection count ====")
-
-        for i in range(self.num_maxCounter) :
+        # save_selection_path = Path(__file__).resolve().parent.parent
+        # print(save_selection_path)
+        for i in range(self.num_maxCounter):
             i_selected = np.argwhere(is_selected_np == (i+1))
-            i_selected =  list(i_selected[:,0])
+            i_selected = list(i_selected[:, 0])
             self.selected_indices_cpu[i+1] = list([int(x) for x in i_selected])
 
             # print(i+1,"th selection",self.selected_indices_cpu[i+1])
@@ -193,11 +194,11 @@ class SelectionTool :
 
         # print("total selection count : ", count_sum)
         # print("==========================")
-
+        export_path = Path(__file__).resolve().parent.parent / "animation/handle.json"
+        # print(save_selection_path)
         # print(self.selected_indices_cpu)
-        model_path = str(Path(__file__).resolve().parent.parent) + "/animation/handle.json"
-        print(model_path)
-        with open(model_path, 'w', encoding='utf-8') as f:
+
+        with open(str(export_path), 'w', encoding='utf-8') as f:
             json.dump(self.selected_indices_cpu, f, ensure_ascii=False, indent=4)
 
 
@@ -211,9 +212,10 @@ class SelectionTool :
         #             print("nononoonononoonononoonononoonononoonononoonononoonononoonononoonononoonononoo",testRead[i+1][j],self.selected_indices_cpu[i+1][j])
 
     def import_selection(self):
-        model_path = str(Path(__file__).resolve().parent.parent) + "/animation/handle.json"
 
-        with open(model_path) as f:
+        import_path = Path(__file__).resolve().parent.parent / "animation/handle.json"
+
+        with open(import_path) as f:
             self.selected_indices_cpu = json.load(f)
         self.selected_indices_cpu = {int(k): v for k, v in self.selected_indices_cpu.items()}
 

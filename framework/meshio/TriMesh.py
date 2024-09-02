@@ -6,7 +6,6 @@ import random
 import os
 from pathlib import Path
 from pyquaternion import Quaternion
-from framework.utilities.InnerFaceParticle import InnerFaceParticle
 
 model_path = Path(__file__).resolve().parent.parent.parent / "models"
 OBJ = "OBJ"
@@ -73,22 +72,18 @@ class TriMesh:
             self.e_np = np.append(self.e_np, np.array(list(edges)), axis=0)
 
         # fields about vertices
-        self.y = ti.Vector.field(n=3, dtype=float)
-        self.y_origin = ti.Vector.field(n=3, dtype=float)
-        self.x = ti.Vector.field(n=3, dtype=float)
-        self.x0 = ti.Vector.field(n=3, dtype=float)
-        self.v = ti.Vector.field(n=3, dtype=float)
-        self.dx = ti.Vector.field(n=3, dtype=float)
-        self.dv = ti.Vector.field(n=3, dtype=float)
-        self.nc = ti.field(dtype=float)
-        self.dup = ti.field(dtype=float)
-        self.m_inv = ti.field(dtype=float)
-        self.fixed = ti.field(dtype=float)
-        self.colors = ti.Vector.field(n=3, dtype=float)
-
-        dnode = ti.root.dense(ti.i, self.num_verts)
-        dnode.place(self.y, self.y_origin, self.x, self.v, self.dx, self.dv, self.nc, self.dup, self.m_inv, self.fixed)
-        dnode.place(self.x0, self.colors)
+        self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.y_origin = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.dx = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.dv = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.nc = ti.field(dtype=float, shape=self.num_verts)
+        self.dup = ti.field(dtype=float, shape=self.num_verts)
+        self.m_inv = ti.field(dtype=float, shape=self.num_verts)
+        self.fixed = ti.field(dtype=float, shape=self.num_verts)
+        self.colors = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
         # initialize the vertex fields
         self.y.fill(0.0)
@@ -107,12 +102,9 @@ class TriMesh:
             self.fixed.fill(0.0)
 
         # fields about edges
-        self.l0 = ti.field(dtype=float)
-        self.eid_field = ti.field(dtype=int)
+        self.l0 = ti.field(dtype=float, shape=self.num_edges)
+        self.eid_field = ti.field(dtype=int, shape=(self.num_edges, 2))
 
-        dnode = ti.root.dense(ti.i, self.num_edges)
-        dnode.place(self.l0)
-        dnode.dense(ti.j, 2).place(self.eid_field)
 
         # initialize the edge fields
         self.l0.fill(0.0)
@@ -120,15 +112,11 @@ class TriMesh:
         self.edge_indices_flatten = ti.field(dtype=ti.int32, shape=self.num_edges * 3)
 
         # fields about faces
-        self.aabb_min = ti.field(dtype=float)
-        self.aabb_max = ti.field(dtype=float)
-        self.morton_code = ti.field(dtype=ti.uint32)
-        self.fid_field = ti.field(dtype=int)
+        self.aabb_min = ti.field(dtype=float, shape=self.num_faces)
+        self.aabb_max = ti.field(dtype=float, shape=self.num_faces)
+        self.morton_code = ti.field(dtype=ti.uint32, shape=self.num_faces)
+        self.fid_field = ti.field(dtype=int, shape=(self.num_faces, 3))
         self.face_indices_flatten = ti.field(dtype=ti.int32, shape=self.num_faces * 3)
-
-        dnode = ti.root.dense(ti.i, self.num_faces)
-        dnode.place(self.aabb_min, self.aabb_max, self.morton_code)
-        dnode.dense(ti.j, 3).place(self.fid_field)
 
         # initialize the face fields
         self.fid_field.from_numpy(self.f_np)
@@ -137,9 +125,6 @@ class TriMesh:
         self.init_face_indices_flatten()
         self.init_l0_m_inv()
         self.init_color()
-
-        if self.is_static is False:
-            self.particles = InnerFaceParticle(self.num_faces, self.x_np, self.f_np, self.is_static)
 
     ####################################################################################################################
     def reset(self):
@@ -172,7 +157,7 @@ class TriMesh:
 
             size = 0
             if i < len(self.offsets) - 1:
-                size = self.offsets[i + 1] - self.offsets[i]
+                size = self.offsets[i+1] - self.offsets[i]
             else:
                 size = self.num_verts - self.offsets[i]
             self.init_color_kernel(offset=self.offsets[i], size=size, color=ti.math.vec3(r,g,b))

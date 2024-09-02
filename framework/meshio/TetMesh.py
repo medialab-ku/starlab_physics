@@ -1,155 +1,100 @@
 import numpy as np
 import taichi as ti
-import meshtaichi_patcher as patcher
-
+import meshio
+import random
 import os
 import igl
 
 @ti.data_oriented
-class TetMesh:
+class TetMeshWrapper:
 
     def __init__(self,
-                 model_path,
-                 trans=ti.math.vec3(0, 0, 0),
+                 model_dir,
+                 model_name_list=[],
+                 trans_list=[],
                  rot=ti.math.vec3(0, 0, 0),
-                 scale=1.0,
+                 scale_list=[],
                  density=1.0,
                  is_static=False):
 
-        self.is_static = is_static
-        self.tet_mesh = patcher.load_mesh(model_path, relations=["FV", "CV", "EV"])
-        self.tet_mesh.verts.place({'x0': ti.math.vec3, 'x': ti.math.vec3, 'v': ti.math.vec3})
-        self.density = density
-        self.tet_mesh.verts.v.fill([0.0, 0.0, 0.0])
-        self.tet_mesh.verts.x.from_numpy(self.tet_mesh.get_position_as_numpy())
-        self.num_verts = len(self.tet_mesh.verts)
+        num_verts = 0
+        num_tetras = 0
+        x_np = np.empty((0, 3), dtype=float)
+        tet_indices_np = np.empty((0, 4), dtype=int)
+        offsets = [0]
+        for i in range(len(model_name_list)):
+            model_path = model_dir + "/" + model_name_list[i]
+            mesh = meshio.read(model_path)
+            scale_lf = lambda x, sc: sc * x
+            trans_lf = lambda x, trans: x + trans
 
+            x_np_temp = np.array(mesh.points, dtype=float)
+            center = x_np_temp.sum(axis=0) / x_np_temp.shape[0]
+            # print(center)
+            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np_temp)
+            x_np_temp = scale_lf(x_np_temp, scale_list[i])
+            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, trans_list[i]), 1, x_np_temp)
+            x_np = np.append(x_np, x_np_temp, axis=0)
+            tet_indices_np_temp = np.array(mesh.cells[0].data, dtype=int) + num_verts
+            offset = num_verts * np.ones(shape=4, dtype=int)
+            # tet_indices_np_temp = np.apply_along_axis(lambda row: trans_lf(row, offset), 1, tet_indices_np_temp)
+            tet_indices_np = np.append(tet_indices_np, tet_indices_np_temp, axis=0)
+            num_verts += mesh.points.shape[0]
+            num_tetras += mesh.cells[0].data.shape[0]
+            offsets.append(num_verts)
 
-        self.face_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.faces) * 3)
-        self.edge_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.edges) * 2)
-        self.tetra_indices = ti.field(dtype=ti.i32, shape=len(self.tet_mesh.cells) * 4)
-        self.initTetraIndices()
+        # print(offsets)
+        self.y = ti.Vector.field(n=3, dtype=float)
+        self.x = ti.Vector.field(n=3, dtype=float)
+        self.dx = ti.Vector.field(n=3, dtype=float)
+        self.nc = ti.field(dtype=float)
+        # self.hii = ti.field(dtype=float)
+        self.x0 = ti.Vector.field(n=3, dtype=float)
+        self.v = ti.Vector.field(n=3, dtype=float)
+        self.invM = ti.field(dtype=float)
+        self.M = ti.field(dtype=float)
+        self.color = ti.Vector.field(n=3, dtype=float)
 
+        # print(x_np)
 
-        ti.sync()
+        dnode = ti.root.dense(ti.i, num_verts)
+        dnode.place(self.y, self.dx, self.nc, self.x, self.v, self.invM, self.M)
+        dnode.place(self.x0, self.color)
 
-        self.fid_np = self.get_surface_id()
-        self.num_faces = self.fid_np.shape[0]
-        # print(self.fid_np.shape)
-        self.fid = ti.field(dtype=ti.i32, shape=self.fid_np.shape)
-        self.fid.from_numpy(self.fid_np)
-        # self.initEdgeIndices()
+        self.init_color(offsets)
 
-        self.eid = ti.field(dtype = ti.i32, shape = (self.fid_np.shape[0] *3, 2))
-        self.set_eid()
-        self.num_edges = self.fid_np.shape[0] * 3
-        print(len(self.tet_mesh.verts))
-        print(len(self.tet_mesh.cells))
+        self.x.from_numpy(x_np)
+        self.x0.copy_from(self.x)
+        self.v.fill(0.0)
 
-        self.verts = self.tet_mesh.verts
-        self.cells = self.tet_mesh.cells
-        self.faces = self.tet_mesh.faces
-        self.edges = self.tet_mesh.edges
+        self.invDm = ti.Matrix.field(n=3, m=3, dtype=float)
+        self.V0 = ti.field(dtype=float)
+        self.tet_indices = ti.field(dtype=int)
 
-        self.trans = trans
-        self.rot = rot
-        self.scale = scale
+        node = ti.root.dense(ti.i, num_tetras)
+        node.place(self.invDm, self.V0)
+        ti.root.dense(ti.ij, (num_tetras, 4)).place(self.tet_indices)
+        self.tet_indices.from_numpy(tet_indices_np)
 
-        self.applyTransform()
-        # self.computeInitialLength()
-        # self.compute_Dm_inv()
-        self.tet_mesh.verts.x0.copy_from(self.tet_mesh.verts.x)
+        f = self.list_faces(tet_indices_np)
+        _, indxs, count = np.unique(f, axis=0, return_index=True, return_counts=True)
 
+        surface_indices_np = f[indxs[count == 1]]
+        surface_indices_np.astype(int)
+        num_faces = surface_indices_np.shape[0]
+        # print(surface_indices_np)
 
-
-        # self.fid_np = self.face_indices.to_numpy()
-        # self.fid_np = np.reshape(self.fid_np, (len(self.tet_mesh.faces), 3))
-        #
-        # print("rawFID : ",self.fid_np.shape)
-
-        # self.initFaceIndices()
+        self.surface_indices = ti.field(dtype=int)
+        ti.root.dense(ti.i, 3 * num_faces).place(self.surface_indices)
+        self.surface_indices.from_numpy(surface_indices_np.reshape(3 * num_faces))
+        self.init()
 
     def reset(self):
-        self.tet_mesh.verts.x.copy_from(self.tet_mesh.verts.x0)
-        self.tet_mesh.verts.v.fill(0.)
+        self.x.copy_from(self.x0)
+        self.v.fill(0.0)
+        self.init()
 
-
-    @ti.kernel
-    def initFaceIndices(self):
-        for f in self.tet_mesh.faces:
-            self.face_indices[f.id * 3 + 0] = f.verts[0].id
-            self.face_indices[f.id * 3 + 1] = f.verts[1].id
-            self.face_indices[f.id * 3 + 2] = f.verts[2].id
-
-    @ti.kernel
-    def initEdgeIndices(self):
-        for e in self.tet_mesh.edges:
-            self.edge_indices[e.id * 2 + 0] = e.verts[0].id
-            self.edge_indices[e.id * 2 + 1] = e.verts[1].id
-
-    @ti.kernel
-    def initTetraIndices(self):
-        for c in self.tet_mesh.cells:
-            self.tetra_indices[c.id * 4 + 0] = c.verts[0].id
-            self.tetra_indices[c.id * 4 + 1] = c.verts[1].id
-            self.tetra_indices[c.id * 4 + 2] = c.verts[2].id
-            self.tetra_indices[c.id * 4 + 3] = c.verts[3].id
-
-
-    @ti.kernel
-    def setCenterToOrigin(self):
-
-        center = ti.math.vec3(0, 0, 0)
-        for v in self.tet_mesh.verts:
-            center += v.x
-
-        center /= self.num_verts
-        for v in self.tet_mesh.verts:
-            v.x -= center
-
-    @ti.kernel
-    def applyTransform(self):
-
-        # self.setCenterToOrigin()
-
-        for v in self.tet_mesh.verts:
-            v.x *= self.scale
-
-        for v in self.tet_mesh.verts:
-            v_4d = ti.Vector([v.x[0], v.x[1], v.x[2], 1])
-            rot_rad = ti.math.radians(self.rot)
-            rv = ti.math.rotation3d(rot_rad[0], rot_rad[1], rot_rad[2]) @ v_4d
-            v.x = ti.Vector([rv[0], rv[1], rv[2]])
-
-        for v in self.tet_mesh.verts:
-            v.x += self.trans
-
-
-    def export(self, scene_name, mesh_id, frame):
-        directory = os.path.join("../results/", scene_name, "TetMesh_ID_" + str(mesh_id))
-
-        try :
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-        except OSError:
-            print("Error: Failed to create folder" + directory)
-
-        x_np = self.tet_mesh.verts.x.to_numpy()
-
-        #TODO : bug report : mesh position loss
-        #offset 문제인것 같음
-        print("BUG!!!! : self.tet_mesh.verts.x has nan")
-        print(self.tet_mesh.verts.x)
-
-        file_name = "TetMesh_obj_" + str(frame) + ".obj"
-        file_path = os.path.join(directory, file_name)
-        print("exporting ", file_path.__str__())
-
-        igl.write_triangle_mesh(file_path, x_np, self.fid_np, force_ascii=True)
-
-        print("done")
-
-    def __list_faces(self,t):
+    def list_faces(self, t):
         t.sort(axis=1)
         n_t, m_t = t.shape
         f = np.empty((4 * n_t, 3), dtype=int)
@@ -160,33 +105,78 @@ class TetMesh:
             i = i + n_t
         return f
 
-    def __extract_unique_triangles(self,t):
-        _, indxs, count = np.unique(t, axis=0, return_index=True, return_counts=True)
-        return t[indxs[count == 1]]
+    def init_color(self, offsets):
+        # print(self.offsets)
+        for i in range(len(offsets) - 1):
+            size = offsets[i + 1] - offsets[i]
+            # if is_static[i] is True:
+            #     self.init_colors(self.offsets[i], size, color=ti.math.vec3(0.5, 0.5, 0.5))
+            # else:
+            r = float(random.randrange(0, 255) / 256)
+            g = float(random.randrange(0, 255) / 256)
+            b = float(random.randrange(0, 255) / 256)
 
-    def get_surface_id(self):
-        # https://stackoverflow.com/questions/66607716/how-to-extract-surface-triangles-from-a-tetrahedral-mesh
-        tid_np = self.tetra_indices.to_numpy()
-        tid_np = np.reshape(tid_np, (len(self.tet_mesh.cells), 4))
-
-        # print("tid")
-        # print(tid_np)
-        # print(tid_np.shape)
-
-        f = self.__list_faces(tid_np)
-        f = self.__extract_unique_triangles(f)
-
-        return f
+            self.init_colors(offsets[i], size, color=ti.math.vec3(r, g, b))
 
     @ti.kernel
-    def set_eid(self):
-        for i in ti.ndrange(self.fid.shape[0]):
-            self.eid[3 * i, 0] = self.fid[i, 0]
-            self.eid[3 * i, 1] = self.fid[i, 1]
+    def init_colors(self, offset: ti.i32, size: ti.i32, color: ti.math.vec3):
 
-            self.eid[3 * i + 1, 0] = self.fid[i, 1]
-            self.eid[3 * i + 1, 1] = self.fid[i, 2]
+        for i in range(size):
+            self.color[i + offset] = color
 
-            self.eid[3 * i + 2, 0] = self.fid[i, 2]
-            self.eid[3 * i + 2, 1] = self.fid[i, 0]
+    # @ti.func
+    # def volume_projection(self, sigma: ti.math.mat3) -> ti.math.mat3:
+    #
+    #     singular_values = ti.math.vec3(sigma[0, 0], sigma[1, 1], sigma[2, 2])
+    #     nabla_c = ti.math.vec3(0.0)
+    #     count = 0
+    #     count_max = 30
+    #     threshold = 1e-4
+    #
+    #     c = singular_values[0] * singular_values[1] * singular_values[2] - 1.0
+    #     while abs(c) > threshold:
+    #
+    #         if count > count_max: break
+    #         c = singular_values[0] * singular_values[1] * singular_values[2] - 1.0
+    #         nabla_c[0] = singular_values[1] * singular_values[2]
+    #         nabla_c[1] = singular_values[0] * singular_values[2]
+    #         nabla_c[2] = singular_values[0] * singular_values[1]
+    #         ld = c / (nabla_c.dot(nabla_c) + 1e-3)
+    #         singular_values -= ld * nabla_c
+    #         count += 1
+    #
+    #     print(count)
+    #     print(singular_values)
+    #     print(singular_values[0] * singular_values[1] * singular_values[2])
+    #
+    #     for i in ti.static(range(3)):
+    #         sigma[i, i] = singular_values[i]
+    #
+    #     return sigma
 
+    @ti.kernel
+    def init(self):
+
+        # test = ti.math.mat3(0.0)
+        # test[0, 0] = 1.0
+        # test[1, 1] = 2.0
+        # test[2, 2] = 3.0
+        #
+        # projection = self.volume_projection(test)
+        # print(projection[0, 0] * projection[1, 1] * projection[2, 2])
+
+        self.M.fill(0.0)
+        for i in self.invDm:
+            Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
+            self.invDm[i] = Dm_i.inverse()
+            V0_i = ti.abs(Dm_i.determinant()) / 6.0
+            self.V0[i] = V0_i
+            for j in ti.static(range(4)):
+                self.M[self.tet_indices[i, j]] += 0.25 * V0_i
+
+            self.V0[i] = V0_i / 6.0
+
+        for i in self.invM:
+            self.invM[i] = 1.0 / self.M[i]
+
+            # print(self.M[i])

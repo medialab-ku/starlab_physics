@@ -1,4 +1,4 @@
-from framework.meshio.meshTaichiWrapper import MeshTaichiWrapper
+# from framework.meshio.meshTaichiWrapper import MeshTaichiWrapper
 from framework.meshio.particle import Particle
 import taichi as ti
 from pathlib import Path

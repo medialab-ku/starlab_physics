@@ -29,7 +29,7 @@ class GraphColoring:
         self.max_num_colors = 100
         self.available_colors = ti.field(dtype=ti.int32, shape=self.max_num_colors)  # temporary
 
-        # these data will be ultimately used in XPBD.py
+        # these data will be ultimately used in XPBD_old.py
         self.sorted_edges_sequence_for_color = self.edge_indices_sequence
         self.sorted_edges_sequence_np = self.sorted_edges_sequence_for_color.to_numpy()
         self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.max_num_colors)
@@ -66,35 +66,36 @@ class GraphColoring:
             self.adj_edges_list_np = self.adj_edges_list.to_numpy()
             self.available_colors_np = self.available_colors.to_numpy()
 
-            self.colorEdgesGreedy() # coloring edges
+            # coloring edges
+            # self.colorEdgesGreedy()
 
             # after color
-            self.edges_color.from_numpy(self.edges_color_np)
-            self.adj_edges_list.from_numpy(self.adj_edges_list_np)
-            self.available_colors.from_numpy(self.available_colors_np)
-
-            # self.printEdgesColor()
-            self.checkAdjColor() # checking integrity of the graph
-
-            self.sorted_edges_sequence_for_color = self.edge_indices_sequence
-            self.sorted_edges_color = self.edges_color
-            self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.max_num_colors)
-            self.color_prefix_sum.fill(0)
-
-            # before sort
-            self.sorted_edges_sequence_np = self.sorted_edges_sequence_for_color.to_numpy()
-            self.sorted_edges_color_np = self.sorted_edges_color.to_numpy()
-            self.color_prefix_sum_np = self.color_prefix_sum.to_numpy()
-
-            self.colorCountingSort()  # sort
+            # self.edges_color.from_numpy(self.edges_color_np)
+            # self.adj_edges_list.from_numpy(self.adj_edges_list_np)
+            # self.available_colors.from_numpy(self.available_colors_np)
+            #
+            # # self.printEdgesColor()
+            # self.checkAdjColor() # checking integrity of the graph
+            #
+            # self.sorted_edges_sequence_for_color = self.edge_indices_sequence
+            # self.sorted_edges_color = self.edges_color
+            # self.color_prefix_sum = ti.field(dtype=ti.i32, shape=self.max_num_colors)
+            # self.color_prefix_sum.fill(0)
+            #
+            # # before sort
+            # self.sorted_edges_sequence_np = self.sorted_edges_sequence_for_color.to_numpy()
+            # self.sorted_edges_color_np = self.sorted_edges_color.to_numpy()
+            # self.color_prefix_sum_np = self.color_prefix_sum.to_numpy()
+            #
+            # self.colorCountingSort()  # sort
 
             # after sort
-            self.sorted_edges_sequence_for_color.from_numpy(self.sorted_edges_sequence_np)
-            self.sorted_edges_color.from_numpy(self.sorted_edges_color_np)
-            self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
+            # self.sorted_edges_sequence_for_color.from_numpy(self.sorted_edges_sequence_np)
+            # self.sorted_edges_color.from_numpy(self.sorted_edges_color_np)
+            # self.color_prefix_sum.from_numpy(self.color_prefix_sum_np)
 
             self.insertPhantom() # insert phantom constraints and phantom particles in the edge graph
-            self.exportColorResult() # export coloring result
+            # self.exportColorResult() # export coloring result
 
     @ti.kernel
     def initEdgeIndicesForColor(self):
@@ -221,7 +222,7 @@ class GraphColoring:
         # traverse all cliques and insert phantom particles
         print("- Inserting phantom particles...", end=" ")
         enough_clique_size = len(cliques[0]) // 2 # As the paper says, the good trade-off is choosing w(G)/2 as "q"
-        # print("The clique size enough to neglect :", enough_clique_size)
+        print("The clique size enough to neglect :", enough_clique_size)
 
         max_shared_vertex = {} # hash table to store vertices which has the largest shared number
         for clique in cliques:
@@ -240,21 +241,21 @@ class GraphColoring:
             vertices_of_edges_np = np.array(verts_of_edges)
             unique_verts, counts = np.unique(vertices_of_edges_np, return_counts=True)
             max_count_vert = unique_verts[np.argmax(counts)]
-
+            print(max_count_vert)
             # insert max vertex in the hash table (Key : clique, Value : vertex)
             max_shared_vertex[tuple(clique)] = int(max_count_vert)
         # print(max_shared_vertex)
 
-        edge_cliques = {key: set() for key in np.arange(self.num_edges, dtype=int)}
-        count = 0
-        for i in range(len(cliques)):
-            for edge in cliques[i]:
-                edge_cliques[edge].add(i)
-                count += 1
-        print("Cliques per edge")
-        for key in edge_cliques:
-            print(key, ":", edge_cliques[key])
-        print(count)
+        # edge_cliques = {key: set() for key in np.arange(self.num_edges, dtype=int)}
+        # count = 0
+        # for i in range(len(cliques)):
+        #     for edge in cliques[i]:
+        #         edge_cliques[edge].add(i)
+        #         count += 1
+        # print("Cliques per edge")
+        # for key in edge_cliques:
+        #     print(key, ":", edge_cliques[key])
+        # print(count)
         print("Done.")
 
         end_time = time.time()
@@ -271,7 +272,7 @@ class GraphColoring:
             R, P, X = stack.pop()
 
             if not P and not X:
-                if len(R) >= 5:
+                if len(R) >= 3:
                     maximal_cliques.append({int(node) for node in R})
                 continue
 

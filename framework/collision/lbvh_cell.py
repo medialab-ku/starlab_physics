@@ -23,10 +23,9 @@ class LBVH_CELL:
         self.grid_res[2] = 32
         self.cell_size = ti.math.vec3(0)
         self.origin = ti.math.vec3(0)
-
         self.num_cells = self.grid_res[0] * self.grid_res[1] * self.grid_res[2]
         print("# cells: ", self.num_cells)
-        self.cell_centers = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_cells)
+        self.cell_centers = ti.Vector.field(n=3, dtype=float, shape=self.num_cells)
         self.cell_ids = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.cell_morton_codes = ti.field(dtype=ti.int32, shape=self.num_cells)
         self.cell_nodes = Node.field(shape=(2 * self.num_cells - 1))
@@ -34,6 +33,8 @@ class LBVH_CELL:
         self.cell_ids_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.cell_morton_codes_sorted = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.num_faces_in_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
+
+
         self.prefix_sum_cell = ti.field(dtype=ti.i32, shape=self.num_cells)
         self.prefix_sum_cell_temp = ti.field(dtype=ti.i32, shape=self.num_cells)
 
@@ -48,16 +49,16 @@ class LBVH_CELL:
         self.sorted_face_cell_ids = ti.field(dtype=ti.i32, shape=self.num_leafs)
         self.sorted_to_origin_face_ids = ti.field(int, shape=self.num_leafs)
 
-        self.face_aabb_min = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
-        self.face_aabb_max = ti.Vector.field(n=3, dtype=ti.f32, shape=self.num_leafs)
+        self.face_aabb_min = ti.Vector.field(n=3, dtype=float, shape=self.num_leafs)
+        self.face_aabb_max = ti.Vector.field(n=3, dtype=float, shape=self.num_leafs)
 
         # print("# leafs", num_leafs)
         self.leaf_offset = self.num_leafs - 1
         self.num_nodes = 2 * self.num_leafs - 1
         self.root = -1
         self.test = 1
-        self.aabb_x = ti.Vector.field(n=3, dtype=ti.f32, shape=8 * self.test)
-        self.aabb_x0 = ti.Vector.field(n=3, dtype=ti.f32, shape=8)
+        self.aabb_x = ti.Vector.field(n=3, dtype=float, shape=8 * self.test)
+        self.aabb_x0 = ti.Vector.field(n=3, dtype=float, shape=8)
 
         self.aabb_indices = ti.field(dtype=ti.uint32, shape=24 * self.test)
         self.aabb_index0 = ti.field(dtype=ti.uint32, shape=24)
@@ -489,6 +490,7 @@ class LBVH_CELL:
 
     @ti.kernel
     def compute_cell_node_aabbs(self) -> ti.int32:
+
         cnt = 0
         for i in range(self.num_cells - 1):
             if self.cell_nodes[i].visited == 2:
@@ -574,11 +576,26 @@ class LBVH_CELL:
         return self.flatten_cell_id(self.pos_to_idx3d(pos, grid_size, origin))
 
     @ti.kernel
-    def assign_face_cell_ids(self, mesh: ti.template(), cell_size: ti.math.vec3, origin: ti.math.vec3):
+    def assign_face_cell_ids(self, mesh: ti.template(), aabb_min: ti.math.vec3, aabb_max: ti.math.vec3):
+        self.prefix_sum_cell.fill(0)
+
+        cell_size = ti.math.vec3(0.)
+        cell_size[0] = (aabb_max[0] - aabb_min[0]) / self.grid_res[0]
+        cell_size[1] = (aabb_max[1] - aabb_min[1]) / self.grid_res[1]
+        cell_size[2] = (aabb_max[2] - aabb_min[2]) / self.grid_res[2]
+
+        for i in range(self.num_cells):
+            x0 = i // (self.grid_res[1] * self.grid_res[2])
+            y0 = (i % (self.grid_res[1] * self.grid_res[2])) // self.grid_res[2]
+            z0 = i % self.grid_res[2]
+
+            pos = ti.math.vec3(cell_size[0] * x0 + 0.5 * cell_size[0], cell_size[1] * y0 + 0.5 * cell_size[1], cell_size[2] * z0 + 0.5 * cell_size[2]) + aabb_min
+            self.cell_centers[i] = pos
+
 
         for f in mesh.faces:
             pos = 0.5 * (f.aabb_min + f.aabb_max)
-            cell_id = self.get_flatten_cell_id(pos, cell_size, origin)
+            cell_id = self.get_flatten_cell_id(pos, cell_size, aabb_min)
             self.face_aabb_min[f.id] = f.aabb_min
             self.face_aabb_max[f.id] = f.aabb_max
             self.face_ids[f.id] = f.id
@@ -586,11 +603,12 @@ class LBVH_CELL:
             ti.atomic_add(self.prefix_sum_cell[cell_id], 1)
 
     @ti.kernel
-    def counting_sort_cells(self):
+    def counting_sort_cells(self, mesh: ti.template()):
 
         # ti.loop_config(serialize=True)
 
-        ti.loop_config(block_dim=64, block_dim_adaptive=True)
+        # ti.loop_config(block_dim=64, block_dim_adaptive=True)
+
         for fid in range(self.num_leafs):
             I = self.num_leafs - 1 - fid
             cell_id = self.face_cell_ids[I]
@@ -598,9 +616,44 @@ class LBVH_CELL:
             self.sorted_face_ids[idx] = self.face_ids[I]
             # self.sorted_face_cell_ids[idx] = cell_id
 
+        self.cell_nodes.visited.fill(0)
+        self.cell_nodes.num_faces.fill(0)
+        for i in range(self.num_cells):
+            # // no need to set parent to nullptr, each child will have a parents
+            if i == 0:
+                self.cell_nodes[i + self.num_cells - 1].range_l = 0
+
+            else:
+                self.cell_nodes[i + self.num_cells - 1].range_l = self.prefix_sum_cell[i - 1]
+
+            self.cell_nodes[i + self.num_cells - 1].range_r = self.prefix_sum_cell[i] - 1
+            self.cell_nodes[i + self.num_cells - 1].child_a = -1
+            self.cell_nodes[i + self.num_cells - 1].child_b = -1
+
+            size = self.cell_nodes[i + self.num_cells - 1].range_r - self.cell_nodes[i + self.num_cells - 1].range_l + 1
+            offset = self.cell_nodes[i + self.num_cells - 1].range_l
+
+            aabb_min = self.cell_centers[i]
+            aabb_max = self.cell_centers[i]
+
+            self.cell_nodes[i + self.num_cells - 1].num_faces = size
+
+            for j in range(size):
+                fid = self.sorted_face_ids[j + offset]
+                # print(mesh.faces.aabb_min[fid],  mesh.faces.aabb_max[fid])
+                aabb_min = ti.math.min(aabb_min, mesh.faces.aabb_min[fid])
+                aabb_max = ti.math.max(aabb_max, mesh.faces.aabb_max[fid])
+
+            self.cell_nodes[i + self.num_cells - 1].aabb_min = aabb_min
+            self.cell_nodes[i + self.num_cells - 1].aabb_max = aabb_max
+
+            parent = self.cell_nodes[i + self.num_cells - 1].parent
+            self.cell_nodes[parent].visited += 1
+
     @ti.kernel
     def assign_leaf_cell_nodes(self, mesh: ti.template()):
-
+        self.cell_nodes.visited.fill(0)
+        self.cell_nodes.num_faces.fill(0)
         for i in range(self.num_cells):
             # // no need to set parent to nullptr, each child will have a parents
             if i == 0:
@@ -635,21 +688,13 @@ class LBVH_CELL:
 
 
     def build(self, mesh, aabb_min_g, aabb_max_g):
-        self.origin = aabb_min_g
-        self.cell_size = self.assign_cell_centers(aabb_min_g, aabb_max_g)
-        self.prefix_sum_cell.fill(0)
-        self.assign_face_cell_ids(mesh, self.cell_size, aabb_min_g)
 
-        # self.prefix_sum_executer_cell_Blelloch.run(self.prefix_sum_cell)
+        self.assign_face_cell_ids(mesh, aabb_min_g, aabb_max_g)
         self.prefix_sum_executer_cell.run(self.prefix_sum_cell)
-        self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
-        self.counting_sort_cells()
-        if self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs:
-            print("[abort]: self.prefix_sum_cell[self.num_cells - 1] != self.num_leafs")
+        # self.prefix_sum_executer_cell_Blelloch.run(self.prefix_sum_cell)
 
-        self.cell_nodes.visited.fill(0)
-        self.cell_nodes.num_faces.fill(0)
-        self.assign_leaf_cell_nodes(mesh)
+        self.prefix_sum_cell_temp.copy_from(self.prefix_sum_cell)
+        self.counting_sort_cells(mesh)
         self.compute_bvh_aabbs_cells()
 
     @ti.func

@@ -84,24 +84,24 @@ class Solver:
             self.mesh_dy.x[i] += dt * self.mesh_dy.v[i]
 
         # update the particles' position!
-        num_faces = self.mesh_dy.particles.num_faces
-        num_particles_per_edge = self.mesh_dy.particles.num_particles_per_edge
-        num_particles_per_face = self.mesh_dy.particles.num_particles_per_face
-        ub, lb = self.mesh_dy.particles.ub, self.mesh_dy.particles.lb
-
-        for i in range(num_faces):
-            vid_0, vid_1, vid_2 = self.mesh_dy.fid_field[i,0], self.mesh_dy.fid_field[i,1], self.mesh_dy.fid_field[i,2]
-            v0, v1, v2 = self.mesh_dy.x[vid_0], self.mesh_dy.x[vid_1], self.mesh_dy.x[vid_2]
-
-            count = 0
-            for j in range(self.mesh_dy.particles.num_particles_per_edge):
-                for k in range(j + 1):
-                    self.mesh_dy.particles.particles_per_face_field[num_particles_per_face * i + count] = (
-                        (ub - ((ub - lb) * (j / (num_particles_per_edge - 1)))) * v0 +
-                        ((lb / 2) + ((ub - lb) * ((j-k) / (num_particles_per_edge - 1)))) * v1 +
-                        ((lb / 2) + ((ub - lb) * (k / (num_particles_per_edge - 1)))) * v2
-                    )
-                    count += 1
+        # num_faces = self.mesh_dy.particles.num_faces
+        # num_particles_per_edge = self.mesh_dy.particles.num_particles_per_edge
+        # num_particles_per_face = self.mesh_dy.particles.num_particles_per_face
+        # ub, lb = self.mesh_dy.particles.ub, self.mesh_dy.particles.lb
+        #
+        # for i in range(num_faces):
+        #     vid_0, vid_1, vid_2 = self.mesh_dy.fid_field[i,0], self.mesh_dy.fid_field[i,1], self.mesh_dy.fid_field[i,2]
+        #     v0, v1, v2 = self.mesh_dy.x[vid_0], self.mesh_dy.x[vid_1], self.mesh_dy.x[vid_2]
+        #
+        #     count = 0
+        #     for j in range(self.mesh_dy.particles.num_particles_per_edge):
+        #         for k in range(j + 1):
+        #             self.mesh_dy.particles.particles_per_face_field[num_particles_per_face * i + count] = (
+        #                 (ub - ((ub - lb) * (j / (num_particles_per_edge - 1)))) * v0 +
+        #                 ((lb / 2) + ((ub - lb) * ((j-k) / (num_particles_per_edge - 1)))) * v1 +
+        #                 ((lb / 2) + ((ub - lb) * (k / (num_particles_per_edge - 1)))) * v2
+        #             )
+        #             count += 1
 
     ####################################################################################################################
     # Several constraint solvers to compute physics...
