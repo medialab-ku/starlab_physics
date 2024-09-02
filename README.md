@@ -9,6 +9,32 @@
 
     pip install -r requirements.txt
 
+# Current Features
+
+* XPBD
+  * Constraints
+    * Spring Constraints
+    * Bending Constraints 
+    * Non-penetration Constraints 
+      
+  * Solver
+    * Jacobi
+    * **[WIP]** Parallel Gauss-Seidel
+
+
+* Collision detection
+  * Broad phase
+    * Parallel AABB BVH Construction/Traversal
+    * Spatial Hashing 
+  * Narrow phase
+    * Vertex-Triangle
+    * **[WIP]** Edge-Edge
+
+* Utilities
+  * GUI for setting XPBD parameters in runtime
+  * Vertex selection (for setting fixed)
+  * Exporting simulated meshes
+
 # run demo
 
     python main.py

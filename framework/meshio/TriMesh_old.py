@@ -10,7 +10,6 @@ import networkx as nx
 import time
 
 from framework.utilities.graph_coloring import GraphColoring
-
 @ti.data_oriented
 class TriMeshWrapper:
     def __init__(self,
