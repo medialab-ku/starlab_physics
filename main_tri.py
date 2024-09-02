@@ -6,7 +6,7 @@ import os
 from framework.physics import XPBD
 from framework.utilities import selection_tool as st
 
-sim = XPBD.Solver(scene1.mesh_dy, scene1.mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
+sim = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()

@@ -6,7 +6,7 @@ import os
 import igl
 
 @ti.data_oriented
-class TetMeshWrapper:
+class TetMesh:
 
     def __init__(self,
                  model_dir,
