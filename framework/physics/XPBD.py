@@ -105,7 +105,6 @@ class Solver:
 
     ####################################################################################################################
     # Several constraint solvers to compute physics...
-
     def solve_constraints_jacobi_x(self, dt):
         self.init_variables()
 
@@ -181,6 +180,8 @@ class Solver:
                 self.solve_constraints_jacobi_x(dt_sub)
             elif self.selected_solver_type == 1:
                 self.solve_constraints_gauss_seidel_x(dt_sub)
+            elif self.selected_solver_type == 2:
+                self.solve_constraints_jacobi_x(dt_sub)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)

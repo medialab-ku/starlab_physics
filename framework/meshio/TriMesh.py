@@ -28,9 +28,9 @@ class TriMesh:
         self.num_verts = 0
         self.num_faces = 0
         self.num_edges = 0
-        self.x_np = np.empty((0,3), dtype=float) # the vertices of mesh
-        self.f_np = np.empty((0,3), dtype=int)   # the faces of mesh
-        self.e_np = np.empty((0,2), dtype=int)   # the edges of mesh
+        self.x_np = np.empty((0, 3), dtype=float) # the vertices of mesh
+        self.f_np = np.empty((0, 3), dtype=int)   # the faces of mesh
+        self.e_np = np.empty((0, 2), dtype=int)   # the edges of mesh
 
         # concatenate all of meshes
         for i in range(len(model_name_list)):
@@ -62,6 +62,9 @@ class TriMesh:
 
             self.num_faces += len(mesh.cells_dict.get("triangle", []))
             self.f_np = np.append(self.f_np, np.array(mesh.cells_dict["triangle"]), axis=0)
+
+            self.f_np = np.reshape(self.f_np, (3 * self.num_faces, ))
+            print(self.f_np.shape)
 
             edges = set()
             for face in mesh.cells_dict["triangle"]:
@@ -104,25 +107,25 @@ class TriMesh:
         # fields about edges
         self.l0 = ti.field(dtype=float, shape=self.num_edges)
         self.eid_field = ti.field(dtype=int, shape=(self.num_edges, 2))
-
-
+        #
+        #
         # initialize the edge fields
         self.l0.fill(0.0)
         self.eid_field.from_numpy(self.e_np)
-        self.edge_indices_flatten = ti.field(dtype=ti.int32, shape=self.num_edges * 3)
-
-        # fields about faces
-        self.aabb_min = ti.field(dtype=float, shape=self.num_faces)
-        self.aabb_max = ti.field(dtype=float, shape=self.num_faces)
-        self.morton_code = ti.field(dtype=ti.uint32, shape=self.num_faces)
+        self.edge_indices_flatten = ti.field(dtype=int, shape=self.num_edges * 2)
+        #
+        # # fields about faces
+        # self.aabb_min = ti.field(dtype=float, shape=self.num_faces)
+        # self.aabb_max = ti.field(dtype=float, shape=self.num_faces)
+        # # self.morton_code = ti.field(dtype=ti.uint32, shape=self.num_faces)
         self.fid_field = ti.field(dtype=int, shape=(self.num_faces, 3))
         self.face_indices_flatten = ti.field(dtype=ti.int32, shape=self.num_faces * 3)
-
-        # initialize the face fields
-        self.fid_field.from_numpy(self.f_np)
-
+        #
+        # # initialize the face fields
+        # # self.fid_field.from_numpy(self.f_np)
+        self.face_indices_flatten.from_numpy(self.f_np)
         self.init_edge_indices_flatten()
-        self.init_face_indices_flatten()
+        # # self.init_face_indices_flatten()
         self.init_l0_m_inv()
         self.init_color()
 
@@ -151,13 +154,13 @@ class TriMesh:
 
     def init_color(self):
         for i in range(len(self.offsets)):
-            r = random.randrange(0, 255) / 256
-            g = random.randrange(0, 255) / 256
-            b = random.randrange(0, 255) / 256
+            r = float(random.randrange(0, 255) / 256)
+            g = float(random.randrange(0, 255) / 256)
+            b = float(random.randrange(0, 255) / 256)
 
             size = 0
             if i < len(self.offsets) - 1:
-                size = self.offsets[i+1] - self.offsets[i]
+                size = self.offsets[i + 1] - self.offsets[i]
             else:
                 size = self.num_verts - self.offsets[i]
             self.init_color_kernel(offset=self.offsets[i], size=size, color=ti.math.vec3(r,g,b))
