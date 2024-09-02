@@ -141,6 +141,12 @@ class Particle:
                 self.init_colors(self.offsets[i], size, color=ti.math.vec3(r, g, b))
 
     @ti.kernel
+    def move(self):
+        a = ti.math.vec3(0.001)
+        for i in range(self.x0):
+            self.x0[i] += a
+
+    @ti.kernel
     def init_colors(self, offset: ti.i32, size: ti.i32, color: ti.math.vec3):
 
         for i in range(size):

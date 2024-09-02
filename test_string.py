@@ -4,13 +4,13 @@
 import math
 
 import numpy as np
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import taichi as ti
 import taichi.ui
 
 ti.init(arch=ti.gpu)
 
-screen_res = (800, 400)
+screen_res = (1500, 1500)
 screen_to_world_ratio = 10.0
 boundary = (
     screen_res[0] / screen_to_world_ratio,
@@ -31,11 +31,11 @@ particle_color = ti.math.vec3(1.0, 1.0, 1.0)
 # print(particle_color)
 boundary_particle_color = 0xFFC433
 # boundary_color = 0x068587
-num_particles_x = 105
-num_particles = num_particles_x * 15
-max_num_particles_per_cell = 50
+num_particles_x = 150
+num_particles = num_particles_x * 1
+max_num_particles_per_cell = 80
 max_num_neighbors = 50
-time_delta = 1.0 / 20.0
+time_delta = 1.0 / 60.0
 epsilon = 1e-5
 particle_radius = 10.0
 particle_radius_in_world = particle_radius / screen_to_world_ratio
@@ -69,6 +69,9 @@ particle_neighbors = ti.field(int)
 particle_num_neighbors_rest = ti.field(int)
 particle_neighbors_rest = ti.field(int)
 
+indices = ti.field(int, shape=2 * (num_particles_x - 1))
+l0 = ti.field(float, shape=(num_particles_x - 1))
+
 # lambdas = ti.field(float)
 # position_deltas = ti.Vector.field(dim, float)
 # # 0: x-pos, 1: timestep in sin()
@@ -92,8 +95,16 @@ nb_node.dense(ti.j, max_num_neighbors).place(particle_neighbors, particle_neighb
 # print(board_states.shape)
 old_positions = ti.Vector.field(dim, float, shape=num_particles)
 positions = ti.Vector.field(dim, float, shape=num_particles)
-hii = ti.field( float, shape=num_particles)
+hii = ti.field(float, shape=num_particles)
+a = ti.field(float, shape=num_particles)
+b = ti.field(float, shape=num_particles)
+c = ti.field(float, shape=num_particles)
+c_tilde = ti.field(float, shape=num_particles)
 gii = ti.Vector.field(dim, float, shape=num_particles)
+d = ti.Vector.field(dim, float, shape=num_particles)
+d_tilde = ti.Vector.field(dim, float, shape=num_particles)
+
+
 
 x0 = ti.Vector.field(dim, float, shape=num_particles)
 positions_window = ti.Vector.field(dim, float, shape=num_particles)
@@ -110,13 +121,14 @@ mass = ti.field(float, shape=num_particles)
 V0 = ti.field(float, shape=num_particles)
 invDm = ti.Matrix.field(n=2, m=2, dtype=float, shape=num_particles)
 material_type = ti.field(float, shape=num_particles)
-position_deltas = ti.Vector.field(dim, float, shape=num_particles)
+dx = ti.Vector.field(dim, float, shape=num_particles)
 
 # Dm_inv = ti.Matrix.field(dim, float, shape=num_particles)
 num_boundary_particles_x = 40
 num_boundary_particles = 10 * num_boundary_particles_x
 boundary_positions = ti.Vector.field(dim, float, shape=num_boundary_particles)
 boundary_positions_window = ti.Vector.field(dim, float, shape=num_boundary_particles)
+
 # num_boundary_particles_x = 40
 # num_boundary_particles = 10 * num_boundary_particles_x
 # ti.root.dense(ti.i, num_boundary_particles).place(boundary_positions, boundary_positions_window)
@@ -192,37 +204,6 @@ def move_board():
 @ti.kernel
 def prologue(mass_ratio: float):
 
-    for i in range(num_particles):
-        if material_type[i] == 0:
-            # positions[i] += offs
-            mass[i] = 1.0
-            # rho0[i] = mass[i] * poly6_value(0.0, h_)
-
-        elif material_type[i] == 1:
-            # positions[i] -= offs
-            mass[i] = mass_ratio
-
-        elif material_type[i] == 2:
-            mass[i] = (mass_ratio ** 2)
-            # rho0[i] = mass[i] * poly6_value(0.0, h_)
-
-    for p_i in positions:
-        pos_i = x0[p_i]
-        # Dm = ti.math.mat2(0.0)
-        V0 = 0.0
-        mass_i = 0.0
-        for j in range(particle_num_neighbors_rest[p_i]):
-            p_j = particle_neighbors_rest[p_i, j]
-            if p_j < 0:
-                break
-            pos_ji = x0[p_j] - pos_i
-            # Dm += poly6_value(pos_ji.norm(), h_) * outer_product(pos_ji, pos_ji)
-            mass_i += poly6_value(pos_ji.norm(), h_) * mass[p_j]
-
-        mass[p_i] = mass_i
-        rho0[p_i] = poly6_value(0.0, h_) * mass_i
-        # invDm[p_i] = Dm.inverse()
-
     # save old positions
     for i in positions:
         old_positions[i] = positions[i]
@@ -231,7 +212,7 @@ def prologue(mass_ratio: float):
     for i in positions:
         g = ti.Vector([0.0, -9.81])
         pos, vel = positions[i], velocities[i]
-        vel += g * time_delta
+        vel += mass[i] * g * time_delta
         pos += vel * time_delta
         positions[i] = confine_position_to_boundary(pos)
 
@@ -321,45 +302,127 @@ def ssvd(F):
     return U, sig, V
 
 @ti.kernel
-def substep_fem(k: float):
+def substep_pbd_mass_spring(k: float):
+
+    hii.fill(0.0)
+    gii.fill(0.0)
+
+    for i in range(num_particles_x - 1):
+        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
+        x10 = positions[v0] - positions[v1]
+        lij = x10.norm()
+
+        C = (lij - l0[i])
+        nabla_C = x10.normalized()
+        schur = mass[v0] + mass[v1]
+
+        ld = k * C / (k * schur + 1.0)
+
+        gii[v0] -= mass[v0] * ld * nabla_C
+        gii[v1] += mass[v1] * ld * nabla_C
+
+        hii[v0] += 1.0
+        hii[v1] += 1.0
+
+    for i in range(num_particles_x):
+        positions[i] += gii[i] / hii[i]
+
+@ti.kernel
+def substep_pd_diag_mass_spring(k: float):
 
     hii.fill(1.0)
     gii.fill(0.0)
 
-    for p_i in positions:
-        pos_i = positions[p_i]
-        xi0 = x0[p_i]
-        Ds = ti.math.mat2(0.0)
-        for j in range(particle_num_neighbors_rest[p_i]):
-            p_j = particle_neighbors_rest[p_i, j]
-            if p_j < 0:
-                break
-            pos_ji = positions[p_j] - pos_i
-            xji0 = x0[p_j] - xi0
-            Ds += poly6_value(xji0.norm(), h_) * outer_product(pos_ji, xji0)
+    for i in range(num_particles_x - 1):
+        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
+        x01 = positions[v0] - positions[v1]
 
-        F = Ds @ invDm[p_i]
-        U, sig, V = ssvd(F)
-        R = U @ V.transpose()
-        wi = k
-        for j in range(particle_num_neighbors_rest[p_i]):
-            p_j = particle_neighbors_rest[p_i, j]
-            if p_j < 0:
-                break
-            x0ji = x0[p_j] - xi0
-            xji = positions[p_j] - pos_i
-            dxji = R @ x0ji - xji
+        dp01 = x01 - l0[i] * x01.normalized()
+        gii[v0] += mass[v0] * k * dp01
+        gii[v1] -= mass[v1] * k * dp01
 
-            gii[p_j] += wi * dxji
-            gii[p_i] -= wi * dxji
+        hii[v0] += mass[v0] * k
+        hii[v1] += mass[v1] * k
 
-            hii[p_i] += wi
-            hii[p_j] += wi
+    for i in range(num_particles_x):
+        positions[i] -= gii[i] / hii[i]
 
-    for i in positions:
-        positions[i] += gii[i] / hii[i]
+@ti.kernel
+def substep_string_mass_spring(k: float):
 
+    a.fill(0.0)
+    b.fill(1.0)
+    c.fill(0.0)
+    d.fill(0.0)
 
+    for i in range(num_particles_x - 1):
+        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
+        x01 = positions[v0] - positions[v1]
+        dp01 = x01 - l0[i] * x01.normalized()
+
+        d[v0] += mass[v0] * k * dp01
+        d[v1] -= mass[v1] * k * dp01
+
+        b[v0] += mass[v0] * k
+        b[v1] += mass[v1] * k
+
+        a[v1] -= mass[v1] * k
+        c[v0] -= mass[v0] * k
+
+    c_tilde[0] = c[0] / b[0]
+    ti.loop_config(serialize=True)
+    for i in range(num_particles_x - 2):
+        id = i + 1
+        # print(id)
+        c_tilde[id] = c[id] / (b[id] - a[id] * c[id - 1])
+
+    # print("_______________")
+    d_tilde[0] = d[0] / b[0]
+
+    ti.loop_config(serialize=True)
+    for i in range(num_particles_x - 1):
+        id = i + 1
+        # print(id)
+        d_tilde[id] = (d[id] - a[id] * d_tilde[id - 1]) / (b[id] - a[id] * c_tilde[id - 1])
+    #
+    dx[num_particles_x - 1] = d[num_particles_x - 1]
+
+    ti.loop_config(serialize=True)
+    for i in range(num_particles_x - 1):
+        id = num_particles_x - 2 - i
+        dx[id] = d_tilde[id] - c_tilde[id] * dx[id + 1]
+
+    for i in range(num_particles_x):
+        positions[i] -= dx[i]
+
+@ti.kernel
+def solve_ls_thomas_euler_x(a: ti.template(), b: ti.template(), c: ti.template(), d: ti.template(), c_tilde: ti.template(), d_tilde: ti.template(), dx: ti.template()):
+    numVerts = b.shape[0]
+    #
+    # for i in range(numVerts):
+    #     dx[i] = d[i] / b[i]
+    c_tilde[0] = c[0] / b[0]
+    ti.loop_config(serialize=True)
+    for i in range(numVerts - 2):
+        id = i + 1
+        # print(id)
+        c_tilde[id] = c[id] / (b[id] - a[id] * c[id - 1])
+
+    # print("_______________")
+    d_tilde[0] = d[0] / b[0]
+
+    ti.loop_config(serialize=True)
+    for i in range(numVerts - 1):
+        id = i + 1
+        # print(id)
+        d_tilde[id] = (d[id] - a[id] * d_tilde[id - 1]) / (b[id] - a[id] * c_tilde[id - 1])
+    #
+    dx[numVerts - 1] = d[numVerts - 1]
+
+    ti.loop_config(serialize=True)
+    for i in range(numVerts - 1):
+        id = numVerts - 2 - i
+        dx[id] = d_tilde[id] - c_tilde[id] * dx[id + 1]
 
 @ti.kernel
 def epilogue():
@@ -379,17 +442,18 @@ def run_pbf():
     prologue(mass_ratio)
     if solver_type == 0:
         for _ in range(pbf_num_iters):
-            substep()
             k = PR * time_delta ** 2
-            substep_fem(k)
+            substep_pbd_mass_spring(k)
 
     elif solver_type == 1:
         for _ in range(pbf_num_iters):
-            substep()
+            k = PR * time_delta ** 2
+            substep_pd_diag_mass_spring(k)
 
+    elif solver_type == 2:
         for _ in range(pbf_num_iters):
             k = PR * time_delta ** 2
-            substep_fem(k)
+            substep_string_mass_spring(k)
 
     epilogue()
 
@@ -435,27 +499,25 @@ def outer_product(u: ti.math.vec2, v: ti.math.vec2)->ti.math.mat2:
 def init_particles(mass_ratio: float):
     # print(boundary)
 
-    off_test = ti.math.vec2([0.0, boundary[1] * 0.05])
+    # off_test = ti.math.vec2([0.0, boundary[1] * 0.05])
+    delta = h_ * 0.4
     for i in range(num_particles):
-        delta = h_ * 0.7
-        offs = ti.Vector([(boundary[0] - delta * num_particles_x) * 0.5, boundary[1] * 0.2])
+        # delta = h_ * 0.2
+        offs = ti.Vector([boundary[0] * 0.5, boundary[1] * 0.9])
         x = i % num_particles_x
         y = i // num_particles_x
+        positions[i] = ti.Vector([x, y]) * delta + offs
         # mass[i] = 1.0
-        if 0 <= y < 5:
-            colors[i] = ti.math.vec3(255.0, 128.0, 0.0) / 255.0
-            material_type[i] = 1
-            positions[i] = ti.Vector([x, y]) * delta + offs + off_test
-
-        elif 5 <= y < 10:
-            colors[i] = ti.math.vec3(0.0, 128.0, 255.0) / 255.0
-            material_type[i] = 0
-            positions[i] = ti.Vector([x, y]) * delta + offs
-        else:
-            colors[i] = ti.math.vec3(255.0, 0.0, 128.0) / 255.0
-            material_type[i] = 2
-            positions[i] = ti.Vector([x, y]) * delta + offs - off_test
+        # if 0 <= y < 5:
+        colors[i] = ti.math.vec3(255.0, 128.0, 0.0) / 255.0
+        material_type[i] = 0
         x0[i] = positions[i]
+
+    for i in range(num_particles - 1):
+        indices[2 * i + 0] = i
+        indices[2 * i + 1] = i + 1
+        l0[i] = delta
+
         # positions[i] = ti.Vector([x, y]) * delta + offs
     # delta = h_ * 0.7
     # offs = ti.Vector([.0, boundary[1] * 0.1])
@@ -473,58 +535,10 @@ def init_particles(mass_ratio: float):
         elif material_type[i] == 2:
             mass[i] = 10 * mass_ratio
             # rho0[i] = mass[i] * poly6_value(0.0, h_)
-
+    mass[0] = 0.0
     velocities.fill(0.0)
     board_states[None] = ti.Vector([boundary[0] - epsilon, -0.0])
 
-    # clear neighbor lookup table
-    for I in ti.grouped(grid_num_particles):
-        grid_num_particles[I] = 0
-
-    for I in ti.grouped(particle_neighbors):
-        particle_neighbors_rest[I] = -1
-
-    for p_i in positions:
-        cell = get_cell(positions[p_i])
-        # ti.Vector doesn't seem to support unpacking yet
-        # but we can directly use int Vectors as indices
-        offs = ti.atomic_add(grid_num_particles[cell], 1)
-        grid2particles[cell, offs] = p_i
-
-    # find particle neighbors
-    for p_i in positions:
-        pos_i = x0[p_i]
-        cell = get_cell(pos_i)
-        nb_i = 0
-        for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2)))):
-            cell_to_check = cell + offs
-            if is_in_grid(cell_to_check):
-                for j in range(grid_num_particles[cell_to_check]):
-                    p_j = grid2particles[cell_to_check, j]
-                    if (nb_i < max_num_neighbors and p_j != p_i
-                            and (pos_i - positions[p_j]).norm() < h_) and material_type[p_i] == material_type[p_j]:
-                        particle_neighbors_rest[p_i, nb_i] = p_j
-                        nb_i += 1
-        if nb_i < 3:
-            print("fuck")
-        particle_num_neighbors_rest[p_i] = nb_i
-
-    for p_i in positions:
-        pos_i = x0[p_i]
-        Dm = ti.math.mat2(0.0)
-        V0 = 0.0
-        mass_i = 0.0
-        for j in range(particle_num_neighbors_rest[p_i]):
-            p_j = particle_neighbors_rest[p_i, j]
-            if p_j < 0:
-                break
-            pos_ji = x0[p_j] - pos_i
-            Dm += poly6_value(pos_ji.norm(), h_) * outer_product(pos_ji, pos_ji)
-            mass_i += poly6_value(pos_ji.norm(), h_) * mass[p_j]
-
-        mass[p_i] = mass_i
-        rho0[p_i] = poly6_value(0.0, h_) * mass_i
-        invDm[p_i] = Dm.inverse()
 
 @ti.kernel
 def switch_material():
@@ -593,11 +607,13 @@ def main():
             # dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
             # g_ui = w.slider_float("g", g_ui, -20.0, 20.0)
             # pbf_num_iters = w.slider_int("# iter", pbf_num_iters, 1, 100)
-            solver_type = w.slider_int("solver type", solver_type, 0, 1)
+            solver_type = w.slider_int("solver type", solver_type, 0, 2)
             if solver_type == 0:
-                w.text("locking")
+                w.text("pbd")
             elif solver_type == 1:
-                w.text("locking-free")
+                w.text("pd diag")
+            elif solver_type == 2:
+                w.text("string")
 
             pbf_num_iters = w.slider_int("# sub", pbf_num_iters, 1, 100)
             mass_ratio_old = w.slider_float("mass ratio", mass_ratio_old, 1, 100)
@@ -632,7 +648,7 @@ def main():
 
         show_options()
         render_kernel(positions, positions_window, screen_to_world_ratio, screen_res[0], screen_res[1])
-        radius = 0.5 * (screen_to_world_ratio / screen_res[0]) * h_
+        radius = 0.2 * (screen_to_world_ratio / screen_res[0]) * h_
 
         if use_heatmap:
             rho0_np = rho0.to_numpy()
@@ -643,6 +659,7 @@ def main():
             # heat_map.from_numpy(rgb_array)
             canvas.circles(positions_window, radius=radius, per_vertex_color=heat_map)
         else:
+            canvas.lines(positions_window, indices=indices, width=0.001, color=(1.0, 1.0, 1.0))
             canvas.circles(positions_window, radius=radius, per_vertex_color=colors)
         window.show()
 

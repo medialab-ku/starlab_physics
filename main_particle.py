@@ -200,6 +200,9 @@ while window.running:
         # if window.event.key == 'u':
         #     g_selector.remove_all_sewing()
 
+        # if window.event.key == 'a':
+        #     sim.particle_st.move()
+
         if window.event.key == ' ':
             run_sim = not run_sim
 
