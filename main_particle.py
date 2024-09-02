@@ -11,7 +11,7 @@ from framework.collision import SpatialHash as shash
 
 sh_dy = shash.SpatialHash(grid_resolution=(64, 64, 64))
 sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
-sim = XPBF.Solver(scene1.particles_dy, scene1.particles_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020, sh_dy=sh_dy, sh_st=sh_st)
+sim_tri = XPBF.Solver(scene1.particles_dy, scene1.particles_st, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020, sh_dy=sh_dy, sh_st=sh_st)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -27,7 +27,7 @@ run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 #selector
-g_selector = st.SelectionTool(sim.num_particles_dy, sim.x, window, camera)
+g_selector = st.SelectionTool(sim_tri.num_particles_dy, sim_tri.x, window, camera)
 
 n_substep = 20
 frame_end = 100
@@ -36,16 +36,16 @@ dt_ui = 0.01
 solver_type_ui = 1
 g_ui = -9.81
 
-dt_ui = sim.dt
-solver_type_ui = sim.solver_type
-g_ui = sim.g[1]
+dt_ui = sim_tri.dt
+solver_type_ui = sim_tri.solver_type
+g_ui = sim_tri.g[1]
 
 
-dHat_ui = sim.particle_rad
-damping_ui = sim.damping
-YM_ui = sim.YM
-PR_ui = sim.PR
-ZE_ui = sim.ZE
+dHat_ui = sim_tri.particle_rad
+damping_ui = sim_tri.damping
+YM_ui = sim_tri.YM
+PR_ui = sim_tri.PR
+ZE_ui = sim_tri.ZE
 mesh_export = False
 frame_cpu = 0
 
@@ -56,7 +56,7 @@ def show_options():
     global solver_type_ui
     global g_ui
     global damping_ui
-    global sim
+    global sim_tri
     global dHat_ui
     global YM_ui
     global PR_ui
@@ -148,7 +148,7 @@ def show_options():
         sim.damping = damping_ui
 
 def load_animation():
-    global sim
+    global sim_tri
 
     with open('framework/animation/animation.json') as f:
         animation_raw = json.load(f)
@@ -188,7 +188,7 @@ while window.running:
         if window.event.key == 'i':
             print("==== IMPORT!! ====")
             g_selector.import_selection()
-            sim.set_fixed_vertices(g_selector.is_selected)
+            sim_tri.set_fixed_vertices(g_selector.is_selected)
         #     # load_animation()
         #
         # if window.event.key == 't':
@@ -207,14 +207,14 @@ while window.running:
             run_sim = not run_sim
 
         if window.event.key == 't':
-            sim.randomize()
+            sim_tri.randomize()
             run_sim = False
 
         if window.event.key == 'r':
             frame_cpu = 0
-            sim.reset()
+            sim_tri.reset()
             g_selector.is_selected.fill(0.0)
-            sim.set_fixed_vertices(g_selector.is_selected)
+            sim_tri.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
 
         # if window.event.key == 'v':
@@ -258,7 +258,7 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep, n_iter=3)
+        sim_tri.forward(n_substeps=n_substep, n_iter=3)
         frame_cpu += 1
 
     show_options()
@@ -272,14 +272,14 @@ while window.running:
     # if run_sim :
     #     for i in range(sim.particle.num_sets):
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
-    scene.particles(sim.particle_dy.x, radius=sim.particle_rad, per_vertex_color=sim.particle_dy.color)
-    if sim.particle_st != None:
-        scene.particles(sim.particle_st.x, radius=sim.particle_rad, per_vertex_color=sim.particle_st.color)
+    scene.particles(sim_tri.particle_dy.x, radius=sim_tri.particle_rad, per_vertex_color=sim_tri.particle_dy.color)
+    if sim_tri.particle_st != None:
+        scene.particles(sim_tri.particle_st.x, radius=sim_tri.particle_rad, per_vertex_color=sim_tri.particle_st.color)
     # scene.particles
     # scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
 
     g_selector.renderTestPos()
-    scene.particles(g_selector.renderTestPosition, radius=sim.particle_rad, color=(1, 0, 0))
+    scene.particles(g_selector.renderTestPosition, radius=sim_tri.particle_rad, color=(1, 0, 0))
     canvas.lines(g_selector.ti_mouse_click_pos, width=0.002, indices=g_selector.ti_mouse_click_index, color=(1, 0, 1) if g_selector.MODE_SELECTION else (0, 0, 1))
 
     # scene.particles(particles.x0, radius=0.2, color=(1, 0, 0))

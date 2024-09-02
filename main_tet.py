@@ -8,7 +8,7 @@ from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 
 # sim = XPBF.Solver(scene1.particles_dy, g=ti.math.vec3(0.0, -7., 0.0), dt=0.020)
-sim = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
+sim_tri = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 window = ti.ui.Window("XPBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -28,13 +28,13 @@ LOOKAt_ORIGIN = True
 n_substep = 5
 frame_end = 100
 
-dt_ui = sim.dt
-solver_type_ui = sim.solver_type
-dHat_ui = sim.dHat
-damping_ui = sim.damping
+dt_ui = sim_tri.dt
+solver_type_ui = sim_tri.solver_type
+dHat_ui = sim_tri.dHat
+damping_ui = sim_tri.damping
 
-YM_ui = sim.YM
-PR_ui = sim.PR
+YM_ui = sim_tri.YM
+PR_ui = sim_tri.PR
 
 mesh_export = False
 frame_cpu = 0
@@ -45,7 +45,7 @@ def show_options():
     global dt_ui
     global solver_type_ui
     global damping_ui
-    global sim
+    global sim_tri
     global dHat_ui
     global YM_ui
     global PR_ui
@@ -120,7 +120,7 @@ def show_options():
         sim.damping = damping_ui
 
 def load_animation():
-    global sim
+    global sim_tri
 
     with open('framework/animation/animation.json') as f:
         animation_raw = json.load(f)
@@ -177,7 +177,7 @@ while window.running:
 
         if window.event.key == 'r':
             frame_cpu = 0
-            sim.reset()
+            sim_tri.reset()
             # g_selector.is_selected.fill(0.0)
             # sim.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
@@ -223,7 +223,7 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep)
+        sim_tri.forward(n_substeps=n_substep)
         frame_cpu += 1
 
     show_options()
@@ -249,9 +249,9 @@ while window.running:
     #         sim.particle.export(os.path.basename(scene1.__file__),i,frame_cpu)
 
     # scene.particles(sim.x, radius=sim.padding, color=(1.0, 0.0, 0.0))
-    scene.mesh(sim.x, indices=sim.faces, per_vertex_color=sim.tet_mesh.color)
-    scene.mesh(sim.x, indices=sim.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
-    scene.lines(sim.aabb_x0, indices=sim.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
+    scene.mesh(sim_tri.x, indices=sim_tri.faces, per_vertex_color=sim_tri.tet_mesh.color)
+    scene.mesh(sim_tri.x, indices=sim_tri.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
+    scene.lines(sim_tri.aabb_x0, indices=sim_tri.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()

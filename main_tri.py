@@ -4,9 +4,12 @@ import json
 from Scenes import concat_test as scene1
 import os
 from framework.physics import XPBD
+from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 
-sim = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
+sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
+sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
+
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -21,34 +24,35 @@ run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 #selector
-g_selector = st.SelectionTool(sim.num_verts_dy, sim.mesh_dy.x, window, camera)
+g_selector = st.SelectionTool(sim_tri.num_verts_dy, sim_tri.mesh_dy.x, window, camera)
 
 n_substep = 20
 frame_end = 100
 
-dt_ui = sim.dt
-solver_type_ui = sim.selected_solver_type
-dHat_ui = sim.dHat
+sim_type_ui = 0
+dt_ui = sim_tri.dt
+solver_type_ui = sim_tri.selected_solver_type
+dHat_ui = sim_tri.dHat
+damping_ui = sim_tri.damping
+YM_ui = sim_tri.stiffness_bending
+YM_b_ui = sim_tri.stiffness_stretch
+friction_coeff_ui = sim_tri.mu
 
-damping_ui = sim.damping
-
-YM_ui = sim.stiffness_bending
-YM_b_ui = sim.stiffness_stretch
-
-friction_coeff_ui = sim.mu
+PR_ui = sim_tet.PR
 
 mesh_export = False
 frame_cpu = 0
 
-def show_options():
+def show_options_tri():
 
     global n_substep
     global dt_ui
+    global sim_type_ui
     global solver_type_ui
     global damping_ui
     global YM_ui
     global YM_b_ui
-    global sim
+    global sim_tri
     global dHat_ui
     global friction_coeff_ui
     global MODE_WIREFRAME
@@ -65,6 +69,9 @@ def show_options():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
+
+        sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
+
         solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 2)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
@@ -94,63 +101,146 @@ def show_options():
 
         w.text("")
         w.text("dynamic mesh stats.")
-        verts_str = "# verts: " + str(sim.num_verts_dy)
-        edges_str = "# edges: " + str(sim.num_edges_dy)
-        faces_str = "# faces: " + str(sim.num_faces_dy)
+        verts_str = "# verts: " + str(sim_tri.num_verts_dy)
+        edges_str = "# edges: " + str(sim_tri.num_edges_dy)
+        faces_str = "# faces: " + str(sim_tri.num_faces_dy)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
         w.text("")
         w.text("static mesh stats.")
-        verts_str = "# verts: " + str(sim.num_verts_st)
-        edges_str = "# edges: " + str(sim.num_edges_st)
-        faces_str = "# faces: " + str(sim.num_faces_st)
+        verts_str = "# verts: " + str(sim_tri.num_verts_st)
+        edges_str = "# edges: " + str(sim_tri.num_edges_st)
+        faces_str = "# faces: " + str(sim_tri.num_faces_st)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
 
     if not old_dt == dt_ui:
-        sim.dt = dt_ui
+        sim_tri.dt = dt_ui
 
     if not old_solver_type_ui == solver_type_ui:
-        sim.selected_solver_type = solver_type_ui
+        sim_tri.selected_solver_type = solver_type_ui
 
     if not old_dHat == dHat_ui:
-        sim.dHat = dHat_ui
+        sim_tri.dHat = dHat_ui
 
     if not old_friction_coeff == friction_coeff_ui:
-        sim.mu = friction_coeff_ui
+        sim_tri.mu = friction_coeff_ui
 
     if not YM_old == YM_ui:
-        sim.stiffness_bending = YM_ui
+        sim_tri.stiffness_bending = YM_ui
 
     if not YM_b_old == YM_b_ui:
-        sim.stiffness_stretch = YM_b_ui
+        sim_tri.stiffness_stretch = YM_b_ui
 
     if not old_damping == damping_ui:
-        sim.damping = damping_ui
+        sim_tri.damping = damping_ui
 
-def load_animation():
-    global sim
+def show_options_tet():
 
-    with open('framework/animation/animation.json') as f:
-        animation_raw = json.load(f)
-    animation_raw = {int(k): v for k, v in animation_raw.items()}
+    global n_substep
+    global dt_ui
+    global solver_type_ui
+    global sim_type_ui
+    global damping_ui
+    global sim_tri
+    global dHat_ui
+    global YM_ui
+    global PR_ui
+    global MODE_WIREFRAME
+    global LOOKAt_ORIGIN
+    global mesh_export
+    global frame_end
 
-    animationDict = {(i+1):[] for i in range(4)}
+    old_dt = dt_ui
+    old_solver_type_ui = solver_type_ui
+    old_dHat = dHat_ui
+    old_damping = damping_ui
+    YM_old = YM_ui
+    PR_old = PR_ui
 
-    for i in range(4):
-        ic = i + 1
-        icAnimation = animation_raw[ic]
-        listLen = len(icAnimation)
-        # print(listLen)
-        assert listLen % 7 == 0,str(ic)+"th Animation SETTING ERROR!! ======"
+    with gui.sub_window("XPBD Settings", 0., 0., 0.4, 0.35) as w:
 
-        num_animation = listLen // 7
+        sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
 
-        for a in range(num_animation) :
-            animationFrag = [animation_raw[ic][k + 7*a] for k in range(7)] # [vx,vy,vz,rx,ry,rz,frame]
-            animationDict[ic].append(animationFrag)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 1)
+        if solver_type_ui == 0:
+            w.text("solver type: XPBD Jacobi")
+        elif solver_type_ui == 1:
+            w.text("solver type: PD diag")
+
+        dt_ui = w.slider_float("Time Step Size", dt_ui, 0.001, 0.101)
+        n_substep = w.slider_int("# Substepping", n_substep, 1, 100)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.001, 0.101)
+        damping_ui = w.slider_float("Damping Ratio", damping_ui, 0.0, 1.0)
+        YM_ui = w.slider_float("Young's Modulus", YM_ui, 0.0, 1e8)
+        PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 1e8)
+
+        frame_str = "# frame: " + str(frame_cpu)
+        w.text(frame_str)
+
+        LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
+        # sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
+        # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
+        # mesh_export = w.checkbox("export mesh", mesh_export)
+
+        # if mesh_export is True:
+        #     frame_end = w.slider_int("end frame", frame_end, 1, 2000)
+
+        w.text("stats.")
+        verts_str = "# verts: " + str(sim_tet.num_verts)
+        w.text(verts_str)
+        tets_str = "# tets: " + str(sim_tet.num_tets)
+        w.text(tets_str)
+        # w.text("")
+        # particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
+        # w.text(particles_st_str)
+
+
+
+    if not old_dt == dt_ui:
+        sim_tet.dt = dt_ui
+
+    if not old_dHat == dHat_ui:
+        sim_tet.particle_rad = dHat_ui
+
+    if not old_solver_type_ui == solver_type_ui:
+        sim_tet.solver_type = solver_type_ui
+
+    # if not old_friction_coeff == friction_coeff_ui:
+    #     sim.mu = friction_coeff_ui
+    #
+    if not YM_old == YM_ui:
+        sim_tet.YM = YM_ui
+
+    if not PR_old == PR_ui:
+        sim_tet.PR = PR_ui
+
+    if not old_damping == damping_ui:
+        sim_tet.damping = damping_ui
+
+# def load_animation():
+#     global sim_tri
+#
+#     with open('framework/animation/animation.json') as f:
+#         animation_raw = json.load(f)
+#     animation_raw = {int(k): v for k, v in animation_raw.items()}
+#
+#     animationDict = {(i+1):[] for i in range(4)}
+#
+#     for i in range(4):
+#         ic = i + 1
+#         icAnimation = animation_raw[ic]
+#         listLen = len(icAnimation)
+#         # print(listLen)
+#         assert listLen % 7 == 0,str(ic)+"th Animation SETTING ERROR!! ======"
+#
+#         num_animation = listLen // 7
+#
+#         for a in range(num_animation) :
+#             animationFrag = [animation_raw[ic][k + 7*a] for k in range(7)] # [vx,vy,vz,rx,ry,rz,frame]
+#             animationDict[ic].append(animationFrag)
 
 while window.running:
 
@@ -171,7 +261,7 @@ while window.running:
         if window.event.key == 'i':
             print("==== IMPORT!! ====")
             g_selector.import_selection()
-            sim.set_fixed_vertices(g_selector.is_selected)
+            sim_tri.set_fixed_vertices(g_selector.is_selected)
             # load_animation()
 
         if window.event.key == 't':
@@ -189,28 +279,30 @@ while window.running:
 
         if window.event.key == 'r':
             frame_cpu = 0
-            sim.reset()
+            sim_tri.reset()
+            sim_tet.reset()
             g_selector.is_selected.fill(0.0)
-            sim.set_fixed_vertices(g_selector.is_selected)
+            sim_tri.set_fixed_vertices(g_selector.is_selected)
+            # sim_tet.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
 
         if window.event.key == 'v':
-            sim.enable_velocity_update = not sim.enable_velocity_update
-            if sim.enable_velocity_update is True:
+            sim_tri.enable_velocity_update = not sim_tri.enable_velocity_update
+            if sim_tri.enable_velocity_update is True:
                 print("velocity update on")
             else:
                 print("velocity update off")
 
         if window.event.key == 'z':
-            sim.enable_collision_handling = not sim.enable_collision_handling
-            if sim.enable_collision_handling is True:
+            sim_tri.enable_collision_handling = not sim_tri.enable_collision_handling
+            if sim_tri.enable_collision_handling is True:
                 print("collision handling on")
             else:
                 print("collision handling off")
 
         if window.event.key == 'h':
             print("fix vertices")
-            sim.set_fixed_vertices(g_selector.is_selected)
+            sim_tri.set_fixed_vertices(g_selector.is_selected)
 
         if window.event.key == ti.ui.BACKSPACE:
             g_selector.is_selected.fill(0)
@@ -235,16 +327,29 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep)
+
+        if sim_type_ui == 0:
+            sim_tri.forward(n_substeps=n_substep)
+        elif sim_type_ui == 1:
+            sim_tet.forward(n_substeps=n_substep)
+
         frame_cpu += 1
 
-    show_options()
+
+    if sim_type_ui == 0:
+        show_options_tri()
+    elif sim_type_ui == 1:
+        show_options_tet()
 
     if mesh_export and run_sim and frame_cpu < frame_end:
-        sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
+        sim_tri.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
-    scene.mesh(sim.mesh_dy.x, indices=sim.mesh_dy.face_indices_flatten, per_vertex_color=sim.mesh_dy.colors)
-    scene.mesh(sim.mesh_dy.x, indices=sim.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+    if sim_type_ui == 0:
+        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
+        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+    elif sim_type_ui == 1:
+        scene.mesh(sim_tet.x, indices=sim_tet.faces, per_vertex_color=sim_tet.tet_mesh.color)
+        scene.mesh(sim_tet.x, indices=sim_tet.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
 
     # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
     # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))

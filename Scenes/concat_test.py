@@ -29,3 +29,11 @@ obj_mesh_st = TriMesh(
     rot_list=[],
     is_static=True
 )
+
+msh_model_dir = str(model_path) + "/MSH"
+#dynamic mesh
+msh_mesh_dy = TetMesh(msh_model_dir,
+                      model_name_list=["sphere19K.msh"],
+                      trans_list=[(0.0, 0.0, 0.0)],
+                      scale_list=[30.0],
+                      rot_list=[])
