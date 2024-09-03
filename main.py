@@ -7,7 +7,7 @@ from framework.physics import XPBD
 from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 
-sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e5, stiffness_bending=5e5, dHat=4e-3)
+sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=4e-3)
 sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -76,7 +76,7 @@ def show_options_tri():
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
-            w.text("solver type: Gauss Seidel")
+            w.text("solver type: PD-diag")
         elif solver_type_ui == 2:
             w.text("solver type: Euler Path")
 
@@ -85,8 +85,8 @@ def show_options_tri():
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
-        YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e8)
-        YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e8)
+        YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e5)
+        YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e5)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
@@ -196,8 +196,6 @@ def show_options_tet():
         # w.text("")
         # particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
         # w.text(particles_st_str)
-
-
 
     if not old_dt == dt_ui:
         sim_tet.dt = dt_ui
@@ -334,7 +332,6 @@ while window.running:
             sim_tet.forward(n_substeps=n_substep)
 
         frame_cpu += 1
-
 
     if sim_type_ui == 0:
         show_options_tri()

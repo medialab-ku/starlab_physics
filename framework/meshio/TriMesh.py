@@ -1,11 +1,12 @@
 import taichi as ti
 import numpy as np
-import meshio
-import igl
-import random
 import os
+import time
+import meshio
+import random
 from pathlib import Path
 from pyquaternion import Quaternion
+import networkx as nx
 
 model_path = Path(__file__).resolve().parent.parent.parent / "models"
 OBJ = "OBJ"
@@ -128,6 +129,8 @@ class TriMesh:
         # # self.init_face_indices_flatten()
         self.init_l0_m_inv()
         self.init_color()
+
+
 
     ####################################################################################################################
     def reset(self):

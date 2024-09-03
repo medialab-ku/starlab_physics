@@ -106,7 +106,7 @@ class Solver:
     ####################################################################################################################
     # Several constraint solvers to compute physics...
     def solve_constraints_jacobi_x(self, dt):
-        self.init_variables()
+        # self.init_variables()
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
@@ -119,14 +119,23 @@ class Solver:
 
         self.solve_spring_constraints_gauss_seidel_x(compliance_stretch, compliance_bending)
 
+    def solve_constraints_pd_diag_x(self, dt):
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
+
+        self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
+
     ####################################################################################################################
     # Taichi kernel function which are called in solvers...
 
     @ti.kernel
     def solve_spring_constraints_jacobi_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
         # project x_(t+1) by solving constraints in parallel way
-        ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv,
-                       self.mesh_dy.dx, self.mesh_dy.nc)
+
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(0.0)
+
+        ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv, self.mesh_dy.dx, self.mesh_dy.nc)
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
             v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
@@ -147,8 +156,8 @@ class Solver:
         # after solving all constaints, we should coordinate the projected x_(t+1)!
         ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
         for i in range(self.num_verts_dy):
-            if self.mesh_dy.nc[i] > 0:
-                self.mesh_dy.y[i] += self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
+            # if self.mesh_dy.nc[i] > 0:
+            self.mesh_dy.y[i] += self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
 
     @ti.kernel
     def solve_spring_constraints_gauss_seidel_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
@@ -169,6 +178,33 @@ class Solver:
             self.mesh_dy.y[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * ld * nabla_C
             self.mesh_dy.y[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * ld * nabla_C
 
+    @ti.kernel
+    def solve_spring_constraints_pd_diag_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
+
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
+
+        # ti.loop_config(serialize=True)
+        ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
+        for i in range(self.num_edges_dy):
+            l0 = self.mesh_dy.l0[i]
+            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+            x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
+
+            dp01 = x01 - l0 * x01.normalized()
+
+            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
+            self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
+
+            self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
+            self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
+
+        ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
+        for i in range(self.num_verts_dy):
+            # if self.mesh_dy.nc[i] > 0:
+            self.mesh_dy.y[i] += self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
+
+
     ####################################################################################################################
 
     def forward(self, n_substeps):
@@ -179,9 +215,9 @@ class Solver:
             if self.selected_solver_type == 0:
                 self.solve_constraints_jacobi_x(dt_sub)
             elif self.selected_solver_type == 1:
-                self.solve_constraints_gauss_seidel_x(dt_sub)
+                self.solve_constraints_pd_diag_x(dt_sub)
             elif self.selected_solver_type == 2:
-                self.solve_constraints_jacobi_x(dt_sub)
+                self.solve_constraints_pd_diag_x(dt_sub)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
