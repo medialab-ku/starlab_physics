@@ -19,7 +19,7 @@ class Solver:
         self.stiffness_bending = stiffness_bending
         self.g = g
         self.dt = dt
-        self.damping = 0.001
+        self.damping = 0.00
         self.mu = 0.8
 
         self.selected_solver_type = 0
@@ -61,7 +61,7 @@ class Solver:
     def compute_y(self, g: ti.math.vec3, dt: ti.f32):
         # compute apporximate x_(t+1) (== y) by explicit way before projecting constraints to x_(t+1)...
         for i in range(self.num_verts_dy):
-            self.mesh_dy.y[i] = (self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + self.g * dt * dt))
+            self.mesh_dy.y[i] = self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt)
             self.mesh_dy.y_origin[i] = self.mesh_dy.y[i]
 
     @ti.kernel
@@ -123,6 +123,11 @@ class Solver:
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
+        self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
+
+    def solve_constraints_newton_pcg_x(self, dt):
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
         self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
 
     ####################################################################################################################
@@ -207,17 +212,20 @@ class Solver:
 
     ####################################################################################################################
 
-    def forward(self, n_substeps):
+    def forward(self, n_substeps, n_iter):
         dt_sub = self.dt / n_substeps
 
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
-            if self.selected_solver_type == 0:
-                self.solve_constraints_jacobi_x(dt_sub)
-            elif self.selected_solver_type == 1:
-                self.solve_constraints_pd_diag_x(dt_sub)
-            elif self.selected_solver_type == 2:
-                self.solve_constraints_pd_diag_x(dt_sub)
+            for _ in range(n_iter):
+                if self.selected_solver_type == 0:
+                    self.solve_constraints_jacobi_x(dt_sub)
+                elif self.selected_solver_type == 1:
+                    self.solve_constraints_pd_diag_x(dt_sub)
+                elif self.selected_solver_type == 2:
+                    self.solve_constraints_pd_diag_x(dt_sub)
+                elif self.selected_solver_type == 3:
+                    self.solve_constraints_newton_pcg_x(dt_sub)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)

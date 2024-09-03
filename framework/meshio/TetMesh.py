@@ -45,6 +45,7 @@ class TetMesh:
 
         # print(offsets)
         self.y = ti.Vector.field(n=3, dtype=float)
+        self.y_origin = ti.Vector.field(n=3, dtype=float)
         self.x = ti.Vector.field(n=3, dtype=float)
         self.dx = ti.Vector.field(n=3, dtype=float)
         self.nc = ti.field(dtype=float)
@@ -52,13 +53,14 @@ class TetMesh:
         self.x0 = ti.Vector.field(n=3, dtype=float)
         self.v = ti.Vector.field(n=3, dtype=float)
         self.invM = ti.field(dtype=float)
+        self.fixed = ti.field(dtype=float)
         self.M = ti.field(dtype=float)
         self.color = ti.Vector.field(n=3, dtype=float)
 
         # print(x_np)
 
         dnode = ti.root.dense(ti.i, num_verts)
-        dnode.place(self.y, self.dx, self.nc, self.x, self.v, self.invM, self.M)
+        dnode.place(self.y, self.y_origin, self.dx, self.nc, self.x, self.v, self.fixed, self.invM, self.M)
         dnode.place(self.x0, self.color)
 
         self.init_color(offsets)
@@ -137,7 +139,7 @@ class TetMesh:
             for j in ti.static(range(4)):
                 self.M[self.tet_indices[i, j]] += 0.25 * V0_i
 
-            self.V0[i] = V0_i / 6.0
+            self.V0[i] = V0_i
 
         for i in self.invM:
             self.invM[i] = 1.0 / self.M[i]
