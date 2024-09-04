@@ -19,7 +19,10 @@ class Solver:
         self.stiffness_bending = stiffness_bending
         self.g = g
         self.dt = dt
-        self.damping = 0.00
+        self.damping = 0.001
+        self.threshold = 1e-4
+        self.max_cg_iter = 100
+
         self.mu = 0.8
 
         self.selected_solver_type = 0
@@ -153,13 +156,14 @@ class Solver:
         return uvT
 
 
-    def solve_constraints_newton_pcg_x(self, dt):
+    # @ti.kernel
+    # def pcg_iterate(self):
+
+    def solve_constraints_newton_pcg_x(self, dt, max_cg_iter, threshold):
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
-        # self.mesh_dy.hii.copy_from(self.mesh_dy.m)
-        # print(self.mesh_dy.hii)
         self.compute_grad_and_hess_spring_x(compliance_stretch, compliance_bending)
         self.mesh_dy.dx.fill(0.0)
         # r_0 = b - Ax_0
@@ -167,18 +171,18 @@ class Solver:
         # print(self.mesh_dy.b)
         # p_0 = r_0
         self.mesh_dy.p.copy_from(self.mesh_dy.r)
-        max_cg_iter = 100
         cg_iter = 0
         # r_normSq = self.dot_product(self.mesh_dy.r, self.mesh_dy.r)
         # if r_normSq > 1e-6:
         while True:
             #Ap_k = A * p_k
             self.compute_mat_free_Ax(self.mesh_dy.Ax, self.mesh_dy.p)
-            # print(self.mesh_dy.Ax)
-            # alpha = r_k ^T r_k / p_k ^T (Ap_k)
 
+            # alpha = r_k ^T r_k / p_k ^T (Ap_k)
             r_normSq = self.dot_product(self.mesh_dy.r, self.mesh_dy.r)
-            if cg_iter > max_cg_iter or r_normSq < 1e-8:
+
+            # print(r_normSq)
+            if r_normSq < threshold or cg_iter >= max_cg_iter:
                 break
 
             alpha = r_normSq / self.dot_product(self.mesh_dy.p, self.mesh_dy.Ax)
@@ -197,8 +201,8 @@ class Solver:
 
             #r_k = r_k+1
             self.mesh_dy.r.copy_from(self.mesh_dy.r_next)
-
             cg_iter += 1
+
         print(cg_iter)
         self.vector_add(self.mesh_dy.y, self.mesh_dy.y, self.mesh_dy.dx, 1.0)
         # self.mesh_dy.dx.copy_from(self.mesh_dy.p)
@@ -214,7 +218,7 @@ class Solver:
         for i in range(self.num_edges_dy):
             vi, vj = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
             hij = self.mesh_dy.hij[i]
-            xij = x[vi] - x[vi]
+            xij = x[vi] - x[vj]
             hijxij = hij @ xij
             Ax[vi] += hijxij
             Ax[vj] -= hijxij
@@ -302,8 +306,12 @@ class Solver:
     @ti.kernel
     def solve_spring_constraints_hess_diag_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
 
-        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.b.fill(0.0)
         self.mesh_dy.nc.fill(0.0)
+
+        id3 = ti.math.mat3([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        for i in range(self.num_verts_dy):
+            self.mesh_dy.hii[i] = self.mesh_dy.m[i] * id3
 
         # ti.loop_config(serialize=True)
         ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
@@ -312,19 +320,21 @@ class Solver:
             v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
             x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             dp01 = x01 - l0 * x01.normalized()
-
+            n = x01.normalized()
             alpha = (1.0 - l0 / x01.norm())
+            # alpha = 0.0
+            if alpha < 1e-3:
+                alpha = 1e-3
 
-            self.mesh_dy.dx[v0] -= compliance_stretch * dp01
-            self.mesh_dy.dx[v1] += compliance_stretch * dp01
+            self.mesh_dy.b[v0] -= compliance_stretch * dp01
+            self.mesh_dy.b[v1] += compliance_stretch * dp01
 
-            self.mesh_dy.nc[v0] += compliance_stretch * alpha
-            self.mesh_dy.nc[v1] += compliance_stretch * alpha
-
+            self.mesh_dy.hii[v0] += compliance_stretch * (id3 + self.outer_product(n, n))
+            self.mesh_dy.hii[v1] += compliance_stretch * (id3 + self.outer_product(n, n))
         ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
         for i in range(self.num_verts_dy):
             # if self.mesh_dy.nc[i] > 0:
-            self.mesh_dy.y[i] += (self.mesh_dy.dx[i] / (self.mesh_dy.m[i] + self.mesh_dy.nc[i]))
+            self.mesh_dy.y[i] += ti.math.inverse(self.mesh_dy.hii[i]) @ self.mesh_dy.b[i]
 
     @ti.kernel
     def compute_grad_and_hess_spring_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
@@ -347,7 +357,7 @@ class Solver:
             dp01 = (l - l0) * n
             alpha = l0 / x01.norm()
 
-            self.mesh_dy.hij[i] = compliance_stretch * ((1.0 - alpha) * id3 + alpha * self.outer_product(n, n))
+            self.mesh_dy.hij[i] = compliance_stretch * id3
 
             self.mesh_dy.b[v0] -= compliance_stretch * dp01
             self.mesh_dy.b[v1] += compliance_stretch * dp01
@@ -377,7 +387,7 @@ class Solver:
                 elif self.selected_solver_type == 3:
                     self.solve_constraints_pd_diag_x(dt_sub)
                 elif self.selected_solver_type == 4:
-                    self.solve_constraints_newton_pcg_x(dt_sub)
+                    self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)

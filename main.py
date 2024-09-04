@@ -29,6 +29,7 @@ g_selector_tet = st.SelectionTool(sim_tet.num_verts_dy, sim_tet.mesh_dy.x, windo
 
 n_substep = 20
 n_iter = 1
+
 frame_end = 100
 
 sim_type_ui = 0
@@ -86,6 +87,11 @@ def show_options_tri():
             w.text("solver type: Euler Path")
         elif solver_type_ui == 4:
             w.text("solver type: Newton PCG")
+
+        if solver_type_ui == 4:
+            sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
+            # print(sim_tri.threshold)
+            sim_tri.max_cg_iter = w.slider_int("max iter", sim_tri.max_cg_iter, 1, 100)
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
