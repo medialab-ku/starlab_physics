@@ -344,7 +344,10 @@ class Solver:
 
         id3 = ti.math.mat3([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         for i in range(self.num_verts_dy):
-            self.mesh_dy.hii[i] = self.mesh_dy.m[i] * id3
+            test = 1.0
+            if self.mesh_dy.fixed[i] < 1.0:
+                test = 1e5
+            self.mesh_dy.hii[i] = test * self.mesh_dy.m[i] * id3
 
         # ti.loop_config(serialize=True)
         ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
@@ -355,9 +358,11 @@ class Solver:
             l = x01.norm()
             n = x01.normalized()
             dp01 = (l - l0) * n
-            alpha = l0 / x01.norm()
+            alpha = 1.0 - l0 / x01.norm()
+            if alpha < 1e-3:
+                alpha = 1e-3
 
-            self.mesh_dy.hij[i] = compliance_stretch * id3
+            self.mesh_dy.hij[i] = compliance_stretch * (alpha * id3 + (1.0 - alpha) * self.outer_product(n, n))
 
             self.mesh_dy.b[v0] -= compliance_stretch * dp01
             self.mesh_dy.b[v1] += compliance_stretch * dp01
