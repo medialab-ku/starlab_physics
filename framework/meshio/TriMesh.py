@@ -86,6 +86,7 @@ class TriMesh:
         self.nc = ti.field(dtype=float, shape=self.num_verts)
         self.dup = ti.field(dtype=float, shape=self.num_verts)
         self.m_inv = ti.field(dtype=float, shape=self.num_verts)
+        self.m = ti.field(dtype=float, shape=self.num_verts)
         self.fixed = ti.field(dtype=float, shape=self.num_verts)
         self.colors = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
@@ -100,6 +101,7 @@ class TriMesh:
         self.nc.fill(0.0)
         self.dup.fill(0.0)
         self.m_inv.fill(0.0)
+        self.m.fill(0.0)
         if self.is_static is False:
             self.fixed.fill(1.0)
         else:
@@ -107,6 +109,16 @@ class TriMesh:
 
         # fields about edges
         self.l0 = ti.field(dtype=float, shape=self.num_edges)
+
+        self.hii = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_verts)
+        self.hij = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_edges)
+
+        self.Ax = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.r = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.r_next = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.b = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+
         self.eid_field = ti.field(dtype=int, shape=(self.num_edges, 2))
         #
         #
@@ -176,5 +188,8 @@ class TriMesh:
         for i in range(self.num_edges):
             v0, v1 = self.eid_field[i,0], self.eid_field[i,1]
             self.l0[i] = (self.x[v0] - self.x[v1]).norm()
-            self.m_inv[v0] += 0.5 * self.l0[i]
-            self.m_inv[v1] += 0.5 * self.l0[i]
+            self.m[v0] += 0.5 * self.l0[i]
+            self.m[v1] += 0.5 * self.l0[i]
+
+        for i in range(self.num_verts):
+            self.m_inv[i] = 1.0 /  self.m[i]

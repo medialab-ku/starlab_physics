@@ -260,7 +260,7 @@ class Solver:
             self.nc[self.tetras[i, 0]] += weight
             self.nc[self.tetras[i, 1]] += weight
             self.nc[self.tetras[i, 2]] += weight
-            self.nc[self.tetras[i, 3]] += weight
+            self.nc[self.tetras[i, 3]] += 3 * weight
 
         ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:

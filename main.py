@@ -36,8 +36,8 @@ dt_ui = sim_tri.dt
 solver_type_ui = sim_tri.selected_solver_type
 dHat_ui = sim_tri.dHat
 damping_ui = sim_tri.damping
-YM_ui = sim_tri.stiffness_bending
-YM_b_ui = sim_tri.stiffness_stretch
+YM_b_ui = sim_tri.stiffness_bending
+YM_ui = sim_tri.stiffness_stretch
 friction_coeff_ui = sim_tri.mu
 
 PR_ui = sim_tet.PR
@@ -75,14 +75,16 @@ def show_options_tri():
 
         sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
 
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 3)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 4)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
             w.text("solver type: PD-diag")
         elif solver_type_ui == 2:
-            w.text("solver type: Euler Path")
+            w.text("solver type: H-diag")
         elif solver_type_ui == 3:
+            w.text("solver type: Euler Path")
+        elif solver_type_ui == 4:
             w.text("solver type: Newton PCG")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
@@ -135,10 +137,10 @@ def show_options_tri():
         sim_tri.mu = friction_coeff_ui
 
     if not YM_old == YM_ui:
-        sim_tri.stiffness_bending = YM_ui
+        sim_tri.stiffness_stretch = YM_ui
 
     if not YM_b_old == YM_b_ui:
-        sim_tri.stiffness_stretch = YM_b_ui
+        sim_tri.stiffness_bending = YM_b_ui
 
     if not old_damping == damping_ui:
         sim_tri.damping = damping_ui
