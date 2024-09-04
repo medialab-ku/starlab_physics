@@ -65,12 +65,14 @@ def show_options():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 2)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 3)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
             w.text("solver type: Gauss Seidel")
         elif solver_type_ui == 2:
+            w.text("solver type: Parallel Gauss Seidel")
+        elif solver_type_ui == 3:
             w.text("solver type: Euler Path")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
@@ -249,7 +251,7 @@ while window.running:
     # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
     # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
     # sim.mesh_dy.colors_edge_euler.fill(ti.math.vec3([1.0, 0.0, 0.0]))
-    # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.colors_edge_euler)
+    # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.edge_color_euler)
     # if sim.mesh_st != None:
     #     scene.mesh(sim.mesh_st.x, indices=sim.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
     #     scene.mesh(sim.mesh_st.x, indices=sim.mesh_st.face_indices_flatten, per_vertex_color=sim.mesh_st.colors)
