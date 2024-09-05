@@ -28,7 +28,7 @@ class Solver:
         self.selected_solver_type = 0
         self.definiteness_fix = True
         self.print_stats = False
-        self.line_search = True
+        self.use_line_search = True
 
         self.num_verts_dy = self.mesh_dy.num_verts
         self.num_edges_dy = self.mesh_dy.num_edges
@@ -149,21 +149,35 @@ class Solver:
         return uvT
 
 
+    @ti.kernel
+    def line_search(self, E_current: float) -> float:
+
+        alpha = 1.0
+
+        return alpha
+
     def solve_constraints_newton_pcg_x(self, dt, max_cg_iter, threshold):
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
-        self.compute_grad_and_hess_spring_x(compliance_stretch, compliance_bending, self.definiteness_fix)
+        E_curr = self.compute_grad_and_hess_spring_x(compliance_stretch, compliance_bending, self.definiteness_fix)
 
         r_sq, cg_iter = self.PCG.run(self.mesh_dy, max_cg_iter, threshold)
         alpha = 1.0
+        if self.use_line_search:
+            self.PCG.compute_mat_free_Ax(self.mesh_dy, self.mesh_dy.Ax, self.mesh_dy.dx)
+            test = self.PCG.dot_product(self.mesh_dy.dx, self.mesh_dy.Ax)
+            if test > 1e-3:
+                alpha = self.PCG.dot_product(self.mesh_dy.b, self.mesh_dy.dx) / test
+            else:
+                alpha = 1.0
 
         if self.print_stats:
             print("CG err: ", r_sq)
             print("CG iter: ", cg_iter)
 
-        if self.print_stats and self.line_search:
+        if self.print_stats and self.use_line_search:
             print("alpha: ", alpha)
 
         self.PCG.vector_add(self.mesh_dy.y, self.mesh_dy.y, self.mesh_dy.dx, alpha)
@@ -176,6 +190,8 @@ class Solver:
         self.compute_pd_grad_spring_x(compliance_stretch, compliance_bending)
         self.PCG.run(self.mesh_dy, max_cg_iter, threshold)
         alpha = 1.0
+        if self.use_line_search:
+            alpha = self.line_search(0.0)
 
         self.PCG.vector_add(self.mesh_dy.y, self.mesh_dy.y, self.mesh_dy.dx, alpha)
 
@@ -294,10 +310,10 @@ class Solver:
             self.mesh_dy.y[i] += self.mesh_dy.b[i] / (self.mesh_dy.m[i] + self.mesh_dy.nc[i])
 
     @ti.kernel
-    def compute_grad_and_hess_spring_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32, definite_fix: bool):
+    def compute_grad_and_hess_spring_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32, definite_fix: bool)-> float:
 
         self.mesh_dy.b.fill(0.0)
-
+        E_cur = 0.0
         id3 = ti.math.mat3([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         for i in range(self.num_verts_dy):
             test = 1.0
@@ -314,6 +330,7 @@ class Solver:
             l = x01.norm()
             n = x01.normalized()
             dp01 = (l - l0) * n
+            E_cur += 0.5 * compliance_stretch * (l - l0) ** 2
             alpha = 1.0 - l0 / x01.norm()
             if definite_fix and alpha < 1e-3:
                 alpha = 1e-3
@@ -325,6 +342,7 @@ class Solver:
             self.mesh_dy.b[v0] -= compliance_stretch * dp01
             self.mesh_dy.b[v1] += compliance_stretch * dp01
 
+        return E_cur
     @ti.kernel
     def compute_pd_grad_spring_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
 

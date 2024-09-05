@@ -75,7 +75,6 @@ def show_options_tri():
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
         sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
-
         solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 5)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
@@ -89,13 +88,13 @@ def show_options_tri():
             w.text("solver type: Newton PCG")
             sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
             sim_tri.definiteness_fix = w.checkbox("definiteness fix", sim_tri.definiteness_fix)
-            sim_tri.line_search = w.checkbox("line search", sim_tri.line_search)
+            sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
             sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
             sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
         elif solver_type_ui == 5:
             w.text("solver type: PD PCG")
             sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
-            sim_tri.line_search = w.checkbox("line search", sim_tri.line_search)
+            sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
             sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
             sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
 
