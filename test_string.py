@@ -216,6 +216,8 @@ def prologue(mass_ratio: float):
         pos += vel * time_delta
         positions[i] = confine_position_to_boundary(pos)
 
+    positions[0] = old_positions[0]
+
     # clear neighbor lookup table
     for I in ti.grouped(grid_num_particles):
         grid_num_particles[I] = 0
@@ -338,11 +340,11 @@ def substep_pd_diag_mass_spring(k: float):
         x01 = positions[v0] - positions[v1]
 
         dp01 = x01 - l0[i] * x01.normalized()
-        gii[v0] += mass[v0] * k * dp01
-        gii[v1] -= mass[v1] * k * dp01
+        gii[v0] += k * dp01
+        gii[v1] -= k * dp01
 
-        hii[v0] += mass[v0] * k
-        hii[v1] += mass[v1] * k
+        hii[v0] += k
+        hii[v1] += k
 
     for i in range(num_particles_x):
         positions[i] -= gii[i] / hii[i]
@@ -360,14 +362,14 @@ def substep_string_mass_spring(k: float):
         x01 = positions[v0] - positions[v1]
         dp01 = x01 - l0[i] * x01.normalized()
 
-        d[v0] += mass[v0] * k * dp01
-        d[v1] -= mass[v1] * k * dp01
+        d[v0] += k * dp01
+        d[v1] -= k * dp01
 
-        b[v0] += mass[v0] * k
-        b[v1] += mass[v1] * k
+        b[v0] += k
+        b[v1] += k
 
-        a[v1] -= mass[v1] * k
-        c[v0] -= mass[v0] * k
+        a[v1] -= k
+        c[v0] -= k
 
     c_tilde[0] = c[0] / b[0]
     ti.loop_config(serialize=True)
@@ -434,6 +436,10 @@ def epilogue():
     for i in positions:
         velocities[i] = (positions[i] - old_positions[i]) / time_delta
 
+    velocities[0] = 0
+
+    for i in positions:
+        positions[i] = old_positions[i] + velocities[i] * time_delta
 
     # no vorticity/xsph because we cannot do cross product in 2D...
 

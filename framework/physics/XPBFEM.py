@@ -251,16 +251,16 @@ class Solver:
             # dxp2 = proj2 - self.y[self.tetras[i, 2]]
             # dxp3 = proj3 - self.y[self.tetras[i, 3]]
 
-            weight = self.V0[i] * compliance_str
-            self.dx[self.tetras[i, 0]] += weight * proj03
-            self.dx[self.tetras[i, 1]] += weight * proj13
-            self.dx[self.tetras[i, 2]] += weight * proj23
-            self.dx[self.tetras[i, 3]] -= weight * (proj03 + proj13 +proj23)
+            weight = compliance_str
+            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight * proj03
+            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight * proj13
+            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight * proj23
+            self.dx[self.tetras[i, 3]] -= self.invM[self.tetras[i, 3]] * weight * (proj03 + proj13 +proj23)
 
-            self.nc[self.tetras[i, 0]] += weight
-            self.nc[self.tetras[i, 1]] += weight
-            self.nc[self.tetras[i, 2]] += weight
-            self.nc[self.tetras[i, 3]] += 3 * weight
+            self.nc[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * weight
+            self.nc[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * weight
+            self.nc[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * weight
+            self.nc[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * 3 * weight
 
         ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:
