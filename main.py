@@ -76,7 +76,7 @@ def show_options_tri():
 
         sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
 
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 4)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 5)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
@@ -87,11 +87,18 @@ def show_options_tri():
             w.text("solver type: Euler Path")
         elif solver_type_ui == 4:
             w.text("solver type: Newton PCG")
-
-        if solver_type_ui == 4:
             sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
-            # print(sim_tri.threshold)
-            sim_tri.max_cg_iter = w.slider_int("max iter", sim_tri.max_cg_iter, 1, 100)
+            sim_tri.definiteness_fix = w.checkbox("definiteness fix", sim_tri.definiteness_fix)
+            sim_tri.line_search = w.checkbox("line search", sim_tri.line_search)
+            sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
+            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
+        elif solver_type_ui == 5:
+            w.text("solver type: PD PCG")
+            sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
+            sim_tri.line_search = w.checkbox("line search", sim_tri.line_search)
+            sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
+            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
+
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
