@@ -46,6 +46,14 @@ class Solver:
             else:
                 self.mesh_dy.fixed[i] = 1.0
 
+        for i in range(self.mesh_dy.euler_path_len):
+            vid = self.mesh_dy.euler_path_field[i]
+            if fixed_vertices[vid] >= 1:
+                self.mesh_dy.fixed_euler[i] = 0.0
+            else:
+                self.mesh_dy.fixed_euler[i] = 1.0
+
+
     def reset(self):
         self.mesh_dy.reset()
         # self.mesh_dy.particles.reset()
@@ -56,6 +64,7 @@ class Solver:
         # initialize dx and number of constraints (used in the Jacobi solver)
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(0.0)
+        self.mesh_dy.dx_euler.fill(0.0)
 
     @ti.kernel
     def compute_y_tilde(self, g: ti.math.vec3, dt: ti.f32):
@@ -65,16 +74,22 @@ class Solver:
             self.mesh_dy.y_tilde[i] = self.mesh_dy.y[i]
 
         # for Euler path...
-        # for i in range(self.mesh_dy.euler_path_len):
-        #     self.mesh_dy.y_euler[i] = (self.mesh_dy.x_euler[i] + self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt))
+        for i in range(self.mesh_dy.euler_path_len):
+            self.mesh_dy.y_euler[i] = (self.mesh_dy.x_euler[i] +
+                                       self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt))
+            self.mesh_dy.y_tilde_euler[i] = self.mesh_dy.y_euler[i]
 
     @ti.kernel
     def update_y(self):
         # update x_(t+1) by adding dx (used in the Euler path solver)
         for i in range(self.num_verts_dy):
             self.mesh_dy.y[i] = (self.mesh_dy.y_tilde[i] +
-                                   self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i]))
-            # print(i, self.mesh_dy.dx[i], self.mesh_dy.duplicates_field[i])
+                                 self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i]))
+
+        for i in range(self.mesh_dy.euler_path_len):
+            vid = self.mesh_dy.euler_path_field[i]
+            self.mesh_dy.y_euler[i] = (self.mesh_dy.y_tilde_euler[i] +
+                                       self.mesh_dy.fixed_euler[i] * (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
 
     @ti.kernel
     def compute_v(self, damping: ti.f32, dt: ti.f32):
@@ -83,8 +98,9 @@ class Solver:
             self.mesh_dy.v[i] = self.mesh_dy.fixed[i] * (1.0 - damping) * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
 
         # for Euler path...
-        # for i in range(self.mesh_dy.euler_path_len):
-        #     self.mesh_dy.v_euler[i] = self.mesh_dy.fixed_euler[i] * (1.0 - damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
+        for i in range(self.mesh_dy.euler_path_len):
+            self.mesh_dy.v_euler[i] = self.mesh_dy.fixed_euler[i] * (1.0 - damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
+
 
     @ti.kernel
     def update_x(self, dt: ti.f32):
@@ -93,11 +109,10 @@ class Solver:
             self.mesh_dy.x[i] += dt * self.mesh_dy.v[i]
 
         # for Euler path...
-        # for i in range(self.mesh_dy.euler_path_len):
-        #     self.mesh_dy.x_euler[i] += dt * self.mesh_dy.v_euler[i]
-        # for i in range(self.mesh_dy.euler_edge_len):
-        #     v0, v1 = self.mesh_dy.euler_path_field[i], self.mesh_dy.euler_path_field[i+1]
-        #     self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x[v0] + self.mesh_dy.x[v1])
+        for i in range(self.mesh_dy.euler_path_len):
+            self.mesh_dy.x_euler[i] += dt * self.mesh_dy.v_euler[i]
+        for i in range(self.mesh_dy.euler_edge_len):
+            self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[i] + self.mesh_dy.x_euler[i+1])
 
     @ti.kernel
     def aggregate_duplicates(self):
@@ -170,7 +185,6 @@ class Solver:
                                                                     1)
 
         self.update_y()
-            # self.aggregate_duplicates()
 
     ####################################################################################################################
     # Taichi kernel function which are called in solvers...
@@ -252,10 +266,10 @@ class Solver:
                                                            current_offset: ti.i32,
                                                            next_offset: ti.i32,
                                                            edge_offset: ti.i32):
-        for i in range(0, (next_offset - current_offset) // 2):
+        # ti.loop_config(serialize=True)
+        for i in range(0, (next_offset - current_offset - 1) // 2):
             idx = current_offset + (i * 2 + edge_offset) # current_offset + (0, 2, 4, ... or 1, 3, 5, ...)
-            v0, v1 = (self.mesh_dy.euler_path_field[idx + 0],
-                      self.mesh_dy.euler_path_field[idx + 1])
+            v0, v1 = self.mesh_dy.euler_path_field[idx], self.mesh_dy.euler_path_field[idx + 1]
             l0 = self.mesh_dy.l0_euler[idx]
             x10 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             lij = x10.norm()
@@ -270,6 +284,22 @@ class Solver:
 
             self.mesh_dy.nc[v0] += 1.0
             self.mesh_dy.nc[v1] += 1.0
+
+        # ti.loop_config(serialize=True)
+        for i in range(0, (next_offset - current_offset - 1) // 2):
+            idx = current_offset + (i * 2 + edge_offset) # current_offset + (0, 2, 4, ... or 1, 3, 5, ...)
+            l0 = self.mesh_dy.l0_euler[idx]
+            x10 = self.mesh_dy.y_euler[idx] - self.mesh_dy.y_euler[idx + 1]
+            lij = x10.norm()
+
+            C = lij - l0
+            nabla_C = x10.normalized()
+            schur = (self.mesh_dy.fixed_euler[idx] * self.mesh_dy.m_inv_euler[idx] +
+                     self.mesh_dy.fixed_euler[idx + 1] * self.mesh_dy.m_inv_euler[idx + 1])
+            ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
+
+            self.mesh_dy.dx_euler[idx] -= self.mesh_dy.fixed_euler[idx] * self.mesh_dy.m_inv_euler[idx] * ld * nabla_C
+            self.mesh_dy.dx_euler[idx + 1] += self.mesh_dy.fixed_euler[idx + 1] * self.mesh_dy.m_inv_euler[idx + 1] * ld * nabla_C
 
     ####################################################################################################################
 

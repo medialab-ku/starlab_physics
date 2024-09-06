@@ -2,9 +2,9 @@ import taichi as ti
 import numpy as np
 import networkx as nx
 import meshio
-import igl
 import random
 import os
+import sys
 import time
 from pathlib import Path
 from pyquaternion import Quaternion
@@ -89,8 +89,8 @@ class TriMesh:
             self.vert_offsets.append(self.vert_offsets[-1] + mesh.points.shape[0])
             self.edge_offsets.append(self.edge_offsets[-1] + len(edges))
             self.face_offsets.append(self.face_offsets[-1] + len(mesh.cells_dict.get("triangle", [])))
-        print(self.num_verts, self.num_edges, self.num_faces)
-        print(self.vert_offsets, self.edge_offsets, self.face_offsets)
+        # print(self.num_verts, self.num_edges, self.num_faces)
+        # print(self.vert_offsets, self.edge_offsets, self.face_offsets)
 
         ################################################################################################################
         # Graph Coloring (Crumpling Issue!)
@@ -101,6 +101,7 @@ class TriMesh:
         self.original_edge_color_np = np.empty((0, 3), dtype=int)
 
         if not self.is_static:
+            print("\n=====================================================================================\n")
             for i in range(self.num_model):
                 precomputed_dir = model_dir[:-len("models/OBJ")] + "color_graph"
                 original_color_prefix_sum_name = precomputed_dir + "/" + model_name_list[i][:-len(".obj")] + "_original_prefix_sum.npy"
@@ -119,13 +120,18 @@ class TriMesh:
                     # if the number of prefix sum differs from the one of precomputed graph, we should make graph...
                     if edges_color_prefix_sum.shape[0] != self.color_max:
                         break
-
                     edges_color = np.load(original_color_graph_name)
 
-                    self.original_edge_color_prefix_sum_np = np.append(self.original_edge_color_prefix_sum_np, edges_color_prefix_sum, axis=0)
+                    self.original_edge_color_prefix_sum_np = np.append(self.original_edge_color_prefix_sum_np,
+                                                                       edges_color_prefix_sum + self.edge_offsets[i],
+                                                                       axis=0)
+
+                    edges_color[:, 0] = edges_color[:, 0] + self.vert_offsets[i]
+                    edges_color[:, 1] = edges_color[:, 1] + self.vert_offsets[i]
                     self.original_edge_color_np = np.append(self.original_edge_color_np, edges_color, axis=0)
-                    print("The color graph and prefix sum files exist!")
-                    print("Importing these files...")
+
+                    print(f"The color graph and prefix sum files of <{model_name_list[i]}> exist!")
+                    print("Importing these files...\n")
                     should_make_graph = False
 
                 # otherwise, we should make graph in the first place...
@@ -176,8 +182,6 @@ class TriMesh:
                         original_edge_color_temp.append([v0, v1, c])
                     original_edge_color = np.array(original_edge_color_temp, dtype=int)
                     self.original_edge_color_np = np.append(self.original_edge_color_np, original_edge_color, axis=0)
-                    # print("Original Edge-Color Field")
-                    # print(original_edge_color)
 
                     kind_of_color = original_edge_color[:, 2]
                     color_values, color_first_index = np.unique(kind_of_color, return_index=True)
@@ -186,14 +190,22 @@ class TriMesh:
                     num_model_edges = self.edge_offsets[i+1] - self.edge_offsets[i]
                     original_edge_color_prefix_sum = np.full(self.color_max, fill_value=num_model_edges, dtype=int)
                     original_edge_color_prefix_sum[:len(original_prefix_sum_list)] = original_prefix_sum_list
-                    original_edge_color_prefix_sum = original_edge_color_prefix_sum + self.edge_offsets[i]
-                    self.original_edge_color_prefix_sum_np = np.append(self.original_edge_color_prefix_sum_np, original_edge_color_prefix_sum, axis=0)
+                    self.original_edge_color_prefix_sum_np = np.append(self.original_edge_color_prefix_sum_np,
+                                                                       original_edge_color_prefix_sum + self.edge_offsets[i],
+                                                                       axis=0)
+
+                    print(f"Exporting the graph and prefix sum files of <{model_name_list[i]}>...\n")
+                    original_edge_color[:, 0] = original_edge_color[:, 0] - self.vert_offsets[i]
+                    original_edge_color[:, 1] = original_edge_color[:, 1] - self.vert_offsets[i]
+                    np.save(original_color_graph_name, original_edge_color)
+                    np.save(original_color_prefix_sum_name, original_edge_color_prefix_sum)
 
             self.original_edge_color_field = ti.field(dtype=int, shape=(self.num_edges, 3))
             self.original_edge_color_field.from_numpy(self.original_edge_color_np)
+            print("=====================================================================================\n")
 
-            print(self.original_edge_color_prefix_sum_np, self.original_edge_color_prefix_sum_np.shape[0])
-            print(self.original_edge_color_np, self.original_edge_color_np.shape[0])
+            # print(self.original_edge_color_prefix_sum_np, self.original_edge_color_prefix_sum_np.shape[0])
+            # print(self.original_edge_color_np, self.original_edge_color_np.shape[0])
 
         ################################################################################################################
         # Euler Path
@@ -248,7 +260,7 @@ class TriMesh:
 
                     print("Exporting the constructed Euler graph...")
                     nx.write_edgelist(euler_graph, precomputed_graph_file)
-                    print("Export is completed!")
+                    print("Export is completed!\n")
                     print(euler_graph.edges())
 
                 else:
@@ -257,9 +269,9 @@ class TriMesh:
 
                     print("Importing a precomputed Euler graph...")
                     euler_graph = nx.read_edgelist(precomputed_graph_file, create_using=nx.MultiGraph)
-                    print("Checking integrity...")
+                    print("Checking integrity... ", end='')
                     if nx.is_eulerian(euler_graph):
-                        print("The imported graph is Eulerian!")
+                        print("The imported graph is Eulerian!\n")
 
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
@@ -277,11 +289,16 @@ class TriMesh:
 
                         self.euler_path_offsets.append(self.euler_path_offsets[-1] + path_len)
                         self.duplicates_offsets.append(self.vert_offsets[i+1])
+                    else:
+                        print("The imported graph is not eulerian...")
+                        print("Simulation ended!\n")
+                        sys.exit()
 
-            print("Euler Path\n", self.euler_path_np)
-            print("Duplicate\n", self.duplicates_np)
-            print("Euler Path Length Offsets :", self.euler_path_offsets)
-            print("Duplicates Length Offsets :", self.duplicates_offsets)
+
+            # print("Euler Path\n", self.euler_path_np)
+            # print("Duplicate\n", self.duplicates_np)
+            # print("Euler Path Length Offsets :", self.euler_path_offsets)
+            # print("Duplicates Length Offsets :", self.duplicates_offsets)
 
             euler_path_offsets_np = np.array(self.euler_path_offsets)
             duplicates_offsets_np = np.array(self.duplicates_offsets)
@@ -299,16 +316,25 @@ class TriMesh:
             self.euler_path_field.from_numpy(self.euler_path_np)
             self.duplicates_field.from_numpy(self.duplicates_np)
 
+            self.euler_path_field_dim2 = ti.field(dtype=int, shape=(self.euler_edge_len, 2))
+            for i in range(self.euler_edge_len - 1):
+                self.euler_path_field_dim2[i,0] = self.euler_path_field[i]
+                self.euler_path_field_dim2[i,1] = self.euler_path_field[i+1]
+
             # fields about euler
             self.y_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.y_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
             self.x_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
             self.v_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
             self.m_inv_euler = ti.field(dtype=float, shape=self.euler_path_len)
             self.fixed_euler = ti.field(dtype=float, shape=self.euler_path_len)
 
             self.l0_euler = ti.field(dtype=float, shape=self.euler_edge_len)
             self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_edge_len)
             self.edge_color_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_edge_len)
+
+            print("=====================================================================================\n")
 
         ################################################################################################################
         # fields about vertices
@@ -379,6 +405,8 @@ class TriMesh:
 
         if self.is_static is False:
             self.init_euler()
+            self.y_euler.fill(0.0)
+            self.y_tilde_euler.fill(0.0)
             self.v_euler.fill(0.0)
 
     @ti.kernel
@@ -458,6 +486,9 @@ class TriMesh:
         # for i in range(self.euler_path_len):
         #     print(f"{i}: {self.fixed_euler[i]}")
         # print("l0_euler")
+        # ti.loop_config(serialize=True)
+        # for i in range(self.euler_edge_len):
+        #     print(i, i+1, self.euler_path_field[i], self.euler_path_field[i+1])
         # ti.loop_config(serialize=True)
         # for i in range(self.euler_edge_len):
         #     print(f"{i}: {self.l0_euler[i]}")
