@@ -164,76 +164,52 @@ class Solver:
         return U, sig, V
 
     @ti.kernel
-    def solve_xpbd_fem_stretch_x(self, mu: float, lda: float):
-
+    def solve_xpbd_fem_stretch_x(self, compliance_str: float):
         self.dx.fill(0.0)
         self.nc.fill(0.0)
 
         ti.block_local(self.invDm, self.dx, self.nc)
-
         for i in self.invDm:
             Ds = ti.Matrix.cols([self.y[self.tetras[i, j]] - self.y[self.tetras[i, 3]] for j in ti.static(range(3))])
-            v0, v1, v2, v3 = self.tetras[i, 0], self.tetras[i, 1], self.tetras[i, 2], self.tetras[i, 3]
-            invM0, invM1, invM2, invM3 = self.invM[v0], self.invM[v1], self.invM[v2], self.invM[v3]
             B = self.invDm[i]
-            Dm = B.inverse()
             F = Ds @ B
+            U, _, V = self.ssvd(F)
+            R = U @ V.transpose()
+            P = F - R
+            test = (P.transpose() @ P).trace()
+            C = ti.sqrt(test)
+            # print(C)
+            eps = 0.0
+            if C < 1e-3:
+                eps = 1e-3
+            dCdx = (F - R) @ B.transpose() / (C + eps)
 
-            f1 = ti.math.vec3(F[0, 0], F[1, 0], F[2, 0])
-            f2 = ti.math.vec3(F[0, 1], F[1, 1], F[2, 1])
-            f3 = ti.math.vec3(F[0, 2], F[1, 2], F[2, 2])
+            grad0 = ti.math.vec3(dCdx[0, 0], dCdx[1, 0], dCdx[2, 0])
+            grad1 = ti.math.vec3(dCdx[0, 1], dCdx[1, 1], dCdx[2, 1])
+            grad2 = ti.math.vec3(dCdx[0, 2], dCdx[1, 2], dCdx[2, 2])
+            grad3 = -(grad0 + grad1 + grad2)
 
-            rS = ti.math.sqrt(f1.dot(f1) + f2.dot(f2) + f3.dot(f3))
-            nabla_C_D012 = F @ B.transpose() / rS
+            weight = self.V0[i] * compliance_str
 
-            nabla_C_D0 = ti.math.vec3(nabla_C_D012[0, 0], nabla_C_D012[1, 0], nabla_C_D012[2, 0])
-            nabla_C_D1 = ti.math.vec3(nabla_C_D012[0, 1], nabla_C_D012[1, 1], nabla_C_D012[2, 1])
-            nabla_C_D2 = ti.math.vec3(nabla_C_D012[0, 2], nabla_C_D012[1, 2], nabla_C_D012[2, 2])
-            nabla_C_D3 = -(nabla_C_D0 + nabla_C_D1 + nabla_C_D2)
+            schur = (self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
+                     self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
+                     self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
+                     self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
 
-            schur_D = (nabla_C_D0.dot(nabla_C_D0) * invM0 +
-                       nabla_C_D1.dot(nabla_C_D1) * invM1 +
-                       nabla_C_D2.dot(nabla_C_D2) * invM2 +
-                       nabla_C_D3.dot(nabla_C_D3) * invM3)
+            ld = -(weight * C) / (weight * schur + 1.0)
+            # print(ld)
 
-            alpha_D = mu * self.V0[i]
-            ld_D = -alpha_D * rS / (alpha_D * schur_D + 1.0)
+            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * ld * grad0
+            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * ld * grad1
+            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * ld * grad2
+            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * ld * grad3
 
-            self.dx[v0] += ld_D * invM0 * nabla_C_D0
-            self.dx[v1] += ld_D * invM1 * nabla_C_D1
-            self.dx[v2] += ld_D * invM2 * nabla_C_D2
-            self.dx[v3] += ld_D * invM3 * nabla_C_D3
+            self.nc[self.tetras[i, 0]] += 1.0
+            self.nc[self.tetras[i, 1]] += 1.0
+            self.nc[self.tetras[i, 2]] += 1.0
+            self.nc[self.tetras[i, 3]] += 1.0
 
-            self.nc[v0] += 1.0
-            self.nc[v1] += 1.0
-            self.nc[v2] += 1.0
-            self.nc[v3] += 1.0
-            #
-            test = 1.0 + mu / lda
-            C_H = ti.determinant(F) - test
-            nabla_C_H012 = ti.Matrix.cols([f2.cross(f3), f3.cross(f1), f1.cross(f2)])
-            nabla_C_H0 = ti.math.vec3(nabla_C_H012[0, 0], nabla_C_H012[1, 0], nabla_C_H012[2, 0])
-            nabla_C_H1 = ti.math.vec3(nabla_C_H012[0, 1], nabla_C_H012[1, 1], nabla_C_H012[2, 1])
-            nabla_C_H2 = ti.math.vec3(nabla_C_H012[0, 2], nabla_C_H012[1, 2], nabla_C_H012[2, 2])
-            nabla_C_H3 = -(nabla_C_H0 + nabla_C_H1 + nabla_C_H2)
-
-            schur_H = (nabla_C_D0.dot(nabla_C_H0) * invM0 +
-                       nabla_C_D1.dot(nabla_C_H1) * invM1 +
-                       nabla_C_D2.dot(nabla_C_H2) * invM2 +
-                       nabla_C_D3.dot(nabla_C_H3) * invM3)
-            alpha_H = -lda * self.V0[i]
-            ld_H = alpha_H * C_H / (alpha_H * schur_H + 1.0)
-
-            self.dx[v0] += ld_H * invM0 * nabla_C_H0
-            self.dx[v1] += ld_H * invM1 * nabla_C_H1
-            self.dx[v2] += ld_H * invM2 * nabla_C_H2
-            self.dx[v3] += ld_H * invM3 * nabla_C_H3
-
-            self.nc[v0] += 1.0
-            self.nc[v1] += 1.0
-            self.nc[v2] += 1.0
-            self.nc[v3] += 1.0
-
+        ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:
             self.y[i] += (self.dx[i] / self.nc[i])
 
@@ -369,7 +345,6 @@ class Solver:
 
     @ti.kernel
     def solve_xpbd_fem_volume_x(self, compliance_vol: float):
-
         self.dx.fill(0.0)
         self.nc.fill(0.0)
 
@@ -378,43 +353,44 @@ class Solver:
             Ds = ti.Matrix.cols([self.y[self.tetras[i, j]] - self.y[self.tetras[i, 3]] for j in ti.static(range(3))])
             B = self.invDm[i]
             F = Ds @ B
-            U, _, V = self.ssvd(F)
-            R = U @ V.transpose()
 
-            Dm = ti.math.inverse(B)
-            Ds_proj = R @ Dm
+            f1 = ti.math.vec3(F[0, 0], F[1, 0], F[2, 0])
+            f2 = ti.math.vec3(F[0, 1], F[1, 1], F[2, 1])
+            f3 = ti.math.vec3(F[0, 2], F[1, 2], F[2, 2])
 
-            proj03 = self.M[self.tetras[i, 0]] * ti.math.vec3(Ds_proj[0, 0], Ds_proj[1, 0], Ds_proj[2, 0])
-            proj13 = self.M[self.tetras[i, 1]] * ti.math.vec3(Ds_proj[0, 1], Ds_proj[1, 1], Ds_proj[2, 1])
-            proj23 = self.M[self.tetras[i, 2]] * ti.math.vec3(Ds_proj[0, 2], Ds_proj[1, 2], Ds_proj[2, 2])
+            J = (f1.cross(f2)).dot(f3)
+            C = J - 1.0
+            # print(C)
+            dCdx = ti.Matrix.cols([f2.cross(f3), f3.cross(f1), f1.cross(f2)]) @ B.transpose()
 
-            com = ti.math.vec3(0.0)
-            m = 0.0
+            grad0 = ti.math.vec3(dCdx[0, 0], dCdx[1, 0], dCdx[2, 0])
+            grad1 = ti.math.vec3(dCdx[0, 1], dCdx[1, 1], dCdx[2, 1])
+            grad2 = ti.math.vec3(dCdx[0, 2], dCdx[1, 2], dCdx[2, 2])
+            grad3 = -(grad0 + grad1 + grad2)
 
-            for j in ti.static(range(4)):
-                com += self.M[self.tetras[i, j]] * self.y[self.tetras[i, j]]
-                m += self.M[self.tetras[i, j]]
+            weight = self.V0[i] * compliance_vol
 
-            com /= m
+            schur = (self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
+                     self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
+                     self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
+                     self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
 
-            proj3 = com - (proj03 + proj13 + proj23) / m
-            proj0 = proj03 / self.M[self.tetras[i, 0]] + proj3
-            proj1 = proj13 / self.M[self.tetras[i, 1]] + proj3
-            proj2 = proj23 / self.M[self.tetras[i, 2]] + proj3
+            ld = -(weight * C) / (weight * schur + 1.0)
+            # print(ld)
 
-            self.dx[self.tetras[i, 0]] += (proj0 - self.y[self.tetras[i, 0]])
-            self.dx[self.tetras[i, 1]] += (proj1 - self.y[self.tetras[i, 1]])
-            self.dx[self.tetras[i, 2]] += (proj2 - self.y[self.tetras[i, 2]])
-            self.dx[self.tetras[i, 3]] += (proj3 - self.y[self.tetras[i, 3]])
+            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * ld * grad0
+            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * ld * grad1
+            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * ld * grad2
+            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * ld * grad3
 
             self.nc[self.tetras[i, 0]] += 1.0
             self.nc[self.tetras[i, 1]] += 1.0
             self.nc[self.tetras[i, 2]] += 1.0
             self.nc[self.tetras[i, 3]] += 1.0
 
+        ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:
             self.y[i] += (self.dx[i] / self.nc[i])
-            # nabla_Ci0 = ti.math.vec3(H[0, 0])
 
     @ti.kernel
     def update_state(self, damping: float, dt: float):
@@ -432,11 +408,10 @@ class Solver:
         ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
 
         compliance_str = mu * dtSq
+        self.solve_xpbd_fem_stretch_x(compliance_str)
+
         compliance_vol = ld * dtSq
-        self.solve_xpbd_fem_stretch_x(compliance_str, compliance_vol)
-        #
-        # compliance_vol = ld * dtSq
-        # self.solve_constraints_fem_volume_x(compliance_vol)
+        self.solve_xpbd_fem_volume_x(compliance_vol)
 
     def solve_PD_diag(self, dt):
 
