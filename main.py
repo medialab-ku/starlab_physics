@@ -195,7 +195,7 @@ def show_options_tet():
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.001, 0.101)
         damping_ui = w.slider_float("Damping Ratio", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("Young's Modulus", YM_ui, 0.0, 1e8)
-        PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 1e8)
+        PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 0.49)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
