@@ -33,7 +33,7 @@ obj_mesh_st = TriMesh(
 msh_model_dir = str(model_path) + "/MSH"
 #dynamic mesh
 msh_mesh_dy = TetMesh(msh_model_dir,
-                      model_name_list=["sphere1K.msh"],
+                      model_name_list=["mat20x20.msh"],
                       trans_list=[(0.0, 0.0, 0.0)],
-                      scale_list=[30.0],
+                      scale_list=[60.0],
                       rot_list=[0.0, 90.0, 0.0])

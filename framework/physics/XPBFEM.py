@@ -254,7 +254,10 @@ class Solver:
             test = (P.transpose() @ P).trace()
             C = ti.sqrt(test)
             # print(C)
-            dCdx = (F - R) @ B.transpose() / C
+            eps = 0.0
+            if C < 1e-3:
+                eps = 1e-3
+            dCdx = (F - R) @ B.transpose() / (C + eps)
 
             grad0 = ti.math.vec3(dCdx[0, 0], dCdx[1, 0], dCdx[2, 0])
             grad1 = ti.math.vec3(dCdx[0, 1], dCdx[1, 1], dCdx[2, 1])
