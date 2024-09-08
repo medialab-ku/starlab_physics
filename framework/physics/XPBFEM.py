@@ -149,7 +149,7 @@ class Solver:
         # ti.block_local(self.m_inv_p, self.v, self.x, self.y)
         for i in self.y:
             # if self.m_inv_p[i] > 0.0:
-            self.y[i] = self.mesh_dy.x[i] + (self.v[i] * dt + self.g * dt * dt)
+            self.y[i] = self.mesh_dy.x[i] + self.fixed[i] * (self.v[i] * dt + self.g * dt * dt)
             self.y[i] = self.confine_boundary(self.y[i])
 
     @ti.func
@@ -191,18 +191,18 @@ class Solver:
 
             weight = self.V0[i] * compliance_str
 
-            schur = (self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
-                     self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
-                     self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
-                     self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
+            schur = (self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
+                     self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
+                     self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
+                     self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
 
             ld = -(weight * C) / (weight * schur + 1.0)
             # print(ld)
 
-            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * ld * grad0
-            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * ld * grad1
-            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * ld * grad2
-            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * ld * grad3
+            self.dx[self.tetras[i, 0]] += self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]] * ld * grad0
+            self.dx[self.tetras[i, 1]] += self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]] * ld * grad1
+            self.dx[self.tetras[i, 2]] += self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]] * ld * grad2
+            self.dx[self.tetras[i, 3]] += self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]] * ld * grad3
 
             self.nc[self.tetras[i, 0]] += 1.0
             self.nc[self.tetras[i, 1]] += 1.0
@@ -217,11 +217,16 @@ class Solver:
     def solve_pd_fem_stretch_x(self, compliance_str: float):
         # print("fuck")
         self.dx.fill(0.0)
-        self.nc.fill(0.0)
+        self.nc.fill(1.0)
 
         ti.block_local(self.invDm, self.dx, self.nc)
         for i in self.invDm:
-            Ds = ti.Matrix.cols([self.y[self.tetras[i, j]] - self.y[self.tetras[i, 3]] for j in ti.static(range(3))])
+
+            y03 = self.y[self.tetras[i, 0]] - self.y[self.tetras[i, 3]]
+            y13 = self.y[self.tetras[i, 1]] - self.y[self.tetras[i, 3]]
+            y23 = self.y[self.tetras[i, 2]] - self.y[self.tetras[i, 3]]
+
+            Ds = ti.Matrix.cols([y03, y13, y23])
             B = self.invDm[i]
             F = Ds @ B
             U, _, V = self.ssvd(F)
@@ -238,27 +243,28 @@ class Solver:
             grad0 = ti.math.vec3(dCdx[0, 0], dCdx[1, 0], dCdx[2, 0])
             grad1 = ti.math.vec3(dCdx[0, 1], dCdx[1, 1], dCdx[2, 1])
             grad2 = ti.math.vec3(dCdx[0, 2], dCdx[1, 2], dCdx[2, 2])
-            grad3 = -(grad0 + grad1 + grad2)
+            # grad3 = -(grad0 + grad1 + grad2)
 
+            schur = grad0.dot(grad0) + grad1.dot(grad1) + grad2.dot(grad2)
+            ld = -C / (schur + 1e-3)
+
+            p03 = ld * grad0
+            p13 = ld * grad1
+            p23 = ld * grad2
+
+            # p33 = ld * grad3
+            # print(ld)
             weight = self.V0[i] * compliance_str
 
-            schur = (self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
-                     self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
-                     self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
-                     self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
+            self.dx[self.tetras[i, 0]] += weight * self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]] * p03
+            self.dx[self.tetras[i, 1]] += weight * self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]] * p13
+            self.dx[self.tetras[i, 2]] += weight * self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]] * p23
+            self.dx[self.tetras[i, 3]] -= weight * self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]] * (p03 + p13 + p23)
 
-            ld = -(weight * C) / (weight * schur + 1.0)
-            # print(ld)
-
-            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * ld * grad0
-            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * ld * grad1
-            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * ld * grad2
-            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * ld * grad3
-
-            self.nc[self.tetras[i, 0]] += 1.0
-            self.nc[self.tetras[i, 1]] += 1.0
-            self.nc[self.tetras[i, 2]] += 1.0
-            self.nc[self.tetras[i, 3]] += 1.0
+            self.nc[self.tetras[i, 0]] += weight * self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]]
+            self.nc[self.tetras[i, 1]] += weight * self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]]
+            self.nc[self.tetras[i, 2]] += weight * self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]]
+            self.nc[self.tetras[i, 3]] += 3 * weight * self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]]
 
         ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:
@@ -297,7 +303,7 @@ class Solver:
     def solve_pd_fem_volume_x(self, compliance_vol: float):
 
         self.dx.fill(0.0)
-        self.nc.fill(0.0)
+        self.nc.fill(1.0)
 
         ti.block_local(self.invDm, self.dx, self.nc)
         for i in self.invDm:
@@ -317,27 +323,30 @@ class Solver:
             grad0 = ti.math.vec3(dCdx[0, 0], dCdx[1, 0], dCdx[2, 0])
             grad1 = ti.math.vec3(dCdx[0, 1], dCdx[1, 1], dCdx[2, 1])
             grad2 = ti.math.vec3(dCdx[0, 2], dCdx[1, 2], dCdx[2, 2])
-            grad3 = -(grad0 + grad1 + grad2)
+            # grad3 = -(grad0 + grad1 + grad2)
 
+            schur = grad0.dot(grad0) + grad1.dot(grad1) + grad2.dot(grad2)
+            ld = -C / (schur + 1e-3)
+
+            p03 = ld * grad0
+            p13 = ld * grad1
+            p23 = ld * grad2
+
+            # p33 = ld * grad3
+            # print(ld)
             weight = self.V0[i] * compliance_vol
 
-            schur = (self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
-                     self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
-                     self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
-                     self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
+            self.dx[self.tetras[i, 0]] += weight * self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]] * p03
+            self.dx[self.tetras[i, 1]] += weight * self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]] * p13
+            self.dx[self.tetras[i, 2]] += weight * self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]] * p23
+            self.dx[self.tetras[i, 3]] -= weight * self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]] * (p03 + p13 + p23)
 
-            ld = -(weight * C) / (weight * schur + 1.0)
-            # print(ld)
+            self.nc[self.tetras[i, 0]] += weight * self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]]
+            self.nc[self.tetras[i, 1]] += weight * self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]]
+            self.nc[self.tetras[i, 2]] += weight * self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]]
+            self.nc[self.tetras[i, 3]] += 3 * weight * self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]]
 
-            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * ld * grad0
-            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * ld * grad1
-            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * ld * grad2
-            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * ld * grad3
 
-            self.nc[self.tetras[i, 0]] += 1.0
-            self.nc[self.tetras[i, 1]] += 1.0
-            self.nc[self.tetras[i, 2]] += 1.0
-            self.nc[self.tetras[i, 3]] += 1.0
 
         ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:
@@ -370,18 +379,18 @@ class Solver:
 
             weight = self.V0[i] * compliance_vol
 
-            schur = (self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
-                     self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
-                     self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
-                     self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
+            schur = (self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]] * grad0.dot(grad0) +
+                     self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]] * grad1.dot(grad1) +
+                     self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]] * grad2.dot(grad2) +
+                     self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]] * grad3.dot(grad3))
 
             ld = -(weight * C) / (weight * schur + 1.0)
             # print(ld)
 
-            self.dx[self.tetras[i, 0]] += self.invM[self.tetras[i, 0]] * ld * grad0
-            self.dx[self.tetras[i, 1]] += self.invM[self.tetras[i, 1]] * ld * grad1
-            self.dx[self.tetras[i, 2]] += self.invM[self.tetras[i, 2]] * ld * grad2
-            self.dx[self.tetras[i, 3]] += self.invM[self.tetras[i, 3]] * ld * grad3
+            self.dx[self.tetras[i, 0]] += self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]] * ld * grad0
+            self.dx[self.tetras[i, 1]] += self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]] * ld * grad1
+            self.dx[self.tetras[i, 2]] += self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]] * ld * grad2
+            self.dx[self.tetras[i, 3]] += self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]] * ld * grad3
 
             self.nc[self.tetras[i, 0]] += 1.0
             self.nc[self.tetras[i, 1]] += 1.0
@@ -398,7 +407,7 @@ class Solver:
         # ti.block_local(self.m_inv_p, self.v, self.x, self.y)
         for i in self.y:
             new_x = self.confine_boundary(self.y[i])
-            self.v[i] = (1.0 - damping) * (new_x - self.x[i]) / dt
+            self.v[i] = self.fixed[i] * (1.0 - damping) * (new_x - self.x[i]) / dt
             self.x[i] += self.v[i] * dt
 
     def solve_constraints_jacobi(self, dt):
