@@ -6,8 +6,10 @@ import os
 from framework.physics import XPBD
 from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
+from framework.collision import SpatialHash as shash
 
-sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=4e-3)
+sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
+sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=5e-2, sh_st=sh_st)
 sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -102,7 +104,7 @@ def show_options_tri():
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         n_iter = w.slider_int("# iter", n_iter, 1, 100)
-        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 1.101)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e5)
@@ -192,7 +194,7 @@ def show_options_tet():
 
         dt_ui = w.slider_float("Time Step Size", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# Substepping", n_substep, 1, 100)
-        dHat_ui = w.slider_float("dHat", dHat_ui, 0.001, 0.101)
+        dHat_ui = w.slider_float("dHat", dHat_ui, 0.001, 1.01)
         damping_ui = w.slider_float("Damping Ratio", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("Young's Modulus", YM_ui, 0.0, 1e8)
         PR_ui = w.slider_float("Poisson's Ratio", PR_ui, 0.0, 0.49)
@@ -387,8 +389,16 @@ while window.running:
         sim_tri.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
     if sim_type_ui == 0:
-        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
+        # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
         scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+        scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.colors)
+
+        # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))
+        scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+        scene.particles(sim_tri.mesh_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+        scene.lines(sh_st.bbox_vertices, width=1.0, indices=sh_st.bbox_edge_indices_flattened, color=(0, 0, 0))
+
+
     elif sim_type_ui == 1:
         scene.mesh(sim_tet.x, indices=sim_tet.faces, per_vertex_color=sim_tet.mesh_dy.color)
         scene.mesh(sim_tet.x, indices=sim_tet.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
@@ -410,7 +420,7 @@ while window.running:
         scene.particles(g_selector_tet.renderTestPosition, radius=0.02, color=(1, 0, 1))
         canvas.lines(g_selector_tet.ti_mouse_click_pos, width=0.002, indices=g_selector_tet.ti_mouse_click_index, color=(1, 0, 1) if g_selector_tet.MODE_SELECTION else (0, 0, 1))
 
-    scene.lines(sim_tet.aabb_x0, indices=sim_tet.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
+    # scene.lines(sim_tet.aabb_x0, indices=sim_tet.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
     camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()

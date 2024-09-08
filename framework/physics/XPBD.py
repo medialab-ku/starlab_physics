@@ -7,6 +7,7 @@ class Solver:
             mesh_dy,
             mesh_st,
             dHat,
+            sh_st,
             stiffness_stretch,
             stiffness_bending,
             g,
@@ -15,6 +16,7 @@ class Solver:
         self.mesh_dy = mesh_dy
         self.mesh_st = mesh_st
         self.dHat = dHat
+        self.sh_st = sh_st
         self.stiffness_stretch = stiffness_stretch
         self.stiffness_bending = stiffness_bending
         self.g = g
@@ -118,6 +120,7 @@ class Solver:
         compliance_bending = self.stiffness_bending * dt * dt
 
         self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
+        self.solve_xpbd_collision_constraints_st_x(2 * self.dHat)
 
     def solve_constraints_gauss_seidel_x(self, dt):
         compliance_stretch = self.stiffness_stretch * dt * dt
@@ -372,8 +375,46 @@ class Solver:
 
     ####################################################################################################################
 
+
+    @ti.kernel
+    def solve_xpbd_collision_constraints_st_x(self, distance_threshold: float):
+
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(0.0)
+
+        for pi in range(self.num_verts_dy):
+            pos_i = self.mesh_dy.y[pi]
+            cell_id = self.sh_st.pos_to_cell_id(pos_i)
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.sh_st.is_in_grid(cell_to_check):
+                    for j in range(self.sh_st.num_particles_in_cell[cell_to_check]):
+                        pj = self.sh_st.particle_ids_in_cell[cell_to_check, j]
+                        if pi == pj:
+                            continue
+                        pos_j = self.mesh_st.x[pj]
+                        xji = pos_j - pos_i
+                        if xji.norm() < distance_threshold:
+                            C = (xji.norm() - distance_threshold)
+                            nabla_C = ti.math.normalize(xji)
+                            schur = (self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi])
+                            k = 1e8
+                            ld = -(k * C) / (k * schur + 1.0)
+
+                            self.mesh_dy.dx[pi] -= self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * ld * nabla_C
+                            # self.dx[pj] += self.is_fixed[pj] * self.m_inv[pj] * ld * nabla_C
+
+                            self.mesh_dy.nc[pi] += 1.0
+                            # self.nc[pj] += 1.0
+
+        for pi in range(self.num_verts_dy):
+            if self.mesh_dy.nc[pi] > 0:
+                self.mesh_dy.y[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+
     def forward(self, n_substeps, n_iter):
+
         dt_sub = self.dt / n_substeps
+        self.sh_st.search_neighbours(self.mesh_st.x0)
 
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)

@@ -15,17 +15,17 @@ obj_model_dir = str(model_path) + "/OBJ"
 obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=["plane_64.obj"],
-    trans_list=[(0.0, 5.0, 0.0)],
-    scale_list=[10.0],
+    trans_list=[(0.0, 2.0, 0.0)],
+    scale_list=[1.0],
     rot_list=[], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
 
 # mesh_st = None
 obj_mesh_st = TriMesh(
     obj_model_dir,
-    model_name_list=["square.obj"],
-    trans_list=[(0.0, -20.0, 0.0)],
-    scale_list=[1.5],
+    model_name_list=["sphere1K.obj"],
+    trans_list=[(0.0, 0.0, 0.0)],
+    scale_list=[2.0],
     rot_list=[],
     is_static=True
 )
