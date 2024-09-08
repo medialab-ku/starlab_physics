@@ -132,8 +132,11 @@ class Solver:
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
-        self.mesh_dy.nc.copy_from(self.mesh_dy.m)
         self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
+
+        compliance_collision = 1e6 * dt * dt
+        # self.solve_xpbd_collision_constraints_st_x(2 * self.dHat)
+        self.solve_collision_constraints_st_pd_diag_x(2 * self.dHat, compliance_collision)
 
     def solve_constraints_hess_diag_x(self, dt):
         compliance_stretch = self.stiffness_stretch * dt * dt
@@ -256,7 +259,7 @@ class Solver:
     def solve_spring_constraints_pd_diag_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
 
         self.mesh_dy.dx.fill(0.0)
-        self.mesh_dy.nc.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
 
         # ti.loop_config(serialize=True)
         ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
@@ -268,16 +271,16 @@ class Solver:
 
             # alpha = (1.0 - l0 / x01.norm())
 
-            self.mesh_dy.dx[v0] -= compliance_stretch * dp01
-            self.mesh_dy.dx[v1] += compliance_stretch * dp01
+            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
+            self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
 
-            self.mesh_dy.nc[v0] += compliance_stretch
-            self.mesh_dy.nc[v1] += compliance_stretch
+            self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
+            self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
 
         ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
         for i in range(self.num_verts_dy):
             # if self.mesh_dy.nc[i] > 0:
-            self.mesh_dy.y[i] += (self.mesh_dy.dx[i] / (self.mesh_dy.m[i] + self.mesh_dy.nc[i]))
+            self.mesh_dy.y[i] += (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
 
     @ti.kernel
     def solve_spring_constraints_hess_diag_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
@@ -410,6 +413,42 @@ class Solver:
         for pi in range(self.num_verts_dy):
             if self.mesh_dy.nc[pi] > 0:
                 self.mesh_dy.y[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+
+    @ti.kernel
+    def solve_collision_constraints_st_pd_diag_x(self, distance_threshold: float, compliance_col: float):
+
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
+
+        for pi in range(self.num_verts_dy):
+            pos_i = self.mesh_dy.y[pi]
+            cell_id = self.sh_st.pos_to_cell_id(pos_i)
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.sh_st.is_in_grid(cell_to_check):
+                    for j in range(self.sh_st.num_particles_in_cell[cell_to_check]):
+                        pj = self.sh_st.particle_ids_in_cell[cell_to_check, j]
+                        if pi == pj:
+                            continue
+                        pos_j = self.mesh_st.x[pj]
+                        xji = pos_j - pos_i
+                        if xji.norm() < distance_threshold:
+                            C = (xji.norm() - distance_threshold)
+                            nabla_C = ti.math.normalize(xji)
+                            schur = (self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi])
+                            pij = xji - distance_threshold * nabla_C
+                            k = 1e8
+                            ld = -(k * C) / (k * schur + 1.0)
+
+                            self.mesh_dy.dx[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * pij
+                            # self.dx[pj] += self.is_fixed[pj] * self.m_inv[pj] * ld * nabla_C
+
+                            self.mesh_dy.nc[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
+                            # self.nc[pj] += 1.0
+
+        for pi in range(self.num_verts_dy):
+            # if self.mesh_dy.nc[pi] > 0:
+            self.mesh_dy.y[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
     def forward(self, n_substeps, n_iter):
 

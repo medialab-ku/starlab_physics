@@ -16,7 +16,7 @@ obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=["plane_64.obj"],
     trans_list=[(0.0, 2.0, 0.0)],
-    scale_list=[1.0],
+    scale_list=[2.0],
     rot_list=[], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
 
