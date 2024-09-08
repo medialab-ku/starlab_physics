@@ -404,7 +404,7 @@ class Solver:
     def solve_constraints_jacobi(self, dt):
 
         dtSq = dt ** 2
-        mu = self.YM / 2.0 * (1.0 + self.PR)
+        mu = self.YM / 2.0 / (1.0 + self.PR)
         ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
 
         compliance_str = mu * dtSq
@@ -416,7 +416,7 @@ class Solver:
     def solve_PD_diag(self, dt):
 
         dtSq = dt ** 2
-        mu = self.YM / 2.0 * (1.0 + self.PR)
+        mu = self.YM / 2.0 / (1.0 + self.PR)
         ld = (self.YM * self.PR) / ((1.0 + self.PR) * (1.0 - 2.0 * self.PR))
 
         compliance_str = mu * dtSq
