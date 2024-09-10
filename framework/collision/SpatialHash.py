@@ -81,10 +81,31 @@ class SpatialHash:
 
 
     @ti.kernel
-    def search_neighbours(self, x: ti.template()):
+    def insert_particles_in_grid(self, x: ti.template()):
         self.num_particles_in_cell.fill(0)
         for pi in x:
             cell_id = self.pos_to_cell_id(x[pi])
             counter = ti.atomic_add(self.num_particles_in_cell[cell_id], 1)
             if counter < self.cell_cache_size:
                 self.particle_ids_in_cell[cell_id, counter] = pi
+
+    @ti.kernel
+    def search_neighbours(self, x: ti.template(), num_neighbours: ti.template(), neighbour_ids: ti.template(), cache_size: int):
+
+        num_neighbours.fill(0)
+        for pi in x:
+            xi = x[pi]
+            cell_id = self.pos_to_cell_id(xi)
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.is_in_grid(cell_to_check):
+                    for j in range(self.num_particles_in_cell[cell_to_check]):
+                        pj = self.particle_ids_in_cell[cell_to_check, j]
+                        if pi == pj:
+                            continue
+
+                        xj = x[pi]
+                        n = num_neighbours[pi]
+                        if n < cache_size:
+                            neighbour_ids[pi, n] = pj
+                            num_neighbours[pi] += 1

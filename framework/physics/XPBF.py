@@ -73,7 +73,7 @@ class Solver:
 
     def reset(self):
         self.particle_dy.reset()
-        self.sh_dy.search_neighbours(self.particle_dy.x0)
+        self.sh_dy.insert_particles_in_grid(self.particle_dy.x0)
         print(self.particle_rad)
         self.init_V0_and_L(3 * self.particle_rad, self.solver_type)
 
@@ -652,9 +652,9 @@ class Solver:
         dt_sub = self.dt / n_substeps
 
         if self.particle_st != None:
-            self.sh_st.search_neighbours(self.particle_st.x0)
+            self.sh_st.insert_particles_in_grid(self.particle_st.x0)
 
-        self.sh_dy.search_neighbours(self.particle_dy.x)
+        self.sh_dy.insert_particles_in_grid(self.particle_dy.x)
         for _ in range(n_substeps):
             self.compute_y(dt_sub)
             for _ in range(n_iter):

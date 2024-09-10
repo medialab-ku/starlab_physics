@@ -1332,7 +1332,7 @@ class Solver:
             self.mesh_dy.verts.nc[v2_id] += 1.0
 
     @ti.kernel
-    def search_neighbours(self):
+    def insert_particles_in_grid(self):
 
         self.grid_num_particles.fill(0)
         # ti.block_local(self.x_p, self.grid_num_particles, self.particles2grid)

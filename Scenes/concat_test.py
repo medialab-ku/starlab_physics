@@ -50,7 +50,7 @@ rot = []
 is_static = []
 rho0 = []
 particle_names.append("smpl_neutral.vtk")
-trans.append([0.0, -1.0, 0.0])
+trans.append([0.0, 0.0, 0.0])
 scale.append(1.5)
 is_static.append(True)
 rho0.append(1.0)

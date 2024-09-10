@@ -92,6 +92,9 @@ class TriMesh:
         self.m = ti.field(dtype=float, shape=self.num_verts)
         self.fixed = ti.field(dtype=float, shape=self.num_verts)
         self.colors = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.num_neighbours = ti.field(dtype=int, shape=self.num_verts + self.num_edges + self.num_faces)
+        self.cache_size = 50
+        self.neighbour_ids = ti.field(dtype=int, shape=(self.num_verts + self.num_edges + self.num_faces, self.cache_size))
 
         # initialize the vertex fields
         self.y.fill(0.0)
