@@ -32,8 +32,8 @@ dHat_ui = sim.dHat
 
 damping_ui = sim.damping
 
-YM_ui = sim.stiffness_bending
-YM_b_ui = sim.stiffness_stretch
+YM_b_ui = sim.stiffness_bending
+YM_ui = sim.stiffness_stretch
 
 friction_coeff_ui = sim.mu
 
@@ -65,7 +65,7 @@ def show_options():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 3)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 4)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
@@ -74,6 +74,8 @@ def show_options():
             w.text("solver type: Parallel Gauss Seidel")
         elif solver_type_ui == 3:
             w.text("solver type: Euler Path")
+        elif solver_type_ui == 4:
+            w.text("solver type: Tridiagonal Euler Path")
 
         dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
@@ -123,11 +125,11 @@ def show_options():
     if not old_friction_coeff == friction_coeff_ui:
         sim.mu = friction_coeff_ui
 
-    if not YM_old == YM_ui:
-        sim.stiffness_bending = YM_ui
+    if not YM_old == YM_b_ui:
+        sim.stiffness_bending = YM_b_ui
 
-    if not YM_b_old == YM_b_ui:
-        sim.stiffness_stretch = YM_b_ui
+    if not YM_b_old == YM_ui:
+        sim.stiffness_stretch = YM_ui
 
     if not old_damping == damping_ui:
         sim.damping = damping_ui
