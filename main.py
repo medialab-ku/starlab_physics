@@ -9,7 +9,8 @@ from framework.utilities import selection_tool as st
 from framework.collision import SpatialHash as shash
 
 sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
-sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=5e-2, sh_st=sh_st)
+# sh_st_e = shash.SpatialHash(grid_resolution=(64, 64, 64))
+sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, scene1.particles_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=5e-2, sh_st=sh_st)
 sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -25,6 +26,7 @@ camera.up(0, 1, 0)
 run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
+PARTICLE = True
 #selector
 g_selector_tri = st.SelectionTool(sim_tri.num_verts_dy, sim_tri.mesh_dy.x, window, camera)
 g_selector_tet = st.SelectionTool(sim_tet.num_verts_dy, sim_tet.mesh_dy.x, window, camera)
@@ -63,6 +65,7 @@ def show_options_tri():
     global friction_coeff_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
+    global PARTICLE
     global mesh_export
     global frame_end
 
@@ -114,6 +117,7 @@ def show_options_tri():
         w.text(frame_str)
 
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
+        PARTICLE = w.checkbox("particle", PARTICLE)
         # sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
         # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         # mesh_export = w.checkbox("export mesh", mesh_export)
@@ -172,6 +176,7 @@ def show_options_tet():
     global PR_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
+    global PARTICLE
     global mesh_export
     global frame_end
 
@@ -203,6 +208,7 @@ def show_options_tet():
         w.text(frame_str)
 
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
+        PARTICLE = w.checkbox("particle", PARTICLE)
         # sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
         # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         # mesh_export = w.checkbox("export mesh", mesh_export)
@@ -389,19 +395,34 @@ while window.running:
         sim_tri.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
     if sim_type_ui == 0:
-        # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
-        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
-        scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.colors)
+        # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(1, 0.5, 0.0))
 
-        # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))
-        scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
-        scene.particles(sim_tri.mesh_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+        if PARTICLE:
+            scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
+            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+            scene.particles(sim_tri.mesh_dy.x_e, radius=sim_tri.dHat,  color=(0.0, 1.0, 0.0))
+            scene.particles(sim_tri.mesh_dy.x_f, radius=sim_tri.dHat,  color=(0.0, 0.0, 1.0))
+
+            # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0),show_wireframe=True)
+            # scene.particles(sim_tri.mesh_st.x_test, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+            scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+        else:
+
+            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(1, 0.5, 0.0))
+            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+
+            # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))
+            # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+            scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+
+
         scene.lines(sh_st.bbox_vertices, width=1.0, indices=sh_st.bbox_edge_indices_flattened, color=(0, 0, 0))
 
 
     elif sim_type_ui == 1:
         scene.mesh(sim_tet.x, indices=sim_tet.faces, per_vertex_color=sim_tet.mesh_dy.color)
         scene.mesh(sim_tet.x, indices=sim_tet.faces, color=(0.0, 0.0, 0.0), show_wireframe=True)
+        scene.lines(sim_tet.aabb_x0, indices=sim_tet.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
 
     # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
     # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))

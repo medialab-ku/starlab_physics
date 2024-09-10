@@ -79,6 +79,9 @@ class TriMesh:
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_origin = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.x_e = ti.Vector.field(n=3, dtype=float, shape=self.num_edges)
+        self.x_f = ti.Vector.field(n=3, dtype=float, shape=self.num_faces)
+        self.x_test = ti.Vector.field(n=3, dtype=float, shape=self.num_verts + self.num_edges + self.num_faces)
         self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dx = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -135,7 +138,7 @@ class TriMesh:
         self.face_indices_flatten = ti.field(dtype=ti.int32, shape=self.num_faces * 3)
         #
         # # initialize the face fields
-        # # self.fid_field.from_numpy(self.f_np)
+        # self.fid_field.from_numpy(self.f_np)
         self.face_indices_flatten.from_numpy(self.f_np)
         self.init_edge_indices_flatten()
         # # self.init_face_indices_flatten()

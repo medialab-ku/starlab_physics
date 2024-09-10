@@ -19,8 +19,8 @@ class SpatialHash:
         self.bbox_vertices = ti.Vector.field(n=3, dtype=float, shape=8)
         self.bbox_edge_indices_flattened = ti.field(dtype=int, shape=24)
 
-        self.bbox_min = -ti.math.vec3(10.0)
-        self.bbox_max = ti.math.vec3(10.0)
+        self.bbox_min = -ti.math.vec3(5.0)
+        self.bbox_max = ti.math.vec3(5.0)
 
         self.cell_size = (self.bbox_max - self.bbox_min)[0] / self.grid_resolution[0]
         print(self.cell_size)
