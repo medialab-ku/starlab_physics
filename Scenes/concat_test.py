@@ -15,9 +15,9 @@ obj_model_dir = str(model_path) + "/OBJ"
 
 obj_mesh_dy = TriMesh(
     obj_model_dir,
-    model_name_list=["plane.obj"],
-    trans_list=[(0.0, 2.0, 0.0)],
-    scale_list=[2.0],
+    model_name_list=["tshirt.obj"],
+    trans_list=[(0.0, 0.65, 0.05)],
+    scale_list=[3.0],
     rot_list=[(0.0, 1.0, 0.0, 0.0)], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
 
