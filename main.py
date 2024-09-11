@@ -118,7 +118,7 @@ def show_options_tri():
 
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
         PARTICLE = w.checkbox("particle", PARTICLE)
-        # sim.enable_velocity_update = w.checkbox("velocity constraint", sim.enable_velocity_update)
+        sim_tri.enable_velocity_update = w.checkbox("velocity constraint", sim_tri.enable_velocity_update)
         # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         # mesh_export = w.checkbox("export mesh", mesh_export)
 

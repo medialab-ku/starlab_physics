@@ -13,21 +13,29 @@ model_path = Path(__file__).resolve().parent.parent / "models"
 OBJ = "OBJ"
 obj_model_dir = str(model_path) + "/OBJ"
 
+# obj_mesh_dy = TriMesh(
+#     obj_model_dir,
+#     model_name_list=["tshirt.obj"],
+#     trans_list=[(0.0, 0.75, 0.00)],
+#     scale_list=[2.3],
+#     rot_list=[(0.0, 1.0, 0.0, 0.0)], # (axis.x, axis.y, axis.z, radian)
+#     is_static=False)
+
 obj_mesh_dy = TriMesh(
     obj_model_dir,
-    model_name_list=["tshirt.obj"],
-    trans_list=[(0.0, 0.65, 0.05)],
-    scale_list=[3.0],
+    model_name_list=["plane.obj"],
+    trans_list=[(0.0, 3.0, 0.00)],
+    scale_list=[1.3],
     rot_list=[(0.0, 1.0, 0.0, 0.0)], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
 
 # mesh_st = None
 obj_mesh_st = TriMesh(
     obj_model_dir,
-    model_name_list=["bunny_tiny.obj"],
+    model_name_list=["plane.obj"],
     trans_list=[(0.0, 0.0, 0.0)],
-    scale_list=[0.2],
-    rot_list=[],
+    scale_list=[1.3],
+    rot_list=[(0.0, 1.0, 0.0, 20.0)],
     is_static=True
 )
 
@@ -49,9 +57,9 @@ scale = []
 rot = []
 is_static = []
 rho0 = []
-particle_names.append("smpl_neutral.vtk")
+particle_names.append("very_thin_sheet.vtk")
 trans.append([0.0, 0.0, 0.0])
-scale.append(1.5)
+scale.append(0.1)
 is_static.append(True)
 rho0.append(1.0)
 
