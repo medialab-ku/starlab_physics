@@ -9,8 +9,9 @@ from framework.utilities import selection_tool as st
 from framework.collision import SpatialHash as shash
 
 sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
-# sh_st_e = shash.SpatialHash(grid_resolution=(64, 64, 64))
-sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, scene1.particles_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=5e-2, sh_st=sh_st)
+sh_dy = shash.SpatialHash(grid_resolution=(64, 64, 64))
+
+sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, scene1.particles_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=5e-2, sh_st=sh_st, sh_dy=sh_dy)
 sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)

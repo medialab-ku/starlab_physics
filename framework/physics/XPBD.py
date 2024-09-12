@@ -9,6 +9,7 @@ class Solver:
             particle_st,
             dHat,
             sh_st,
+            sh_dy,
             # sh_st_e,
             stiffness_stretch,
             stiffness_bending,
@@ -19,6 +20,7 @@ class Solver:
         self.mesh_st = mesh_st
         self.particle_st = particle_st
         self.dHat = dHat
+        self.sh_dy = sh_dy
         self.sh_st = sh_st
         # self.sh_st_e = sh_st_e
         self.stiffness_stretch = stiffness_stretch
@@ -62,12 +64,50 @@ class Solver:
                 self.mesh_dy.fixed[i] = 1.0
 
     def reset(self):
+
+        print("reset...")
         self.mesh_dy.reset()
         # self.mesh_dy.particles.reset()
         if self.mesh_st is None:
             self.mesh_st.reset()
-
         self.set_edge_and_face_particles()
+
+        self.sh_dy.insert_particles_in_grid(self.mesh_dy.x)
+        self.init_rest_neighbours(2*self.dHat)
+
+
+    @ti.kernel
+    def init_rest_neighbours(self, kernel_radius: float):
+
+        self.mesh_dy.num_neighbours_rest.fill(0)
+        for i in range(self.num_verts_dy):
+            pi = i
+            pos_i = self.mesh_dy.x[pi]
+            cell_id = self.sh_dy.pos_to_cell_id(pos_i)
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.sh_dy.is_in_grid(cell_to_check):
+                    for j in range(self.sh_dy.num_particles_in_cell[cell_to_check]):
+                        pj = self.sh_dy.particle_ids_in_cell[cell_to_check, j]
+                        if pi == pj:
+                            continue
+                        pos_j = self.mesh_dy.x[pj]
+                        xji = pos_j - pos_i
+                        n = self.mesh_dy.num_neighbours_rest[pi]
+                        if xji.norm() < kernel_radius and n < self.mesh_dy.cache_size:
+                            self.mesh_dy.neighbour_ids_rest[pi, n] = pj
+                            self.mesh_dy.num_neighbours_rest[pi] += 1
+
+
+    @ti.func
+    def is_neighbour(self, id_i, id_j, num_neighbours, neighbour_ids):
+
+        n = 0
+        for j in range(num_neighbours[id_i]):
+            if id_j == neighbour_ids[id_i, j]:
+                n += 1
+
+        return n
 
     def init_variables(self):
         # initialize dx and number of constraints (used in the Jacobi solver)
@@ -162,6 +202,7 @@ class Solver:
             self.solve_collision_constraints_st_pd_diag_x(2 * self.dHat, compliance_collision)
         elif self.selected_solver_type == 2:
             self.solve_collision_constraints_st_pd_diag_test_x(2 * self.dHat, compliance_collision)
+            self.solve_collision_constraints_dy_pd_diag_test_x(2 * self.dHat, compliance_collision)
 
     def solve_constraints_pd_diag_v(self):
         self.solve_collision_constraints_st_pd_diag_v(self.mu)
@@ -577,9 +618,9 @@ class Solver:
                 xji = pos_j - pos_i
                 n = xji.normalized()
                 vi = self.mesh_dy.v[pi]
-                cv = n.dot(vi)
-                if cv > 0.0:
-                    v_tan = vi - cv * n
+                cv = n.dot(-vi)
+                if cv < 0.0:
+                    v_tan = vi + cv * n
                     if v_tan.norm() <= mu * ti.abs(cv):
                         v_tan = ti.math.vec3(0.0)
                     else:
@@ -589,8 +630,45 @@ class Solver:
                     dv = v_tan - self.mesh_dy.v[pi]
                     self.mesh_dy.dx[pi] += dv
                     self.mesh_dy.nc[pi] += 1.0
+        for pi in range(self.num_verts_dy):
+            if self.mesh_dy.nc[pi] > 0:
+                self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(0.0)
+        k = 100.0
+        for i in range(self.num_verts_dy):
+            pi = i
+            pos_i = self.mesh_dy.y[pi]
+            for j in range(self.mesh_dy.num_neighbours_dy[pi]):
+                pj = self.mesh_dy.neighbour_ids_dy[pi, j]
+                pos_j = self.mesh_dy.y[pj]
+                xji = pos_j - pos_i
+                n = xji.normalized()
+                vji = self.mesh_dy.v[pj] - self.mesh_dy.v[pi]
+                cv = n.dot(vji)
+                if cv < 0.0:
 
+                    schur = self.mesh_dy.m_inv[pi] + self.mesh_dy.m_inv[pj]
+                    ld = cv / schur
+                    dv1 = self.mesh_dy.m_inv[pi] * ld * n
+                    dv2 = -self.mesh_dy.m_inv[pj] * ld * n
+
+                    # if v_tan.norm() <= mu * ti.abs(cv):
+                    #     v_tan = ti.math.vec3(0.0)
+                    # else:
+                    #     t = v_tan.normalized()
+                    #     v_tan = v_tan - mu * cv * t
+                        # dv = vji
+
+                    self.mesh_dy.dx[pi] += dv1
+                    self.mesh_dy.dx[pj] += dv2
+                    self.mesh_dy.nc[pi] += 1.0
+                    self.mesh_dy.nc[pj] += 1.0
+
+        for pi in range(self.num_verts_dy):
+            if self.mesh_dy.nc[pi] > 0:
+                self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
             # # Cv = nabla_C
             # schur = (self.mesh_dy.m_inv[pi] *nabla_C.dot(nabla_C) + 1e-3)
             # # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
@@ -670,9 +748,9 @@ class Solver:
         #     self.mesh_dy.nc[v1] += inv3 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1]
         #     self.mesh_dy.nc[v2] += inv3 * self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2]
         #
-        for pi in range(self.num_verts_dy):
-            if self.mesh_dy.nc[pi] > 0:
-                self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+        # for pi in range(self.num_verts_dy):
+        #     if self.mesh_dy.nc[pi] > 0:
+        #         self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
     @ti.kernel
     def solve_collision_constraints_st_pd_diag_test_x(self, kernel_radius: float, compliance_col: float):
@@ -778,6 +856,116 @@ class Solver:
             self.mesh_dy.y[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
     @ti.kernel
+    def solve_collision_constraints_dy_pd_diag_test_x(self, kernel_radius: float, compliance_col: float):
+
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
+        self.mesh_dy.num_neighbours.fill(0)
+        for i in range(self.num_verts_dy):
+            # if i < self.num_verts_dy:
+            pi = i
+            pos_i = self.mesh_dy.y[pi]
+            cell_id = self.sh_dy.pos_to_cell_id(pos_i)
+            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+                cell_to_check = cell_id + offs
+                if self.sh_dy.is_in_grid(cell_to_check):
+                    for j in range(self.sh_dy.num_particles_in_cell[cell_to_check]):
+                        pj = self.sh_dy.particle_ids_in_cell[cell_to_check, j]
+                        if pi == pj:
+                            continue
+                        #
+                        if self.is_neighbour(pi, pj, self.mesh_dy.num_neighbours_rest, self.mesh_dy.neighbour_ids_rest) > 0:
+                            continue
+
+                        pos_j = self.mesh_dy.y[pj]
+                        xji = pos_j - pos_i
+                        # n = self.mesh_dy.num_neighbours[pi]
+                        if xji.norm() < kernel_radius:
+                            n = xji.normalized()
+                            dp = xji - kernel_radius * n
+                            self.mesh_dy.dx[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * dp
+                            self.mesh_dy.dx[pj] -= self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * dp
+                            self.mesh_dy.nc[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
+                            self.mesh_dy.nc[pj] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
+                            ni = self.mesh_dy.num_neighbours_dy[pi]
+                            if ni < self.mesh_dy.cache_size_dy:
+                                self.mesh_dy.neighbour_ids_dy[pi, ni] = pj
+                                self.mesh_dy.num_neighbours_dy[pi] += 1
+
+                            # ni = self.mesh_dy.num_neighbours[pi]
+                            # if ni < self.mesh_dy.cache_size:
+                            #     self.mesh_dy.neighbour_ids[pi, ni] = pj
+                            #     self.mesh_dy.num_neighbours[pi] += 1
+                            # ni += 1.
+                            # C += self.poly6_value(xji.norm(), kernel_radius)
+                            # nabla_C += self.spiky_gradient(xji, kernel_radius)
+
+            # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
+        # for i in range(self.num_edges_dy):
+        #     v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+        #     #     pos_i = 0.5 * (self.mesh_dy.y[v0] + self.mesh_dy.y[v1])
+        #     pi = i
+        #     pos_i = 0.5 * (self.mesh_dy.y[v0] + self.mesh_dy.y[v1])
+        #     C = 0.0
+        #     nabla_C = ti.math.vec3(0.0)
+        #     # grad_rh0 = ti.math.vec3(0.0)
+        #     ni = 0.0
+        #     cell_id = self.sh_st.pos_to_cell_id(pos_i)
+        #     for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+        #         cell_to_check = cell_id + offs
+        #         if self.sh_st.is_in_grid(cell_to_check):
+        #             for j in range(self.sh_st.num_particles_in_cell[cell_to_check]):
+        #                 pj = self.sh_st.particle_ids_in_cell[cell_to_check, j]
+        #                 if pi == pj:
+        #                     continue
+        #                 pos_j = self.particle_st.x[pj]
+        #                 xji = pos_j - pos_i
+        #                 # n = self.mesh_dy.num_neighbours[pi]
+        #                 if xji.norm() < kernel_radius:
+        #                     n = xji.normalized()
+        #                     dp = xji - kernel_radius * n
+        #                     # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
+        #                     self.mesh_dy.dx[v0] += 0.5 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col * dp
+        #                     self.mesh_dy.dx[v1] += 0.5 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col * dp
+        #                     self.mesh_dy.nc[v0] += 0.5 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col
+        #                     self.mesh_dy.nc[v1] += 0.5 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col
+
+        # elif i < self.num_verts_dy + self.num_edges_dy + self.num_faces_dy:
+        #     pi = i - self.num_verts_dy - self.num_edges_dy
+        #     v0, v1, v2 = self.mesh_dy.face_indices_flatten[3 * pi + 0], self.mesh_dy.face_indices_flatten[3 * pi + 1], self.mesh_dy.face_indices_flatten[3 * pi + 2]
+        #     inv3 = 1.0 / 3.0
+        #     pos_i = (self.mesh_dy.y[v0] + self.mesh_dy.y[v1] + self.mesh_dy.y[v2]) * inv3
+        #     cell_id = self.sh_st.pos_to_cell_id(pos_i)
+        #     for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+        #         cell_to_check = cell_id + offs
+        #         if self.sh_st.is_in_grid(cell_to_check):
+        #             for j in range(self.sh_st.num_particles_in_cell[cell_to_check]):
+        #                 pj = self.sh_st.particle_ids_in_cell[cell_to_check, j]
+        #                 if pi == pj:
+        #                     continue
+        #                 pos_j = self.particle_st.x[pj]
+        #                 xji = pos_j - pos_i
+        #                 if xji.norm() < distance_threshold:
+        #                     # C = (xji.norm() - distance_threshold)
+        #                     nabla_C = ti.math.normalize(xji)
+        #                     # schur = (self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi])
+        #                     pij = xji - distance_threshold * nabla_C
+        #                     # k = 1e8
+        #                     # ld = -(k * C) / (k * schur + 1.0)
+        #
+        #                     self.mesh_dy.dx[v0] += inv3 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col * pij
+        #                     self.mesh_dy.dx[v1] += inv3 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col * pij
+        #                     self.mesh_dy.dx[v2] += inv3 * self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * compliance_col * pij
+        #                     # self.dx[pj] += self.iinv3ixed[pj] * self.m_inv[pj] * ld * nabla_C
+        #                     self.mesh_dy.nc[v0] += inv3 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col
+        #                     self.mesh_dy.nc[v1] += inv3 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col
+        #                     self.mesh_dy.nc[v2] += inv3 * self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * compliance_col
+
+        for pi in range(self.num_verts_dy):
+            # if self.mesh_dy.nc[pi] > 0:
+            self.mesh_dy.y[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+
+    @ti.kernel
     def set_edge_and_face_particles(self):
 
         for i in range(self.num_edges_dy):
@@ -809,6 +997,9 @@ class Solver:
 
         # self.set_edge_and_face_particles()
         self.sh_st.insert_particles_in_grid(self.particle_st.x)
+        self.sh_dy.insert_particles_in_grid(self.mesh_dy.x)
+        # self.init_rest_neighbours(2 * self.dHat)
+        # self.init_rest_neighbours(2 * self.dHat)
         # self.sh_st.search_neighbours(self.mesh_dy.y, self.mesh_dy.num_neighbours, self.mesh_dy.neighbour_ids, self.mesh_dy.cache_size)
         # self.sh_st_e.search_neighbours(self.mesh_st.x_e)
 
