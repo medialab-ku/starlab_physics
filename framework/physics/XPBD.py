@@ -102,16 +102,16 @@ class Solver:
                 self.mesh_dy.y[i] += self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
 
     @ti.kernel
-    def compute_v(self, damping: ti.f32, dt: ti.f32):
+    def compute_v(self, dt: ti.f32):
         # compute v after all constraints are projected to x_(t+1)
         for i in range(self.num_verts_dy):
-            self.mesh_dy.v[i] = self.mesh_dy.fixed[i] * (1.0 - damping) * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
+            self.mesh_dy.v[i] = self.mesh_dy.fixed[i] * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
 
     @ti.kernel
-    def update_x(self, dt: ti.f32):
+    def update_x(self, damping: float, dt: float):
         # eventually, update actual position x_(t+1) after velocities are computed...
         for i in range(self.num_verts_dy):
-            self.mesh_dy.x[i] += dt * self.mesh_dy.v[i]
+            self.mesh_dy.x[i] += dt * (1.0 - damping) * self.mesh_dy.v[i]
 
         # update the particles' position!
         # num_faces = self.mesh_dy.particles.num_faces
@@ -164,24 +164,13 @@ class Solver:
             self.solve_collision_constraints_st_pd_diag_test_x(2 * self.dHat, compliance_collision)
 
     def solve_constraints_pd_diag_v(self):
-        self.solve_collision_constraints_st_pd_diag_v(2 * self.dHat)
+        self.solve_collision_constraints_st_pd_diag_v(self.mu)
 
     def solve_constraints_hess_diag_x(self, dt):
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
         self.solve_spring_constraints_hess_diag_x(compliance_stretch, compliance_bending)
-
-
-    @ti.func
-    def outer_product(self, u: ti.math.vec3, v: ti.math.vec3) -> ti.math.mat3:
-
-        uvT = ti.math.mat3(0.0)
-        for I in ti.grouped(ti.ndrange((0, 3), (0, 3))):
-            uvT[I] += u[I[0]] * v[I[1]]
-
-        return uvT
-
 
     @ti.kernel
     def line_search(self, E_current: float) -> float:
@@ -573,7 +562,7 @@ class Solver:
             self.mesh_dy.y[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
     @ti.kernel
-    def solve_collision_constraints_st_pd_diag_v(self, kernel_radius: float):
+    def solve_collision_constraints_st_pd_diag_v(self, mu: float):
 
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(0.0)
@@ -587,11 +576,20 @@ class Solver:
                 pos_j = self.particle_st.x[pj]
                 xji = pos_j - pos_i
                 n = xji.normalized()
-                cv = n.dot(self.mesh_dy.v[pi])
-                if n.dot(self.mesh_dy.v[pi]) < 0.0:
-                    v_tan = self.mesh_dy.v[pi] - cv * n
-                    self.mesh_dy.dx[pi] += (v_tan - self.mesh_dy.v[pi])
+                vi = self.mesh_dy.v[pi]
+                cv = n.dot(vi)
+                if cv > 0.0:
+                    v_tan = vi - cv * n
+                    if v_tan.norm() <= mu * ti.abs(cv):
+                        v_tan = ti.math.vec3(0.0)
+                    else:
+                        t = v_tan.normalized()
+                        v_tan = v_tan - mu * cv * t
+
+                    dv = v_tan - self.mesh_dy.v[pi]
+                    self.mesh_dy.dx[pi] += dv
                     self.mesh_dy.nc[pi] += 1.0
+
 
             # # Cv = nabla_C
             # schur = (self.mesh_dy.m_inv[pi] *nabla_C.dot(nabla_C) + 1e-3)
@@ -681,7 +679,7 @@ class Solver:
 
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(1.0)
-
+        self.mesh_dy.num_neighbours.fill(0)
         for i in range(self.num_verts_dy):
             # if i < self.num_verts_dy:
             pi = i
@@ -829,13 +827,13 @@ class Solver:
                 #     self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
                 # elif self.selected_solver_type == 5:
                 #     self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-            self.compute_v(damping=self.damping, dt=dt_sub)
+            self.compute_v(dt=dt_sub)
             if self.enable_velocity_update:
                 self.solve_constraints_pd_diag_v()
 
-            if self.selected_solver_type == 0:
-                self.solve_constraints_jacobi_x(dt_sub)
-            elif self.selected_solver_type >= 1:
-                self.solve_constraints_pd_diag_x(dt_sub)
-            self.update_x(dt_sub)
+            # if self.selected_solver_type == 0:
+            #     self.solve_constraints_jacobi_x(dt_sub)
+            # elif self.selected_solver_type >= 1:
+            #     self.solve_constraints_pd_diag_x(dt_sub)
+            self.update_x(self.damping, dt_sub)
         self.set_edge_and_face_particles()

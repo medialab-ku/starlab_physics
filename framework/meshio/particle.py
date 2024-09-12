@@ -2,6 +2,7 @@ import taichi as ti
 import meshio
 import numpy as np
 import random
+from pyquaternion import Quaternion
 
 import os
 
@@ -41,6 +42,11 @@ class Particle:
             center = pos_temp.sum(axis=0) / pos_temp.shape[0]
             pos_temp = np.apply_along_axis(lambda row: translate(row, -center), 1, pos_temp)
             pos_temp = scale(pos_temp, scales[i])
+            if len(rotations) > 0: # rotate mesh if it is demanded...
+                rot_quaternion = Quaternion(axis=[rotations[i][0], rotations[i][1], rotations[i][2]], angle=rotations[i][3])
+                rot_matrix = rot_quaternion.rotation_matrix
+                for j in range(pos_temp.shape[0]):
+                    pos_temp[j] = rot_matrix @ pos_temp[j]
             pos_temp = np.apply_along_axis(lambda row: translate(row, translations[i]), 1, pos_temp)
 
             if is_static[i] is True:

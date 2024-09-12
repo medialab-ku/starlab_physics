@@ -108,7 +108,7 @@ def show_options_tri():
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         n_iter = w.slider_int("# iter", n_iter, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 1.101)
-        friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
+        friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 5.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e5)
         YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e5)
