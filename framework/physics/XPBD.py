@@ -582,34 +582,16 @@ class Solver:
             # if i < self.num_verts_dy:
             pi = i
             pos_i = self.mesh_dy.y[pi]
-            C = 0.0
-            Cv = 0.0
-            nabla_C = ti.math.vec3(0.0)
-            # grad_rh0 = ti.math.vec3(0.0)
-            ni = 0.
-            cell_id = self.sh_st.pos_to_cell_id(pos_i)
-            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
-                cell_to_check = cell_id + offs
-                if self.sh_st.is_in_grid(cell_to_check):
-                    for j in range(self.sh_st.num_particles_in_cell[cell_to_check]):
-                        pj = self.sh_st.particle_ids_in_cell[cell_to_check, j]
-                        if pi == pj:
-                            continue
-                        pos_j = self.particle_st.x[pj]
-                        xji = pos_j - pos_i
-                        # n = self.mesh_dy.num_neighbours[pi]
-                        if xji.norm() < kernel_radius:
-                            # ni += 1.
-                            # C += self.poly6_value(xji.norm(), kernel_radius)
-                            # nabla_Cji = self.spiky_gradient(xji, kernel_radius)
-                            # Cv -= nabla_Cji.dot(self.mesh_dy.v[pi])
-                            # nabla_C += nabla_Cji
-                            n = xji.normalized()
-                            cv = n.dot(self.mesh_dy.v[pi])
-                            if n.dot(self.mesh_dy.v[pi]) < 0.0:
-                                v_tan = self.mesh_dy.v[pi] - cv * n
-                                self.mesh_dy.dx[pi] += (v_tan - self.mesh_dy.v[pi])
-                                self.mesh_dy.nc[pi] += 1.0
+            for j in range(self.mesh_dy.num_neighbours[pi]):
+                pj = self.mesh_dy.neighbour_ids[pi, j]
+                pos_j = self.particle_st.x[pj]
+                xji = pos_j - pos_i
+                n = xji.normalized()
+                cv = n.dot(self.mesh_dy.v[pi])
+                if n.dot(self.mesh_dy.v[pi]) < 0.0:
+                    v_tan = self.mesh_dy.v[pi] - cv * n
+                    self.mesh_dy.dx[pi] += (v_tan - self.mesh_dy.v[pi])
+                    self.mesh_dy.nc[pi] += 1.0
 
             # # Cv = nabla_C
             # schur = (self.mesh_dy.m_inv[pi] *nabla_C.dot(nabla_C) + 1e-3)
@@ -707,7 +689,7 @@ class Solver:
             # C = 0.0
             nabla_C = ti.math.vec3(0.0)
             # grad_rh0 = ti.math.vec3(0.0)
-            ni = 0.
+            # ni = 0
             cell_id = self.sh_st.pos_to_cell_id(pos_i)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
@@ -724,39 +706,43 @@ class Solver:
                             dp = xji - kernel_radius * n
                             self.mesh_dy.dx[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * dp
                             self.mesh_dy.nc[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
+                            ni = self.mesh_dy.num_neighbours[pi]
+                            if ni < self.mesh_dy.cache_size:
+                                self.mesh_dy.neighbour_ids[pi, ni] = pj
+                                self.mesh_dy.num_neighbours[pi] += 1
                             # ni += 1.
                             # C += self.poly6_value(xji.norm(), kernel_radius)
                             # nabla_C += self.spiky_gradient(xji, kernel_radius)
 
             # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
-        for i in range(self.num_edges_dy):
-            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
-            #     pos_i = 0.5 * (self.mesh_dy.y[v0] + self.mesh_dy.y[v1])
-            pi = i
-            pos_i = 0.5 * (self.mesh_dy.y[v0] + self.mesh_dy.y[v1])
-            C = 0.0
-            nabla_C = ti.math.vec3(0.0)
-            # grad_rh0 = ti.math.vec3(0.0)
-            ni = 0.0
-            cell_id = self.sh_st.pos_to_cell_id(pos_i)
-            for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
-                cell_to_check = cell_id + offs
-                if self.sh_st.is_in_grid(cell_to_check):
-                    for j in range(self.sh_st.num_particles_in_cell[cell_to_check]):
-                        pj = self.sh_st.particle_ids_in_cell[cell_to_check, j]
-                        if pi == pj:
-                            continue
-                        pos_j = self.particle_st.x[pj]
-                        xji = pos_j - pos_i
-                        # n = self.mesh_dy.num_neighbours[pi]
-                        if xji.norm() < kernel_radius:
-                            n = xji.normalized()
-                            dp = xji - kernel_radius * n
-                            # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
-                            self.mesh_dy.dx[v0] += 0.5 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col * dp
-                            self.mesh_dy.dx[v1] += 0.5 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col * dp
-                            self.mesh_dy.nc[v0] += 0.5 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col
-                            self.mesh_dy.nc[v1] += 0.5 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col
+        # for i in range(self.num_edges_dy):
+        #     v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+        #     #     pos_i = 0.5 * (self.mesh_dy.y[v0] + self.mesh_dy.y[v1])
+        #     pi = i
+        #     pos_i = 0.5 * (self.mesh_dy.y[v0] + self.mesh_dy.y[v1])
+        #     C = 0.0
+        #     nabla_C = ti.math.vec3(0.0)
+        #     # grad_rh0 = ti.math.vec3(0.0)
+        #     ni = 0.0
+        #     cell_id = self.sh_st.pos_to_cell_id(pos_i)
+        #     for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
+        #         cell_to_check = cell_id + offs
+        #         if self.sh_st.is_in_grid(cell_to_check):
+        #             for j in range(self.sh_st.num_particles_in_cell[cell_to_check]):
+        #                 pj = self.sh_st.particle_ids_in_cell[cell_to_check, j]
+        #                 if pi == pj:
+        #                     continue
+        #                 pos_j = self.particle_st.x[pj]
+        #                 xji = pos_j - pos_i
+        #                 # n = self.mesh_dy.num_neighbours[pi]
+        #                 if xji.norm() < kernel_radius:
+        #                     n = xji.normalized()
+        #                     dp = xji - kernel_radius * n
+        #                     # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
+        #                     self.mesh_dy.dx[v0] += 0.5 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col * dp
+        #                     self.mesh_dy.dx[v1] += 0.5 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col * dp
+        #                     self.mesh_dy.nc[v0] += 0.5 * self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_col
+        #                     self.mesh_dy.nc[v1] += 0.5 * self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_col
 
             # elif i < self.num_verts_dy + self.num_edges_dy + self.num_faces_dy:
             #     pi = i - self.num_verts_dy - self.num_edges_dy
