@@ -33,11 +33,11 @@ class Solver:
 
         self.mu = 0.8
         self.PCG = ConjugateGradient()
-        self.selected_solver_type = 0
+        self.selected_solver_type = 2
         self.definiteness_fix = True
         self.print_stats = False
         self.use_line_search = True
-        self.enable_velocity_update = False
+        self.enable_velocity_update = True
 
         self.num_verts_dy = self.mesh_dy.num_verts
         self.num_edges_dy = self.mesh_dy.num_edges
@@ -651,9 +651,16 @@ class Solver:
                 vji = self.mesh_dy.v[pj] - self.mesh_dy.v[pi]
                 cv = n.dot(vji)
                 if cv < 0.0:
-                    dvij = cv * n
-                    self.mesh_dy.dx[pi] += k * self.mesh_dy.m_inv[pi] * dvij
-                    self.mesh_dy.dx[pj] -= k * self.mesh_dy.m_inv[pj] * dvij
+                    dvji_tan = vji - cv * n
+                    if dvji_tan.norm() <= mu * ti.abs(cv):
+                        dvji_tan = ti.math.vec3(0.0)
+                    else:
+                        t = dvji_tan.normalized()
+                        dvji_tan = dvji_tan + mu * cv * t
+
+                    dvji = vji - dvji_tan
+                    self.mesh_dy.dx[pi] += k * self.mesh_dy.m_inv[pi] * dvji
+                    self.mesh_dy.dx[pj] -= k * self.mesh_dy.m_inv[pj] * dvji
                     self.mesh_dy.nc[pi] += k * self.mesh_dy.m_inv[pi]
                     self.mesh_dy.nc[pj] += k * self.mesh_dy.m_inv[pj]
         #
