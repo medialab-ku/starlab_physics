@@ -637,9 +637,9 @@ class Solver:
                 self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
         self.mesh_dy.dx.fill(0.0)
-        self.mesh_dy.nc.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
 
-        k = 100.0
+        k = 1e6
         for i in range(self.num_verts_dy):
             pi = i
             pos_i = self.mesh_dy.y[pi]
@@ -651,27 +651,15 @@ class Solver:
                 vji = self.mesh_dy.v[pj] - self.mesh_dy.v[pi]
                 cv = n.dot(vji)
                 if cv < 0.0:
-
-                    schur = self.mesh_dy.m_inv[pi] + self.mesh_dy.m_inv[pj]
-                    ld = cv / schur
-                    dv1 = self.mesh_dy.m_inv[pi] * ld * n
-                    dv2 = -self.mesh_dy.m_inv[pj] * ld * n
-
-                    # if v_tan.norm() <= mu * ti.abs(cv):
-                    #     v_tan = ti.math.vec3(0.0)
-                    # else:
-                    #     t = v_tan.normalized()
-                    #     v_tan = v_tan - mu * cv * t
-                        # dv = vji
-
-                    self.mesh_dy.dx[pi] += self.mesh_dy.m_inv[pi] * ld * n
-                    self.mesh_dy.dx[pj] -= self.mesh_dy.m_inv[pj] * ld * n
-                    self.mesh_dy.nc[pi] += 1.0
-                    self.mesh_dy.nc[pj] += 1.0
+                    dvij = cv * n
+                    self.mesh_dy.dx[pi] += k * self.mesh_dy.m_inv[pi] * dvij
+                    self.mesh_dy.dx[pj] -= k * self.mesh_dy.m_inv[pj] * dvij
+                    self.mesh_dy.nc[pi] += k * self.mesh_dy.m_inv[pi]
+                    self.mesh_dy.nc[pj] += k * self.mesh_dy.m_inv[pj]
         #
         for pi in range(self.num_verts_dy):
-            if self.mesh_dy.nc[pi] > 0:
-                self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+            # if self.mesh_dy.nc[pi] > 0:
+            self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
             # # Cv = nabla_C
             # schur = (self.mesh_dy.m_inv[pi] *nabla_C.dot(nabla_C) + 1e-3)
             # # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
