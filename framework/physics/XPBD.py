@@ -605,6 +605,7 @@ class Solver:
     @ti.kernel
     def solve_collision_constraints_st_pd_diag_v(self, mu: float):
 
+        # print(mu)
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(0.0)
 
@@ -618,8 +619,8 @@ class Solver:
                 xji = pos_j - pos_i
                 n = xji.normalized()
                 vi = self.mesh_dy.v[pi]
-                cv = n.dot(-vi)
-                if cv < 0.0:
+                cv = n.dot(vi)
+                if cv > 0.0:
                     v_tan = vi + cv * n
                     if v_tan.norm() <= mu * ti.abs(cv):
                         v_tan = ti.math.vec3(0.0)
@@ -630,12 +631,14 @@ class Solver:
                     dv = v_tan - self.mesh_dy.v[pi]
                     self.mesh_dy.dx[pi] += dv
                     self.mesh_dy.nc[pi] += 1.0
+
         for pi in range(self.num_verts_dy):
             if self.mesh_dy.nc[pi] > 0:
                 self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(0.0)
+
         k = 100.0
         for i in range(self.num_verts_dy):
             pi = i
@@ -661,11 +664,11 @@ class Solver:
                     #     v_tan = v_tan - mu * cv * t
                         # dv = vji
 
-                    self.mesh_dy.dx[pi] += dv1
-                    self.mesh_dy.dx[pj] += dv2
+                    self.mesh_dy.dx[pi] += self.mesh_dy.m_inv[pi] * ld * n
+                    self.mesh_dy.dx[pj] -= self.mesh_dy.m_inv[pj] * ld * n
                     self.mesh_dy.nc[pi] += 1.0
                     self.mesh_dy.nc[pj] += 1.0
-
+        #
         for pi in range(self.num_verts_dy):
             if self.mesh_dy.nc[pi] > 0:
                 self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
@@ -860,7 +863,8 @@ class Solver:
 
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(1.0)
-        self.mesh_dy.num_neighbours.fill(0)
+        self.mesh_dy.num_neighbours_dy.fill(0)
+
         for i in range(self.num_verts_dy):
             # if i < self.num_verts_dy:
             pi = i
@@ -884,9 +888,9 @@ class Solver:
                             n = xji.normalized()
                             dp = xji - kernel_radius * n
                             self.mesh_dy.dx[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * dp
-                            self.mesh_dy.dx[pj] -= self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * dp
+                            self.mesh_dy.dx[pj] -= self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pj] * compliance_col * dp
                             self.mesh_dy.nc[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
-                            self.mesh_dy.nc[pj] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
+                            self.mesh_dy.nc[pj] += self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pj] * compliance_col
                             ni = self.mesh_dy.num_neighbours_dy[pi]
                             if ni < self.mesh_dy.cache_size_dy:
                                 self.mesh_dy.neighbour_ids_dy[pi, ni] = pj

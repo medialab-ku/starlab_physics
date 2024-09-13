@@ -24,48 +24,56 @@ class TriMesh:
             is_static=False):
 
         self.is_static = is_static
-        self.offsets = [] # offsets of each mesh
+        self.num_model = len(model_name_list)
 
         self.num_verts = 0
         self.num_faces = 0
         self.num_edges = 0
-        self.x_np = np.empty((0, 3), dtype=float) # the vertices of mesh
-        self.f_np = np.empty((0, 3), dtype=int)   # the faces of mesh
-        self.e_np = np.empty((0, 2), dtype=int)   # the edges of mesh
+        self.x_np = np.empty((0, 3), dtype=float)  # the vertices of mesh
+        self.f_np = np.empty((0, 3), dtype=int)  # the faces of mesh
+        self.e_np = np.empty((0, 2), dtype=int)  # the edges of mesh
+
+        self.vert_offsets = []  # offsets of each mesh
+        self.edge_offsets = []  # offsets of each edge
+        self.face_offsets = []  # offsets of each face
+        self.vert_offsets.append(0)
+        self.edge_offsets.append(0)
+        self.face_offsets.append(0)
 
         # concatenate all of meshes
-        for i in range(len(model_name_list)):
+        for i in range(self.num_model):
             model_path = model_dir + "/" + model_name_list[i]
             mesh = meshio.read(model_path)
-            if len(self.offsets) == 0:
-                self.offsets.append(0)
-            else:
-                self.offsets.append(self.num_verts)
 
             scale_lf = lambda x, sc: sc * x
             trans_lf = lambda x, trans: x + trans
 
             # rotate, scale, and translate all vertices
             x_np_temp = np.array(mesh.points, dtype=float)
-            center = x_np_temp.sum(axis=0) / x_np_temp.shape[0] # center position of the mesh
-            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np_temp) # translate to origin
+            center = x_np_temp.sum(axis=0) / x_np_temp.shape[0]  # center position of the mesh
+            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np_temp)  # translate to origin
 
-            x_np_temp = scale_lf(x_np_temp, scale_list[i]) # scale mesh to the particular ratio
-            if len(rot_list) > 0: # rotate mesh if it is demanded...
+            x_np_temp = scale_lf(x_np_temp, scale_list[i])  # scale mesh to the particular ratio
+
+            # rotate mesh if it is demanded...
+            if len(rot_list) > 0:
                 rot_quaternion = Quaternion(axis=[rot_list[i][0], rot_list[i][1], rot_list[i][2]], angle=rot_list[i][3])
                 rot_matrix = rot_quaternion.rotation_matrix
                 for j in range(x_np_temp.shape[0]):
                     x_np_temp[j] = rot_matrix @ x_np_temp[j]
 
-            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, trans_list[i]), 1, x_np_temp) # translate back to the particular position
+            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, center), 1,
+                                            x_np_temp)  # translate back to the original position
+            x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, trans_list[i]), 1,
+                                            x_np_temp)  # translate again to the designated position!
             self.x_np = np.append(self.x_np, x_np_temp, axis=0)
             self.num_verts += mesh.points.shape[0]
 
             self.num_faces += len(mesh.cells_dict.get("triangle", []))
-            self.f_np = np.append(self.f_np, np.array(mesh.cells_dict["triangle"]), axis=0)
 
-            self.f_np = np.reshape(self.f_np, (3 * self.num_faces, ))
-            print(self.f_np.shape)
+            face_temp = np.array(mesh.cells_dict["triangle"])
+            face_temp = face_temp + self.vert_offsets[i]
+            self.f_np = np.append(self.f_np, face_temp, axis=0)
 
             edges = set()
             for face in mesh.cells_dict["triangle"]:
@@ -73,7 +81,14 @@ class TriMesh:
                 edges.add(tuple(sorted([face[1], face[2]])))
                 edges.add(tuple(sorted([face[2], face[0]])))
             self.num_edges += len(edges)
-            self.e_np = np.append(self.e_np, np.array(list(edges)), axis=0)
+
+            edge_temp = np.array(list(edges))
+            edge_temp = edge_temp + self.vert_offsets[i]
+            self.e_np = np.append(self.e_np, edge_temp, axis=0)
+
+            self.vert_offsets.append(self.vert_offsets[-1] + mesh.points.shape[0])
+            self.edge_offsets.append(self.edge_offsets[-1] + len(edges))
+            self.face_offsets.append(self.face_offsets[-1] + len(mesh.cells_dict.get("triangle", [])))
 
         # fields about vertices
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -150,10 +165,10 @@ class TriMesh:
         self.face_indices_flatten = ti.field(dtype=ti.int32, shape=self.num_faces * 3)
         #
         # # initialize the face fields
-        # self.fid_field.from_numpy(self.f_np)
-        self.face_indices_flatten.from_numpy(self.f_np)
+        self.fid_field.from_numpy(self.f_np)
+        # self.face_indices_flatten.from_numpy(self.f_np)
         self.init_edge_indices_flatten()
-        # # self.init_face_indices_flatten()
+        self.init_face_indices_flatten()
         self.init_l0_m_inv()
         self.init_color()
 
@@ -181,17 +196,17 @@ class TriMesh:
             self.face_indices_flatten[3 * i + 2] = self.fid_field[i, 2]
 
     def init_color(self):
-        for i in range(len(self.offsets)):
+        for i in range(len(self.vert_offsets)):
             r = float(random.randrange(0, 255) / 256)
             g = float(random.randrange(0, 255) / 256)
             b = float(random.randrange(0, 255) / 256)
 
             size = 0
-            if i < len(self.offsets) - 1:
-                size = self.offsets[i + 1] - self.offsets[i]
+            if i < len(self.vert_offsets) - 1:
+                size = self.vert_offsets[i + 1] - self.vert_offsets[i]
             else:
-                size = self.num_verts - self.offsets[i]
-            self.init_color_kernel(offset=self.offsets[i], size=size, color=ti.math.vec3(r,g,b))
+                size = self.num_verts - self.vert_offsets[i]
+            self.init_color_kernel(offset=self.vert_offsets[i], size=size, color=ti.math.vec3(r,g,b))
 
     @ti.kernel
     def init_color_kernel(self, offset: ti.i32, size: ti.i32, color: ti.math.vec3):
