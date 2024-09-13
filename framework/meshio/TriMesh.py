@@ -106,6 +106,7 @@ class TriMesh:
         self.m_inv = ti.field(dtype=float, shape=self.num_verts)
         self.m = ti.field(dtype=float, shape=self.num_verts)
         self.fixed = ti.field(dtype=float, shape=self.num_verts)
+        self.rho0 = ti.field(dtype=float, shape=self.num_verts)
         self.colors = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
         self.cache_size = 50
