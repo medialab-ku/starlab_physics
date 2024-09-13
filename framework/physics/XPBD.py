@@ -335,6 +335,21 @@ class Solver:
             self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
             self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
 
+
+        for i in self.mesh_dy.bending_l0:
+            l0 = self.mesh_dy.bending_l0[i]
+            v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
+            x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
+            dp01 = x01 - l0 * x01.normalized()
+
+            # alpha = (1.0 - l0 / x01.norm())
+
+            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_bending * dp01
+            self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_bending * dp01
+
+            self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_bending
+            self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_bending
+
         ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
         for i in range(self.num_verts_dy):
             # if self.mesh_dy.nc[i] > 0:
@@ -639,7 +654,7 @@ class Solver:
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(1.0)
 
-        k = 1e6
+        k = 1e5
         for i in range(self.num_verts_dy):
             pi = i
             pos_i = self.mesh_dy.y[pi]

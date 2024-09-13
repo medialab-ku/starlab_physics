@@ -150,13 +150,10 @@ class TriMesh:
         self.p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
         self.eid_field = ti.field(dtype=int, shape=(self.num_edges, 2))
-        #
-        #
         # initialize the edge fields
         self.l0.fill(0.0)
         self.eid_field.from_numpy(self.e_np)
         self.edge_indices_flatten = ti.field(dtype=int, shape=self.num_edges * 2)
-        #
         # # fields about faces
         # self.aabb_min = ti.field(dtype=float, shape=self.num_faces)
         # self.aabb_max = ti.field(dtype=float, shape=self.num_faces)
@@ -171,6 +168,107 @@ class TriMesh:
         self.init_face_indices_flatten()
         self.init_l0_m_inv()
         self.init_color()
+        self.bending_indices = ti.field(dtype=ti.i32)
+        self.bending_constraint_count = 0
+        self.bending_l0 = ti.field(dtype=float)
+        # self.num_bending = self.bending_l0.shape
+        self.initBendingIndices()
+
+    def initBendingIndices(self):
+        # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
+        self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
+        bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
+        # print(bending_indices_np)
+        # print("# bending: ", self.bending_constraint_count)
+        ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
+        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
+
+        for i in range(bending_indices_np.shape[0]):
+            self.bending_indices[2 * i] = bending_indices_np[i][0]
+            self.bending_indices[2 * i + 1] = bending_indices_np[i][1]
+
+        self.init_bengding_l0()
+
+    def findTriNeighbors(self):
+        # print("initBend")
+        # print(self.fid_np)
+        # print(self.fid_np.shape)
+        num_f = np.rint(self.f_np.shape[0]).astype(int)
+        edgeTable = np.zeros((num_f * 3, self.f_np.shape[1]), dtype=int)
+        # print(edgeTable.shape)
+
+        for f in range(self.f_np.shape[0]):
+            eT = np.zeros((3, 3))
+            v1, v2, v3 = np.sort(self.f_np[f])
+            e1, e2, e3 = 3 * f, 3 * f + 1, 3 * f + 2
+            eT[0, :] = [v1, v2, e1]
+            eT[1, :] = [v1, v3, e2]
+            eT[2, :] = [v2, v3, e3]
+
+            edgeTable[3 * f:3 * f + 3, :] = eT
+
+        ind = np.lexsort((edgeTable[:, 1], edgeTable[:, 0]))
+        edgeTable = edgeTable[ind]
+        # print(edgeTable)
+
+        neighbors = np.zeros((num_f * 3), dtype=int)
+        neighbors.fill(-1)
+
+        ii = 0
+        bending_constraint_count = 0
+        while (ii < 3 * num_f - 1):
+            e0 = edgeTable[ii, :]
+            e1 = edgeTable[ii + 1, :]
+
+            if (e0[0] == e1[0] and e0[1] == e1[1]):
+                neighbors[e0[2]] = e1[2]
+                neighbors[e1[2]] = e0[2]
+
+                bending_constraint_count = bending_constraint_count + 1
+                ii = ii + 2
+            else:
+                ii = ii + 1
+
+        # print(bending_constraint_count, "asdf!!")
+        return bending_constraint_count, neighbors
+
+    def getBendingPair(self, bend_count, neighbors):
+
+        num_f = np.rint(self.f_np.shape[0]).astype(int)
+        pairs = np.zeros((bend_count, 2), dtype=int)
+
+        count = 0
+        # print(neighbors)
+
+        for f in range(num_f):
+            for i in range(3):
+                eid = 3 * f + i
+                neighbor_edge = neighbors[eid]
+
+                if neighbor_edge >= 0:
+                    # print(eid,neighbor_edge,neighbors[neighbor_edge])
+                    neighbors[neighbor_edge] = -1
+                    # find not shared vertex in common edge of adjacent triangles
+                    v = np.sort(self.f_np[f])
+
+                    neighbor_fid = int(np.floor(neighbor_edge / 3.0 + 1e-4) + 1e-4)
+                    neighbor_eid_local = neighbor_fid % 3
+
+                    w = np.sort(self.f_np[neighbor_fid])
+
+                    pairs[count, 0] = v[~np.isin(v, w)]
+                    pairs[count, 1] = w[~np.isin(w, v)]
+
+                    count = count + 1
+
+        # print("검산!!!",count == bend_count)
+        return pairs
+
+    @ti.kernel
+    def init_bengding_l0(self):
+        for bi in ti.ndrange(self.bending_constraint_count):
+            v0, v1 = self.bending_indices[2 * bi], self.bending_indices[2 * bi + 1]
+            self.bending_l0[bi] = (self.x[v0] - self.x[v1]).norm()
 
     ####################################################################################################################
     def reset(self):
