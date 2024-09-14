@@ -647,7 +647,7 @@ class Solver:
                 vi = self.mesh_dy.v[pi]
                 cv = n.dot(vi)
                 if cv > 0.0:
-                    v_tan = vi + cv * n
+                    v_tan = vi - cv * n
                     if v_tan.norm() <= mu * ti.abs(cv):
                         v_tan = ti.math.vec3(0.0)
                     else:
@@ -665,7 +665,7 @@ class Solver:
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(1.0)
 
-        k = 1e5
+        k = 1e8
         for i in range(self.num_verts_dy):
             pi = i
             pos_i = self.mesh_dy.y[pi]
