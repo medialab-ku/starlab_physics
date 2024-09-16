@@ -405,9 +405,8 @@ while window.running:
 
         if PARTICLE:
 
-
             if USE_HEATMAP:
-                rho0_np = sim_tri.mesh_dy.m_inv.to_numpy()
+                rho0_np = sim_tri.mesh_dy.rho0.to_numpy()
                 colormap = plt.colormaps['plasma']
                 norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
                 rgb_array = colormap(norm(rho0_np))[:, :3]
