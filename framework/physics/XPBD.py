@@ -717,8 +717,8 @@ class Solver:
                 # vi = self.mesh_dy.v[pi]
                 # cv += nabla_c_ji.dot(vi)
 
-            cv = nabla_c.dot(self.mesh_dy.v[pi])
-            if cv < 0.0:
+            cv = nabla_c.dot(-self.mesh_dy.v[pi])
+            if cv > 0.0:
                 # schur = nabla_c.dot(nabla_c)
                 for j in range(self.mesh_dy.num_neighbours[pi]):
                     pj = self.mesh_dy.neighbour_ids[pi, j]
@@ -726,7 +726,16 @@ class Solver:
                     xji = pos_j - pos_i
                     nabla_cji = self.spiky_gradient(xji, kernel_radius)
                     ld = cv / (schur + 1e-3)
-                    self.mesh_dy.dx[pi] -= k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * ld * nabla_cji
+                    pji = -self.mesh_dy.v[pi] - ld * nabla_cji
+                    # pji = ti.math.vec3(0.0)
+                    # if pji.norm() < mu * abs(cv):
+                    #     pji = ti.math.vec3(0.0)
+                    # else:
+                    #     t = pji.normalized()
+                    #     pji = pji - mu * cv * t
+
+                    dvji = pji + self.mesh_dy.v[pi]
+                    self.mesh_dy.dx[pi] -= k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * dvji
                     self.mesh_dy.nc[pi] += k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi]
 
         for pi in range(self.num_verts_dy):
