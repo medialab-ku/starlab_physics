@@ -155,7 +155,7 @@ class Solver:
     def update_x(self, damping: float, dt: float):
         # eventually, update actual position x_(t+1) after velocities are computed...
         for i in range(self.num_verts_dy):
-            self.mesh_dy.x[i] += dt * (1.0 - damping) * self.mesh_dy.v[i]
+            self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * (1.0 - damping) * self.mesh_dy.v[i]
 
         # update the particles' position!
         # num_faces = self.mesh_dy.particles.num_faces
@@ -523,17 +523,13 @@ class Solver:
 
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(1.0)
-        self.mesh_dy.num_neighbours.fill(0.0)
+        self.mesh_dy.num_neighbours.fill(0)
 
         for i in range(self.num_verts_dy):
-            # if i < self.num_verts_dy:
             pi = i
             pos_i = self.mesh_dy.y[pi]
             C = 0.0
-            nabla_C = ti.math.vec3(0.0)
             schur = 0.0
-            # grad_rh0 = ti.math.vec3(0.0)
-            # ni = 0.
             cell_id = self.sh_st.pos_to_cell_id(pos_i)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
@@ -544,9 +540,7 @@ class Solver:
                             continue
                         pos_j = self.particle_st.x[pj]
                         xji = pos_j - pos_i
-                        # n = self.mesh_dy.num_neighbours[pi]
                         if xji.norm() < kernel_radius:
-                            # ni += 1.
                             C += self.poly6_value(xji.norm(), kernel_radius)
                             nabla_Cji = self.spiky_gradient(xji, kernel_radius)
                             schur += nabla_Cji.dot(nabla_Cji)
@@ -568,13 +562,6 @@ class Solver:
                 self.mesh_dy.dx[pi] -= self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * pji
                 self.mesh_dy.nc[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
 
-                # self.mesh_dy.dx[pj] += self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pj] * compliance_col * pji
-                # self.mesh_dy.nc[pj] += self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pj] * compliance_col
-
-            # dp = (C / (nabla_C.dot(nabla_C) + 1e-3)) * nabla_C
-            #
-            # self.mesh_dy.dx[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col * dp
-            # self.mesh_dy.nc[pi] += self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * compliance_col
 
         for pi in range(self.num_verts_dy):
             # if self.mesh_dy.nc[pi] > 0:
@@ -694,10 +681,10 @@ class Solver:
                         dvji_tan = dvji_tan + mu * cv * t
 
                     dvji = vji - dvji_tan
-                    self.mesh_dy.dx[pi] += k * self.mesh_dy.m_inv[pi] * dvji
-                    self.mesh_dy.dx[pj] -= k * self.mesh_dy.m_inv[pj] * dvji
-                    self.mesh_dy.nc[pi] += k * self.mesh_dy.m_inv[pi]
-                    self.mesh_dy.nc[pj] += k * self.mesh_dy.m_inv[pj]
+                    self.mesh_dy.dx[pi] += k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * dvji
+                    self.mesh_dy.dx[pj] -= k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pj] * dvji
+                    self.mesh_dy.nc[pi] += k * self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pi]
+                    self.mesh_dy.nc[pj] += k * self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pj]
         #
         for pi in range(self.num_verts_dy):
             # if self.mesh_dy.nc[pi] > 0:
@@ -709,65 +696,80 @@ class Solver:
         # print(mu)
         # print("1")
         self.mesh_dy.dx.fill(0.0)
-        self.mesh_dy.nc.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
 
+        k = 1e8
         for i in range(self.num_verts_dy):
             # if i < self.num_verts_dy:
             pi = i
             pos_i = self.mesh_dy.y[pi]
             # cv = 0.0
             nabla_c = ti.math.vec3(0.0)
+            schur = 0.0
             for j in range(self.mesh_dy.num_neighbours[pi]):
                 pj = self.mesh_dy.neighbour_ids[pi, j]
                 pos_j = self.particle_st.x[pj]
                 xji = pos_j - pos_i
-                nabla_c += self.spiky_gradient(xji, kernel_radius)
+                nabla_cji = self.spiky_gradient(xji, kernel_radius)
+                nabla_c += nabla_cji
+                schur += nabla_cji.dot(nabla_cji)
                 # nabla_c += nabla_c_ji
                 # vi = self.mesh_dy.v[pi]
                 # cv += nabla_c_ji.dot(vi)
 
             cv = nabla_c.dot(self.mesh_dy.v[pi])
             if cv < 0.0:
-                schur = nabla_c.dot(nabla_c)
-                ld = cv / (schur + 1e-3)
-                self.mesh_dy.dx[pi] -= ld * nabla_c
-                self.mesh_dy.nc[pi] += 1.0
+                # schur = nabla_c.dot(nabla_c)
+                for j in range(self.mesh_dy.num_neighbours[pi]):
+                    pj = self.mesh_dy.neighbour_ids[pi, j]
+                    pos_j = self.particle_st.x[pj]
+                    xji = pos_j - pos_i
+                    nabla_cji = self.spiky_gradient(xji, kernel_radius)
+                    ld = cv / (schur + 1e-3)
+                    self.mesh_dy.dx[pi] -= k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * ld * nabla_cji
+                    self.mesh_dy.nc[pi] += k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi]
 
         for pi in range(self.num_verts_dy):
-            if self.mesh_dy.nc[pi] > 0:
-                self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+            # if self.mesh_dy.nc[pi] > 0:
+            self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
 
-        # self.mesh_dy.dx.fill(0.0)
-        # self.mesh_dy.nc.fill(1.0)
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
 
-        # k = 1e5
-        # for i in range(self.num_verts_dy):
-        #     pi = i
-        #     pos_i = self.mesh_dy.y[pi]
-        #     for j in range(self.mesh_dy.num_neighbours_dy[pi]):
-        #         pj = self.mesh_dy.neighbour_ids_dy[pi, j]
-        #         pos_j = self.mesh_dy.y[pj]
-        #         xji = pos_j - pos_i
-        #         n = xji.normalized()
-        #         vji = self.mesh_dy.v[pj] - self.mesh_dy.v[pi]
-        #         cv = n.dot(vji)
-        #         if cv < 0.0:
-        #             dvji_tan = vji - cv * n
-        #             if dvji_tan.norm() <= mu * ti.abs(cv):
-        #                 dvji_tan = ti.math.vec3(0.0)
-        #             else:
-        #                 t = dvji_tan.normalized()
-        #                 dvji_tan = dvji_tan + mu * cv * t
-        #
-        #             dvji = vji - dvji_tan
-        #             self.mesh_dy.dx[pi] += k * self.mesh_dy.m_inv[pi] * dvji
-        #             self.mesh_dy.dx[pj] -= k * self.mesh_dy.m_inv[pj] * dvji
-        #             self.mesh_dy.nc[pi] += k * self.mesh_dy.m_inv[pi]
-        #             self.mesh_dy.nc[pj] += k * self.mesh_dy.m_inv[pj]
-        #
-        # for pi in range(self.num_verts_dy):
-        #     # if self.mesh_dy.nc[pi] > 0:
-        #     self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+        n = 0
+        for i in range(self.num_verts_dy):
+            pi = i
+            pos_i = self.mesh_dy.y[pi]
+            c = 0.0
+            schur = 0.0
+            for j in range(self.mesh_dy.num_neighbours_dy[pi]):
+                pj = self.mesh_dy.neighbour_ids_dy[pi, j]
+                pos_j = self.mesh_dy.y[pj]
+                xji = pos_j - pos_i
+                vji =  self.mesh_dy.v[pj] -  self.mesh_dy.v[pi]
+                nabla_cji = self.spiky_gradient(xji, kernel_radius)
+                schur += nabla_cji.dot(nabla_cji)
+                c += nabla_cji.dot(vji)
+
+            ld = 0.0
+            if c > 0.0:
+                ld = c / (schur + 1e-3)
+                n += 1
+            for j in range(self.mesh_dy.num_neighbours_dy[pi]):
+                pj = self.mesh_dy.neighbour_ids_dy[pi, j]
+                pos_j = self.mesh_dy.y[pj]
+                xji = pos_j - pos_i
+                pji = -ld * self.spiky_gradient(xji, kernel_radius)
+                self.mesh_dy.dx[pi] -= k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi] * pji
+                self.mesh_dy.dx[pj] += k * self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pj] * pji
+                self.mesh_dy.nc[pi] += k * self.mesh_dy.fixed[pi] * self.mesh_dy.m_inv[pi]
+                self.mesh_dy.nc[pj] += k * self.mesh_dy.fixed[pj] * self.mesh_dy.m_inv[pj]
+
+        for pi in range(self.num_verts_dy):
+            # if self.mesh_dy.nc[pi] > 0:
+            self.mesh_dy.v[pi] += self.mesh_dy.dx[pi] / self.mesh_dy.nc[pi]
+
+        # print(n)
 
 
     @ti.kernel
