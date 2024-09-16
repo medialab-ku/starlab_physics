@@ -93,10 +93,11 @@ class Particle:
         # self.m = ti.field(dtype=float)
         self.color = ti.Vector.field(n=3, dtype=float)
         self.rho0 = ti.field(dtype=float)
+        self.heat_map = ti.Vector.field(n=3, dtype=float)
         particle_snode = ti.root.dense(ti.i, self.num_particles)
         # particle_snode.place(self.V0, self.F, self.L, self.x0)
         particle_snode.place(self.dx, self.nc)
-        particle_snode.place(self.y, self.x, self.v, self.m_inv, self.m, self.is_fixed, self.color, self.rho0)
+        particle_snode.place(self.y, self.x, self.v, self.m_inv, self.m, self.is_fixed, self.color, self.rho0, self.heat_map)
         particle_snode.place(self.c_den, self.ld)
 
         self.num_particle_neighbours_rest = ti.field(dtype=int)

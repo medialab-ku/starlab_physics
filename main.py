@@ -1,3 +1,5 @@
+import numpy as np
+import matplotlib.pyplot as plt
 import taichi as ti
 import json
 
@@ -27,6 +29,7 @@ camera.up(0, 1, 0)
 run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
+USE_HEATMAP = True
 PARTICLE = True
 #selector
 g_selector_tri = st.SelectionTool(sim_tri.num_verts_dy, sim_tri.mesh_dy.x, window, camera)
@@ -66,6 +69,7 @@ def show_options_tri():
     global friction_coeff_ui
     global MODE_WIREFRAME
     global LOOKAt_ORIGIN
+    global USE_HEATMAP
     global PARTICLE
     global mesh_export
     global frame_end
@@ -118,6 +122,7 @@ def show_options_tri():
         w.text(frame_str)
 
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
+        USE_HEATMAP = w.checkbox("heatmap", USE_HEATMAP)
         PARTICLE = w.checkbox("particle", PARTICLE)
         sim_tri.enable_velocity_update = w.checkbox("velocity constraint", sim_tri.enable_velocity_update)
         # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
@@ -399,14 +404,34 @@ while window.running:
         # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(1, 0.5, 0.0))
 
         if PARTICLE:
-            scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
-            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
-            scene.particles(sim_tri.mesh_dy.x_e, radius=sim_tri.dHat,  color=(0.0, 1.0, 0.0))
-            scene.particles(sim_tri.mesh_dy.x_f, radius=sim_tri.dHat,  color=(0.0, 0.0, 1.0))
 
+
+            if USE_HEATMAP:
+                rho0_np = sim_tri.mesh_dy.m_inv.to_numpy()
+                colormap = plt.colormaps['plasma']
+                norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
+                rgb_array = colormap(norm(rho0_np))[:, :3]
+                # print(rgb_array.shape)
+                sim_tri.mesh_dy.heat_map.from_numpy(rgb_array)
+                scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
+
+                rho0_np = sim_tri.particle_st.m_inv.to_numpy()
+                colormap = plt.colormaps['plasma']
+                norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
+                rgb_array = colormap(norm(rho0_np))[:, :3]
+                # print(rgb_array.shape)
+                sim_tri.particle_st.heat_map.from_numpy(rgb_array)
+                scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.particle_st.heat_map)
+            else:
+                scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
+                # scene.particles(sim_tri.mesh_dy.x_e, radius=sim_tri.dHat,  color=(0.0, 1.0, 0.0))
+                # scene.particles(sim_tri.mesh_dy.x_f, radius=sim_tri.dHat,  color=(0.0, 0.0, 1.0))
+                scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+
+            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0),show_wireframe=True)
             # scene.particles(sim_tri.mesh_st.x_test, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
-            scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+            #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
         else:
 
             scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(1, 0.5, 0.0))
