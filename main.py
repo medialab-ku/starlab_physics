@@ -5,6 +5,7 @@ import json
 
 from Scenes import concat_test as scene1
 import os
+from pathlib import Path
 from framework.physics import XPBD
 from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
@@ -35,19 +36,41 @@ PARTICLE = True
 g_selector_tri = st.SelectionTool(sim_tri.num_verts_dy, sim_tri.mesh_dy.x, window, camera)
 g_selector_tet = st.SelectionTool(sim_tet.num_verts_dy, sim_tet.mesh_dy.x, window, camera)
 
-n_substep = 20
-n_iter = 1
 
 frame_end = 100
 
+# initialize the tri UI params
+json_path = Path(__file__).resolve().parent / "framework" / "sim_config.json"
+default_data = {
+    "dt": sim_tri.dt,
+    "n_substep": 20,
+    "n_iter": 1,
+    "dHat": 0.05,
+    "fric_coef": 0.8,
+    "damping": 0.001,
+    "YM": 5e3,
+    "YM_b": 5e3
+}
+
+config_data = {}
+if not os.path.exists(json_path):
+    with open(json_path, 'w') as json_file:
+        json.dump(default_data, json_file, indent=4)
+
+with open(json_path, 'r') as json_file:
+    config_data = json.load(json_file)
+
 sim_type_ui = 0
-dt_ui = sim_tri.dt
 solver_type_ui = sim_tri.selected_solver_type
-dHat_ui = sim_tri.dHat
-damping_ui = sim_tri.damping
-YM_b_ui = sim_tri.stiffness_bending
-YM_ui = sim_tri.stiffness_stretch
-friction_coeff_ui = sim_tri.mu
+
+dt_ui = config_data["dt"]
+n_substep = config_data["n_substep"]
+n_iter = config_data["n_iter"]
+dHat_ui = config_data["dHat"]
+friction_coeff_ui = config_data["fric_coef"]
+damping_ui = config_data["damping"]
+YM_ui = config_data["YM"]
+YM_b_ui = config_data["YM_b"]
 
 PR_ui = sim_tet.PR
 
@@ -322,6 +345,20 @@ while window.running:
             if sim_type_ui == 0:
                 g_selector_tri.is_selected.fill(0.0)
                 sim_tri.set_fixed_vertices(g_selector_tri.is_selected)
+
+                config_data = {
+                    "dt": dt_ui,
+                    "n_substep": n_substep,
+                    "n_iter": n_iter,
+                    "dHat": dHat_ui,
+                    "fric_coef": friction_coeff_ui,
+                    "damping": damping_ui,
+                    "YM": YM_ui,
+                    "YM_b": YM_b_ui
+                }
+                with open(json_path, 'w') as json_file:
+                    json.dump(config_data, json_file, indent=4)
+
             elif sim_type_ui == 1:
                 g_selector_tet.is_selected.fill(0.0)
                 sim_tet.set_fixed_vertices(g_selector_tet.is_selected)
