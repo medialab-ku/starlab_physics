@@ -11,11 +11,65 @@ from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 from framework.collision import SpatialHash as shash
 
+# initialize the tri UI params
+config_path = Path(__file__).resolve().parent / "framework" / "sim_config.json"
+config_data = {}
+default_data = {
+    "sim_type": 0,
+    "solver_type": 0,
+    "dt_tri": 0.03,
+    "dt_tet": 0.02,
+    "n_substep": 20,
+    "n_iter": 1,
+    "dHat": 0.05,
+    "fric_coef": 0.8,
+    "damping": 0.001,
+    "YM": 5e3,
+    "YM_b": 5e3,
+    "PCG_threshold": 1e-4,
+    "PCG_definiteness_fix": True,
+    "PCG_use_line_search": True,
+    "PCG_print_stats": False,
+    "PCG_max_cg_iter": 100,
+    "PR": 0.2
+}
+
+if not os.path.exists(config_path):
+    with open(config_path, 'w') as json_file:
+        json.dump(default_data, json_file, indent=4)
+
+with open(config_path, 'r') as json_file:
+    config_data = json.load(json_file)
+
+sim_type_ui = config_data["sim_type"]
+solver_type_ui = config_data["solver_type"]
+dt_tri_ui = config_data["dt_tri"]
+dt_tet_ui = config_data["dt_tet"]
+n_substep = config_data["n_substep"]
+n_iter = config_data["n_iter"]
+dHat_ui = config_data["dHat"]
+friction_coeff_ui = config_data["fric_coef"]
+damping_ui = config_data["damping"]
+YM_ui = config_data["YM"]
+YM_b_ui = config_data["YM_b"]
+PR_ui = config_data["PR"]
+
 sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
 sh_dy = shash.SpatialHash(grid_resolution=(64, 64, 64))
 
-sim_tri = XPBD.Solver(scene1.obj_mesh_dy, scene1.obj_mesh_st, scene1.particles_st, g=ti.math.vec3(0.0, -7., 0.0), dt=0.03, stiffness_stretch=5e3, stiffness_bending=5e3, dHat=5e-2, sh_st=sh_st, sh_dy=sh_dy)
-sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy, g=ti.math.vec3(0.0, -9.81, 0.0), dt=0.020)
+sim_tri = XPBD.Solver(scene1.obj_mesh_dy,
+                      scene1.obj_mesh_st,
+                      scene1.particles_st,
+                      g=ti.math.vec3(0.0, -7.0, 0.0),
+                      dt=dt_tri_ui,
+                      stiffness_stretch=YM_ui,
+                      stiffness_bending=YM_b_ui,
+                      dHat=dHat_ui,
+                      sh_st=sh_st,
+                      sh_dy=sh_dy)
+sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy,
+                        g=ti.math.vec3(0.0, -9.8, 0.0),
+                        dt=dt_tet_ui)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -39,40 +93,7 @@ g_selector_tet = st.SelectionTool(sim_tet.num_verts_dy, sim_tet.mesh_dy.x, windo
 
 frame_end = 100
 
-# initialize the tri UI params
-json_path = Path(__file__).resolve().parent / "framework" / "sim_config.json"
-default_data = {
-    "dt": sim_tri.dt,
-    "n_substep": 20,
-    "n_iter": 1,
-    "dHat": 0.05,
-    "fric_coef": 0.8,
-    "damping": 0.001,
-    "YM": 5e3,
-    "YM_b": 5e3
-}
 
-config_data = {}
-if not os.path.exists(json_path):
-    with open(json_path, 'w') as json_file:
-        json.dump(default_data, json_file, indent=4)
-
-with open(json_path, 'r') as json_file:
-    config_data = json.load(json_file)
-
-sim_type_ui = 0
-solver_type_ui = sim_tri.selected_solver_type
-
-dt_ui = config_data["dt"]
-n_substep = config_data["n_substep"]
-n_iter = config_data["n_iter"]
-dHat_ui = config_data["dHat"]
-friction_coeff_ui = config_data["fric_coef"]
-damping_ui = config_data["damping"]
-YM_ui = config_data["YM"]
-YM_b_ui = config_data["YM_b"]
-
-PR_ui = sim_tet.PR
 
 mesh_export = False
 frame_cpu = 0
@@ -81,7 +102,7 @@ def show_options_tri():
 
     global n_substep
     global n_iter
-    global dt_ui
+    global dt_tri_ui
     global sim_type_ui
     global solver_type_ui
     global damping_ui
@@ -97,7 +118,7 @@ def show_options_tri():
     global mesh_export
     global frame_end
 
-    old_dt = dt_ui
+    old_dt = dt_tri_ui
     old_solver_type_ui = solver_type_ui
     old_dHat = dHat_ui
     old_friction_coeff = dHat_ui
@@ -132,7 +153,7 @@ def show_options_tri():
             sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
 
 
-        dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
+        dt_tri_ui = w.slider_float("dt", dt_tri_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         n_iter = w.slider_int("# iter", n_iter, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 1.101)
@@ -171,8 +192,8 @@ def show_options_tri():
         w.text(edges_str)
         w.text(faces_str)
 
-    if not old_dt == dt_ui:
-        sim_tri.dt = dt_ui
+    if not old_dt == dt_tri_ui:
+        sim_tri.dt = dt_tri_ui
 
     if not old_solver_type_ui == solver_type_ui:
         sim_tri.selected_solver_type = solver_type_ui
@@ -195,7 +216,7 @@ def show_options_tri():
 def show_options_tet():
 
     global n_substep
-    global dt_ui
+    global dt_tet_ui
     global solver_type_ui
     global sim_type_ui
     global damping_ui
@@ -209,7 +230,7 @@ def show_options_tet():
     global mesh_export
     global frame_end
 
-    old_dt = dt_ui
+    old_dt = dt_tet_ui
     old_solver_type_ui = solver_type_ui
     old_dHat = dHat_ui
     old_damping = damping_ui
@@ -226,7 +247,7 @@ def show_options_tet():
         elif solver_type_ui == 1:
             w.text("solver type: PD diag")
 
-        dt_ui = w.slider_float("Time Step Size", dt_ui, 0.001, 0.101)
+        dt_tet_ui = w.slider_float("Time Step Size", dt_tet_ui, 0.001, 0.101)
         n_substep = w.slider_int("# Substepping", n_substep, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.001, 1.01)
         damping_ui = w.slider_float("Damping Ratio", damping_ui, 0.0, 1.0)
@@ -254,8 +275,8 @@ def show_options_tet():
         # particles_st_str = "# static particles: " + str(sim.num_particles - sim.num_particles_dy)
         # w.text(particles_st_str)
 
-    if not old_dt == dt_ui:
-        sim_tet.dt = dt_ui
+    if not old_dt == dt_tet_ui:
+        sim_tet.dt = dt_tet_ui
 
     if not old_dHat == dHat_ui:
         sim_tet.particle_rad = dHat_ui
@@ -342,26 +363,37 @@ while window.running:
             frame_cpu = 0
             sim_tri.reset()
             sim_tet.reset()
+
+            config_data = {
+                "sim_type": sim_type_ui,
+                "solver_type": solver_type_ui,
+                "dt_tri": dt_tri_ui,
+                "dt_tet": dt_tet_ui,
+                "n_substep": n_substep,
+                "n_iter": n_iter,
+                "dHat": dHat_ui,
+                "fric_coef": friction_coeff_ui,
+                "damping": damping_ui,
+                "YM": YM_ui,
+                "YM_b": YM_b_ui,
+                "PCG_threshold": sim_tri.threshold,
+                "PCG_definiteness_fix": sim_tri.definiteness_fix,
+                "PCG_use_line_search": sim_tri.use_line_search,
+                "PCG_print_stats": sim_tri.print_stats,
+                "PCG_max_cg_iter": sim_tri.max_cg_iter,
+                "PR": sim_tet.PR
+            }
+            with open(config_path, 'w') as json_file:
+                json.dump(config_data, json_file, indent=4)
+
             if sim_type_ui == 0:
                 g_selector_tri.is_selected.fill(0.0)
                 sim_tri.set_fixed_vertices(g_selector_tri.is_selected)
 
-                config_data = {
-                    "dt": dt_ui,
-                    "n_substep": n_substep,
-                    "n_iter": n_iter,
-                    "dHat": dHat_ui,
-                    "fric_coef": friction_coeff_ui,
-                    "damping": damping_ui,
-                    "YM": YM_ui,
-                    "YM_b": YM_b_ui
-                }
-                with open(json_path, 'w') as json_file:
-                    json.dump(config_data, json_file, indent=4)
-
             elif sim_type_ui == 1:
                 g_selector_tet.is_selected.fill(0.0)
                 sim_tet.set_fixed_vertices(g_selector_tet.is_selected)
+
             # sim_tet.set_fixed_vertices(g_selector.is_selected)
             run_sim = False
 
