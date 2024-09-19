@@ -24,8 +24,8 @@ obj_model_dir = str(model_path) + "/OBJ"
 obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=["plane.obj"],
-    trans_list=[(0.0, 4.0, 0.0), (0.0, 0.5, 0.0)],
-    scale_list=[1.3, 1.3],
+    trans_list=[(0.0, 0.2, 0.0), (0.0, 2.0, 0.0)],
+    scale_list=[1.0, 2.0],
     rot_list=[(1.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0)], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
 
@@ -56,9 +56,9 @@ scale = []
 rot = []
 is_static = []
 rho0 = []
-particle_names.append("very_thin_sheet.vtk")
+particle_names.append("sphere5K.vtk")
 trans.append([0.0, 0.0, 0.0])
-scale.append(0.1)
+scale.append(1.0)
 is_static.append(True)
 rho0.append(1.0)
 

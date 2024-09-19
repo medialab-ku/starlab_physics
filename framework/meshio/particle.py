@@ -133,6 +133,7 @@ class Particle:
     def reset(self):
         self.x.copy_from(self.x0)
         self.v.fill(0.)
+        # self.reset_rho()
 
     def init_color(self, is_static):
         # print(self.offsets)
@@ -158,7 +159,6 @@ class Particle:
 
         for i in range(size):
             self.color[i + offset] = color
-
     # @ti.kernel
     # def setCenterToOrigin(self):
     #
