@@ -132,7 +132,10 @@ class TetMesh:
 
         self.M.fill(0.0)
         for i in self.invDm:
+
+            #TODO
             Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
+
             self.invDm[i] = Dm_i.inverse()
             V0_i = ti.abs(Dm_i.determinant()) / 6.0
             self.V0[i] = V0_i

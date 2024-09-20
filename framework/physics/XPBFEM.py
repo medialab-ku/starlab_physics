@@ -222,9 +222,11 @@ class Solver:
         ti.block_local(self.invDm, self.dx, self.nc)
         for i in self.invDm:
 
+            # TODO-START
             y03 = self.y[self.tetras[i, 0]] - self.y[self.tetras[i, 3]]
             y13 = self.y[self.tetras[i, 1]] - self.y[self.tetras[i, 3]]
             y23 = self.y[self.tetras[i, 2]] - self.y[self.tetras[i, 3]]
+            # TODO-END
 
             Ds = ti.Matrix.cols([y03, y13, y23])
             B = self.invDm[i]
@@ -256,6 +258,7 @@ class Solver:
             # print(ld)
             weight = self.V0[i] * compliance_str
 
+            #TODO-START
             self.dx[self.tetras[i, 0]] += weight * self.fixed[self.tetras[i, 0]] * self.invM[self.tetras[i, 0]] * p03
             self.dx[self.tetras[i, 1]] += weight * self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]] * p13
             self.dx[self.tetras[i, 2]] += weight * self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]] * p23
@@ -265,6 +268,7 @@ class Solver:
             self.nc[self.tetras[i, 1]] += weight * self.fixed[self.tetras[i, 1]] * self.invM[self.tetras[i, 1]]
             self.nc[self.tetras[i, 2]] += weight * self.fixed[self.tetras[i, 2]] * self.invM[self.tetras[i, 2]]
             self.nc[self.tetras[i, 3]] += 3 * weight * self.fixed[self.tetras[i, 3]] * self.invM[self.tetras[i, 3]]
+            #TODO-END
 
         ti.block_local(self.y, self.dx, self.nc)
         for i in self.dx:
