@@ -157,7 +157,7 @@ def show_options_tri():
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
         n_iter = w.slider_int("# iter", n_iter, 1, 100)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 1.101)
-        friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 5.0)
+        friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
         YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e5)
         YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e5)
@@ -501,7 +501,7 @@ while window.running:
             #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
         else:
 
-            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(1, 0.5, 0.0))
+            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
             scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
 
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))

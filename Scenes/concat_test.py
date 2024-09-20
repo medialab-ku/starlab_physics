@@ -23,10 +23,21 @@ obj_model_dir = str(model_path) + "/OBJ"
 
 obj_mesh_dy = TriMesh(
     obj_model_dir,
-    model_name_list=["plane.obj"],
-    trans_list=[(0.0, 0.2, 0.0), (0.0, 2.0, 0.0)],
-    scale_list=[1.0, 2.0],
-    rot_list=[(1.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0)], # (axis.x, axis.y, axis.z, radian)
+    model_name_list=[
+                     # "tshirt.obj",
+                     "dress_modified.obj"
+                    ],
+    trans_list=[
+                # (0.0, -2.4, 0.0),
+                (0.0, 0.0, -1.0)
+               ],
+    scale_list=[
+                # 2.3,
+                3.5
+               ],
+    rot_list=[
+              # (1.0, 0.0, 0.0, 0.0),
+              (1.0, 0.0, 0.0, -3.14 / 2.0)], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
 
 # mesh_st = None
@@ -56,10 +67,10 @@ scale = []
 rot = []
 is_static = []
 rho0 = []
-particle_names.append("sphere5K.vtk")
+particle_names.append("smpl_neutral.vtk")
 trans.append([0.0, 0.0, 0.0])
-scale.append(1.0)
+scale.append(1.5)
 is_static.append(True)
 rho0.append(1.0)
 
-particles_st = Particle(vtk_model_dir, particle_names, translations=trans, scales=scale, rotations=[(1.0, 0.0, 0.0, 0.2)], is_static=is_static, rho0=rho0)
+particles_st = Particle(vtk_model_dir, particle_names, translations=trans, scales=scale, rotations=[(1.0, 0.0, 0.0, 0.)], is_static=is_static, rho0=rho0)

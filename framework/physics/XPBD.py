@@ -83,7 +83,7 @@ class Solver:
             l = (self.particle_st.x[i] - center).norm()
             self.particle_st.rho0[i] = self.poly6_value(l, 1.5 * surface_radius)
 
-        # self.particle_st.rho0.fill(1.0)
+        self.particle_st.rho0.fill(1.0)
 
     def reset(self):
 
@@ -108,17 +108,22 @@ class Solver:
         for i in range(self.num_verts_dy):
             pi = i
             pos_i = self.mesh_dy.x[pi]
+            color_i = self.mesh_dy.colors[pi]
             cell_id = self.sh_dy.pos_to_cell_id(pos_i)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
                 if self.sh_dy.is_in_grid(cell_to_check):
                     for j in range(self.sh_dy.num_particles_in_cell[cell_to_check]):
                         pj = self.sh_dy.particle_ids_in_cell[cell_to_check, j]
+                        color_j = self.mesh_dy.colors[pj]
                         if pi == pj:
                             continue
                         pos_j = self.mesh_dy.x[pj]
                         xji = pos_j - pos_i
-                        self.mesh_dy.rho0[i] += self.poly6_value(xji.norm(), kernel_radius)
+
+                        if (color_i - color_j).norm() < 1e-3:
+                            self.mesh_dy.rho0[i] += self.poly6_value(xji.norm(), kernel_radius)
+
                         n = self.mesh_dy.num_neighbours_rest[pi]
                         if xji.norm() < kernel_radius and n < self.mesh_dy.cache_size:
                             # self.mesh_dy.rho0[pi] +=
