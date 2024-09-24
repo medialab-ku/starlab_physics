@@ -58,7 +58,7 @@ sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
 sh_dy = shash.SpatialHash(grid_resolution=(64, 64, 64))
 
 sim_tri = XPBD.Solver(scene1.obj_mesh_dy,
-                      scene1.obj_mesh_st,
+                      # scene1.obj_mesh_st,
                       scene1.particles_st,
                       g=ti.math.vec3(0.0, -7.0, 0.0),
                       dt=dt_tri_ui,
@@ -183,14 +183,14 @@ def show_options_tri():
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
-        w.text("")
-        w.text("static mesh stats.")
-        verts_str = "# verts: " + str(sim_tri.num_verts_st)
-        edges_str = "# edges: " + str(sim_tri.num_edges_st)
-        faces_str = "# faces: " + str(sim_tri.num_faces_st)
-        w.text(verts_str)
-        w.text(edges_str)
-        w.text(faces_str)
+        # w.text("")
+        # w.text("static mesh stats.")
+        # verts_str = "# verts: " + str(sim_tri.num_verts_st)
+        # edges_str = "# edges: " + str(sim_tri.num_edges_st)
+        # faces_str = "# faces: " + str(sim_tri.num_faces_st)
+        # w.text(verts_str)
+        # w.text(edges_str)
+        # w.text(faces_str)
 
     if not old_dt == dt_tri_ui:
         sim_tri.dt = dt_tri_ui

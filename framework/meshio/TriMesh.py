@@ -40,7 +40,10 @@ class TriMesh:
         self.edge_offsets.append(0)
         self.face_offsets.append(0)
 
-        path = '/home/mhkee/Desktop/workspace/starlab_physics/models/sampling/dress_modified.npy'
+        model_name = model_name_list[0][:-4]
+        print(model_name)
+
+        path = '/home/mhkee/Desktop/workspace/starlab_physics/models/sampling/'+model_name+'.npy'
         load_array = np.load(path, allow_pickle=True)
 
         # print(load_array)
