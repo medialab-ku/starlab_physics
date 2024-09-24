@@ -79,6 +79,8 @@ class Particle:
         # print(self.num_static)
         self.type = ti.field(dtype=int)
         self.x0 = ti.Vector.field(n=3, dtype=float)
+        self.x_prev = ti.Vector.field(n=3, dtype=float)
+        self.x_current = ti.Vector.field(n=3, dtype=float)
         self.y = ti.Vector.field(n=3, dtype=float)
         self.dx = ti.Vector.field(n=3, dtype=float)
         self.nc = ti.field(dtype=float)
@@ -99,7 +101,7 @@ class Particle:
         particle_snode = ti.root.dense(ti.i, self.num_particles)
         # particle_snode.place(self.V0, self.F, self.L, self.x0)
         particle_snode.place(self.dx, self.nc)
-        particle_snode.place(self.y, self.x, self.v, self.m_inv, self.m, self.is_fixed, self.color, self.rho0, self.heat_map)
+        particle_snode.place(self.y, self.x, self.x_prev,  self.x_current, self.v, self.m_inv, self.m, self.is_fixed, self.color, self.rho0, self.heat_map)
         particle_snode.place(self.c_den, self.ld)
 
         self.num_particle_neighbours_rest = ti.field(dtype=int)

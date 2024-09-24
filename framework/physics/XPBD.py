@@ -187,6 +187,12 @@ class Solver:
                 p[i] = boundary_max[i] - 1e-4 * ti.random()
 
         return p
+
+    @ti.kernel
+    def compute_particle_v(self, dt: float):
+        for i in self.particle_st.x_prev:
+            self.particle_st.v[i] = (self.particle_st.x_current[i] - self.particle_st.x_prev[i]) / dt
+
     @ti.kernel
     def compute_y(self, g: ti.math.vec3, dt: ti.f32):
         # compute apporximate x_(t+1) (== y) by explicit way before projecting constraints to x_(t+1)...
@@ -194,6 +200,11 @@ class Solver:
             self.mesh_dy.y[i] = self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt)
             self.mesh_dy.y[i] = self.confine_boundary(self.mesh_dy.y[i])
             self.mesh_dy.y_origin[i] = self.mesh_dy.y[i]
+
+        for i in self.particle_st.x:
+            self.particle_st.x[i] = self.particle_st.x_prev[i] + self.particle_st.v[i] * dt
+
+
 
     @ti.kernel
     def update_dx(self):
@@ -207,6 +218,9 @@ class Solver:
         # compute v after all constraints are projected to x_(t+1)
         for i in range(self.num_verts_dy):
             self.mesh_dy.v[i] = self.mesh_dy.fixed[i] * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
+
+
+        # self.particle_st.x_prev.copy_from(self.particle_st.x)
 
     @ti.kernel
     def update_x(self, damping: float, dt: float):
@@ -1320,6 +1334,10 @@ class Solver:
 
         self.sh_st.insert_particles_in_grid(self.particle_st.x)
         self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
+
+        self.particle_st.x_prev.copy_from(self.particle_st.x0)
+        self.particle_st.x_current.copy_from(self.particle_st.x0)
+        self.compute_particle_v(dt_sub)
 
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
