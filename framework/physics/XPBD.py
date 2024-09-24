@@ -92,7 +92,7 @@ class Solver:
 
         self.particle_st.reset()
         self.particle_st.v.fill(0.0)
-        self.particle_st.rho0.fill(1.0)
+        # self.particle_st.rho0.fill(1.0)
         # self.reset_rho()
         # if self.mesh_st is None:
         #     self.mesh_st.reset()

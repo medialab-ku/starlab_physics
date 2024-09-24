@@ -14,43 +14,43 @@ model_path = Path(__file__).resolve().parent.parent / "models"
 OBJ = "OBJ"
 CSV = "CSV"
 obj_model_dir = str(model_path) + "/OBJ"
-# obj_mesh_dy = TriMesh(
-#     obj_model_dir,
-#     model_name_list=[
-#                      # "tshirt.obj",
-#                      "dress_modified.obj"
-#                     ],
-#     trans_list=[
-#                 # (0.0, -2.4, 0.0),
-#                 (0.0, 0.0, -1.0)
-#                ],
-#     scale_list=[
-#                 # 2.3,
-#                 3.5
-#                ],
-#     rot_list=[
-#               # (1.0, 0.0, 0.0, 0.0),
-#               (1.0, 0.0, 0.0, -3.14 / 2.0)], # (axis.x, axis.y, axis.z, radian)
-#     is_static=False)
-
 obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=[
                      # "tshirt.obj",
-                     "plane.obj"
+                     "dress_modified.obj"
                     ],
     trans_list=[
                 # (0.0, -2.4, 0.0),
-                (0.0, 4.0, 0.0)
+                (0.0, 0.0, -1.2)
                ],
     scale_list=[
                 # 2.3,
-                2.0
+                3.5
                ],
     rot_list=[
               # (1.0, 0.0, 0.0, 0.0),
-              (1.0, 0.0, 0.0, 0)], # (axis.x, axis.y, axis.z, radian)
+              (1.0, 0.0, 0.0, -3.14 / 2.0)], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
+
+# obj_mesh_dy = TriMesh(
+#     obj_model_dir,
+#     model_name_list=[
+#                      # "tshirt.obj",
+#                      "plane.obj"
+#                     ],
+#     trans_list=[
+#                 # (0.0, -2.4, 0.0),
+#                 (0.0, 4.0, 0.0)
+#                ],
+#     scale_list=[
+#                 # 2.3,
+#                 2.0
+#                ],
+#     rot_list=[
+#               # (1.0, 0.0, 0.0, 0.0),
+#               (1.0, 0.0, 0.0, 0)], # (axis.x, axis.y, axis.z, radian)
+#     is_static=False)
 
 
 # mesh_st = None
@@ -80,9 +80,9 @@ scale = []
 rot = []
 is_static = []
 rho0 = []
-particle_names.append("thin_sheet.vtk")
-trans.append([0.0, -2.0, 0.0])
-scale.append(0.2)
+particle_names.append("smpl_neutral_new.vtk")
+trans.append([0.0, 0.0, 0.0])
+scale.append(1.8)
 is_static.append(True)
 rho0.append(1.0)
 
