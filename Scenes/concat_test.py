@@ -82,7 +82,7 @@ is_static = []
 rho0 = []
 particle_names.append("smpl_neutral_new.vtk")
 trans.append([0.0, 0.0, 0.0])
-scale.append(1.8)
+scale.append(1.7)
 is_static.append(True)
 rho0.append(1.0)
 

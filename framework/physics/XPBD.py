@@ -957,6 +957,7 @@ class Solver:
             # cv = 0.0
             nabla_c = ti.math.vec3(0.0)
             schur = 0.0
+            cv = 0.0
             for j in range(self.mesh_dy.num_neighbours[pi]):
                 pj = self.mesh_dy.neighbour_ids[pi, j]
                 pos_j = self.particle_st.x[pj]
@@ -966,9 +967,9 @@ class Solver:
                 schur += nabla_cji.dot(nabla_cji)
                 # nabla_c += nabla_c_ji
                 # vi = self.mesh_dy.v[pi]
-                # cv += nabla_c_ji.dot(vi)
+                cv += nabla_cji.dot(self.particle_st.v[pj] - vel_i)
 
-            cv = nabla_c.dot(-vel_i)
+            # cv = nabla_c.dot(-vel_i)
             if cv > 0.0:
                 # schur = nabla_c.dot(nabla_c)
                 for j in range(self.mesh_dy.num_neighbours[pi]):
@@ -1329,20 +1330,21 @@ class Solver:
     def move_particle_x(self, scale: float):
         sc = ti.math.vec3(scale, 0, scale)
         for i in range(self.particle_st.num_particles):
-            self.particle_st.x[i] += sc
+            self.particle_st.x_current[i] = sc + self.particle_st.x_prev[i]
 
 
     def forward(self, n_substeps, n_iter):
 
         dt_sub = self.dt / n_substeps
 
+        self.particle_st.x.copy_from(self.particle_st.x_prev)
         self.sh_st.insert_particles_in_grid(self.particle_st.x)
         self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
 
         # self.particle_st.x_prev.copy_from(self.particle_st.x0)
         # self.particle_st.x_current.copy_from(self.particle_st.x0)
-        # self.compute_particle_v(dt_sub)
 
+        self.compute_particle_v(dt_sub)
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
             for _ in range(n_iter):
