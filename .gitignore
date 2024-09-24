@@ -289,6 +289,6 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm
 
 # Big Data
-*.csv
+#*.csv
 Digital-human-taichi/seq_models/
 framework/results/
