@@ -480,13 +480,13 @@ while window.running:
 
         if PARTICLE:
             if USE_HEATMAP:
-                rho0_np = sim_tri.mesh_dy.rho0.to_numpy()
-                colormap = plt.colormaps['plasma']
+                rho0_np = sim_tri.mesh_dy.rho0_sample.to_numpy()
+                colormap = plt.colormaps['viridis']
                 norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
                 rgb_array = colormap(norm(rho0_np))[:, :3]
                 # print(rgb_array.shape)
-                sim_tri.mesh_dy.heat_map.from_numpy(rgb_array)
-                scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
+                sim_tri.mesh_dy.heat_map_sample.from_numpy(rgb_array)
+                scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map_sample)
                 #TODO
                 # scene.particles(sim_tri.mesh_dy.test_particles, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
                 # scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)

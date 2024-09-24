@@ -46,6 +46,8 @@ class TriMesh:
         # print(load_array)
         self.sample_indices = ti.field(dtype=float, shape=load_array.shape)
         self.x_sample = ti.Vector.field(n=3, dtype=float, shape=load_array.shape[0])
+        self.rho0_sample = ti.field(dtype=float, shape=load_array.shape[0])
+        self.heat_map_sample = ti.Vector.field(n=3, dtype=float, shape=load_array.shape[0])
 
         if is_static is False:
             self.sample_indices.from_numpy(load_array)
@@ -139,8 +141,8 @@ class TriMesh:
         self.neighbour_ids_rest = ti.field(dtype=int, shape=(self.num_verts + self.num_edges + self.num_faces, self.cache_size_rest))
 
         self.cache_size_dy = 100
-        self.num_neighbours_dy = ti.field(dtype=int, shape=self.num_verts + self.num_edges + self.num_faces)
-        self.neighbour_ids_dy = ti.field(dtype=int, shape=(self.num_verts + self.num_edges + self.num_faces, self.cache_size_dy))
+        self.num_neighbours_dy = ti.field(dtype=int, shape=load_array.shape[0])
+        self.neighbour_ids_dy = ti.field(dtype=int, shape=(load_array.shape[0], self.cache_size_dy))
 
         # initialize the vertex fields
         self.y.fill(0.0)
