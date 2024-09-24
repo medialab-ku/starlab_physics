@@ -53,4 +53,4 @@ class GenerateParticle:
         self.part.taichi_display(distance=0.05)
 
 if __name__ == '__main__':
-    gen = GenerateParticle(file_name="plane_8")
+    gen = GenerateParticle(file_name="smplH-male")
