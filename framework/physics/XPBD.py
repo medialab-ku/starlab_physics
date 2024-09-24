@@ -1335,8 +1335,8 @@ class Solver:
         self.sh_st.insert_particles_in_grid(self.particle_st.x)
         self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
 
-        self.particle_st.x_prev.copy_from(self.particle_st.x0)
-        self.particle_st.x_current.copy_from(self.particle_st.x0)
+        # self.particle_st.x_prev.copy_from(self.particle_st.x0)
+        # self.particle_st.x_current.copy_from(self.particle_st.x0)
         self.compute_particle_v(dt_sub)
 
         for _ in range(n_substeps):
