@@ -191,6 +191,8 @@ class Solver:
     @ti.kernel
     def compute_particle_v(self, dt: float):
         for i in self.particle_st.x_prev:
+            # self.particle_st.x_prev[i] = self.particle_st.x[i]
+            # self.particle_st.x_current[i] = self.particle_st.x_prev[i] + ti.math.vec3([0., 0.001, 0.0])
             self.particle_st.v[i] = (self.particle_st.x_current[i] - self.particle_st.x_prev[i]) / dt
 
     @ti.kernel
@@ -202,7 +204,7 @@ class Solver:
             self.mesh_dy.y_origin[i] = self.mesh_dy.y[i]
 
         # for i in self.particle_st.x:
-        #     self.particle_st.x[i] = self.particle_st.x_prev[i] + self.particle_st.v[i] * dt
+        #     self.particle_st.x[i] += self.particle_st.v[i] * dt
 
 
 
@@ -239,12 +241,13 @@ class Solver:
         # rot = ti.math.mat3([[ti.cos(theta), 0, ti.sin(theta)],
         #                     [0, 1, 0],
         #                     [-ti.sin(theta), 0, ti.cos(theta)]])
-        # for i in range(self.particle_st.num_particles):
-        #     ri = self.particle_st.x[i] - center
-        #     x_new = rot @ ri + center
-        #     self.particle_st.v[i] = (x_new - self.mesh_dy.x[i]) / dt
-        #     self.particle_st.x[i] = x_new
-
+        for i in self.particle_st.x:
+            # ri = self.particle_st.x[i] - center
+            # x_new = rot @ ri + center
+            # x_new = rot @ ri + center
+            # self.particle_st.v[i] = ti.math.vec3([0.0, 0.5, 0.0])
+            self.particle_st.x[i] += self.particle_st.v[i] * dt
+        #
 
 
         # update the particles' position!
@@ -1328,23 +1331,27 @@ class Solver:
 
     @ti.kernel
     def move_particle_x(self, scale: float):
-        sc = ti.math.vec3(scale, 0, scale)
+        sc = ti.math.vec3(0., scale, 0.)
         for i in range(self.particle_st.num_particles):
+            self.particle_st.x_prev[i] = self.particle_st.x[i]
             self.particle_st.x_current[i] = sc + self.particle_st.x_prev[i]
+            # self.particle_st.v[i] += sc + self.particle_st.x_prev[i]
 
 
     def forward(self, n_substeps, n_iter):
 
         dt_sub = self.dt / n_substeps
 
-        self.particle_st.x.copy_from(self.particle_st.x_prev)
+        # self.particle_st.x.copy_from(self.particle_st.x_prev)
         self.sh_st.insert_particles_in_grid(self.particle_st.x)
         self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
 
         # self.particle_st.x_prev.copy_from(self.particle_st.x0)
         # self.particle_st.x_current.copy_from(self.particle_st.x0)
 
+        self.particle_st.x_prev.copy_from(self.particle_st.x)
         self.compute_particle_v(dt_sub)
+
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
             for _ in range(n_iter):
@@ -1369,4 +1376,6 @@ class Solver:
             # elif self.selected_solver_type >= 1:
             #     self.solve_constraints_pd_diag_x(dt_sub)
             self.update_x(self.damping, dt_sub)
+            # self.compute_particle_v(dt_sub)
+
         self.set_edge_and_face_particles()
