@@ -40,6 +40,16 @@ class TriMesh:
         self.edge_offsets.append(0)
         self.face_offsets.append(0)
 
+        path = '/home/mhkee/Desktop/workspace/starlab_physics/models/sampling/dress_modified.npy'
+        load_array = np.load(path, allow_pickle=True)
+
+        # print(load_array)
+        self.sample_indices = ti.field(dtype=float, shape=load_array.shape)
+        self.x_sample = ti.Vector.field(n=3, dtype=float, shape=load_array.shape[0])
+
+        if is_static is False:
+            self.sample_indices.from_numpy(load_array)
+
         # concatenate all of meshes
         for i in range(self.num_model):
             model_path = model_dir + "/" + model_name_list[i]
@@ -52,7 +62,6 @@ class TriMesh:
             x_np_temp = np.array(mesh.points, dtype=float)
             center = x_np_temp.sum(axis=0) / x_np_temp.shape[0]  # center position of the mesh
             x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np_temp)  # translate to origin
-
             x_np_temp = scale_lf(x_np_temp, scale_list[i])  # scale mesh to the particular ratio
 
             # rotate mesh if it is demanded...
@@ -66,6 +75,8 @@ class TriMesh:
                                             x_np_temp)  # translate back to the original position
             x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, trans_list[i]), 1,
                                             x_np_temp)  # translate again to the designated position!
+
+
             self.x_np = np.append(self.x_np, x_np_temp, axis=0)
             self.num_verts += mesh.points.shape[0]
 
@@ -89,6 +100,15 @@ class TriMesh:
             self.vert_offsets.append(self.vert_offsets[-1] + mesh.points.shape[0])
             self.edge_offsets.append(self.edge_offsets[-1] + len(edges))
             self.face_offsets.append(self.face_offsets[-1] + len(mesh.cells_dict.get("triangle", [])))
+
+        #TODO
+        # test_particle_np = np.zeros_like(self.x_np)
+        # self.test_particles = ti.Vector.field(n=3, dtype=float)
+        # size = 100
+        # ti.root.dense(ti.i, size).place(self.test_particles)
+        # self.test_particles.from_numpy(test_particle_np)
+        # TODO
+
 
         # fields about vertices
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)

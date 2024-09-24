@@ -353,6 +353,12 @@ while window.running:
         if window.event.key == 'y':
             g_selector_tri.pop_sewing()
 
+        if window.event.key == 'u':
+            sim_tri.move_particle_x(-0.05)
+
+        if window.event.key == 'o':
+            sim_tri.move_particle_x(0.05)
+
         # if window.event.key == 'u':
         #     g_selector.remove_all_sewing()
 
@@ -481,7 +487,9 @@ while window.running:
                 # print(rgb_array.shape)
                 sim_tri.mesh_dy.heat_map.from_numpy(rgb_array)
                 scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
-
+                #TODO
+                # scene.particles(sim_tri.mesh_dy.test_particles, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
+                # scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
                 rho0_np = sim_tri.particle_st.rho0.to_numpy()
                 colormap = plt.colormaps['viridis']
                 norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
@@ -490,12 +498,17 @@ while window.running:
                 sim_tri.particle_st.heat_map.from_numpy(rgb_array)
                 scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.particle_st.heat_map)
             else:
-                scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
+                # scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
+
+                #TODO
+                scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, color=(0.0, 1.0, 0.0))
+
                 # scene.particles(sim_tri.mesh_dy.x_e, radius=sim_tri.dHat,  color=(0.0, 1.0, 0.0))
                 # scene.particles(sim_tri.mesh_dy.x_f, radius=sim_tri.dHat,  color=(0.0, 0.0, 1.0))
                 scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
 
-            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+
+            # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0),show_wireframe=True)
             # scene.particles(sim_tri.mesh_st.x_test, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
             #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))

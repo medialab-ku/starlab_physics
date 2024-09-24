@@ -3,7 +3,7 @@ import meshio
 import numpy as np
 import random
 from pyquaternion import Quaternion
-
+from pathlib import Path
 import os
 
 @ti.data_oriented
@@ -72,6 +72,8 @@ class Particle:
             rest_density.extend([rho0[i]] * pos_temp.shape[0])
 
         rest_density = np.array(rest_density)
+        density_np = np.loadtxt('smpl_particles_density.csv', delimiter=',')
+
 
         self.num_dynamic = self.num_particles - self.num_static
         # print(self.num_static)
@@ -126,7 +128,7 @@ class Particle:
 
         self.init_color(is_static=is_static)
         self.radius = radius
-        self.rho0.from_numpy(rest_density)
+        self.rho0.from_numpy(density_np)
         # print(self.rho0)
         self.x0.copy_from(self.x)
 
