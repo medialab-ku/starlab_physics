@@ -133,9 +133,9 @@ class TetMesh:
         self.M.fill(0.0)
         for i in self.invDm:
 
-            #TODO
-            Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
-
+            # Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j]] - self.x[self.tet_indices[i, 3]] for j in ti.static(range(3))])
+            # Assign (x1-x0 | x2-x1 | x3-x2) to the matrix Dm
+            Dm_i = ti.Matrix.cols([self.x[self.tet_indices[i, j+1]] - self.x[self.tet_indices[i, j]] for j in ti.static(range(3))])
             self.invDm[i] = Dm_i.inverse()
             V0_i = ti.abs(Dm_i.determinant()) / 6.0
             self.V0[i] = V0_i

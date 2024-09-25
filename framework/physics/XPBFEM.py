@@ -170,7 +170,7 @@ class Solver:
 
         ti.block_local(self.invDm, self.dx, self.nc)
         for i in self.invDm:
-            Ds = ti.Matrix.cols([self.y[self.tetras[i, j]] - self.y[self.tetras[i, 3]] for j in ti.static(range(3))])
+            Ds = ti.Matrix.cols([self.y[self.tetras[i, j+1]] - self.y[self.tetras[i, j]] for j in ti.static(range(3))])
             B = self.invDm[i]
             F = Ds @ B
             U, _, V = self.ssvd(F)
