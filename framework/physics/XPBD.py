@@ -994,30 +994,30 @@ class Solver:
                     self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * df_n_dx
                     self.mesh_dy.nc[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * df_n_dx
 
-                    # t = -vel_i + pji_nor
-                    # u_norm = ti.sqrt(ti.math.dot(t,t))
-                    # f_n_norm = ti.sqrt(ti.math.dot(f_n, f_n))
-                    # if  u_norm <= mu * f_n_norm:
-                    #     f_f = -k_f * u
-                    #     df_f_dx = k_f
-                    #     self.mesh_dy.dx[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * f_f
-                    #     self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * f_f
-                    #     self.mesh_dy.dx[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * f_f
-                    #
-                    #     self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * df_f_dx
-                    #     self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * df_f_dx
-                    #     self.mesh_dy.nc[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * df_f_dx
-                    # else:
-                    #     df_f_dx = mu * (f_n_norm / u_norm)
-                    #     f_f = -df_f_dx * u
-                    #     df_f_dx = df_f_dx
-                    #     self.mesh_dy.dx[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * f_f
-                    #     self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * f_f
-                    #     self.mesh_dy.dx[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * f_f
-                    #
-                    #     self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * df_f_dx
-                    #     self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * df_f_dx
-                    #     self.mesh_dy.nc[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * df_f_dx
+                    t = vel_i - pji_nor
+                    u_norm = ti.sqrt(ti.math.dot(t,t))
+                    f_n_norm = ti.sqrt(ti.math.dot(f_n, f_n))
+                    if  u_norm <= mu * f_n_norm:
+                        f_f = -k_f * t
+                        df_f_dx = k_f
+                        self.mesh_dy.dx[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * f_f
+                        self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * f_f
+                        self.mesh_dy.dx[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * f_f
+
+                        self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * df_f_dx
+                        self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * df_f_dx
+                        self.mesh_dy.nc[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * df_f_dx
+                    else:
+                        df_f_dx = mu * (f_n_norm / u_norm)
+                        f_f = -df_f_dx * t
+                        df_f_dx = df_f_dx
+                        self.mesh_dy.dx[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * f_f
+                        self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * f_f
+                        self.mesh_dy.dx[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * f_f
+
+                        self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * u * df_f_dx
+                        self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * v * df_f_dx
+                        self.mesh_dy.nc[v2] += self.mesh_dy.fixed[v2] * self.mesh_dy.m_inv[v2] * w * df_f_dx
 
 
         for pi in range(self.num_verts_dy):

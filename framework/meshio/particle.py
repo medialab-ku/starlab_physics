@@ -130,8 +130,8 @@ class Particle:
 
         self.init_color(is_static=is_static)
         self.radius = radius
-        # self.rho0.fill(1.0)
-        self.rho0.from_numpy(density_np)
+        self.rho0.fill(1.0)
+        # self.rho0.from_numpy(density_np)
         # print(self.rho0)
         self.x0.copy_from(self.x)
 

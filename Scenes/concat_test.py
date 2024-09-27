@@ -14,25 +14,25 @@ model_path = Path(__file__).resolve().parent.parent / "models"
 OBJ = "OBJ"
 CSV = "CSV"
 obj_model_dir = str(model_path) + "/OBJ"
-obj_mesh_dy = TriMesh(
-    obj_model_dir,
-    model_name_list=[
-                     "hood_modified.obj",
-                     # "dress_modified.obj"
-                    ],
-    trans_list=[
-                # (0.0, -2.4, 0.0),
-                (0.0, -0.28, 0.3)
-               ],
-    scale_list=[
-                # 2.3,
-                4.5
-               ],
-    rot_list=[
-              (1.0, 0.0, 0.0, 0.0),
-              # (1.0, 0.0, 0.0, -3.14 / 2.0)
-                ], # (axis.x, axis.y, axis.z, radian)
-    is_static=False)
+# obj_mesh_dy = TriMesh(
+#     obj_model_dir,
+#     model_name_list=[
+#                      "hood_modified.obj",
+#                      # "dress_modified.obj"
+#                     ],
+#     trans_list=[
+#                 # (0.0, -2.4, 0.0),
+#                 (0.0, -0.28, 0.3)
+#                ],
+#     scale_list=[
+#                 # 2.3,
+#                 4.5
+#                ],
+#     rot_list=[
+#               (1.0, 0.0, 0.0, 0.0),
+#               # (1.0, 0.0, 0.0, -3.14 / 2.0)
+#                 ], # (axis.x, axis.y, axis.z, radian)
+#     is_static=False)
 
 # obj_mesh_dy = TriMesh(
 #     obj_model_dir,
@@ -54,24 +54,24 @@ obj_mesh_dy = TriMesh(
 #                 ], # (axis.x, axis.y, axis.z, radian)
 #     is_static=False)
 
-# obj_mesh_dy = TriMesh(
-#     obj_model_dir,
-#     model_name_list=[
-#                      # "tshirt.obj",
-#                      "plane.obj"
-#                     ],
-#     trans_list=[
-#                 # (0.0, -2.4, 0.0),
-#                 (0.0, 4.0, 0.0)
-#                ],
-#     scale_list=[
-#                 # 2.3,
-#                 2.0
-#                ],
-#     rot_list=[
-#               # (1.0, 0.0, 0.0, 0.0),
-#               (1.0, 0.0, 0.0, 0)], # (axis.x, axis.y, axis.z, radian)
-#     is_static=False)
+obj_mesh_dy = TriMesh(
+    obj_model_dir,
+    model_name_list=[
+                     # "tshirt.obj",
+                     "plane.obj"
+                    ],
+    trans_list=[
+                # (0.0, -2.4, 0.0),
+                (0.0, 4.0, 0.0)
+               ],
+    scale_list=[
+                # 2.3,
+                2.0
+               ],
+    rot_list=[
+              # (1.0, 0.0, 0.0, 0.0),
+              (1.0, 0.0, 0.0, 0)], # (axis.x, axis.y, axis.z, radian)
+    is_static=False)
 
 
 # mesh_st = None
@@ -101,11 +101,11 @@ scale = []
 rot = []
 is_static = []
 rho0 = []
-particle_names.append("smpl_neutral_new.vtk")
+particle_names.append("very_thin_sheet.vtk")
 trans.append([0.0, 0.0, 0.0])
-scale.append(1.8)
+scale.append(0.2)
 is_static.append(True)
 rho0.append(1.0)
 
 
-particles_st = Particle(vtk_model_dir, particle_names, translations=trans, scales=scale, rotations=[(1.0, 0.0, 0.0, 0)], is_static=is_static, rho0=rho0)
+particles_st = Particle(vtk_model_dir, particle_names, translations=trans, scales=scale, rotations=[(1.0, 0.0, 0.0, 3.14/100)], is_static=is_static, rho0=rho0)
