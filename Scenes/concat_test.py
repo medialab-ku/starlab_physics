@@ -108,4 +108,4 @@ is_static.append(True)
 rho0.append(1.0)
 
 
-particles_st = Particle(vtk_model_dir, particle_names, translations=trans, scales=scale, rotations=[(1.0, 0.0, 0.0, 3.14/100)], is_static=is_static, rho0=rho0)
+particles_st = Particle(vtk_model_dir, particle_names, translations=trans, scales=scale, rotations=[(1.0, 0.0, 0.0, 0.0)], is_static=is_static, rho0=rho0)

@@ -461,12 +461,14 @@ while window.running:
         # sim.animate_handle(g_selector.is_selected)
 
         if sim_type_ui == 0:
-            # if frame_cpu == 0:
-                # sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x)
-
-            sim_tri.move_particle_x(0.00)
+            if frame_cpu == 0:
+                sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x0)
+                # sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x0)
+            sim_tri.move_particle_x(0.03)
             sim_tri.forward(n_substeps=n_substep, n_iter=n_iter)
             sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x_current)
+
+
         elif sim_type_ui == 1:
             sim_tet.forward(n_substeps=n_substep, n_iter=n_iter)
 
