@@ -94,8 +94,7 @@ class Solver:
     def update_y(self):
         # update x_(t+1) by adding dx (used in the Euler path solver)
         for i in range(self.num_verts_dy):
-            self.mesh_dy.y[i] = (self.mesh_dy.y_tilde[i] +
-                                 self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i]))
+            self.mesh_dy.y[i] = (self.mesh_dy.y_tilde[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i]))
 
     @ti.kernel
     def compute_v(self, damping: ti.f32, dt: ti.f32):
@@ -347,24 +346,24 @@ class Solver:
             x01 = self.mesh_dy.y_euler[i] - self.mesh_dy.y_euler[i+1]
             dp01 = x01 - l0 * x01.normalized()
 
-            self.d[i]   += self.mesh_dy.m_inv_euler[i] * compliance_stretch * dp01
-            self.d[i+1] -= self.mesh_dy.m_inv_euler[i+1] * compliance_stretch * dp01
+            self.d[i]   += self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch * dp01
+            self.d[i+1] -= self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i+1] * compliance_stretch * dp01
 
-            self.b[i]   += self.mesh_dy.m_inv_euler[i] * compliance_stretch
-            self.b[i+1] += self.mesh_dy.m_inv_euler[i+1] * compliance_stretch
+            self.b[i]   += self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch
+            self.b[i+1] += self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i+1] * compliance_stretch
 
-            self.a[i+1] -= self.mesh_dy.m_inv_euler[i+1] * compliance_stretch
-            self.c[i]   -= self.mesh_dy.m_inv_euler[i] * compliance_stretch
+            self.a[i+1] -= self.mesh_dy.fixed_euler[i + 1] * self.mesh_dy.m_inv_euler[i + 1] * compliance_stretch
+            self.c[i]   -= self.mesh_dy.fixed_euler[i] * self.mesh_dy.m_inv_euler[i] * compliance_stretch
 
         self.c_tilde[current_offset] = self.c[current_offset] / self.b[current_offset]
         ti.loop_config(serialize=True)
         for i in range(current_offset + 1, next_offset - 1):
-            self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i-1])
+            self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
 
         self.d_tilde[current_offset] = self.d[current_offset] / self.b[current_offset]
         ti.loop_config(serialize=True)
         for i in range(current_offset + 1, next_offset):
-            self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i-1]) / (self.b[i] - self.a[i] * self.c_tilde[i-1])
+            self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i-1]) / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
 
         self.mesh_dy.dx_euler[next_offset - 1] = self.d_tilde[next_offset - 1]
         ti.loop_config(serialize=True)
@@ -374,17 +373,18 @@ class Solver:
 
         for i in range(current_offset, next_offset):
             vid = self.mesh_dy.euler_path_field[i]
-            self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
-                                     (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
+            self.mesh_dy.dx[vid] += self.mesh_dy.dx_euler[i]
+            self.mesh_dy.nc[vid] += 1.0
 
         for i in range(current_offset, next_offset):
             vid = self.mesh_dy.euler_path_field[i]
-            self.mesh_dy.dx_euler[i] = self.mesh_dy.dx[vid]
+            self.mesh_dy.dx_euler[i] = (self.mesh_dy.dx[vid] / self.mesh_dy.nc[vid])
+            # self.mesh_dy.dx[i] = (self.mesh_dy.dx[vid] / self.mesh_dy.nc[vid])
 
         for i in range(current_offset, next_offset):
-            vid = self.mesh_dy.euler_path_field[i]
+            # vid = self.mesh_dy.euler_path_field[i]
             self.mesh_dy.y_euler[i] -= self.mesh_dy.dx_euler[i]
-
+            # self.mesh_dy.y[vid] = self.mesh_dy.y_euler[i]
     ####################################################################################################################
 
     def forward(self, n_substeps):
