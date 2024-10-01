@@ -316,6 +316,9 @@ class TriMesh:
             self.euler_path_field.from_numpy(self.euler_path_np)
             self.duplicates_field.from_numpy(self.duplicates_np)
 
+            self.min_euler_len = ti.field(dtype=int, shape=())
+            self.min_euler_len[None] = self.euler_edge_len
+
             self.euler_path_field_dim2 = ti.field(dtype=int, shape=(self.euler_edge_len, 2))
             for i in range(self.euler_edge_len - 1):
                 self.euler_path_field_dim2[i,0] = self.euler_path_field[i]
@@ -452,6 +455,10 @@ class TriMesh:
     def init_euler(self):
         for i in range(self.num_model):
             current_offset, next_offset = self.euler_path_offsets_field[i], self.euler_path_offsets_field[i+1]
+
+            if (next_offset - current_offset) < self.min_euler_len[None]:
+                self.min_euler_len[None] = next_offset - current_offset
+
             for j in range(current_offset, next_offset - 1):
                 v0, v1 = self.euler_path_field[j], self.euler_path_field[j+1]
                 self.l0_euler[j] = (self.x0[v0] - self.x0[v1]).norm()

@@ -192,7 +192,7 @@ class Solver:
 
         self.update_y()
 
-    def solve_constraints_euler_path_tridiagonal_x(self, dt):
+    def solve_constraints_euler_path_tridiagonal_x(self, dt, num_partition):
         self.init_variables()
 
         compliance_stretch = self.stiffness_stretch * dt * dt
@@ -205,9 +205,8 @@ class Solver:
             self.solve_spring_constraints_euler_path_tridiagonal_x(compliance_stretch,
                                                                    compliance_bending,
                                                                    current_offset,
-                                                                   next_offset)
-
-        self.update_y()
+                                                                   next_offset,
+                                                                   num_partition)
 
     ####################################################################################################################
     # Taichi kernel function which are called in solvers...
@@ -330,64 +329,78 @@ class Solver:
             self.mesh_dy.y_euler[i] = (self.mesh_dy.y_tilde_euler[i] +
                                        self.mesh_dy.fixed_euler[i] * (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
 
-    # For Checking the operation of euler path...
     @ti.kernel
     def solve_spring_constraints_euler_path_tridiagonal_x(self,
                                                           compliance_stretch: ti.f32,
                                                           compliance_bending: ti.f32,
                                                           current_offset: ti.i32,
-                                                          next_offset: ti.i32):
+                                                          next_offset: ti.i32,
+                                                          num_partition: ti.i32):
         self.a.fill(0.0)
         self.b.fill(1.0)
         self.c.fill(0.0)
         self.d.fill(0.0)
 
-        for i in range(current_offset, next_offset - 1):
-            l0 = self.mesh_dy.l0_euler[i]
-            x01 = self.mesh_dy.y_euler[i] - self.mesh_dy.y_euler[i+1]
-            dp01 = x01 - l0 * x01.normalized()
+        partition_size = (next_offset - current_offset) // num_partition
+        for p_idx in range(num_partition):
+            idx_lb = current_offset + p_idx * partition_size # from idx_lb ...
+            idx_ub = current_offset + (p_idx + 1) * partition_size # ... up to idx_ub - 1
+            if p_idx == num_partition - 1:
+                idx_ub = next_offset
+            print(idx_lb, idx_ub)
 
-            self.d[i]   += self.mesh_dy.m_inv_euler[i] * compliance_stretch * dp01
-            self.d[i+1] -= self.mesh_dy.m_inv_euler[i+1] * compliance_stretch * dp01
+            # Thomas algorithm
+            # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
 
-            self.b[i]   += self.mesh_dy.m_inv_euler[i] * compliance_stretch
-            self.b[i+1] += self.mesh_dy.m_inv_euler[i+1] * compliance_stretch
+            for i in range(idx_lb, idx_ub - 1):
+                l0 = self.mesh_dy.l0_euler[i]
+                x01 = self.mesh_dy.y_euler[i] - self.mesh_dy.y_euler[i+1]
+                dp01 = x01 - l0 * x01.normalized()
 
-            self.a[i+1] -= self.mesh_dy.m_inv_euler[i+1] * compliance_stretch
-            self.c[i]   -= self.mesh_dy.m_inv_euler[i] * compliance_stretch
+                self.d[i]   += self.mesh_dy.m_inv_euler[i] * compliance_stretch * dp01
+                self.d[i+1] -= self.mesh_dy.m_inv_euler[i+1] * compliance_stretch * dp01
 
-        self.c_tilde[current_offset] = self.c[current_offset] / self.b[current_offset]
-        ti.loop_config(serialize=True)
-        for i in range(current_offset + 1, next_offset - 1):
-            self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i-1])
+                self.b[i]   += self.mesh_dy.m_inv_euler[i] * compliance_stretch
+                self.b[i+1] += self.mesh_dy.m_inv_euler[i+1] * compliance_stretch
 
-        self.d_tilde[current_offset] = self.d[current_offset] / self.b[current_offset]
-        ti.loop_config(serialize=True)
-        for i in range(current_offset + 1, next_offset):
-            self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i-1]) / (self.b[i] - self.a[i] * self.c_tilde[i-1])
+                self.a[i+1] -= self.mesh_dy.m_inv_euler[i+1] * compliance_stretch
+                self.c[i]   -= self.mesh_dy.m_inv_euler[i] * compliance_stretch
 
-        self.mesh_dy.dx_euler[next_offset - 1] = self.d_tilde[next_offset - 1]
-        ti.loop_config(serialize=True)
-        for i in range(current_offset, next_offset - 1):
-            idx = current_offset + next_offset - 2 - i
-            self.mesh_dy.dx_euler[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
+            self.c_tilde[idx_lb] = self.c[idx_lb] / self.b[idx_lb]
+            ti.loop_config(serialize=True)
+            for i in range(idx_lb + 1, idx_ub - 1):
+                self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i-1])
 
-        for i in range(current_offset, next_offset):
-            vid = self.mesh_dy.euler_path_field[i]
-            self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
-                                     (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
+            self.d_tilde[idx_lb] = self.d[idx_lb] / self.b[idx_lb]
+            ti.loop_config(serialize=True)
+            for i in range(idx_lb + 1, idx_ub):
+                self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i-1]) / (self.b[i] - self.a[i] * self.c_tilde[i-1])
 
-        for i in range(current_offset, next_offset):
-            vid = self.mesh_dy.euler_path_field[i]
-            self.mesh_dy.dx_euler[i] = self.mesh_dy.dx[vid]
+            self.mesh_dy.dx_euler[idx_ub - 1] = self.d_tilde[idx_ub - 1]
+            ti.loop_config(serialize=True)
+            for i in range(idx_lb, idx_ub - 1):
+                idx = idx_lb + idx_ub - 2 - i
+                self.mesh_dy.dx_euler[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
 
-        for i in range(current_offset, next_offset):
-            vid = self.mesh_dy.euler_path_field[i]
-            self.mesh_dy.y_euler[i] -= self.mesh_dy.dx_euler[i]
+            # Update dx and y
+
+            for i in range(idx_lb, idx_ub):
+                vid = self.mesh_dy.euler_path_field[i]
+                self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
+                                         (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
+
+            for i in range(idx_lb, idx_ub):
+                vid = self.mesh_dy.euler_path_field[i]
+                self.mesh_dy.dx_euler[i] = self.mesh_dy.dx[vid]
+
+            for i in range(idx_lb, idx_ub):
+                vid = self.mesh_dy.euler_path_field[i]
+                self.mesh_dy.y_euler[i] -= self.mesh_dy.dx_euler[i]
+                self.mesh_dy.y[vid] = self.mesh_dy.y_euler[i]
 
     ####################################################################################################################
 
-    def forward(self, n_substeps):
+    def forward(self, n_substeps, num_partition):
         dt_sub = self.dt / n_substeps
 
         for _ in range(n_substeps):
@@ -401,7 +414,7 @@ class Solver:
             elif self.selected_solver_type == 3:
                 self.solve_constraints_euler_path_gauss_seidel_x(dt_sub)
             elif self.selected_solver_type == 4:
-                self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+                self.solve_constraints_euler_path_tridiagonal_x(dt_sub, num_partition)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
