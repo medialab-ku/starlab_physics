@@ -37,8 +37,6 @@ YM_ui = sim.stiffness_stretch
 
 friction_coeff_ui = sim.mu
 
-euler_path_partition = 1
-
 mesh_export = False
 frame_cpu = 0
 
@@ -50,7 +48,6 @@ def show_options():
     global damping_ui
     global YM_ui
     global YM_b_ui
-    global euler_path_partition
     global sim
     global dHat_ui
     global friction_coeff_ui
@@ -85,10 +82,8 @@ def show_options():
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 0.0301)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
-        YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e6)
-        YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e6)
-        max_partition = scene1.obj_mesh_dy.min_euler_len[None] // 2
-        euler_path_partition = w.slider_int("euler path partition.", euler_path_partition, 1, max_partition)
+        YM_ui = w.slider_float("stretch stiff.", YM_ui, 0.0, 1e8)
+        YM_b_ui = w.slider_float("bending stiff.", YM_b_ui, 0.0, 1e8)
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
@@ -244,7 +239,7 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-        sim.forward(n_substeps=n_substep, num_partition=euler_path_partition)
+        sim.forward(n_substeps=n_substep)
         frame_cpu += 1
 
     show_options()
