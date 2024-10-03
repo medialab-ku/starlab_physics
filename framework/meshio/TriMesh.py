@@ -65,6 +65,16 @@ class TriMesh:
 
             # rotate, scale, and translate all vertices
             x_np_temp = np.array(mesh.points, dtype=float)
+            a = np.reshape(x_np_temp, (3 * x_np_temp.shape[0]))
+            np.save("ox.npy", a)
+            # print(a.shape)
+            # x_bytes = bytearray(a)
+            # file_path = "ox.bin"
+            # with open(file_path, "wb") as file:
+            #     # binary_data = bytearray([0xFF, 0x00, 0x7F, 0x80])
+            #     # Example binary data as a bytearray
+            #     file.write(x_bytes)
+
             center = x_np_temp.sum(axis=0) / x_np_temp.shape[0]  # center position of the mesh
             x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np_temp)  # translate to origin
             x_np_temp = scale_lf(x_np_temp, scale_list[i])  # scale mesh to the particular ratio
@@ -88,6 +98,15 @@ class TriMesh:
             self.num_faces += len(mesh.cells_dict.get("triangle", []))
 
             face_temp = np.array(mesh.cells_dict["triangle"])
+            b = np.reshape(face_temp, (3 * face_temp.shape[0]))
+            np.save("indices.npy", b)
+            # face_temp_bytes = bytearray(b)
+            # file_path = "indices.bin"
+            # with open(file_path, "wb") as file:
+            #     # binary_data = bytearray([0xFF, 0x00, 0x7F, 0x80])
+            #     # Example binary data as a bytearray
+            #     file.write(face_temp_bytes)
+
             face_temp = face_temp + self.vert_offsets[i]
             self.f_np = np.append(self.f_np, face_temp, axis=0)
 
