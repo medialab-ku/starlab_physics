@@ -22,7 +22,7 @@ class Solver:
         self.damping = 0.001
         self.mu = 0.8
 
-        self.selected_solver_type = 0
+        self.selected_solver_type = 4
 
         self.num_verts_dy = self.mesh_dy.num_verts
         self.num_edges_dy = self.mesh_dy.num_edges
@@ -46,6 +46,8 @@ class Solver:
         self.d = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
         self.d_tilde = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
         self.dx = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+
+        self.partition_duplicate_num = ti.field(dtype=int, shape=self.euler_path_len)
 
     ####################################################################################################################
 
@@ -340,20 +342,20 @@ class Solver:
         self.b.fill(1.0)
         self.c.fill(0.0)
         self.d.fill(0.0)
+        self.partition_duplicate_num.fill(0)
 
         partition_size = (next_offset - current_offset) // num_partition
+
         for p_idx in range(num_partition):
-            idx_lb = current_offset + p_idx * partition_size # from the first of current partition ...
-            idx_ub = current_offset + (p_idx + 1) * partition_size # ... to the first of next partition
-            # which means that you can access up to the last of current partition!
+            idx_lb = current_offset + p_idx * partition_size # from the first particle of current partition ...
+            idx_ub = current_offset + (p_idx + 1) * partition_size # ... to the last particle of current partition
             if p_idx == num_partition - 1:
-                idx_ub = next_offset
-            print(idx_lb, idx_ub)
+                idx_ub = next_offset - 1
 
             # Thomas algorithm
             # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
 
-            for i in range(idx_lb, idx_ub - 1):
+            for i in range(idx_lb, idx_ub): # lb ~ ub-1
                 l0 = self.mesh_dy.l0_euler[i]
                 x01 = self.mesh_dy.y_euler[i] - self.mesh_dy.y_euler[i+1]
                 dp01 = x01 - l0 * x01.normalized()
@@ -369,36 +371,45 @@ class Solver:
 
             self.c_tilde[idx_lb] = self.c[idx_lb] / self.b[idx_lb]
             ti.loop_config(serialize=True)
-            for i in range(idx_lb + 1, idx_ub - 1):
+            for i in range(idx_lb + 1, idx_ub): # lb+1 ~ ub-1
                 self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i-1])
 
             self.d_tilde[idx_lb] = self.d[idx_lb] / self.b[idx_lb]
             ti.loop_config(serialize=True)
-            for i in range(idx_lb + 1, idx_ub):
+            for i in range(idx_lb + 1, idx_ub + 1): # lb+1 ~ ub
                 self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i-1]) / (self.b[i] - self.a[i] * self.c_tilde[i-1])
 
-            self.mesh_dy.dx_euler[idx_ub - 1] = self.d_tilde[idx_ub - 1]
+            self.mesh_dy.dx_euler[idx_ub] = self.d_tilde[idx_ub]
+            self.partition_duplicate_num[idx_ub] += 1
             ti.loop_config(serialize=True)
-            for i in range(idx_lb, idx_ub - 1):
-                idx = idx_lb + idx_ub - 2 - i
+            for i in range(idx_lb, idx_ub):
+                idx = idx_lb + idx_ub - 1 - i # ub-1 ~ lb
                 self.mesh_dy.dx_euler[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
+                self.partition_duplicate_num[idx] += 1
 
-            # Update dx and y
+        # ti.loop_config(serialize=True)
+        # for i in range(current_offset, next_offset):
+        #     print(i, self.partition_duplicate_num[i])
 
-            for i in range(idx_lb, idx_ub):
+        # Update dx and y
+        for p_idx in range(num_partition):
+            idx_lb = current_offset + p_idx * partition_size  # from the first particle of current partition ...
+            idx_ub = current_offset + (p_idx + 1) * partition_size # ... to the last particle of current partition
+            if p_idx == num_partition - 1:
+                idx_ub = next_offset - 1
+
+            for i in range(idx_lb, idx_ub + 1): # lb ~ ub
                 vid = self.mesh_dy.euler_path_field[i]
-                if (i != current_offset and i != next_offset - 1) and (i == idx_lb or i == idx_ub - 1):
-                    self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
-                                            (self.mesh_dy.dx_euler[i] / (self.mesh_dy.duplicates_field[vid] + 1)))
-                else:
-                    self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
-                                            (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
+                self.mesh_dy.dx[vid] += (
+                        self.mesh_dy.fixed_euler[i] *
+                            (self.mesh_dy.dx_euler[i] /
+                            (self.mesh_dy.duplicates_field[vid] + self.partition_duplicate_num[i] - 1)))
 
-            for i in range(idx_lb, idx_ub):
+            for i in range(idx_lb, idx_ub + 1): # lb ~ ub
                 vid = self.mesh_dy.euler_path_field[i]
                 self.mesh_dy.dx_euler[i] = self.mesh_dy.dx[vid]
 
-            for i in range(idx_lb, idx_ub):
+            for i in range(idx_lb, idx_ub + 1): # lb ~ ub
                 vid = self.mesh_dy.euler_path_field[i]
                 self.mesh_dy.y_euler[i] -= self.mesh_dy.dx_euler[i]
                 self.mesh_dy.y[vid] = self.mesh_dy.y_euler[i]
