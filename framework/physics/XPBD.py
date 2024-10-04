@@ -343,10 +343,12 @@ class Solver:
 
         partition_size = (next_offset - current_offset) // num_partition
         for p_idx in range(num_partition):
-            idx_lb = current_offset + p_idx * partition_size # from idx_lb ...
-            idx_ub = current_offset + (p_idx + 1) * partition_size # ... up to idx_ub - 1
+            idx_lb = current_offset + p_idx * partition_size # from the first of current partition ...
+            idx_ub = current_offset + (p_idx + 1) * partition_size # ... to the first of next partition
+            # which means that you can access up to the last of current partition!
             if p_idx == num_partition - 1:
                 idx_ub = next_offset
+            print(idx_lb, idx_ub)
 
             # Thomas algorithm
             # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
@@ -385,8 +387,12 @@ class Solver:
 
             for i in range(idx_lb, idx_ub):
                 vid = self.mesh_dy.euler_path_field[i]
-                self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
-                                         (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
+                if (i != current_offset and i != next_offset - 1) and (i == idx_lb or i == idx_ub - 1):
+                    self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
+                                            (self.mesh_dy.dx_euler[i] / (self.mesh_dy.duplicates_field[vid] + 1)))
+                else:
+                    self.mesh_dy.dx[vid] += (self.mesh_dy.fixed_euler[i] *
+                                            (self.mesh_dy.dx_euler[i] / self.mesh_dy.duplicates_field[vid]))
 
             for i in range(idx_lb, idx_ub):
                 vid = self.mesh_dy.euler_path_field[i]
