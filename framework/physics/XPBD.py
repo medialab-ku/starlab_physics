@@ -47,7 +47,7 @@ class Solver:
         self.d_tilde = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
         self.dx = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
 
-        self.partition_duplicate_num = ti.field(dtype=int, shape=self.euler_path_len)
+        self.tridiagonal_duplicate = ti.field(dtype=int, shape=self.num_verts_dy)
 
     ####################################################################################################################
 
@@ -342,7 +342,9 @@ class Solver:
         self.b.fill(1.0)
         self.c.fill(0.0)
         self.d.fill(0.0)
-        self.partition_duplicate_num.fill(0)
+        self.c_tilde.fill(0.0)
+        self.d_tilde.fill(0.0)
+        self.tridiagonal_duplicate.fill(0)
 
         partition_size = (next_offset - current_offset) // num_partition
 
@@ -379,17 +381,22 @@ class Solver:
             for i in range(idx_lb + 1, idx_ub + 1): # lb+1 ~ ub
                 self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i-1]) / (self.b[i] - self.a[i] * self.c_tilde[i-1])
 
-            self.mesh_dy.dx_euler[idx_ub] = self.d_tilde[idx_ub]
-            self.partition_duplicate_num[idx_ub] += 1
+            for i in range(idx_lb, idx_ub + 1): # lb ~ ub
+                vid = self.mesh_dy.euler_path_field[i]
+                self.tridiagonal_duplicate[vid] += 1
+
+            vid = self.mesh_dy.euler_path_field[idx_ub]
+            self.mesh_dy.dx[vid] += self.d_tilde[idx_ub]
             ti.loop_config(serialize=True)
             for i in range(idx_lb, idx_ub):
                 idx = idx_lb + idx_ub - 1 - i # ub-1 ~ lb
-                self.mesh_dy.dx_euler[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
-                self.partition_duplicate_num[idx] += 1
+                vid = self.mesh_dy.euler_path_field[idx]
+                self.mesh_dy.dx[vid] += self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
 
-        # ti.loop_config(serialize=True)
-        # for i in range(current_offset, next_offset):
-        #     print(i, self.partition_duplicate_num[i])
+        # Debugging
+        for i in range(self.num_verts_dy):
+            if self.tridiagonal_duplicate[i] != self.mesh_dy.duplicates_field[i]:
+                print(i, "False (", self.tridiagonal_duplicate[i], "/", self.mesh_dy.duplicates_field[i], ")")
 
         # Update dx and y
         for p_idx in range(num_partition):
@@ -400,10 +407,7 @@ class Solver:
 
             for i in range(idx_lb, idx_ub + 1): # lb ~ ub
                 vid = self.mesh_dy.euler_path_field[i]
-                self.mesh_dy.dx[vid] += (
-                        self.mesh_dy.fixed_euler[i] *
-                            (self.mesh_dy.dx_euler[i] /
-                            (self.mesh_dy.duplicates_field[vid] + self.partition_duplicate_num[i] - 1)))
+                self.mesh_dy.dx[vid] = self.mesh_dy.fixed_euler[i] * (self.mesh_dy.dx[vid] / self.tridiagonal_duplicate[vid])
 
             for i in range(idx_lb, idx_ub + 1): # lb ~ ub
                 vid = self.mesh_dy.euler_path_field[i]
