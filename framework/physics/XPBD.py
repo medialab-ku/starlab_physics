@@ -372,31 +372,33 @@ class Solver:
                 self.c[i]   -= self.mesh_dy.m_inv_euler[i] * compliance_stretch
 
             self.c_tilde[idx_lb] = self.c[idx_lb] / self.b[idx_lb]
-            ti.loop_config(serialize=True)
             for i in range(idx_lb + 1, idx_ub): # lb+1 ~ ub-1
                 self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i-1])
 
             self.d_tilde[idx_lb] = self.d[idx_lb] / self.b[idx_lb]
-            ti.loop_config(serialize=True)
             for i in range(idx_lb + 1, idx_ub + 1): # lb+1 ~ ub
                 self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i-1]) / (self.b[i] - self.a[i] * self.c_tilde[i-1])
+
+            vid = self.mesh_dy.euler_path_field[idx_ub]
+            self.mesh_dy.dx[vid] += self.d_tilde[idx_ub]
+            for i in range(idx_lb, idx_ub):
+                idx = idx_lb + idx_ub - 1 - i # ub-1 ~ lb
+                vid, vid_after = self.mesh_dy.euler_path_field[idx], self.mesh_dy.euler_path_field[idx + 1]
+                self.mesh_dy.dx[vid] += self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx[vid_after]
 
             for i in range(idx_lb, idx_ub + 1): # lb ~ ub
                 vid = self.mesh_dy.euler_path_field[i]
                 self.tridiagonal_duplicate[vid] += 1
 
-            vid = self.mesh_dy.euler_path_field[idx_ub]
-            self.mesh_dy.dx[vid] += self.d_tilde[idx_ub]
-            ti.loop_config(serialize=True)
-            for i in range(idx_lb, idx_ub):
-                idx = idx_lb + idx_ub - 1 - i # ub-1 ~ lb
-                vid = self.mesh_dy.euler_path_field[idx]
-                self.mesh_dy.dx[vid] += self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
+            self.a[idx_ub] = 0.0
+            self.b[idx_ub] = 0.0
+            self.c[idx_ub] = 0.0
+            self.d[idx_ub] = ti.Vector([0.0, 0.0, 0.0])
 
         # Debugging
-        for i in range(self.num_verts_dy):
-            if self.tridiagonal_duplicate[i] != self.mesh_dy.duplicates_field[i]:
-                print(i, "False (", self.tridiagonal_duplicate[i], "/", self.mesh_dy.duplicates_field[i], ")")
+        # for i in range(self.num_verts_dy):
+        #     if self.tridiagonal_duplicate[i] != self.mesh_dy.duplicates_field[i]:
+        #         print(i, "False (", self.tridiagonal_duplicate[i], "/", self.mesh_dy.duplicates_field[i], ")")
 
         # Update dx and y
         for p_idx in range(num_partition):
