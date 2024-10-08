@@ -394,13 +394,13 @@ class Solver:
             vid = self.mesh_dy.euler_path_field[i]
             self.mesh_dy.dx[vid] += self.mesh_dy.fixed_euler[i] * (self.mesh_dy.dx_euler[i] / self.tridiagonal_duplicate[vid])
 
+        for i in range(self.num_verts_dy):
+            self.mesh_dy.y[i] = self.mesh_dy.y_tilde[i] - self.mesh_dy.fixed[i] * self.mesh_dy.dx[i]
+
         for i in range(current_offset, next_offset):
             vid = self.mesh_dy.euler_path_field[i]
             self.mesh_dy.dx_euler[i] = self.mesh_dy.dx[vid]
             self.mesh_dy.y_euler[i] -= self.mesh_dy.dx_euler[i]
-
-        for i in range(self.num_verts_dy):
-            self.mesh_dy.y[i] = (self.mesh_dy.y_tilde[i] - self.mesh_dy.fixed[i] * self.mesh_dy.dx[i])
 
     ####################################################################################################################
 
