@@ -118,8 +118,15 @@ class TriMesh:
             self.num_edges += len(edges)
 
             edge_temp = np.array(list(edges))
+            c = np.reshape(edge_temp, (2 * edge_temp.shape[0]))
+            np.save("edges.npy", c)
+            # print(edge_temp.shape)
+
+
             edge_temp = edge_temp + self.vert_offsets[i]
             self.e_np = np.append(self.e_np, edge_temp, axis=0)
+
+
 
             self.vert_offsets.append(self.vert_offsets[-1] + mesh.points.shape[0])
             self.edge_offsets.append(self.edge_offsets[-1] + len(edges))
