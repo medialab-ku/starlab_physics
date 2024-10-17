@@ -1,6 +1,7 @@
 import taichi as ti
 import numpy as np
 import os
+import sys
 import time
 import meshio
 import random
@@ -140,6 +141,140 @@ class TriMesh:
         # self.test_particles.from_numpy(test_particle_np)
         # TODO
 
+            # print(self.original_edge_color_prefix_sum_np, self.original_edge_color_prefix_sum_np.shape[0])
+            # print(self.original_edge_color_np, self.original_edge_color_np.shape[0])
+
+            ################################################################################################################
+            # Euler Path
+
+        self.duplicates_np = np.zeros(self.num_verts, dtype=int)
+        self.euler_path_np = np.empty(0, dtype=int)
+        self.duplicates_offsets = [0, ]
+        self.euler_path_offsets = [0, ]
+
+        if not is_static:
+            for i in range(self.num_model):
+                euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
+                precomputed_graph_file = euler_dir + "/" + model_name_list[i][:-len(".obj")] + ".edgelist"
+
+                if not os.path.exists(euler_dir):
+                    print(
+                        "The ""euler_graph"" dictionary does not exist. It will be made and then located in your path...")
+                    os.mkdir(dir)
+
+                if not os.path.isfile(precomputed_graph_file):
+                    print(f"The original color graph of <{model_name_list[i]}> does not exist.")
+                    print("Constructing an Euler graph...")
+                    start = time.time()
+
+                    euler_graph = nx.MultiGraph()
+                    for j in range(self.edge_offsets[i], self.edge_offsets[i + 1]):
+                        euler_graph.add_edge(self.e_np[j][0] - self.vert_offsets[i],
+                                             self.e_np[j][1] - self.vert_offsets[i])
+                    euler_graph = nx.eulerize(euler_graph)
+
+                    if nx.is_eulerian(euler_graph):
+                        print("Euler graph construction is completed!")
+
+                        path_list = []
+                        euler_path = list(nx.eulerian_path(euler_graph))
+
+                        path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
+                        path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
+                        for j in range(1, len(euler_path)):
+                            path_list.append(int(euler_path[j][1]) + self.vert_offsets[i])
+
+                        path_len = len(path_list)
+                        self.euler_path_np = np.append(self.euler_path_np, np.array(path_list), axis=0)
+                        for j in range(path_len):
+                            vid = path_list[j]
+                            self.duplicates_np[vid] += 1
+
+                        self.euler_path_offsets.append(self.euler_path_offsets[-1] + path_len)
+                        self.duplicates_offsets.append(self.vert_offsets[i + 1])
+
+                    end = time.time()
+                    print("Euler Graph Elapsed Time :", round(end - start, 5), "sec.")
+
+                    print("Exporting the constructed Euler graph...")
+                    nx.write_edgelist(euler_graph, precomputed_graph_file)
+                    print("Export is completed!\n")
+                    print(euler_graph.edges())
+
+                else:
+                    euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
+                    precomputed_graph_file = euler_dir + "/" + model_name_list[i][:-len(".obj")] + ".edgelist"
+
+                    print("Importing a precomputed Euler graph...")
+                    euler_graph = nx.read_edgelist(precomputed_graph_file, create_using=nx.MultiGraph)
+                    print("Checking integrity... ", end='')
+                    if nx.is_eulerian(euler_graph):
+                        print("The imported graph is Eulerian!\n")
+
+                        path_list = []
+                        euler_path = list(nx.eulerian_path(euler_graph))
+
+                        path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
+                        path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
+                        for j in range(1, len(euler_path)):
+                            path_list.append(int(euler_path[j][1]) + self.vert_offsets[i])
+
+                        path_len = len(path_list)
+                        self.euler_path_np = np.append(self.euler_path_np, np.array(path_list), axis=0)
+                        for j in range(path_len):
+                            vid = path_list[j]
+                            self.duplicates_np[vid] += 1
+
+                        self.euler_path_offsets.append(self.euler_path_offsets[-1] + path_len)
+                        self.duplicates_offsets.append(self.vert_offsets[i + 1])
+                    else:
+                        print("The imported graph is not eulerian...")
+                        print("Simulation ended!\n")
+                        sys.exit()
+
+            # print("Euler Path\n", self.euler_path_np)
+            # print("Duplicate\n", self.duplicates_np)
+            # print("Euler Path Length Offsets :", self.euler_path_offsets)
+            # print("Duplicates Length Offsets :", self.duplicates_offsets)
+
+            euler_path_offsets_np = np.array(self.euler_path_offsets)
+            duplicates_offsets_np = np.array(self.duplicates_offsets)
+            euler_offset_len = euler_path_offsets_np.shape[0]
+            self.euler_path_offsets_field = ti.field(dtype=int, shape=euler_offset_len)
+            self.duplicates_offsets_field = ti.field(dtype=int, shape=euler_offset_len)
+            self.euler_path_offsets_field.from_numpy(euler_path_offsets_np)
+            self.duplicates_offsets_field.from_numpy(duplicates_offsets_np)
+
+            self.euler_path_len = self.euler_path_np.shape[0]
+            self.euler_edge_len = self.euler_path_len - 1
+            self.duplicates_len = self.duplicates_np.shape[0]
+            self.euler_path_field = ti.field(dtype=int, shape=self.euler_path_len)
+            self.duplicates_field = ti.field(dtype=int, shape=self.duplicates_len)
+            self.euler_path_field.from_numpy(self.euler_path_np)
+            self.duplicates_field.from_numpy(self.duplicates_np)
+
+            self.min_euler_len = ti.field(dtype=int, shape=())
+            self.min_euler_len[None] = self.euler_edge_len
+
+            self.euler_path_field_dim2 = ti.field(dtype=int, shape=(self.euler_edge_len, 2))
+            for i in range(self.euler_edge_len - 1):
+                self.euler_path_field_dim2[i, 0] = self.euler_path_field[i]
+                self.euler_path_field_dim2[i, 1] = self.euler_path_field[i + 1]
+
+            # fields about euler
+            self.y_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.y_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.x_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.v_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.m_inv_euler = ti.field(dtype=float, shape=self.euler_path_len)
+            self.fixed_euler = ti.field(dtype=float, shape=self.euler_path_len)
+
+            self.l0_euler = ti.field(dtype=float, shape=self.euler_edge_len)
+            self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_edge_len)
+            self.edge_color_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_edge_len)
+
+            print("=====================================================================================\n")
 
         # fields about vertices
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)

@@ -38,19 +38,19 @@ obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=[
                      # "tshirt.obj",
-                     "dress_modified.obj"
+                     "plane.obj"
                     ],
     trans_list=[
                 # (0.0, -2.4, 0.0),
-                (0.0, 0.1, -1.0)
+                (0.0, 1.0, 0.0)
                ],
     scale_list=[
                 # 2.3,
-                3.0
+                1.0
                ],
     rot_list=[
-              # (1.0, 0.0, 0.0, 0.0),
-              (1.0, 0.0, 0.0, -3.14 / 2.0)
+              (1.0, 0.0, 0.0, 0.0),
+              # (1.0, 0.0, 0.0, -3.14 / 2.0)
                 ], # (axis.x, axis.y, axis.z, radian)
     is_static=False)
 

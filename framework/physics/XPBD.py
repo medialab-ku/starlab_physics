@@ -17,6 +17,7 @@ class Solver:
             dt):
 
         self.mesh_dy = mesh_dy
+        self.particle_st = particle_st
         # self.mesh_st = mesh_st
         self.dHat = dHat
         self.sh_dy = sh_dy
@@ -43,6 +44,7 @@ class Solver:
         self.num_verts_dy = self.mesh_dy.num_verts
         self.num_edges_dy = self.mesh_dy.num_edges
         self.num_faces_dy = self.mesh_dy.num_faces
+
         # if mesh_st is not None:
         #     self.num_verts_st = self.mesh_st.num_verts
         #     self.num_edges_st = self.mesh_st.num_edges
@@ -114,20 +116,20 @@ class Solver:
     def reset(self):
         print("reset...")
         self.mesh_dy.reset()
-        self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
+        # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
         self.compute_duplicates = True
         # self.mesh_dy.particles.reset()
-        if self.mesh_st is None:
-            self.mesh_st.reset()
-        self.update_sample_particle_pos()
-
-        self.particle_st.reset()
-        self.particle_st.v.fill(0.0)
+        # if self.mesh_st is None:
+        #     self.mesh_st.reset()
+        # self.update_sample_particle_pos()
+        #
+        # self.particle_st.reset()
+        # self.particle_st.v.fill(0.0)
         # self.particle_st.rho0.fill(1.0)
         # self.reset_rho()
         # if self.mesh_st is None:
         #     self.mesh_st.reset()
-        self.update_sample_particle_pos()
+        # self.update_sample_particle_pos()
 
         self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
         self.init_rest_neighbours(2*self.dHat)
@@ -228,10 +230,10 @@ class Solver:
             self.particle_st.v[i] = (self.particle_st.x_current[i] - self.particle_st.x_prev[i]) / dt
 
     @ti.kernel
-    def compute_y_tilde(self, g: ti.math.vec3, dt: ti.f32):
+    def compute_y(self, g: ti.math.vec3, dt: ti.f32):
         # compute apporximate x_(t+1) (== y) by explicit way before projecting constraints to x_(t+1)...
         for i in range(self.num_verts_dy):
-            self.mesh_dy.y[i] = (self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + self.g * dt * dt))
+            self.mesh_dy.y[i] = (self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt))
             # self.mesh_dy.y_tilde[i] = self.mesh_dy.y[i]
 
         # for Euler path...
@@ -239,12 +241,12 @@ class Solver:
         #     self.mesh_dy.y_euler[i] = (self.mesh_dy.x_euler[i] +
         #                                self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt))
         #     self.mesh_dy.y_tilde_euler[i] = self.mesh_dy.y_euler[i]
-            self.mesh_dy.y[i] = self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt)
-            self.mesh_dy.y[i] = self.confine_boundary(self.mesh_dy.y[i])
-            self.mesh_dy.y_origin[i] = self.mesh_dy.y[i]
-
-        for i in self.particle_st.x:
-            self.particle_st.x[i] += self.particle_st.v[i] * dt
+        #     self.mesh_dy.y[i] = self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt)
+        #     self.mesh_dy.y[i] = self.confine_boundary(self.mesh_dy.y[i])
+        #     self.mesh_dy.y_origin[i] = self.mesh_dy.y[i]
+        #
+        # for i in self.particle_st.x:
+        #     self.particle_st.x[i] += self.particle_st.v[i] * dt
 
 
 
@@ -256,10 +258,10 @@ class Solver:
                                  self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.mesh_dy.nc[i]))
 
     @ti.kernel
-    def compute_v(self, dt: ti.f32):
+    def compute_v(self, damping: ti.f32, dt: ti.f32):
         # compute v after all constraints are projected to x_(t+1)
         for i in range(self.num_verts_dy):
-            self.mesh_dy.v[i] = self.mesh_dy.fixed[i] * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
+            self.mesh_dy.v[i] = (1.0 - damping) * self.mesh_dy.fixed[i] * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
 
 
         # self.particle_st.x_prev.copy_from(self.particle_st.x)
@@ -270,10 +272,10 @@ class Solver:
 
 
     @ti.kernel
-    def update_x(self, damping: float, dt: float):
+    def update_x(self, dt: float):
         # eventually, update actual position x_(t+1) after velocities are computed...
         for i in range(self.num_verts_dy):
-            self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * (1.0 - damping) * self.mesh_dy.v[i]
+            self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * self.mesh_dy.v[i]
 
 
         # center = ti.math.vec3(0.0)
@@ -394,18 +396,20 @@ class Solver:
                                                                    current_offset,
                                                                    next_offset,
                                                                    num_partition)
+
+
     def solve_constraints_pd_diag_x(self, dt):
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
         self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
 
-        compliance_collision = 1e6 * dt * dt
-        # self.solve_xpbd_collision_constraints_st_x(2 * self.dHat)
-        # if self.selected_solver_type == 1:
-        #     print("test")
-        self.solve_collision_constraints_st_pd_diag_x(2 * self.dHat, compliance_collision)
-        self.solve_collision_constraints_dy_pd_diag_x(2 * self.dHat, compliance_collision)
+        # compliance_collision = 1e6 * dt * dt
+        # # self.solve_xpbd_collision_constraints_st_x(2 * self.dHat)
+        # # if self.selected_solver_type == 1:
+        # #     print("test")
+        # self.solve_collision_constraints_st_pd_diag_x(2 * self.dHat, compliance_collision)
+        # self.solve_collision_constraints_dy_pd_diag_x(2 * self.dHat, compliance_collision)
 
         # elif self.selected_solver_type == 2:
         #     print("test")
@@ -625,6 +629,7 @@ class Solver:
                                                           current_offset: ti.i32,
                                                           next_offset: ti.i32,
                                                           num_partition: ti.i32):
+
         self.a.fill(0.0)
         self.b.fill(1.0)
         self.c.fill(0.0)
@@ -684,7 +689,7 @@ class Solver:
             self.mesh_dy.dx[vid] += self.mesh_dy.dx_euler[i]
 
         for i in range(self.num_verts_dy):
-            self.mesh_dy.y[i] = self.mesh_dy.y_tilde[i] - self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.tridiagonal_duplicate[i])
+            self.mesh_dy.y[i] -= self.mesh_dy.fixed[i] * (self.mesh_dy.dx[i] / self.tridiagonal_duplicate[i])
 
         # for i in range(current_offset, next_offset):
         #     vid = self.mesh_dy.euler_path_field[i]
@@ -1625,19 +1630,47 @@ class Solver:
             ri = self.particle_st.x_prev[i] - center
             self.particle_st.x_current[i] = rot @ ri + center
 
+    def solve_constraints_euler_path_tridiagonal_x(self, dt, num_partition):
+        self.init_variables()
+
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
+
+        model_num = self.mesh_dy.num_model
+
+        for i in range(model_num):
+            current_offset, next_offset = self.mesh_dy.euler_path_offsets_field[i], \
+            self.mesh_dy.euler_path_offsets_field[i + 1]
+            self.solve_spring_constraints_euler_path_tridiagonal_x(compliance_stretch,
+                                                                   compliance_bending,
+                                                                   current_offset,
+                                                                   next_offset,
+                                                                   num_partition)
+
+
     def forward(self, n_substeps, n_iter):
 
         dt_sub = self.dt / n_substeps
 
         for _ in range(n_substeps):
-            self.compute_y_tilde(self.g, dt_sub)
-            # if self.selected_solver_type == 0:
-            self.solve_constraints_jacobi_x(dt_sub)
-            self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
-            # elif self.selected_solver_type == 1:
-            #     self.solve_constraints_gauss_seidel_x(dt_sub)
+            self.compute_y(self.g, dt_sub)
+            # self.solve_constraints_pd_diag_x(dt_sub)
+            # self.solve_constraints_euler_path_tridiagonal_x(dt_sub, num_partition)
+
+            if self.selected_solver_type == 0:
+                self.solve_constraints_jacobi_x(dt_sub)
+                # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
+            elif self.selected_solver_type == 1:
+                self.solve_constraints_pd_diag_x(dt_sub)
+            elif self.selected_solver_type == 2:
+                self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+            elif self.selected_solver_type == 3:
+                self.solve_constraints_euler_path_tridiagonal_x(dt_sub, 1)
+
+                # self.solve_constraints_euler_path_tridiagonal_x(dt_sub, 1)
+
             # elif self.selected_solver_type == 2:
-            #     self.solve_constraints_parallel_gauss_seidel_x(dt_sub)
+            #     self.solve_constraints_euler_path_tridiagonal_x(dt_sub, 1)
             # elif self.selected_solver_type == 3:
             #     self.solve_constraints_euler_path_jacobi_x(dt_sub)
             # elif self.selected_solver_type == 4:

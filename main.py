@@ -67,6 +67,7 @@ sim_tri = XPBD.Solver(scene1.obj_mesh_dy,
                       dHat=dHat_ui,
                       sh_st=sh_st,
                       sh_dy=sh_dy)
+
 sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy,
                         g=ti.math.vec3(0.0, -9.8, 0.0),
                         dt=dt_tet_ui)
@@ -90,11 +91,7 @@ PARTICLE = True
 g_selector_tri = st.SelectionTool(sim_tri.num_verts_dy, sim_tri.mesh_dy.x, window, camera)
 g_selector_tet = st.SelectionTool(sim_tet.num_verts_dy, sim_tet.mesh_dy.x, window, camera)
 
-
 frame_end = 100
-
-
-
 mesh_export = False
 frame_cpu = 0
 
@@ -129,13 +126,17 @@ def show_options_tri():
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
         sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
-        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 5)
+        solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 4)
         if solver_type_ui == 0:
             w.text("solver type: Jacobi")
         elif solver_type_ui == 1:
             w.text("solver type: PD-diag")
         elif solver_type_ui == 2:
-            w.text("solver type: H-diag")
+            w.text("solver type: PD-PCG")
+            sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
+            sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
+            sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
+            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
         elif solver_type_ui == 3:
             w.text("solver type: Euler Path")
         elif solver_type_ui == 4:
@@ -145,12 +146,12 @@ def show_options_tri():
             sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
             sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
             sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
-        elif solver_type_ui == 5:
-            w.text("solver type: PD PCG")
-            sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
-            sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
-            sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
-            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
+        # elif solver_type_ui == 5:
+        #     w.text("solver type: PD PCG")
+        #     sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
+        #     sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
+        #     sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
+        #     sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
 
 
         dt_tri_ui = w.slider_float("dt", dt_tri_ui, 0.001, 0.101)
@@ -180,9 +181,11 @@ def show_options_tri():
         verts_str = "# verts: " + str(sim_tri.num_verts_dy)
         edges_str = "# edges: " + str(sim_tri.num_edges_dy)
         faces_str = "# faces: " + str(sim_tri.num_faces_dy)
+        paths_str = "# paths: " + str(sim_tri.euler_path_len)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
+        w.text(paths_str)
         # w.text("")
         # w.text("static mesh stats.")
         # verts_str = "# verts: " + str(sim_tri.num_verts_st)
@@ -485,48 +488,48 @@ while window.running:
     if sim_type_ui == 0:
         # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(1, 0.5, 0.0))
 
-        if PARTICLE:
-            if USE_HEATMAP:
-                rho0_np = sim_tri.mesh_dy.rho0_sample.to_numpy()
-                colormap = plt.colormaps['viridis']
-                norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
-                rgb_array = colormap(norm(rho0_np))[:, :3]
-                # print(rgb_array.shape)
-                sim_tri.mesh_dy.heat_map_sample.from_numpy(rgb_array)
-                scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map_sample)
-                #TODO
-                # scene.particles(sim_tri.mesh_dy.test_particles, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
-                # scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
-                rho0_np = sim_tri.particle_st.rho0.to_numpy()
-                colormap = plt.colormaps['viridis']
-                norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
-                rgb_array = colormap(norm(rho0_np))[:, :3]
-                # print(rgb_array.shape)
-                sim_tri.particle_st.heat_map.from_numpy(rgb_array)
-                scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.particle_st.heat_map)
-            else:
-                # scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
-
-                #TODO
-                scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, color=(0.0, 1.0, 0.0))
-
-                # scene.particles(sim_tri.mesh_dy.x_e, radius=sim_tri.dHat,  color=(0.0, 1.0, 0.0))
-                # scene.particles(sim_tri.mesh_dy.x_f, radius=sim_tri.dHat,  color=(0.0, 0.0, 1.0))
-                scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+        # if PARTICLE:
+        #     if USE_HEATMAP:
+        #         rho0_np = sim_tri.mesh_dy.rho0_sample.to_numpy()
+        #         colormap = plt.colormaps['viridis']
+        #         norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
+        #         rgb_array = colormap(norm(rho0_np))[:, :3]
+        #         # print(rgb_array.shape)
+        #         sim_tri.mesh_dy.heat_map_sample.from_numpy(rgb_array)
+        #         scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map_sample)
+        #         #TODO
+        #         # scene.particles(sim_tri.mesh_dy.test_particles, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
+        #         # scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
+        #         rho0_np = sim_tri.particle_st.rho0.to_numpy()
+        #         colormap = plt.colormaps['viridis']
+        #         norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
+        #         rgb_array = colormap(norm(rho0_np))[:, :3]
+        #         # print(rgb_array.shape)
+        #         sim_tri.particle_st.heat_map.from_numpy(rgb_array)
+        #         scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.particle_st.heat_map)
+        #     else:
+        #         # scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
+        #
+        #         #TODO
+        #         scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, color=(0.0, 1.0, 0.0))
+        #
+        #         # scene.particles(sim_tri.mesh_dy.x_e, radius=sim_tri.dHat,  color=(0.0, 1.0, 0.0))
+        #         # scene.particles(sim_tri.mesh_dy.x_f, radius=sim_tri.dHat,  color=(0.0, 0.0, 1.0))
+        #         scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
 
 
             # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0),show_wireframe=True)
             # scene.particles(sim_tri.mesh_st.x_test, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
             #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
-        else:
+        # else:
 
-            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
-            scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
+        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
 
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
-            scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
+        scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
 
 
         scene.lines(sh_st.bbox_vertices, width=1.0, indices=sh_st.bbox_edge_indices_flattened, color=(0, 0, 0))
