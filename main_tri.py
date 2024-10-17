@@ -106,9 +106,13 @@ def show_options():
         verts_str = "# verts: " + str(sim.num_verts_dy)
         edges_str = "# edges: " + str(sim.num_edges_dy)
         faces_str = "# faces: " + str(sim.num_faces_dy)
+        pathes_str = "# paths: " + str(sim.euler_path_len)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
+        w.text(pathes_str)
+
+
         w.text("")
         w.text("static mesh stats.")
         verts_str = "# verts: " + str(sim.num_verts_st)
@@ -252,13 +256,13 @@ while window.running:
     if mesh_export and run_sim and frame_cpu < frame_end:
         sim.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
-    scene.mesh(sim.mesh_dy.x, indices=sim.mesh_dy.face_indices_flatten, per_vertex_color=sim.mesh_dy.colors)
-    scene.mesh(sim.mesh_dy.x, indices=sim.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+    scene.mesh(sim.x_pbd_jacobi, indices=sim.mesh_dy.face_indices_flatten, per_vertex_color=sim.mesh_dy.colors)
+    scene.mesh(sim.x_pbd_jacobi, indices=sim.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
 
     # scene.lines(sim.mesh_dy.x_euler, indices=sim.mesh_dy.edge_indices_euler, width=1.0, color=(0., 0., 0.))
     # scene.particles(sim.mesh_dy.x_euler, radius=0.02, color=(0., 0., 0.))
     # sim.mesh_dy.colors_edge_euler.fill(ti.math.vec3([1.0, 0.0, 0.0]))
-    scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.edge_color_euler)
+    # scene.particles(sim.mesh_dy.colored_edge_pos_euler, radius=0.05,  per_vertex_color=sim.mesh_dy.edge_color_euler)
     # if sim.mesh_st != None:
     #     scene.mesh(sim.mesh_st.x, indices=sim.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
     #     scene.mesh(sim.mesh_st.x, indices=sim.mesh_st.face_indices_flatten, per_vertex_color=sim.mesh_st.colors)
