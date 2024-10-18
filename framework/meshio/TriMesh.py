@@ -267,6 +267,7 @@ class TriMesh:
             self.x_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
             self.v_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
             self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+            self.nc_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
             self.m_inv_euler = ti.field(dtype=float, shape=self.euler_path_len)
             self.fixed_euler = ti.field(dtype=float, shape=self.euler_path_len)
 
@@ -509,3 +510,11 @@ class TriMesh:
 
         for i in range(self.num_verts):
             self.m_inv[i] = 1.0 /  self.m[i]
+
+        for i in range(self.euler_edge_len):
+            v0, v1 = self.euler_path_field[i],  self.euler_path_field[i + 1]
+            self.l0_euler[i] = (self.x[v0] - self.x[v1]).norm()
+
+        for i in range(self.euler_path_len):
+            v0 = self.euler_path_field[i]
+            self.m_inv_euler[i] = self.m_inv[v0]

@@ -1,6 +1,6 @@
 {
     "sim_type": 0,
-    "solver_type": 2,
+    "solver_type": 3,
     "dt_tri": 0.029999999329447746,
     "dt_tet": 0.02,
     "n_substep": 20,
@@ -10,10 +10,10 @@
     "damping": 0.004999999888241291,
     "YM": 5000.0,
     "YM_b": 0.0,
-    "PCG_threshold": 9.999999747378752e-05,
+    "PCG_threshold": 0.0001,
     "PCG_definiteness_fix": true,
     "PCG_use_line_search": true,
     "PCG_print_stats": false,
-    "PCG_max_cg_iter": 1000,
+    "PCG_max_cg_iter": 100,
     "PR": 0.2
 }

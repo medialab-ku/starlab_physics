@@ -43,6 +43,7 @@ with open(config_path, 'r') as json_file:
 
 sim_type_ui = config_data["sim_type"]
 solver_type_ui = config_data["solver_type"]
+print(solver_type_ui)
 dt_tri_ui = config_data["dt_tri"]
 dt_tet_ui = config_data["dt_tet"]
 n_substep = config_data["n_substep"]
@@ -71,6 +72,8 @@ sim_tri = XPBD.Solver(scene1.obj_mesh_dy,
 sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy,
                         g=ti.math.vec3(0.0, -9.8, 0.0),
                         dt=dt_tet_ui)
+
+sim_tri.selected_solver_type = solver_type_ui
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
@@ -124,7 +127,6 @@ def show_options_tri():
     YM_b_old = YM_b_ui
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
-
         sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
         solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 4)
         if solver_type_ui == 0:
@@ -167,8 +169,8 @@ def show_options_tri():
         w.text(frame_str)
 
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
-        USE_HEATMAP = w.checkbox("heatmap", USE_HEATMAP)
-        PARTICLE = w.checkbox("particle", PARTICLE)
+        # USE_HEATMAP = w.checkbox("heatmap", USE_HEATMAP)
+        # PARTICLE = w.checkbox("particle", PARTICLE)
         sim_tri.enable_velocity_update = w.checkbox("velocity constraint", sim_tri.enable_velocity_update)
         # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         # mesh_export = w.checkbox("export mesh", mesh_export)
