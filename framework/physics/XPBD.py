@@ -636,10 +636,13 @@ class Solver:
         self.mesh_dy.nc.fill(1.0)
         self.mesh_dy.nc_euler.fill(1.0)
 
-        self.a.fill(1.0)
-        self.b.fill(1.0)
+        self.a.fill(0.0)
+        self.b.fill(0.0)
         self.c.fill(0.0)
         self.d.fill(0.0)
+
+        self.c_tilde.fill(0.0)
+        self.d_tilde.fill(0.0)
 
         for i in range(self.mesh_dy.euler_edge_len):
             v0, v1 = self.mesh_dy.euler_path_field[i], self.mesh_dy.euler_path_field[i + 1]
@@ -647,43 +650,37 @@ class Solver:
             l0 = self.mesh_dy.l0_euler[i]
             dp01 = x01 - l0 * x01.normalized()
 
-            self.b[i]     += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
-            self.b[i + 1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
+            self.a[i + 1] -= 1.0
 
-            self.d[i]     -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
-            self.d[i + 1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
+            self.b[i]     += 1.0 + (self.mesh_dy.m[v0] / compliance_stretch)
+            self.b[i + 1] += 1.0 + (self.mesh_dy.m[v1] / compliance_stretch)
 
-            # self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
-            # self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
-            # self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
-            # self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
+            self.c[i]     -= 1.0
 
-        for i in self.mesh_dy.dx_euler:
-            self.mesh_dy.dx_euler[i] = self.d[i] / self.b[i]
+            self.d[i]     -= dp01
+            self.d[i + 1] += dp01
+
+
+        self.c_tilde[0] = self.c[0] / self.b[0]
+        ti.loop_config(serialize=True)
+        for i in range(1, self.mesh_dy.euler_path_len):  # lb+1 ~ ub-1
+            self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
+
+        self.d_tilde[0] = self.d[0] / self.b[0]
+        ti.loop_config(serialize=True)
+        for i in range(0 + 1, self.mesh_dy.euler_path_len):  # lb+1 ~ ub
+            self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i - 1]) / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
+
+        self.mesh_dy.dx_euler[self.mesh_dy.euler_path_len] = self.d_tilde[self.mesh_dy.euler_path_len]
+        ti.loop_config(serialize=True)
+        for i in range(self.mesh_dy.euler_path_len):
+            self.mesh_dy.dx_euler[i] = self.d_tilde[i] - self.c_tilde[i] * self.mesh_dy.dx_euler[i + 1]
+
 
         for i in self.mesh_dy.dx_euler:
             v0 = self.mesh_dy.euler_path_field[i]
             self.mesh_dy.dx[v0] += self.mesh_dy.dx_euler[i]
 
-        # for p in range(1):
-        #     idx_lb = 0
-        #     idx_ub = self.mesh_dy.euler_edge_len
-        #     self.c_tilde[idx_lb] = self.c[idx_lb] / self.b[idx_lb]
-        #     for i in range(idx_lb + 1, idx_ub):  # lb+1 ~ ub-1
-        #         self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
-        #
-        #     self.d_tilde[idx_lb] = self.d[idx_lb] / self.b[idx_lb]
-        #     for i in range(idx_lb + 1, idx_ub + 1):  # lb+1 ~ ub
-        #         self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i - 1]) / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
-        #
-        #     self.mesh_dy.dx_euler[idx_ub] += self.d_tilde[idx_ub]
-        #     for i in range(idx_lb, idx_ub):
-        #         idx = idx_lb + idx_ub - 1 - i  # ub-1 ~ lb
-        #         self.mesh_dy.dx_euler[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
-        #
-        #     for i in range(idx_lb, idx_ub):
-        #         v0 = self.mesh_dy.euler_path_field[i]
-        #         self.mesh_dy.dx[v0] += self.mesh_dy.dx_euler[i]
 
         for i in self.mesh_dy.y:
             self.mesh_dy.y[i] += self.mesh_dy.dx[i] /self.mesh_dy.duplicates_field[i]
@@ -1722,7 +1719,6 @@ class Solver:
         # print(self.selected_solver_type)
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
-
             if self.selected_solver_type == 0:
                 self.solve_constraints_jacobi_x(dt_sub)
                 # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
