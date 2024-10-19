@@ -11,6 +11,11 @@ from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 from framework.collision import SpatialHash as shash
 
+import pandas as pd
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+
 # initialize the tri UI params
 config_path = Path(__file__).resolve().parent / "framework" / "sim_config.json"
 config_data = {}
@@ -43,7 +48,7 @@ with open(config_path, 'r') as json_file:
 
 sim_type_ui = config_data["sim_type"]
 solver_type_ui = config_data["solver_type"]
-print(solver_type_ui)
+# print(solver_type_ui)
 dt_tri_ui = config_data["dt_tri"]
 dt_tet_ui = config_data["dt_tet"]
 n_substep = config_data["n_substep"]
@@ -75,6 +80,22 @@ sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy,
 
 sim_tri.selected_solver_type = solver_type_ui
 
+
+df = pd.DataFrame({'x': [], 'y': []})
+
+# Create figure and axis
+fig, ax = plt.subplots()
+line, = ax.plot([], [], 'b')
+# Set axis limits
+ax.set_ylim(1e-4, 0.01)
+# Function to update the plot dynamically
+def update_plot(df):
+    line.set_xdata(df['x'])
+    line.set_ydata(df['y'])
+    fig.canvas.draw()  # Redraw the plot
+    fig.canvas.flush_events()  # Process GUI events
+
+
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -88,6 +109,7 @@ camera.up(0, 1, 0)
 run_sim = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
+SHOW_GRAPH = False
 USE_HEATMAP = True
 PARTICLE = True
 #selector
@@ -112,6 +134,7 @@ def show_options_tri():
     global dHat_ui
     global friction_coeff_ui
     global MODE_WIREFRAME
+    global SHOW_GRAPH
     global LOOKAt_ORIGIN
     global USE_HEATMAP
     global PARTICLE
@@ -167,7 +190,7 @@ def show_options_tri():
 
         frame_str = "# frame: " + str(frame_cpu)
         w.text(frame_str)
-
+        SHOW_GRAPH = w.checkbox("Show graph", SHOW_GRAPH)
         LOOKAt_ORIGIN = w.checkbox("Look at origin", LOOKAt_ORIGIN)
         # USE_HEATMAP = w.checkbox("heatmap", USE_HEATMAP)
         # PARTICLE = w.checkbox("particle", PARTICLE)
@@ -374,7 +397,7 @@ while window.running:
             frame_cpu = 0
             sim_tri.reset()
             sim_tet.reset()
-
+            df = pd.DataFrame({'x': [], 'y': []})
             config_data = {
                 "sim_type": sim_type_ui,
                 "solver_type": solver_type_ui,
@@ -464,7 +487,6 @@ while window.running:
 
     if run_sim:
         # sim.animate_handle(g_selector.is_selected)
-
         if sim_type_ui == 0:
             if frame_cpu == 0:
                 sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x0)
@@ -478,6 +500,17 @@ while window.running:
             sim_tet.forward(n_substeps=n_substep, n_iter=n_iter)
 
         frame_cpu += 1
+
+    if SHOW_GRAPH:
+        plt.ion()
+        ax.set_ylim(sim_tri.E_min, sim_tri.E_max)
+        ax.set_xlim(0, frame_cpu)
+
+        new_data = {'x': [frame_cpu], 'y': [sim_tri.E_curr]}
+        df = df._append(pd.DataFrame(new_data), ignore_index=True)
+        update_plot(df)
+        plt.show()
+
 
     if sim_type_ui == 0:
         show_options_tri()
