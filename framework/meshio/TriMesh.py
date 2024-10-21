@@ -279,6 +279,7 @@ class TriMesh:
 
         # fields about vertices
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.y_tilde = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_origin = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.x_e = ti.Vector.field(n=3, dtype=float, shape=self.num_edges)
