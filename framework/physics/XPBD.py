@@ -55,16 +55,16 @@ class Solver:
 
         self.reset()
 
-        self.euler_path_len = self.mesh_dy.euler_path_len
-        self.euler_edge_len = self.mesh_dy.euler_edge_len
-
-        self.a = ti.field(dtype=float, shape=self.euler_path_len)
-        self.b = ti.field(dtype=float, shape=self.euler_path_len)
-        self.c = ti.field(dtype=float, shape=self.euler_path_len)
-        self.c_tilde = ti.field(dtype=float, shape=self.euler_path_len)
-        self.d = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-        self.d_tilde = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-        self.dx = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+        # self.euler_path_len = self.mesh_dy.euler_path_len
+        # self.euler_edge_len = self.mesh_dy.euler_edge_len
+        #
+        # self.a = ti.field(dtype=float, shape=self.euler_path_len)
+        # self.b = ti.field(dtype=float, shape=self.euler_path_len)
+        # self.c = ti.field(dtype=float, shape=self.euler_path_len)
+        # self.c_tilde = ti.field(dtype=float, shape=self.euler_path_len)
+        # self.d = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+        # self.d_tilde = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+        # self.dx = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
 
         self.compute_duplicates = True
         self.tridiagonal_duplicate = ti.field(dtype=int, shape=self.num_verts_dy)
@@ -134,8 +134,8 @@ class Solver:
         #     self.mesh_st.reset()
         # self.update_sample_particle_pos()
 
-        self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
-        self.init_rest_neighbours(2*self.dHat)
+        # self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
+        # self.init_rest_neighbours(2*self.dHat)
 
 
     @ti.kernel

@@ -95,6 +95,6 @@ def euler_path(model_name):
         plt.show()
 
 
-euler_path("plane.obj")
+euler_path("square.obj")
 
 

@@ -46,17 +46,17 @@ class TriMesh:
         model_name = model_name_list[0][:-4]
         print(model_name)
 
-        path = '/home/mhkee/Desktop/workspace/starlab_physics/models/sampling/'+model_name+'.npy'
-        load_array = np.load(path, allow_pickle=True)
+        path = 'C:/Users/mhkee/Desktop/workspace/starlab_physics/models/sampling/'+model_name+'.npy'
+        # load_array = np.load(path, allow_pickle=True)
 
         # print(load_array)
-        self.sample_indices = ti.field(dtype=float, shape=load_array.shape)
-        self.x_sample = ti.Vector.field(n=3, dtype=float, shape=load_array.shape[0])
-        self.rho0_sample = ti.field(dtype=float, shape=load_array.shape[0])
-        self.heat_map_sample = ti.Vector.field(n=3, dtype=float, shape=load_array.shape[0])
-
-        if is_static is False:
-            self.sample_indices.from_numpy(load_array)
+        # self.sample_indices = ti.field(dtype=float, shape=load_array.shape)
+        # self.x_sample = ti.Vector.field(n=3, dtype=float, shape=load_array.shape[0])
+        # self.rho0_sample = ti.field(dtype=float, shape=load_array.shape[0])
+        # self.heat_map_sample = ti.Vector.field(n=3, dtype=float, shape=load_array.shape[0])
+        #
+        # if is_static is False:
+        #     self.sample_indices.from_numpy(load_array)
 
         # concatenate all of meshes
         for i in range(self.num_model):
@@ -119,6 +119,7 @@ class TriMesh:
         self.duplicates_offsets = [0, ]
         self.euler_path_offsets = [0, ]
 
+        partition = [[]]
         if not is_static:
             for i in range(self.num_model):
                 euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
@@ -173,22 +174,49 @@ class TriMesh:
                     print("Checking integrity... ", end='')
                     if nx.is_eulerian(euler_graph):
                         print("The imported graph is Eulerian!\n")
-
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
-                        # edge_count = {}
-                        # for u, v in euler_graph.edges():
-                        #     if (u, v) in edge_count:
-                        #         edge_count[(u, v)] += 1
-                        #     elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
-                        #         edge_count[(v, u)] += 1
-                        #     else:
-                        #         edge_count[(u, v)] = 1
-                        #
-                        # count_of_duplicates = Counter(edge_count.values())
+
+                        edge_count = {}
+                        duplicate = list()
+                        for u, v in euler_path:
+                            if (u, v) in edge_count:
+                                edge_count[(u, v)] += 1
+                                duplicate.append((u, v))
+                            elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
+                                edge_count[(v, u)] += 1
+                                duplicate.append((v, u))
+                            else:
+                                edge_count[(u, v)] = 1
+
+                        count_of_duplicates = Counter(edge_count.values())
                         # print(count_of_duplicates)
 
+                        for u, v in duplicate:
+                            euler_path.remove((u, v))
 
+                        # print(euler_path)
+
+                        # partition = [[]]
+
+                        pid = 0
+                        for u, v in euler_path:
+                            if (u, v) in edge_count:
+                                if edge_count[(u, v)] == 2:
+                                    partition.append([])
+                                    pid += 1
+
+                                partition[pid].append(int(u))
+                                partition[pid].append(int(v))
+                            elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
+                                if edge_count[(v, u)] == 2:
+                                    partition.append([])
+                                    pid += 1
+                                partition[pid].append(int(u))
+                                partition[pid].append(int(v))
+
+
+                        # print(partition)
                         path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
                         path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
                         for j in range(1, len(euler_path)):
@@ -207,46 +235,7 @@ class TriMesh:
                         print("Simulation ended!\n")
                         sys.exit()
 
-
-
-            euler_path_offsets_np = np.array(self.euler_path_offsets)
-            duplicates_offsets_np = np.array(self.duplicates_offsets)
-            euler_offset_len = euler_path_offsets_np.shape[0]
-            self.euler_path_offsets_field = ti.field(dtype=int, shape=euler_offset_len)
-            self.duplicates_offsets_field = ti.field(dtype=int, shape=euler_offset_len)
-            self.euler_path_offsets_field.from_numpy(euler_path_offsets_np)
-            self.duplicates_offsets_field.from_numpy(duplicates_offsets_np)
-
-            self.euler_path_len = self.euler_path_np.shape[0]
-            self.euler_edge_len = self.euler_path_len - 1
-            self.duplicates_len = self.duplicates_np.shape[0]
-            self.euler_path_field = ti.field(dtype=int, shape=self.euler_path_len)
-            self.duplicates_field = ti.field(dtype=int, shape=self.duplicates_len)
-            self.euler_path_field.from_numpy(self.euler_path_np)
-            self.duplicates_field.from_numpy(self.duplicates_np)
-
-            self.min_euler_len = ti.field(dtype=int, shape=())
-            self.min_euler_len[None] = self.euler_edge_len
-
-            self.euler_path_field_dim2 = ti.field(dtype=int, shape=(self.euler_edge_len, 2))
-            for i in range(self.euler_edge_len - 1):
-                self.euler_path_field_dim2[i, 0] = self.euler_path_field[i]
-                self.euler_path_field_dim2[i, 1] = self.euler_path_field[i + 1]
-
-            # fields about euler
-            self.y_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-            self.y_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-            self.x_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-            self.v_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-            self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-            self.nc_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-            self.m_inv_euler = ti.field(dtype=float, shape=self.euler_path_len)
-            self.fixed_euler = ti.field(dtype=float, shape=self.euler_path_len)
-
-            self.l0_euler = ti.field(dtype=float, shape=self.euler_edge_len)
-            self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_edge_len)
-            self.edge_color_euler = ti.Vector.field(n=3, dtype=float, shape=self.euler_edge_len)
-
+            print(partition)
             print("=====================================================================================\n")
 
         # fields about vertices
@@ -254,9 +243,6 @@ class TriMesh:
         self.y_tilde = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_origin = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
-        self.x_e = ti.Vector.field(n=3, dtype=float, shape=self.num_edges)
-        self.x_f = ti.Vector.field(n=3, dtype=float, shape=self.num_faces)
-        self.x_test = ti.Vector.field(n=3, dtype=float, shape=self.num_verts + self.num_edges + self.num_faces)
         self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dx = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -279,8 +265,8 @@ class TriMesh:
         self.neighbour_ids_rest = ti.field(dtype=int, shape=(self.num_verts + self.num_edges + self.num_faces, self.cache_size_rest))
 
         self.cache_size_dy = 100
-        self.num_neighbours_dy = ti.field(dtype=int, shape=load_array.shape[0])
-        self.neighbour_ids_dy = ti.field(dtype=int, shape=(load_array.shape[0], self.cache_size_dy))
+        # self.num_neighbours_dy = ti.field(dtype=int, shape=load_array.shape[0])
+        # self.neighbour_ids_dy = ti.field(dtype=int, shape=(load_array.shape[0], self.cache_size_dy))
 
         # initialize the vertex fields
         self.y.fill(0.0)
@@ -485,10 +471,10 @@ class TriMesh:
         for i in range(self.num_verts):
             self.m_inv[i] = 1.0 /  self.m[i]
 
-        for i in range(self.euler_edge_len):
-            v0, v1 = self.euler_path_field[i],  self.euler_path_field[i + 1]
-            self.l0_euler[i] = (self.x[v0] - self.x[v1]).norm()
-
-        for i in range(self.euler_path_len):
-            v0 = self.euler_path_field[i]
-            self.m_inv_euler[i] = self.m_inv[v0]
+        # for i in range(self.euler_edge_len):
+        #     v0, v1 = self.euler_path_field[i],  self.euler_path_field[i + 1]
+        #     self.l0_euler[i] = (self.x[v0] - self.x[v1]).norm()
+        #
+        # for i in range(self.euler_path_len):
+        #     v0 = self.euler_path_field[i]
+        #     self.m_inv_euler[i] = self.m_inv[v0]

@@ -36,6 +36,7 @@ default_data = {
     "PCG_use_line_search": True,
     "PCG_print_stats": False,
     "PCG_max_cg_iter": 100,
+
     "PR": 0.2
 }
 
@@ -216,11 +217,11 @@ def show_options_tri():
         verts_str = "# verts: " + str(sim_tri.num_verts_dy)
         edges_str = "# edges: " + str(sim_tri.num_edges_dy)
         faces_str = "# faces: " + str(sim_tri.num_faces_dy)
-        paths_str = "# paths: " + str(sim_tri.euler_path_len)
+        # paths_str = "# paths: " + str(sim_tri.euler_path_len)
         w.text(verts_str)
         w.text(edges_str)
         w.text(faces_str)
-        w.text(paths_str)
+        # w.text(paths_str)
         # w.text("")
         # w.text("static mesh stats.")
         # verts_str = "# verts: " + str(sim_tri.num_verts_st)
