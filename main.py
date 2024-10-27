@@ -48,6 +48,7 @@ with open(config_path, 'r') as json_file:
 
 sim_type_ui = config_data["sim_type"]
 solver_type_ui = config_data["solver_type"]
+precond_type_ui = config_data["precond_type"]
 # print(solver_type_ui)
 dt_tri_ui = config_data["dt_tri"]
 dt_tet_ui = config_data["dt_tet"]
@@ -79,6 +80,7 @@ sim_tet = XPBFEM.Solver(scene1.msh_mesh_dy,
                         dt=dt_tet_ui)
 
 sim_tri.selected_solver_type = solver_type_ui
+sim_tri.selected_precond_type = precond_type_ui
 
 
 df = pd.DataFrame({'x': [], 'y': []})
@@ -127,6 +129,7 @@ def show_options_tri():
     global dt_tri_ui
     global sim_type_ui
     global solver_type_ui
+    global precond_type_ui
     global damping_ui
     global YM_ui
     global YM_b_ui
@@ -143,6 +146,7 @@ def show_options_tri():
 
     old_dt = dt_tri_ui
     old_solver_type_ui = solver_type_ui
+    old_precond_type_ui = precond_type_ui
     old_dHat = dHat_ui
     old_friction_coeff = dHat_ui
     old_damping = damping_ui
@@ -161,16 +165,22 @@ def show_options_tri():
             sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
             sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
             sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
-            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
+            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 1000)
         elif solver_type_ui == 3:
             w.text("solver type: Euler Path")
         elif solver_type_ui == 4:
             w.text("solver type: Newton PCG")
+            precond_type_ui = w.slider_int("precond. type", precond_type_ui, 0, 1)
+            if precond_type_ui == 0:
+                w.text("precond. type: Identity")
+            elif precond_type_ui == 1:
+                w.text("precond. type: Jacobi")
             sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
             sim_tri.definiteness_fix = w.checkbox("definiteness fix", sim_tri.definiteness_fix)
             sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
             sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
-            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 100)
+            sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 1000)
+
         # elif solver_type_ui == 5:
         #     w.text("solver type: PD PCG")
         #     sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
@@ -226,6 +236,9 @@ def show_options_tri():
     if not old_solver_type_ui == solver_type_ui:
         sim_tri.selected_solver_type = solver_type_ui
 
+    if not old_precond_type_ui == precond_type_ui:
+        sim_tri.selected_precond_type = precond_type_ui
+
     if not old_dHat == dHat_ui:
         sim_tri.dHat = dHat_ui
 
@@ -268,7 +281,6 @@ def show_options_tet():
     with gui.sub_window("XPBD Settings", 0., 0., 0.4, 0.35) as w:
 
         sim_type_ui = w.slider_int("sim type", sim_type_ui, 0, 1)
-
         solver_type_ui = w.slider_int("solver type", solver_type_ui, 0, 1)
         if solver_type_ui == 0:
             w.text("solver type: XPBD Jacobi")
@@ -401,6 +413,7 @@ while window.running:
             config_data = {
                 "sim_type": sim_type_ui,
                 "solver_type": solver_type_ui,
+                "precond_type": precond_type_ui,
                 "dt_tri": dt_tri_ui,
                 "dt_tet": dt_tet_ui,
                 "n_substep": n_substep,
@@ -503,10 +516,13 @@ while window.running:
 
     if SHOW_GRAPH:
         plt.ion()
-        ax.set_ylim(sim_tri.E_min, sim_tri.E_max)
-        ax.set_xlim(0, frame_cpu)
+        ax.set_ylim(0, sim_tri.max_cg_iter)
 
-        new_data = {'x': [frame_cpu], 'y': [sim_tri.E_curr]}
+        if frame_cpu < 100:
+            ax.set_xlim(0, 100)
+        else:
+            ax.set_xlim(0, frame_cpu)
+        new_data = {'x': [frame_cpu], 'y': [sim_tri.PCG.cg_iter]}
         df = df._append(pd.DataFrame(new_data), ignore_index=True)
         update_plot(df)
         plt.show()
@@ -559,14 +575,14 @@ while window.running:
             #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
         # else:
 
-        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
+        # scene.lines(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.edge_indices_flatten, color=(0., 0., 0.), width=1.0)
+
+        # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
         scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
 
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
         scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
-
-
         scene.lines(sh_st.bbox_vertices, width=1.0, indices=sh_st.bbox_edge_indices_flattened, color=(0, 0, 0))
 
 

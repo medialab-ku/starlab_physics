@@ -8,6 +8,7 @@ import random
 from pathlib import Path
 from pyquaternion import Quaternion
 import networkx as nx
+from collections import Counter
 
 model_path = Path(__file__).resolve().parent.parent.parent / "models"
 OBJ = "OBJ"
@@ -41,6 +42,7 @@ class TriMesh:
         self.edge_offsets.append(0)
         self.face_offsets.append(0)
 
+
         model_name = model_name_list[0][:-4]
         print(model_name)
 
@@ -66,16 +68,6 @@ class TriMesh:
 
             # rotate, scale, and translate all vertices
             x_np_temp = np.array(mesh.points, dtype=float)
-            a = np.reshape(x_np_temp, (3 * x_np_temp.shape[0]))
-            np.save("ox.npy", a)
-            # print(a.shape)
-            # x_bytes = bytearray(a)
-            # file_path = "ox.bin"
-            # with open(file_path, "wb") as file:
-            #     # binary_data = bytearray([0xFF, 0x00, 0x7F, 0x80])
-            #     # Example binary data as a bytearray
-            #     file.write(x_bytes)
-
             center = x_np_temp.sum(axis=0) / x_np_temp.shape[0]  # center position of the mesh
             x_np_temp = np.apply_along_axis(lambda row: trans_lf(row, -center), 1, x_np_temp)  # translate to origin
             x_np_temp = scale_lf(x_np_temp, scale_list[i])  # scale mesh to the particular ratio
@@ -99,15 +91,6 @@ class TriMesh:
             self.num_faces += len(mesh.cells_dict.get("triangle", []))
 
             face_temp = np.array(mesh.cells_dict["triangle"])
-            b = np.reshape(face_temp, (3 * face_temp.shape[0]))
-            np.save("indices.npy", b)
-            # face_temp_bytes = bytearray(b)
-            # file_path = "indices.bin"
-            # with open(file_path, "wb") as file:
-            #     # binary_data = bytearray([0xFF, 0x00, 0x7F, 0x80])
-            #     # Example binary data as a bytearray
-            #     file.write(face_temp_bytes)
-
             face_temp = face_temp + self.vert_offsets[i]
             self.f_np = np.append(self.f_np, face_temp, axis=0)
 
@@ -119,11 +102,6 @@ class TriMesh:
             self.num_edges += len(edges)
 
             edge_temp = np.array(list(edges))
-            c = np.reshape(edge_temp, (2 * edge_temp.shape[0]))
-            np.save("edges.npy", c)
-            # print(edge_temp.shape)
-
-
             edge_temp = edge_temp + self.vert_offsets[i]
             self.e_np = np.append(self.e_np, edge_temp, axis=0)
 
@@ -132,17 +110,6 @@ class TriMesh:
             self.vert_offsets.append(self.vert_offsets[-1] + mesh.points.shape[0])
             self.edge_offsets.append(self.edge_offsets[-1] + len(edges))
             self.face_offsets.append(self.face_offsets[-1] + len(mesh.cells_dict.get("triangle", [])))
-
-        #TODO
-        # test_particle_np = np.zeros_like(self.x_np)
-        # self.test_particles = ti.Vector.field(n=3, dtype=float)
-        # size = 100
-        # ti.root.dense(ti.i, size).place(self.test_particles)
-        # self.test_particles.from_numpy(test_particle_np)
-        # TODO
-
-            # print(self.original_edge_color_prefix_sum_np, self.original_edge_color_prefix_sum_np.shape[0])
-            # print(self.original_edge_color_np, self.original_edge_color_np.shape[0])
 
             ################################################################################################################
             # Euler Path
@@ -176,9 +143,6 @@ class TriMesh:
                     if nx.is_eulerian(euler_graph):
                         print("Euler graph construction is completed!")
 
-                        path_list = []
-                        euler_path = list(nx.eulerian_path(euler_graph))
-
                         path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
                         path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
                         for j in range(1, len(euler_path)):
@@ -204,7 +168,6 @@ class TriMesh:
                 else:
                     euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
                     precomputed_graph_file = euler_dir + "/" + model_name_list[i][:-len(".obj")] + ".edgelist"
-
                     print("Importing a precomputed Euler graph...")
                     euler_graph = nx.read_edgelist(precomputed_graph_file, create_using=nx.MultiGraph)
                     print("Checking integrity... ", end='')
@@ -213,6 +176,18 @@ class TriMesh:
 
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
+                        # edge_count = {}
+                        # for u, v in euler_graph.edges():
+                        #     if (u, v) in edge_count:
+                        #         edge_count[(u, v)] += 1
+                        #     elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
+                        #         edge_count[(v, u)] += 1
+                        #     else:
+                        #         edge_count[(u, v)] = 1
+                        #
+                        # count_of_duplicates = Counter(edge_count.values())
+                        # print(count_of_duplicates)
+
 
                         path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
                         path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
@@ -232,10 +207,7 @@ class TriMesh:
                         print("Simulation ended!\n")
                         sys.exit()
 
-            # print("Euler Path\n", self.euler_path_np)
-            # print("Duplicate\n", self.duplicates_np)
-            # print("Euler Path Length Offsets :", self.euler_path_offsets)
-            # print("Duplicates Length Offsets :", self.duplicates_offsets)
+
 
             euler_path_offsets_np = np.array(self.euler_path_offsets)
             duplicates_offsets_np = np.array(self.duplicates_offsets)
@@ -331,27 +303,29 @@ class TriMesh:
         self.l0 = ti.field(dtype=float, shape=self.num_edges)
 
         self.hii = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_verts)
+        self.hi = ti.field(dtype=float, shape=self.num_verts)
         self.hij = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_edges)
 
         self.Ax = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.r = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.r_next = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.z = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.z_next = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.b = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+
 
         self.eid_field = ti.field(dtype=int, shape=(self.num_edges, 2))
         # initialize the edge fields
         self.l0.fill(0.0)
         self.eid_field.from_numpy(self.e_np)
         self.edge_indices_flatten = ti.field(dtype=int, shape=self.num_edges * 2)
-        # # fields about faces
-        # self.aabb_min = ti.field(dtype=float, shape=self.num_faces)
-        # self.aabb_max = ti.field(dtype=float, shape=self.num_faces)
-        # # self.morton_code = ti.field(dtype=ti.uint32, shape=self.num_faces)
+        self.edge_colores = ti.Vector.field(n=3, dtype=float, shape=self.num_edges)
         self.fid_field = ti.field(dtype=int, shape=(self.num_faces, 3))
         self.face_indices_flatten = ti.field(dtype=ti.int32, shape=self.num_faces * 3)
         #
         # # initialize the face fields
+
         self.fid_field.from_numpy(self.f_np)
         # self.face_indices_flatten.from_numpy(self.f_np)
         self.init_edge_indices_flatten()
@@ -429,7 +403,6 @@ class TriMesh:
 
         count = 0
         # print(neighbors)
-
         for f in range(num_f):
             for i in range(3):
                 eid = 3 * f + i

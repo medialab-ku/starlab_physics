@@ -42,6 +42,7 @@ class Solver:
         self.num_edges_dy = self.mesh_dy.num_edges
         self.num_faces_dy = self.mesh_dy.num_faces
         self.selected_solver_type = 2
+        self.selected_precond_type = 2
 
         # if mesh_st is not None:
         #     self.num_verts_st = self.mesh_st.num_verts
@@ -333,7 +334,8 @@ class Solver:
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
-        self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
+        self.solve_spring_constraints_gauss_seidel_x(compliance_stretch, compliance_bending)
+        # self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
         # self.solve_xpbd_collision_constraints_st_x(2 * self.dHat)
 
     def solve_constraints_gauss_seidel_x(self, dt):
@@ -407,6 +409,22 @@ class Solver:
         E_curr = self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
 
         return E_curr
+
+    def solve_constraints_pd_test_x(self, dt):
+        compliance_stretch = self.stiffness_stretch * dt * dt
+        compliance_bending = self.stiffness_bending * dt * dt
+
+        E_curr = self.solve_spring_constraints_pd_gs_x(compliance_stretch, compliance_bending)
+
+        return E_curr
+
+    def solve_constraints_pd_gs_x(self, dt):
+            compliance_stretch = self.stiffness_stretch * dt * dt
+            compliance_bending = self.stiffness_bending * dt * dt
+
+            E_curr = self.solve_spring_constraints_pd_test_x(compliance_stretch, compliance_bending)
+
+            return E_curr
         # compliance_collision = 1e6 * dt * dt
         # # self.solve_xpbd_collision_constraints_st_x(2 * self.dHat)
         # # if self.selected_solver_type == 1:
@@ -446,7 +464,7 @@ class Solver:
 
         E_curr = self.compute_grad_and_hess_spring_x(compliance_stretch, compliance_bending, self.definiteness_fix)
 
-        r_sq, cg_iter = self.PCG.run(self.mesh_dy, max_cg_iter, threshold)
+        self.PCG.run(self.selected_precond_type, self.mesh_dy, max_cg_iter, threshold)
         alpha = 1.0
         if self.use_line_search:
             self.PCG.compute_mat_free_Ax(self.mesh_dy, self.mesh_dy.Ax, self.mesh_dy.dx)
@@ -456,12 +474,12 @@ class Solver:
             else:
                 alpha = 1.0
 
-        if self.print_stats:
-            print("CG err: ", r_sq)
-            print("CG iter: ", cg_iter)
-
-        if self.print_stats and self.use_line_search:
-            print("alpha: ", alpha)
+        # if self.print_stats:
+        #     print("CG err: ", r_sq)
+        #     print("CG iter: ", cg_iter)
+        #
+        # if self.print_stats and self.use_line_search:
+        #     print("alpha: ", alpha)
 
         self.PCG.vector_add(self.mesh_dy.y, self.mesh_dy.y, self.mesh_dy.dx, alpha)
 
@@ -827,7 +845,6 @@ class Solver:
 
             self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
             self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
-
             self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
             self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
 
@@ -852,6 +869,104 @@ class Solver:
         for i in range(self.num_verts_dy):
             # if self.mesh_dy.nc[i] > 0:
             self.mesh_dy.y[i] += (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
+
+        return E_curr
+
+    @ti.kernel
+    def solve_spring_constraints_pd_test_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32)->ti.f32:
+
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(0.0)
+        # self.mesh_dy.hii.fill(1.0)
+        # self.mesh_dy.hi.fill(1.0)
+
+        for i in range(self.num_verts_dy):
+            self.mesh_dy.b[i] = self.mesh_dy.m[i] * (self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i])
+            self.mesh_dy.hi[i] = self.mesh_dy.m[i]
+
+        E_curr = 0.0
+        # ti.loop_config(serialize=True)
+        ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
+        for i in range(self.num_edges_dy):
+            l0 = self.mesh_dy.l0[i]
+            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+            x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
+            l = x01.norm()
+            dp01 = x01 - l0 * x01.normalized()
+
+            E_curr += 0.5 * compliance_stretch * (l - l0) ** 2
+
+            # alpha = (1.0 - l0 / x01.norm())
+
+            self.mesh_dy.b[v0]  -= compliance_stretch * dp01
+            self.mesh_dy.b[v1]  += compliance_stretch * dp01
+            self.mesh_dy.hi[v0] += compliance_stretch
+            self.mesh_dy.hi[v1] += compliance_stretch
+            self.mesh_dy.nc[v0] += 1.0
+            self.mesh_dy.nc[v1] += 1.0
+
+        for i in range(self.num_edges_dy):
+            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+
+            dx_local = ti.Matrix.zero(dt=ti.f32, n=2, m=3)
+            for j in range(ti.static(3)):
+                dx_local[0, j] = self.mesh_dy.b[v0][j]
+                dx_local[1, j] = self.mesh_dy.b[v1][j]
+        #
+        #
+            h_local = ti.math.mat2(0.0)
+            h_local[0, 0] = self.mesh_dy.hi[v0]
+            h_local[1, 1] = self.mesh_dy.hi[v1]
+
+            h_local[0, 1] = -compliance_stretch
+            h_local[1, 0] = -compliance_stretch
+            h_inv = h_local.inverse()
+            dx = h_inv @ dx_local
+        #
+            for j in range(ti.static(3)):
+                self.mesh_dy.dx[v0][j] += dx[0, j]
+                self.mesh_dy.dx[v1][j] += dx[1, j]
+
+        ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
+        for i in range(self.num_verts_dy):
+            # if self.mesh_dy.nc[i] > 0:
+            self.mesh_dy.y[i] += (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
+
+        return E_curr
+
+    @ti.kernel
+    def solve_spring_constraints_pd_gs_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32) -> ti.f32:
+
+        E_curr = 0.0
+
+        ti.loop_config(serialize=True)
+        # ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
+        for i in range(self.num_edges_dy):
+            l0 = self.mesh_dy.l0[i]
+            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+            x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
+            l = x01.norm()
+            dp01 = x01 - l0 * x01.normalized()
+            E_curr += 0.5 * compliance_stretch * (l - l0) ** 2
+
+            h_local = ti.math.mat2(0.0)
+            h_local[0, 0] = self.mesh_dy.m[v0] + compliance_stretch
+            h_local[1, 1] = self.mesh_dy.m[v1] + compliance_stretch
+            h_local[0, 1] = -compliance_stretch
+            h_local[1, 0] = -compliance_stretch
+            h_inv = h_local.inverse()
+
+            dx_local = ti.Matrix.zero(dt=ti.f32, n=2, m=3)
+            for j in range(ti.static(3)):
+                dx_local[0, j] = -compliance_stretch * dp01[j]
+                dx_local[1, j] = compliance_stretch * dp01[j]
+
+            dx = h_inv @ dx_local
+            for j in range(ti.static(3)):
+                self.mesh_dy.y[v0][j] += dx[0, j]
+                self.mesh_dy.y[v1][j] += dx[1, j]
+
+
 
         return E_curr
 
@@ -1774,15 +1889,15 @@ class Solver:
 
             for _ in range(n_iter):
                 if self.selected_solver_type == 0:
-                    self.solve_constraints_jacobi_x(dt_sub)
+                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
                     # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
                 elif self.selected_solver_type == 1:
-                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
-                    if self.E_curr > self.E_max:
-                        self.E_max = self.E_curr
-
-                    if self.E_curr < self.E_min:
-                        self.E_min = self.E_curr
+                    self.E_curr = self.solve_constraints_pd_test_x(dt_sub)
+                    # if self.E_curr > self.E_max:
+                    #     self.E_max = self.E_curr
+                    #
+                    # if self.E_curr < self.E_min:
+                    #     self.E_min = self.E_curr
 
                 elif self.selected_solver_type == 2:
                     self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
@@ -1797,6 +1912,9 @@ class Solver:
 
                 elif self.selected_solver_type == 4:
                     self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+
+                # elif self.selected_solver_type == 5:
+                #     self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
 
 
             self.compute_v(damping=self.damping, dt=dt_sub)

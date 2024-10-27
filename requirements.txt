@@ -20,3 +20,6 @@ rich==13.7.1
 scipy==1.13.0
 six==1.16.0
 taichi==1.7.1
+networkx
+pyquaternion==0.9.9
+pandas==2.2.3
