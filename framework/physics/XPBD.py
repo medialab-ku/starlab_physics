@@ -131,7 +131,7 @@ class Solver:
         # self.reset_rho()
         # if self.mesh_st is None:
         #     self.mesh_st.reset()
-        # self.update_sample_particle_pos()
+        self.update_sample_particle_pos()
 
         self.sh_dy.insert_particles_in_grid(self.mesh_dy.x_sample)
         self.init_rest_neighbours(2*self.dHat)
@@ -270,7 +270,8 @@ class Solver:
     def compute_v(self, damping: ti.f32, dt: ti.f32):
         # compute v after all constraints are projected to x_(t+1)
         for i in range(self.num_verts_dy):
-            self.mesh_dy.v[i] = (1.0 - damping) * self.mesh_dy.fixed[i] * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
+            yi = self.confine_boundary(self.mesh_dy.y[i])
+            self.mesh_dy.v[i] = (1.0 - damping) * self.mesh_dy.fixed[i] * (yi - self.mesh_dy.x[i]) / dt
 
 
         # self.particle_st.x_prev.copy_from(self.particle_st.x)
@@ -285,7 +286,6 @@ class Solver:
         # eventually, update actual position x_(t+1) after velocities are computed...
         for i in range(self.num_verts_dy):
             self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * self.mesh_dy.v[i]
-
 
         # center = ti.math.vec3(0.0)
         # for i in range(self.particle_st.num_particles):
@@ -807,9 +807,9 @@ class Solver:
 
         # self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(1.0)
-
-        for i in range(self.num_verts_dy):
-            self.mesh_dy.dx[i] = self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i]
+        self.mesh_dy.dx.fill(0.0)
+        # for i in range(self.num_verts_dy):
+        #     self.mesh_dy.dx[i] = self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i]
 
         E_curr = 0.0
         # ti.loop_config(serialize=True)
@@ -831,7 +831,13 @@ class Solver:
             self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
             self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
 
+        ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
+        for i in range(self.num_verts_dy):
+            # if self.mesh_dy.nc[i] > 0:
+            self.mesh_dy.y[i] += (self.mesh_dy.dx[i] / self.mesh_dy.nc[i])
 
+        self.mesh_dy.nc.fill(1.0)
+        self.mesh_dy.dx.fill(0.0)
         for i in self.mesh_dy.bending_l0:
             l0 = self.mesh_dy.bending_l0[i]
             v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
@@ -1769,35 +1775,37 @@ class Solver:
 
         dt_sub = self.dt / n_substeps
         # print(self.selected_solver_type)
+
+        self.sh_st.insert_particles_in_grid(self.particle_st.x)
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
 
             for _ in range(n_iter):
-                if self.selected_solver_type == 0:
-                    self.solve_constraints_jacobi_x(dt_sub)
+                # if self.selected_solver_type == 0:
+                self.solve_constraints_pd_diag_x(dt_sub)
                     # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
-                elif self.selected_solver_type == 1:
-                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
-                    if self.E_curr > self.E_max:
-                        self.E_max = self.E_curr
-
-                    if self.E_curr < self.E_min:
-                        self.E_min = self.E_curr
-
-                elif self.selected_solver_type == 2:
-                    self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-
-                elif self.selected_solver_type == 3:
-
-                    if self.compute_duplicates:
-                        self.compute_euler_path_duplicates()
-                        self.compute_duplicates = False
-
-                    self.solve_constraints_euler_path_x(dt_sub)
-
-                elif self.selected_solver_type == 4:
-                    self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-
+                # elif self.selected_solver_type == 1:
+                #     self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+                #     if self.E_curr > self.E_max:
+                #         self.E_max = self.E_curr
+                #
+                #     if self.E_curr < self.E_min:
+                #         self.E_min = self.E_curr
+                #
+                # elif self.selected_solver_type == 2:
+                #     self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+                #
+                # elif self.selected_solver_type == 3:
+                #
+                #     if self.compute_duplicates:
+                #         self.compute_euler_path_duplicates()
+                #         self.compute_duplicates = False
+                #
+                #     self.solve_constraints_euler_path_x(dt_sub)
+                #
+                # elif self.selected_solver_type == 4:
+                #     self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
+        self.update_sample_particle_pos()
