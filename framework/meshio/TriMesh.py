@@ -42,9 +42,13 @@ class TriMesh:
         self.face_offsets.append(0)
 
         model_name = model_name_list[0][:-4]
-        print(model_name)
 
-        path = '/home/mhkee/Desktop/workspace/starlab_physics/models/sampling/'+model_name+'.npy'
+        test = Path(__file__).resolve().parent.parent.parent / "models/sampling"
+        #
+        # print(test)
+        # print(model_name)
+
+        path = str(test) + '/' + model_name+'.npy'
         load_array = np.load(path, allow_pickle=True)
 
         # print(load_array)
