@@ -73,14 +73,12 @@ def euler_path(model_name):
             total += len(partition[i])
 
         count = Counter(values)
-
         print(partition)
         # print(total)
 
         # print(len(partition))
         # graph = nx.Graph(euler_graph)
         # print(len(graph.edges))
-
 
         # euler_path = list(nx.eulerian_path(euler_graph))
         # print(len(euler_path))

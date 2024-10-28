@@ -118,7 +118,6 @@ class TriMesh:
         self.euler_path_np = np.empty(0, dtype=int)
         self.duplicates_offsets = [0, ]
         self.euler_path_offsets = [0, ]
-
         partition = [[]]
         if not is_static:
             for i in range(self.num_model):
@@ -235,8 +234,112 @@ class TriMesh:
                         print("Simulation ended!\n")
                         sys.exit()
 
-            print(partition)
+            # print(partition)
+
+
             print("=====================================================================================\n")
+
+        offset = [0]
+        offset_vert = [0]
+        of = 0
+        of_vert = 0
+        partition_flattened = []
+        for i in range(len(partition)):
+            of += len(partition[i])
+            of_vert += (len(partition[i]) // 2 + 1)
+            offset.append(of)
+            offset_vert.append(of_vert)
+
+        for i in range(len(partition)):
+            for j in range(len(partition[i])):
+                partition_flattened.append(partition[i][j])
+
+        partition_flattened = np.array(partition_flattened, dtype=int)
+        offset = np.array(offset, dtype=int)
+        offset_vert = np.array(offset_vert, dtype=int)
+
+        # print(offset_vert[-1])
+
+        # print(colors_np)
+        dup_to_or = np.zeros(offset_vert[-1], dtype=int)
+        # print(offset)
+
+        # print(offset_vert)
+
+        eid_dup = []
+        for pi in range(offset.shape[0] - 1):
+            # print(pi)
+            off = offset[pi]
+            off_v = offset_vert[pi]
+            # print(off_v)
+            size = (offset[pi + 1] - offset[pi]) // 2
+            # print(size)
+            # print(size)
+            for j in range(size):
+                vi = partition_flattened[2 * j + off + 0]
+                eid_dup.append(j + off_v)
+                eid_dup.append(j + off_v + 1)
+                # dup_to_or.append(vi)
+                # self.mesh_dy.x_dup[j + off_v] = self.mesh_dy.x[vi]
+                dup_to_or[j + off_v] = vi
+
+            vi = partition_flattened[2 * (size - 1) + off + 1]
+            # self.mesh_dy.x_dup[size - 1 + off_v] = self.mesh_dy.x[vi]
+            dup_to_or[size + off_v] = vi
+            # dup_to_or.append(vi)
+
+            # print(eid_dup)
+            #
+
+        colors_np = np.zeros((offset_vert[-1], 3))
+
+        for i in range(0, offset.shape[0] - 1):
+
+            r = float(random.randrange(0, 255) / 256)
+            g = float(random.randrange(0, 255) / 256)
+            b = float(random.randrange(0, 255) / 256)
+
+            off = offset_vert[i]
+            # print(off)
+            size = (offset_vert[i + 1] - offset_vert[i])
+            # print(size)
+
+            for j in range(size):
+                colors_np[off + j] = np.array([r, g, b])
+
+            # print("______")
+
+        eid_dup = np.array(eid_dup)
+
+
+        print(eid_dup.shape[0] // 2)
+
+        # dup_to_or = np.array(dup_to_or)
+
+        self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
+        self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
+        self.eid_test = ti.field(dtype=int, shape=partition_flattened.shape[0])
+        self.eid_dup = ti.field(dtype=int, shape=eid_dup.shape[0])
+        self.color_test = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.partition_offset.from_numpy(offset)
+        self.vert_offset.from_numpy(offset_vert)
+        self.eid_test.from_numpy(partition_flattened)
+
+        self.dup_to_ori = ti.field(dtype=int, shape=offset_vert[-1])
+        self.dup_to_ori.from_numpy(dup_to_or)
+        self.eid_dup.from_numpy(eid_dup)
+        # print(self.dup_to_ori)
+        # print(self.eid_test)
+        # print(self.partition_offset)
+
+        self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        # print(self.x_dup.shape)
+        self.color_test.from_numpy(colors_np)
+
+
+
+
+        # print(self.eid_test)
 
         # fields about vertices
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -314,7 +417,7 @@ class TriMesh:
 
         self.fid_field.from_numpy(self.f_np)
         # self.face_indices_flatten.from_numpy(self.f_np)
-        self.init_edge_indices_flatten()
+        # self.init_edge_indices_flatten()
         self.init_face_indices_flatten()
         self.init_l0_m_inv()
         self.init_color()

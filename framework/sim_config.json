@@ -1,10 +1,10 @@
 {
     "sim_type": 0,
-    "solver_type": 1,
+    "solver_type": 0,
     "precond_type": 0,
     "dt_tri": 0.019999999552965164,
     "dt_tet": 0.02,
-    "n_substep": 34,
+    "n_substep": 15,
     "n_iter": 1,
     "dHat": 0.029999999329447746,
     "fric_coef": 0.0,

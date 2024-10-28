@@ -576,10 +576,11 @@ while window.running:
             #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
         # else:
 
-        # scene.lines(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.edge_indices_flatten, color=(0., 0., 0.), width=1.0)
+        scene.lines(sim_tri.mesh_dy.x_dup, indices=sim_tri.mesh_dy.eid_dup, per_vertex_color=sim_tri.mesh_dy.color_test, width=2.0)
+        # scene.lines(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.eid_test, color=(0., 0., 0.), width=1.0)
 
         # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
-        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+        # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
 
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
@@ -610,6 +611,6 @@ while window.running:
         canvas.lines(g_selector_tet.ti_mouse_click_pos, width=0.002, indices=g_selector_tet.ti_mouse_click_index, color=(1, 0, 1) if g_selector_tet.MODE_SELECTION else (0, 0, 1))
 
     # scene.lines(sim_tet.aabb_x0, indices=sim_tet.aabb_index0, width=1.0, color=(0.0, 0.0, 0.0))
-    camera.track_user_inputs(window, movement_speed=0.8, hold_key=ti.ui.RMB)
+    camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
     canvas.scene(scene)
     window.show()

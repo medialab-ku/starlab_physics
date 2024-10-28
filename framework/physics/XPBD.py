@@ -121,6 +121,8 @@ class Solver:
         self.mesh_dy.reset()
         # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
         self.compute_duplicates = True
+
+        self.copy_to_dup()
         # self.mesh_dy.particles.reset()
         # if self.mesh_st is None:
         #     self.mesh_st.reset()
@@ -280,6 +282,12 @@ class Solver:
         # for i in range(self.euler_path_len):
         #     self.mesh_dy.v_euler[i] = self.mesh_dy.fixed_euler[i] * (1.0 - self.damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
 
+    @ti.kernel
+    def copy_to_dup(self):
+
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+            self.mesh_dy.x_dup[di] = self.mesh_dy.x[vi]
 
     @ti.kernel
     def update_x(self, dt: float):
@@ -308,10 +316,10 @@ class Solver:
 
 
         # for Euler path...
-        for i in range(self.euler_path_len):
-            self.mesh_dy.x_euler[i] += dt * self.mesh_dy.v_euler[i]
-        for i in range(self.euler_edge_len):
-            self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[i] + self.mesh_dy.x_euler[i+1])
+        # for i in range(self.euler_path_len):
+        #     self.mesh_dy.x_euler[i] += dt * self.mesh_dy.v_euler[i]
+        # for i in range(self.euler_edge_len):
+        #     self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[i] + self.mesh_dy.x_euler[i+1])
 
     @ti.kernel
     def aggregate_duplicates(self):
@@ -1917,5 +1925,6 @@ class Solver:
                 #     self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
 
 
+            self.copy_to_dup()
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
