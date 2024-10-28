@@ -405,6 +405,8 @@ class Solver:
         compliance_bending = self.stiffness_bending * dt * dt
 
         E_curr = self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
+        compliance_collision = 1e6
+        self.solve_collision_constraints_st_pd_diag_x(2 * self.dHat, compliance_collision)
 
         return E_curr
         # compliance_collision = 1e6 * dt * dt
@@ -1486,6 +1488,7 @@ class Solver:
         self.mesh_dy.dx.fill(0.0)
         self.mesh_dy.nc.fill(1.0)
         self.mesh_dy.num_neighbours.fill(0)
+
         for i in range(self.num_verts_dy):
             # if i < self.num_verts_dy:
             pi = i
@@ -1783,6 +1786,8 @@ class Solver:
             for _ in range(n_iter):
                 # if self.selected_solver_type == 0:
                 self.solve_constraints_pd_diag_x(dt_sub)
+
+
                     # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
                 # elif self.selected_solver_type == 1:
                 #     self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
@@ -1805,7 +1810,10 @@ class Solver:
                 #
                 # elif self.selected_solver_type == 4:
                 #     self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-
             self.compute_v(damping=self.damping, dt=dt_sub)
+
+            if self.enable_velocity_update:
+                self.solve_constraints_pd_diag_v()
+
             self.update_x(dt_sub)
         self.update_sample_particle_pos()
