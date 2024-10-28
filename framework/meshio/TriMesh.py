@@ -512,10 +512,11 @@ class TriMesh:
         for i in range(self.num_verts):
             self.m_inv[i] = 1.0 /  self.m[i]
 
-        for i in range(self.euler_edge_len):
-            v0, v1 = self.euler_path_field[i],  self.euler_path_field[i + 1]
-            self.l0_euler[i] = (self.x[v0] - self.x[v1]).norm()
-
-        for i in range(self.euler_path_len):
-            v0 = self.euler_path_field[i]
-            self.m_inv_euler[i] = self.m_inv[v0]
+        # test 2
+        # for i in range(self.euler_edge_len):
+        #     v0, v1 = self.euler_path_field[i],  self.euler_path_field[i + 1]
+        #     self.l0_euler[i] = (self.x[v0] - self.x[v1]).norm()
+        #
+        # for i in range(self.euler_path_len):
+        #     v0 = self.euler_path_field[i]
+        #     self.m_inv_euler[i] = self.m_inv[v0]
