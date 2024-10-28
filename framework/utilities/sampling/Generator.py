@@ -29,7 +29,7 @@ class GenerateParticle:
             self.part.obj_load()
             self.part.transform(scale=10, translate=np.array([0.0, 0.0, 0.0]), PRINT=False)  # scale, translate
             self.part.viewchange(elev=90, azim=270, size=5)
-            self.part.file_generate(distance=0.1, subFolder=self.subFolder , filename=self.filenpy, LOG=False, SHOW=False)
+            self.part.file_generate(distance=0.2, subFolder=self.subFolder , filename=self.filenpy, LOG=False, SHOW=False)
             print("file generated")
 
         # else:
@@ -53,4 +53,4 @@ class GenerateParticle:
         self.part.taichi_display(distance=0.05)
 
 if __name__ == '__main__':
-    gen = GenerateParticle(file_name="hood_modified")
+    gen = GenerateParticle(file_name="poncho_8K")
