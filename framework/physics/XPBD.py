@@ -235,8 +235,8 @@ class Solver:
     @ti.kernel
     def compute_particle_v(self, dt: float):
         for i in self.particle_st.x_prev:
-            self.particle_st.v[i] = (self.particle_st.x[i] - self.particle_st.x_prev[i]) / dt
-            # self.particle_st.x[i] = self.particle_st.x_prev[i]
+            self.particle_st.v[i] = (self.particle_st.x_current[i] - self.particle_st.x_prev[i]) / dt
+            self.particle_st.x[i] = self.particle_st.x_prev[i]
 
     @ti.kernel
     def compute_y(self, g: ti.math.vec3, dt: ti.f32):
@@ -1538,7 +1538,7 @@ class Solver:
 
         center = ti.math.vec3(0.0)
         for i in range(self.particle_st.num_particles):
-            self.particle_st.x[i] = self.particle_st.x_prev[i] = self.particle_st.x_current[i]
+            self.particle_st.x_prev[i] = self.particle_st.x_current[i]
             center += self.particle_st.x_prev[i]
 
         center /= self.particle_st.num_particles
@@ -1551,7 +1551,7 @@ class Solver:
         for i in self.particle_st.x:
             ri = self.particle_st.x_prev[i] - center
             self.particle_st.x_current[i] = rot @ ri + center
-            self.particle_st.v[i] = (self.particle_st.x_current[i] -  self.particle_st.x_prev[i]) / dt
+            # self.particle_st.v[i] = (self.particle_st.x_current[i] -  self.particle_st.x_prev[i]) / dt
 
             # self.particle_st.x_prev[i] = self.particle_st.x[i]
 
@@ -1582,7 +1582,7 @@ class Solver:
         self.sh_dy.insert_particles_in_grid(self.mesh_dy.x)
 
         # self.particle_st.v.fill(0.0)
-        # self.compute_particle_v(self.dt)
+        self.compute_particle_v(self.dt)
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
 
