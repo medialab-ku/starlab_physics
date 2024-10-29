@@ -490,10 +490,10 @@ while window.running:
         if sim_type_ui == 0:
             if frame_cpu == 0:
                 sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x0)
+                sim_tri.particle_st.x_current.copy_from(sim_tri.particle_st.x0)
                 # sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x0)
-            sim_tri.move_particle_x(0.03)
+            sim_tri.move_particle_x(0.01, sim_tri.dt)
             sim_tri.forward(n_substeps=n_substep, n_iter=n_iter)
-            sim_tri.particle_st.x_prev.copy_from(sim_tri.particle_st.x_current)
 
 
         elif sim_type_ui == 1:
@@ -525,28 +525,28 @@ while window.running:
 
         if PARTICLE:
             # if USE_HEATMAP:
-            #     rho0_np = sim_tri.mesh_dy.rho0_sample.to_numpy()
-            #     colormap = plt.colormaps['viridis']
-            #     norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
-            #     rgb_array = colormap(norm(rho0_np))[:, :3]
-            #     # print(rgb_array.shape)
-            #     sim_tri.mesh_dy.heat_map_sample.from_numpy(rgb_array)
-            #     scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map_sample)
-            #     #TODO
-            #     # scene.particles(sim_tri.mesh_dy.test_particles, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
-            #     # scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
-            #     rho0_np = sim_tri.particle_st.rho0.to_numpy()
-            #     colormap = plt.colormaps['viridis']s
-            #     norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
-            #     rgb_array = colormap(norm(rho0_np))[:, :3]
-            #     # print(rgb_array.shape)
-            #     sim_tri.particle_st.heat_map.from_numpy(rgb_array)
-            #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.particle_st.heat_map)
+            # rho0_np = sim_tri.mesh_dy.rho0_sample.to_numpy()
+            # colormap = plt.colormaps['viridis']
+            # norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
+            # rgb_array = colormap(norm(rho0_np))[:, :3]
+            # # print(rgb_array.shape)
+            # sim_tri.mesh_dy.heat_map_sample.from_numpy(rgb_array)
+            # scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map_sample)
+            #TODO
+            # scene.particles(sim_tri.mesh_dy.test_particles, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
+            # scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, per_vertex_color=sim_tri.mesh_dy.heat_map)
+            # rho0_np = sim_tri.particle_st.rho0.to_numpy()
+            # colormap = plt.colormaps['viridis']
+            # norm = plt.Normalize(vmin=np.min(rho0_np), vmax=np.max(rho0_np))
+            # rgb_array = colormap(norm(rho0_np))[:, :3]
+            # # print(rgb_array.shape)
+            # sim_tri.particle_st.heat_map.from_numpy(rgb_array)
+            # scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, per_vertex_color=sim_tri.particle_st.heat_map)
             # else:
             # scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(1.0, 0.0, 0.0))
 
             #TODO
-            scene.particles(sim_tri.mesh_dy.x_sample, radius=sim_tri.dHat, color=(0.0, 1.0, 0.0))
+            scene.particles(sim_tri.mesh_dy.x, radius=sim_tri.dHat, color=(0.0, 1.0, 0.0))
 
             # scene.particles(sim_tri.mesh_dy.x_e, radius=sim_tri.dHat,  color=(0.0, 1.0, 0.0))
             # scene.particles(sim_tri.mesh_dy.x_f, radius=sim_tri.dHat,  color=(0.0, 0.0, 1.0))

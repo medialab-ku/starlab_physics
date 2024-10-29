@@ -29,10 +29,10 @@ class GenerateParticle:
             self.part.obj_load()
             self.part.transform(scale=10, translate=np.array([0.0, 0.0, 0.0]), PRINT=False)  # scale, translate
             self.part.viewchange(elev=90, azim=270, size=5)
-            self.part.file_generate(distance=0.2, subFolder=self.subFolder , filename=self.filenpy, LOG=False, SHOW=False)
+            self.part.file_generate(distance=0.4, subFolder=self.subFolder , filename=self.filenpy, LOG=False, SHOW=False)
             print("file generated")
 
-        # else:
+        # else:r
         #     print("already generated")
         #     self.part.obj_load()
         #     if self.MODE == "MATPLOT":

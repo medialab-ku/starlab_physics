@@ -38,7 +38,7 @@ obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=[
                      # "tshirt.obj",
-                     "poncho_8K.obj"
+                     "plane.obj"
                     ],
     trans_list=[
                 # (0.0, -2.4, 0.0),
@@ -46,7 +46,7 @@ obj_mesh_dy = TriMesh(
                ],
     scale_list=[
                 # 2.3,
-                1.0
+                1.5
                ],
     rot_list=[
               (1.0, 0.0, 0.0, 0.0),
@@ -101,9 +101,11 @@ scale = []
 rot = []
 is_static = []
 rho0 = []
-particle_names.append("smpl_neutral_new.vtk")
+# particle_names.append("smpl_neutral_new.vtk")
+particle_names.append("very_thin_sheet.vtk")
 trans.append([0.0, 0.0, 0.0])
-scale.append(1.5)
+# scale.append(1.5)
+scale.append(0.15)
 is_static.append(True)
 rho0.append(1.0)
 

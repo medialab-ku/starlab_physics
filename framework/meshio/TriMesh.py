@@ -306,13 +306,13 @@ class TriMesh:
         self.num_neighbours = ti.field(dtype=int, shape=self.num_verts + self.num_edges + self.num_faces)
         self.neighbour_ids = ti.field(dtype=int, shape=(self.num_verts + self.num_edges + self.num_faces, self.cache_size))
 
-        self.cache_size_rest = 100
-        self.num_neighbours_rest = ti.field(dtype=int, shape=self.num_verts + self.num_edges + self.num_faces)
-        self.neighbour_ids_rest = ti.field(dtype=int, shape=(self.num_verts + self.num_edges + self.num_faces, self.cache_size_rest))
+        self.cache_size_rest = 10
+        self.num_neighbours_rest = ti.field(dtype=int, shape=self.num_verts)
+        self.neighbour_ids_rest = ti.field(dtype=int, shape=(self.num_verts, self.cache_size_rest))
 
         self.cache_size_dy = 100
-        self.num_neighbours_dy = ti.field(dtype=int, shape=load_array.shape[0])
-        self.neighbour_ids_dy = ti.field(dtype=int, shape=(load_array.shape[0], self.cache_size_dy))
+        self.num_neighbours_dy = ti.field(dtype=int, shape=self.num_verts)
+        self.neighbour_ids_dy = ti.field(dtype=int, shape=(self.num_verts, self.cache_size_dy))
 
         # initialize the vertex fields
         self.y.fill(0.0)
