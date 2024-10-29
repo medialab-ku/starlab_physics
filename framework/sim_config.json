@@ -1,9 +1,9 @@
 {
     "sim_type": 0,
     "solver_type": 0,
-    "dt_tri": 0.029999999329447746,
+    "dt_tri": 0.009999999776482582,
     "dt_tet": 0.02,
-    "n_substep": 30,
+    "n_substep": 5,
     "n_iter": 1,
     "dHat": 0.03999999910593033,
     "fric_coef": 1.0,
