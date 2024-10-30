@@ -239,6 +239,11 @@ class TriMesh:
 
             print("=====================================================================================\n")
 
+
+        # print(partition)
+
+
+
         offset = [0]
         offset_vert = [0]
         of = 0
@@ -259,37 +264,42 @@ class TriMesh:
         offset_vert = np.array(offset_vert, dtype=int)
 
         # print(offset_vert[-1])
-
+        print(offset)
         # print(colors_np)
+        print(partition_flattened)
+
+
+
+
+
+        #very dubious
         dup_to_or = np.zeros(offset_vert[-1], dtype=int)
         # print(offset)
 
         # print(offset_vert)
 
+
+
+        #TODO: make dup-orig id connection and eid-dup
         eid_dup = []
-        for pi in range(offset.shape[0] - 1):
-            # print(pi)
-            off = offset[pi]
+        id = 0
+        for pi in range(len(partition)):
             off_v = offset_vert[pi]
-            # print(off_v)
-            size = (offset[pi + 1] - offset[pi]) // 2
-            # print(size)
-            # print(size)
+
+            size = len(partition[pi]) // 2
+
             for j in range(size):
-                vi = partition_flattened[2 * j + off + 0]
+                vi = partition[pi][2 * j]
                 eid_dup.append(j + off_v)
                 eid_dup.append(j + off_v + 1)
-                # dup_to_or.append(vi)
-                # self.mesh_dy.x_dup[j + off_v] = self.mesh_dy.x[vi]
-                dup_to_or[j + off_v] = vi
+                dup_to_or[id] = vi
+                id += 1
 
-            vi = partition_flattened[2 * (size - 1) + off + 1]
-            # self.mesh_dy.x_dup[size - 1 + off_v] = self.mesh_dy.x[vi]
-            dup_to_or[size + off_v] = vi
-            # dup_to_or.append(vi)
+            vi = partition[pi][2 * (size - 1) + 1]
+            dup_to_or[id] = vi
+            id += 1
 
-            # print(eid_dup)
-            #
+        #TODO
 
         colors_np = np.zeros((offset_vert[-1], 3))
 
@@ -311,19 +321,20 @@ class TriMesh:
 
         eid_dup = np.array(eid_dup)
 
-
-        print(eid_dup.shape[0] // 2)
-
-        # dup_to_or = np.array(dup_to_or)
-
+        #data structures for partitioned euler path
         self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
-        self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
         self.eid_test = ti.field(dtype=int, shape=partition_flattened.shape[0])
+        self.partition_offset.from_numpy(offset)
+        self.eid_test.from_numpy(partition_flattened)
+
+
+
+
+        self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
         self.eid_dup = ti.field(dtype=int, shape=eid_dup.shape[0])
         self.color_test = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.partition_offset.from_numpy(offset)
+
         self.vert_offset.from_numpy(offset_vert)
-        self.eid_test.from_numpy(partition_flattened)
 
         self.dup_to_ori = ti.field(dtype=int, shape=offset_vert[-1])
         self.dup_to_ori.from_numpy(dup_to_or)
@@ -335,12 +346,7 @@ class TriMesh:
         self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         # print(self.x_dup.shape)
         self.color_test.from_numpy(colors_np)
-
-
-
-
         # print(self.eid_test)
-
         # fields about vertices
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_tilde = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
