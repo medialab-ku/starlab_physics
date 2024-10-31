@@ -195,20 +195,20 @@ class TriMeshWrapper:
 
         print(round(path_len / self.num_edges, 3))
         # print(path_len - 1)
-        self.x_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.v_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.y_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.g_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.x_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.v_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.y_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.g_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
 
         self.m_inv_euler = ti.field(dtype=float, shape=path_len)
         self.fixed_euler = ti.field(dtype=float, shape=path_len)
 
-        self.a_euler = ti.field(dtype=float, shape=path_len) # top 1st off-diagonal elements
-        self.b_euler = ti.field(dtype=float, shape=path_len) # diag elements
-        self.c_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
-        self.c_tilde_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
-        self.d_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        # self.a_euler = ti.field(dtype=float, shape=path_len) # top 1st off-diagonal elements
+        # self.b_euler = ti.field(dtype=float, shape=path_len) # diag elements
+        # self.c_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        # self.c_tilde_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        # self.d_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=path_len) # bottom 1st off-diagonal elements
 
         self.l0_euler = ti.field(dtype=float, shape=l0_len)
         self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=float, shape=l0_len)
@@ -372,7 +372,7 @@ class TriMeshWrapper:
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
         self.mesh.verts.v.fill(0.)
         self.mesh.verts.fixed.fill(0.0)
-        self.v_euler.fill(0.0)
+        # self.v_euler.fill(0.0)
 
         self.init_l0_euler()
 

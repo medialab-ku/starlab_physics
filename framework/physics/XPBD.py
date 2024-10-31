@@ -44,6 +44,9 @@ class Solver:
         self.selected_solver_type = 2
         self.selected_precond_type = 2
 
+
+
+
         # if mesh_st is not None:
         #     self.num_verts_st = self.mesh_st.num_verts
         #     self.num_edges_st = self.mesh_st.num_edges
@@ -58,12 +61,13 @@ class Solver:
         # self.euler_path_len = self.mesh_dy.euler_path_len
         # self.euler_edge_len = self.mesh_dy.euler_edge_len
         #
-        # self.a = ti.field(dtype=float, shape=self.euler_path_len)
-        # self.b = ti.field(dtype=float, shape=self.euler_path_len)
-        # self.c = ti.field(dtype=float, shape=self.euler_path_len)
-        # self.c_tilde = ti.field(dtype=float, shape=self.euler_path_len)
-        # self.d = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
-        # self.d_tilde = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
+        self.a = self.mesh_dy.a_dup
+        self.b = self.mesh_dy.b_dup
+        self.c = self.mesh_dy.c_dup
+        self.c_tilde = self.mesh_dy.c_tilde_dup
+        self.d = self.mesh_dy.d_dup
+        self.d_tilde = self.mesh_dy.d_tilde_dup
+        self.dx_dup = self.mesh_dy.dx_dup
         # self.dx = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
 
         self.compute_duplicates = True
@@ -1870,22 +1874,74 @@ class Solver:
             ri = self.particle_st.x_prev[i] - center
             self.particle_st.x_current[i] = rot @ ri + center
 
-    def solve_constraints_euler_path_tridiagonal_x(self, dt, num_partition):
-        self.init_variables()
+    @ti.kernel
+    def solve_spring_constraints_euler(self, compliance_stretch: float):
+
+
+        self.mesh_dy.dx.fill(0.0)
+        self.mesh_dy.nc.fill(1.0)
+
+        num_edges = self.mesh_dy.eid_test.shape[0] // 2
+        for i in range(num_edges):
+            l0 = self.mesh_dy.l0[i]
+            v0, v1 = self.mesh_dy.eid_test[i, 0], self.mesh_dy.eid_test[i, 1]
+            x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
+            dp01 = x01 - l0 * x01.normalized()
+
+            # alpha = (1.0 - l0 / x01.norm())
+
+            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
+            self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
+            self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
+            self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
+
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+            self.a[di] = self.mesh_dy.nc[vi]
+            self.d[di] = self.mesh_dy.dx[vi]
+
+
+
+        num_partition = self.mesh_dy.partition_offset.shape[0] - 1
+        for i in range(num_partition):
+            idx_lb, idx_ub = self.mesh_dy.vert_offset[i], self.mesh_dy.vert_offset[i + 1]
+
+            self.c_tilde[idx_lb] = self.c[idx_lb] / self.b[idx_lb]
+            for i in range(idx_lb + 1, idx_ub):  # lb+1 ~ ub-1
+                self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
+
+            self.d_tilde[idx_lb] = self.d[idx_lb] / self.b[idx_lb]
+            for i in range(idx_lb + 1, idx_ub + 1):  # lb+1 ~ ub
+                self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i - 1]) / (
+                            self.b[i] - self.a[i] * self.c_tilde[i - 1])
+
+            self.mesh_dy.dx_euler[idx_ub] += self.d_tilde[idx_ub]
+            for i in range(idx_lb, idx_ub):
+                idx = idx_lb + idx_ub - 1 - i  # ub-1 ~ lb
+                self.dx_dup[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_euler[idx + 1]
+
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+            self.mesh_dy.dx[vi] += self.dx_dup[di]
+
+        for i in self.mesh_dy.y:
+            self.mesh_dy.y[i] += self.mesh_dy.dx[i] / self.mesh_dy.dup[i]
+
+
+
+    def solve_constraints_euler_path_tridiagonal_x(self, dt):
+        # self.init_variables()
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
-        model_num = self.mesh_dy.num_model
 
-        for i in range(model_num):
-            current_offset, next_offset = self.mesh_dy.euler_path_offsets_field[i], \
-            self.mesh_dy.euler_path_offsets_field[i + 1]
-            self.solve_spring_constraints_euler_path_tridiagonal_x(compliance_stretch,
-                                                                   compliance_bending,
-                                                                   current_offset,
-                                                                   next_offset,
-                                                                   num_partition)
+        self.solve_spring_constraints_euler()
+
+
+
+
+
 
 
     def forward(self, n_substeps, n_iter):
@@ -1896,30 +1952,33 @@ class Solver:
             self.compute_y(self.g, dt_sub)
 
             for _ in range(n_iter):
-                if self.selected_solver_type == 0:
-                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+                # if self.selected_solver_type == 0:
+                #     self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+
+
+                self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
                     # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
-                elif self.selected_solver_type == 1:
-                    self.E_curr = self.solve_constraints_pd_test_x(dt_sub)
-                    # if self.E_curr > self.E_max:
-                    #     self.E_max = self.E_curr
-                    #
-                    # if self.E_curr < self.E_min:
-                    #     self.E_min = self.E_curr
-
-                elif self.selected_solver_type == 2:
-                    self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-
-                elif self.selected_solver_type == 3:
-
-                    if self.compute_duplicates:
-                        self.compute_euler_path_duplicates()
-                        self.compute_duplicates = False
-
-                    self.solve_constraints_euler_path_x(dt_sub)
-
-                elif self.selected_solver_type == 4:
-                    self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+                # elif self.selected_solver_type == 1:
+                #     self.E_curr = self.solve_constraints_pd_test_x(dt_sub)
+                #     # if self.E_curr > self.E_max:
+                #     #     self.E_max = self.E_curr
+                #     #
+                #     # if self.E_curr < self.E_min:
+                #     #     self.E_min = self.E_curr
+                #
+                # elif self.selected_solver_type == 2:
+                #     self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+                #
+                # elif self.selected_solver_type == 3:
+                #
+                #     if self.compute_duplicates:
+                #         self.compute_euler_path_duplicates()
+                #         self.compute_duplicates = False
+                #
+                #     self.solve_constraints_euler_path_x(dt_sub)
+                #
+                # elif self.selected_solver_type == 4:
+                #     self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
 
                 # elif self.selected_solver_type == 5:
                 #     self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)

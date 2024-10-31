@@ -175,7 +175,7 @@ class TriMesh:
                         print("The imported graph is Eulerian!\n")
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
-                        print("euler path :", euler_path)
+                        # print("euler path :", euler_path)
 
                         edge_count = {}
                         duplicate = list()
@@ -205,8 +205,8 @@ class TriMesh:
 
                         count_of_duplicates = Counter(edge_count.values())
                         # print(count_of_duplicates)
-
-                        print("duplicated edges :", duplicate)
+                        #
+                        # print("duplicated edges :", duplicate)
 
                         for u, v in duplicate:
                             euler_path.remove((u, v))
@@ -255,10 +255,7 @@ class TriMesh:
 
 
             print("=====================================================================================\n")
-
-
-        print("partition :", partition)
-
+        # print("partition :", partition)
 
 
         offset = [0]
@@ -281,8 +278,8 @@ class TriMesh:
         offset_vert = np.array(offset_vert, dtype=int)
 
         # print(offset_vert[-1])
-        print("offset :", offset)
-        print("offset_vert :", offset_vert)
+        # print("offset :", offset)
+        # print("offset_vert :", offset_vert)
         # print(colors_np)
         # print(partition_flattened)
 
@@ -317,22 +314,29 @@ class TriMesh:
             dup_to_or[id] = vi
             id += 1
 
+
+        num_dup = np.zeros(self.num_verts, dtype=float)
+        for i in range(dup_to_or.shape[0]):
+            vi = dup_to_or[i]
+            num_dup[vi] += 1.0
+
+
         #TODO
-        print("eid-dup : ", end="")
-        for i in eid_dup:
-            print(int(i), end=" ")
-        print()
-        print("dup-to-origin : ", end="")
-        for i in dup_to_or:
-            print(int(i), end=" ")
+        # print("eid-dup : ", end="")
+        # for i in eid_dup:
+        #     print(int(i), end=" ")
+        # # print()
+        # # print("dup-to-origin : ", end="")
+        # for i in dup_to_or:
+        #     print(int(i), end=" ")
 
         colors_np = np.zeros((offset_vert[-1], 3))
 
         for i in range(0, offset.shape[0] - 1):
 
-            r = float(random.randrange(0, 255) / 256)
-            g = float(random.randrange(0, 255) / 256)
-            b = float(random.randrange(0, 255) / 256)
+            r = float(random.randrange(0, 1) / 256)
+            g = float(random.randrange(0, 1) / 256)
+            b = float(random.randrange(0, 1) / 256)
 
             off = offset_vert[i]
             # print(off)
@@ -346,29 +350,41 @@ class TriMesh:
 
         eid_dup = np.array(eid_dup)
 
+        print(eid_dup.shape[0] // 2)
+
         #data structures for partitioned euler path
         self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
         self.eid_test = ti.field(dtype=int, shape=partition_flattened.shape[0])
         self.partition_offset.from_numpy(offset)
         self.eid_test.from_numpy(partition_flattened)
 
-
-
-
         self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
         self.eid_dup = ti.field(dtype=int, shape=eid_dup.shape[0])
         self.color_test = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
 
         self.vert_offset.from_numpy(offset_vert)
-
         self.dup_to_ori = ti.field(dtype=int, shape=offset_vert[-1])
+        self.num_dup = ti.field(dtype=float, shape=self.num_verts)
+
+        self.num_dup.copy_from(num_dup)
         self.dup_to_ori.from_numpy(dup_to_or)
         self.eid_dup.from_numpy(eid_dup)
+
         # print(self.dup_to_ori)
         # print(self.eid_test)
         # print(self.partition_offset)
 
         self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+
+        self.a_dup = ti.field(dtype=float, shape=offset_vert[-1])
+        self.b_dup = ti.field(dtype=float, shape=offset_vert[-1])
+        self.c_dup = ti.field(dtype=float, shape=offset_vert[-1])
+        self.c_tilde_dup = ti.field(dtype=float, shape=offset_vert[-1])
+        self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.d_tilde_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+
+
         # print(self.x_dup.shape)
         self.color_test.from_numpy(colors_np)
         # print(self.eid_test)
@@ -380,9 +396,9 @@ class TriMesh:
         self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dx = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.g = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dv = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.nc = ti.field(dtype=float, shape=self.num_verts)
-        self.dup = ti.field(dtype=float, shape=self.num_verts)
         self.m_inv = ti.field(dtype=float, shape=self.num_verts)
         self.m = ti.field(dtype=float, shape=self.num_verts)
         self.fixed = ti.field(dtype=float, shape=self.num_verts)
