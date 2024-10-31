@@ -175,21 +175,38 @@ class TriMesh:
                         print("The imported graph is Eulerian!\n")
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
+                        print("euler path :", euler_path)
 
                         edge_count = {}
                         duplicate = list()
-                        for u, v in euler_path:
-                            if (u, v) in edge_count:
+                        # for u, v in euler_path:
+                        #     if (u, v) in edge_count:
+                        #         edge_count[(u, v)] += 1
+                        #         duplicate.append((u, v))
+                        #     elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
+                        #         edge_count[(v, u)] += 1
+                        #         duplicate.append((v, u))
+                        #     else:
+                        #         edge_count[(u, v)] = 1
+
+                        last_uv = (euler_path[0][0], euler_path[0][1])
+                        edge_count[last_uv] = 1
+                        for j in range(1, len(euler_path)):
+                            u, v = euler_path[j][0], euler_path[j][1]
+                            if (u, v) == last_uv:
                                 edge_count[(u, v)] += 1
                                 duplicate.append((u, v))
-                            elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
+                            elif (v, u) == last_uv:
                                 edge_count[(v, u)] += 1
                                 duplicate.append((v, u))
                             else:
                                 edge_count[(u, v)] = 1
+                            last_uv = (u, v)
 
                         count_of_duplicates = Counter(edge_count.values())
                         # print(count_of_duplicates)
+
+                        print("duplicated edges :", duplicate)
 
                         for u, v in duplicate:
                             euler_path.remove((u, v))
@@ -240,7 +257,7 @@ class TriMesh:
             print("=====================================================================================\n")
 
 
-        # print(partition)
+        print("partition :", partition)
 
 
 
@@ -264,9 +281,10 @@ class TriMesh:
         offset_vert = np.array(offset_vert, dtype=int)
 
         # print(offset_vert[-1])
-        print(offset)
+        print("offset :", offset)
+        print("offset_vert :", offset_vert)
         # print(colors_np)
-        print(partition_flattened)
+        # print(partition_flattened)
 
 
 
@@ -300,6 +318,13 @@ class TriMesh:
             id += 1
 
         #TODO
+        print("eid-dup : ", end="")
+        for i in eid_dup:
+            print(int(i), end=" ")
+        print()
+        print("dup-to-origin : ", end="")
+        for i in dup_to_or:
+            print(int(i), end=" ")
 
         colors_np = np.zeros((offset_vert[-1], 3))
 

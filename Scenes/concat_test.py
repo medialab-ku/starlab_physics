@@ -38,7 +38,7 @@ obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=[
                      # "tshirt.obj",
-                     "plane_8.obj"
+                     "plane.obj"
                     ],
     trans_list=[
                 # (0.0, -2.4, 0.0),
@@ -103,7 +103,7 @@ is_static = []
 rho0 = []
 particle_names.append("smpl_neutral_new.vtk")
 trans.append([0.0, 0.0, 0.0])
-scale.append(1.5)
+scale.append(0.0)
 is_static.append(True)
 rho0.append(1.0)
 
