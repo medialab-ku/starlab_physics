@@ -388,6 +388,13 @@ while window.running:
                 sim_tet.set_fixed_vertices(g_selector_tet.is_selected)
             # load_animation()
 
+        if window.event.key == 'k':
+            print("== current selected vertices ==")
+            for i in range(g_selector_tri.max_numverts_dynamic):
+                if g_selector_tri.is_selected[i] >= 1:
+                    print(i, end=' ')
+            print()
+
         if window.event.key == 't':
             g_selector_tri.sewing_selection()
 

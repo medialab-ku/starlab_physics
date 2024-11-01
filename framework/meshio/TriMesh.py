@@ -175,7 +175,7 @@ class TriMesh:
                         print("The imported graph is Eulerian!\n")
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
-                        print("euler path (before removing consecutive duplicate edges) :", euler_path)
+                        print("euler path :", euler_path)
 
                         edge_count = {}
                         duplicate_edges_consecutive_only = list()
@@ -209,10 +209,9 @@ class TriMesh:
 
                         duplicate_edges = [k for k, v in edge_count.items() if v > 1]
 
-                        for u, v in duplicate_edges_consecutive_only:
-                            euler_path.remove((u, v))
+                        # for u, v in duplicate_edges_consecutive_only:
+                        #     euler_path.remove((u, v))
 
-                        print("euler path (after removing consecutive duplicate edges) :", euler_path)
                         print("All duplicate edges :", duplicate_edges)
                         print("consecutive duplicate edges only :", duplicate_edges_consecutive_only)
 
@@ -316,7 +315,6 @@ class TriMesh:
 
         # print(offset_vert)
 
-        #TODO: make dup-orig id connection and eid-dup
         eid_dup = []
         id = 0
         for pi in range(len(partition)):
@@ -335,7 +333,6 @@ class TriMesh:
             dup_to_or[id] = vi
             id += 1
 
-        #TODO
         print("eid-dup : ", end="")
         for i in eid_dup:
             print(int(i), end=" ")
