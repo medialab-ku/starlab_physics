@@ -175,7 +175,7 @@ class TriMesh:
                         print("The imported graph is Eulerian!\n")
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
-                        print("euler path :", euler_path)
+                        # print("euler path :", euler_path)
 
                         edge_count = {}
                         duplicate_edges_consecutive_only = list()
@@ -237,7 +237,7 @@ class TriMesh:
                         for j in range(len(euler_path)):
                             u, v = euler_path[j][0], euler_path[j][1]
                             if (u, v) in duplicate_edges:
-                                if temp_check_used_duplicate_edges[(u, v)] == 1:
+                                if temp_check_used_duplicate_edges[(u, v)] == 1 and len(partition[pid]) > 0:
                                     partition.append([])
                                     pid += 1
                                 else:
@@ -246,7 +246,7 @@ class TriMesh:
                                     temp_check_used_duplicate_edges[(u, v)] = 1
 
                             elif (v, u) in duplicate_edges:
-                                if temp_check_used_duplicate_edges[(v, u)] == 1:
+                                if temp_check_used_duplicate_edges[(v, u)] == 1 and len(partition[pid]) > 0:
                                     partition.append([])
                                     pid += 1
                                 else:
@@ -281,7 +281,10 @@ class TriMesh:
 
             print("=====================================================================================\n")
 
-        print("partition :", partition)
+        print("the length of each partition : ", end='')
+        for p in partition:
+            print(len(p), "/", end=' ')
+        print()
         print("the number of partition :", len(partition))
 
         offset = [0]
@@ -303,9 +306,8 @@ class TriMesh:
         offset = np.array(offset, dtype=int)
         offset_vert = np.array(offset_vert, dtype=int)
 
-        # print(offset_vert[-1])
-        print("offset :", offset)
-        print("offset_vert :", offset_vert)
+        # print("offset :", offset)
+        # print("offset_vert :", offset_vert)
         # print(colors_np)
         # print(partition_flattened)
 
