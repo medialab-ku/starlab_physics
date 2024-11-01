@@ -175,10 +175,10 @@ class TriMesh:
                         print("The imported graph is Eulerian!\n")
                         path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
-                        print("euler path :", euler_path)
+                        print("euler path (before removing consecutive duplicate edges) :", euler_path)
 
                         edge_count = {}
-                        duplicate = list()
+                        duplicate_edges_consecutive_only = list()
                         # for u, v in euler_path:
                         #     if (u, v) in edge_count:
                         #         edge_count[(u, v)] += 1
@@ -193,46 +193,72 @@ class TriMesh:
                         edge_count[last_uv] = 1
                         for j in range(1, len(euler_path)):
                             u, v = euler_path[j][0], euler_path[j][1]
-                            if (u, v) == last_uv:
+
+                            if (u, v) in edge_count:
                                 edge_count[(u, v)] += 1
-                                duplicate.append((u, v))
-                            elif (v, u) == last_uv:
+                                if (u, v) == last_uv:
+                                    duplicate_edges_consecutive_only.append((u, v))
+                            elif (v, u) in edge_count:
                                 edge_count[(v, u)] += 1
-                                duplicate.append((v, u))
+                                if (v, u) == last_uv:
+                                    duplicate_edges_consecutive_only.append((v, u))
                             else:
                                 edge_count[(u, v)] = 1
+
                             last_uv = (u, v)
 
-                        count_of_duplicates = Counter(edge_count.values())
-                        # print(count_of_duplicates)
+                        duplicate_edges = [k for k, v in edge_count.items() if v > 1]
 
-                        print("duplicated edges :", duplicate)
-
-                        for u, v in duplicate:
+                        for u, v in duplicate_edges_consecutive_only:
                             euler_path.remove((u, v))
 
-                        # print(euler_path)
+                        print("euler path (after removing consecutive duplicate edges) :", euler_path)
+                        print("All duplicate edges :", duplicate_edges)
+                        print("consecutive duplicate edges only :", duplicate_edges_consecutive_only)
 
-                        # partition = [[]]
+                        # for u, v in euler_path:
+                        #     if (u, v) in edge_count:
+                        #         if edge_count[(u, v)] >= 2:
+                        #             partition.append([])
+                        #             pid += 1
+                        #         partition[pid].append(int(u))
+                        #         partition[pid].append(int(v))
+                        #
+                        #     elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
+                        #         if edge_count[(v, u)] == 2:
+                        #             partition.append([])
+                        #             pid += 1
+                        #         partition[pid].append(int(u))
+                        #         partition[pid].append(int(v))
 
+                        temp_check_used_duplicate_edges = {k: 0 for k in
+                                                           duplicate_edges}  # 0 is not used yet, 1 is used
                         pid = 0
-                        for u, v in euler_path:
-                            if (u, v) in edge_count:
-                                if edge_count[(u, v)] == 2:
+
+                        for j in range(len(euler_path)):
+                            u, v = euler_path[j][0], euler_path[j][1]
+                            if (u, v) in duplicate_edges:
+                                if temp_check_used_duplicate_edges[(u, v)] == 1:
                                     partition.append([])
                                     pid += 1
+                                else:
+                                    partition[pid].append(int(u))
+                                    partition[pid].append(int(v))
+                                    temp_check_used_duplicate_edges[(u, v)] = 1
 
-                                partition[pid].append(int(u))
-                                partition[pid].append(int(v))
-                            elif (v, u) in edge_count:  # Ensure undirected pairs are counted correctly
-                                if edge_count[(v, u)] == 2:
+                            elif (v, u) in duplicate_edges:
+                                if temp_check_used_duplicate_edges[(v, u)] == 1:
                                     partition.append([])
                                     pid += 1
+                                else:
+                                    partition[pid].append(int(v))
+                                    partition[pid].append(int(u))
+                                    temp_check_used_duplicate_edges[(v, u)] = 1
+
+                            else:
                                 partition[pid].append(int(u))
                                 partition[pid].append(int(v))
 
-
-                        # print(partition)
                         path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
                         path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
                         for j in range(1, len(euler_path)):
@@ -256,10 +282,8 @@ class TriMesh:
 
             print("=====================================================================================\n")
 
-
         print("partition :", partition)
-
-
+        print("the number of partition :", len(partition))
 
         offset = [0]
         offset_vert = [0]
@@ -286,17 +310,11 @@ class TriMesh:
         # print(colors_np)
         # print(partition_flattened)
 
-
-
-
-
         #very dubious
         dup_to_or = np.zeros(offset_vert[-1], dtype=int)
         # print(offset)
 
         # print(offset_vert)
-
-
 
         #TODO: make dup-orig id connection and eid-dup
         eid_dup = []
@@ -322,9 +340,13 @@ class TriMesh:
         for i in eid_dup:
             print(int(i), end=" ")
         print()
+        print("number of eid-dup :", len(eid_dup))
+
         print("dup-to-origin : ", end="")
         for i in dup_to_or:
             print(int(i), end=" ")
+        print()
+        print("number of dup-to-origin :", len(dup_to_or))
 
         colors_np = np.zeros((offset_vert[-1], 3))
 
@@ -345,6 +367,7 @@ class TriMesh:
             # print("______")
 
         eid_dup = np.array(eid_dup)
+        print("eid_dup // 2 =", eid_dup.shape[0] // 2)
 
         #data structures for partitioned euler path
         self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
