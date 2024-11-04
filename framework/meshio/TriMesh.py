@@ -9,6 +9,7 @@ from pathlib import Path
 from pyquaternion import Quaternion
 import networkx as nx
 from collections import Counter
+import matplotlib.pyplot as plt
 
 model_path = Path(__file__).resolve().parent.parent.parent / "models"
 OBJ = "OBJ"
@@ -260,29 +261,56 @@ class TriMesh:
         # for p in partition:
         #     print(len(p), "/", end=' ')
         # print()
-        print("the number of partition :", len(partition))
+
+        partition_length = [len(p) for p in partition]
+        split_threshold = int(np.mean(partition_length)) // 2 * 2 # the nearest small even number from the average
+        print("Split threshold :", split_threshold)
+
+        # Split Algorithm
+        partition_splited = []
+        for p in partition:
+            if len(p) > split_threshold:
+                for i in range(0, len(p), split_threshold):
+                    partition_splited.append(p[i : i + split_threshold])
+            else:
+                partition_splited.append(p)
+
+        partition_splited_length = [len(p) for p in partition_splited]
+        print("all length (before splitting) :", sum(partition_length))
+        print("all length (after splitting) :", sum(partition_splited_length))
+
+        # Print plots
+        plt.hist(partition_length, bins=max(partition_length))
+        plt.show()
+        plt.hist(partition_splited_length, bins=max(partition_splited_length))
+        plt.show()
+
+        print("the number of partition (before splitting):", len(partition))
+        print("the number of partition (after splitting):", len(partition_splited))
+        print("partition (before splitting) :", partition)
+        print("partition (after splitting) :", partition_splited)
 
         offset = [0]
         offset_vert = [0]
         of = 0
         of_vert = 0
         partition_flattened = []
-        for i in range(len(partition)):
-            of += len(partition[i])
-            of_vert += (len(partition[i]) // 2 + 1)
+        for i in range(len(partition_splited)):
+            of += len(partition_splited[i])
+            of_vert += (len(partition_splited[i]) // 2 + 1)
             offset.append(of)
             offset_vert.append(of_vert)
 
-        for i in range(len(partition)):
-            for j in range(len(partition[i])):
-                partition_flattened.append(partition[i][j])
+        for i in range(len(partition_splited)):
+            for j in range(len(partition_splited[i])):
+                partition_flattened.append(partition_splited[i][j])
 
         partition_flattened = np.array(partition_flattened, dtype=int)
         offset = np.array(offset, dtype=int)
         offset_vert = np.array(offset_vert, dtype=int)
 
-        # print("offset :", offset)
-        # print("offset_vert :", offset_vert)
+        print("offset :", offset)
+        print("offset_vert :", offset_vert)
         # print(colors_np)
         # print(partition_flattened)
 
@@ -294,19 +322,19 @@ class TriMesh:
 
         eid_dup = []
         id = 0
-        for pi in range(len(partition)):
+        for pi in range(len(partition_splited)):
             off_v = offset_vert[pi]
 
-            size = len(partition[pi]) // 2
+            size = len(partition_splited[pi]) // 2
 
             for j in range(size):
-                vi = partition[pi][2 * j]
+                vi = partition_splited[pi][2 * j]
                 eid_dup.append(j + off_v)
                 eid_dup.append(j + off_v + 1)
                 dup_to_or[off_v + j] = vi
                 # id += 1
 
-            vi = partition[pi][2 * (size - 1) + 1]
+            vi = partition_splited[pi][2 * (size - 1) + 1]
             dup_to_or[off_v + size] = vi
             # id += 1
 
@@ -340,9 +368,9 @@ class TriMesh:
 
             # print("______")
 
-        # print(offset_vert)
+        print(offset_vert)
         eid_dup = np.array(eid_dup)
-        # print("eid_dup // 2 =", eid_dup.shape[0] // 2)
+        print("eid_dup // 2 =", eid_dup.shape[0] // 2)
 
         #data structures for partitioned euler path
         self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))

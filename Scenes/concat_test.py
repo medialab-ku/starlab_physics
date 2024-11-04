@@ -38,7 +38,7 @@ obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=[
                      # "tshirt.obj",
-                     "square.obj"
+                     "plane.obj"
                     ],
     trans_list=[
                 # (0.0, -2.4, 0.0),
