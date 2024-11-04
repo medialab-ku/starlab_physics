@@ -405,7 +405,7 @@ class Solver:
     def solve_constraints_pd_diag_x(self, dt):
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
-
+        self.mesh_dy.nc.copy_from(self.mesh_dy.m)
         E_curr = self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
 
         return E_curr
@@ -585,23 +585,26 @@ class Solver:
                                                           compliance_bending: ti.f32
                                                           ):
 
-        self.mesh_dy.dx.fill(0.0)
-        self.mesh_dy.nc.fill(1.0)
+        # self.mesh_dy.dx.fill(0.0)
 
-        self.a.fill(0.0)
-        self.c.fill(0.0)
+        self.a.fill(-compliance_stretch)
+        self.c.fill(-compliance_stretch)
+
+        for i in range(self.num_verts_dy):
+            self.mesh_dy.dx[i] = self.mesh_dy.m[i] * (self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i])
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
-            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
             x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             dp01 = x01 - l0 * x01.normalized()
 
-            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
-            self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
+            self.mesh_dy.dx[v0] -= compliance_stretch * dp01
+            self.mesh_dy.dx[v1] += compliance_stretch * dp01
 
-            self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
-            self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
+            self.mesh_dy.nc[v0] += compliance_stretch
+            self.mesh_dy.nc[v1] += compliance_stretch
 
 
         for di in self.mesh_dy.x_dup:
@@ -618,6 +621,7 @@ class Solver:
 
         #     # Thomas algorithm
         #     # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
+
 
             self.c_tilde[offset] = self.c[offset] / self.b[offset]
             for id in range(size): # lb+1 ~ ub-1
@@ -645,17 +649,18 @@ class Solver:
     def solve_spring_constraints_pd_diag_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32)->ti.f32:
 
         # self.mesh_dy.dx.fill(0.0)
-        self.mesh_dy.nc.fill(1.0)
+        # self.mesh_dy.nc.fill(1.0)
 
         for i in range(self.num_verts_dy):
-            self.mesh_dy.dx[i] = self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i]
+            self.mesh_dy.dx[i] = self.mesh_dy.m[i] * (self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i])
 
         E_curr = 0.0
         # ti.loop_config(serialize=True)
         ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
-            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
             x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             l = x01.norm()
             dp01 = x01 - l0 * x01.normalized()
@@ -664,26 +669,26 @@ class Solver:
 
             # alpha = (1.0 - l0 / x01.norm())
 
-            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch * dp01
-            self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch * dp01
-            self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_stretch
-            self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_stretch
+            self.mesh_dy.dx[v0] -= compliance_stretch * dp01
+            self.mesh_dy.dx[v1] += compliance_stretch * dp01
+            self.mesh_dy.nc[v0] += compliance_stretch
+            self.mesh_dy.nc[v1] += compliance_stretch
 
 
-        for i in self.mesh_dy.bending_l0:
-            l0 = self.mesh_dy.bending_l0[i]
-            v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
-            x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
-            l = x01.norm()
-            dp01 = x01 - l0 * x01.normalized()
-            E_curr += 0.5 * compliance_bending * (l - l0) ** 2
-            # alpha = (1.0 - l0 / x01.norm())
-
-            self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_bending * dp01
-            self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_bending * dp01
-
-            self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_bending
-            self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_bending
+        # for i in self.mesh_dy.bending_l0:
+        #     l0 = self.mesh_dy.bending_l0[i]
+        #     v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
+        #     x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
+        #     l = x01.norm()
+        #     dp01 = x01 - l0 * x01.normalized()
+        #     E_curr += 0.5 * compliance_bending * (l - l0) ** 2
+        #     # alpha = (1.0 - l0 / x01.norm())
+        #
+        #     self.mesh_dy.dx[v0] -= self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_bending * dp01
+        #     self.mesh_dy.dx[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_bending * dp01
+        #
+        #     self.mesh_dy.nc[v0] += self.mesh_dy.fixed[v0] * self.mesh_dy.m_inv[v0] * compliance_bending
+        #     self.mesh_dy.nc[v1] += self.mesh_dy.fixed[v1] * self.mesh_dy.m_inv[v1] * compliance_bending
 
 
         ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
@@ -1686,6 +1691,8 @@ class Solver:
     def solve_constraints_euler_path_tridiagonal_x(self, dt):
         # self.init_variables()
 
+        self.mesh_dy.nc.copy_from(self.mesh_dy.m)
+
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
 
@@ -1697,29 +1704,29 @@ class Solver:
         dt_sub = self.dt / n_substeps
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
-            self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+            # self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+            # self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+            for _ in range(n_iter):
 
-            # for _ in range(n_iter):
-            #
-            #     if self.selected_solver_type == 0:
-            #         self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
-            #
-            #     elif self.selected_solver_type == 1:
-            #         self.E_curr = self.solve_constraints_pd_test_x(dt_sub)
-            #
-            #     elif self.selected_solver_type == 2:
-            #         self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-            #
-            #     elif self.selected_solver_type == 3:
-            #
-            #         self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
-            #
-            #     elif self.selected_solver_type == 4:
-            #         self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-            #
-            #     elif self.selected_solver_type == 5:
-            #         self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+                if self.selected_solver_type == 0:
+                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
 
-            self.copy_to_dup()
+                elif self.selected_solver_type == 1:
+                    self.E_curr = self.solve_constraints_pd_test_x(dt_sub)
+
+                elif self.selected_solver_type == 2:
+                    self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+
+                elif self.selected_solver_type == 3:
+                    self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+
+                elif self.selected_solver_type == 4:
+                    self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+
+                elif self.selected_solver_type == 5:
+                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
+
+            self.copy_to_dup()

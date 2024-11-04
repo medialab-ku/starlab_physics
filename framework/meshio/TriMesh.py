@@ -366,6 +366,8 @@ class TriMesh:
         # print(self.eid_test)
         # print(self.partition_offset)
 
+        self.l0_dup = ti.field(dtype=float, shape=self.num_edges)
+
         self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.v_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
@@ -618,7 +620,10 @@ class TriMesh:
     @ti.kernel
     def init_l0_m_inv(self):
         for i in range(self.num_edges):
-            v0, v1 = self.eid_field[i,0], self.eid_field[i,1]
+            # v0, v1 = self.eid_field[i,0], self.eid_field[i,1]
+            v0_d, v1_d = self.eid_dup[2 * i + 0], self.eid_dup[2 * i + 1]
+            v0, v1 = self.dup_to_ori[v0_d], self.dup_to_ori[v1_d]
+            # self.l0_dup[i] = (self.x[v0] - self.x[v1]).norm()
             self.l0[i] = (self.x[v0] - self.x[v1]).norm()
             self.m[v0] += 0.5 * self.l0[i]
             self.m[v1] += 0.5 * self.l0[i]
