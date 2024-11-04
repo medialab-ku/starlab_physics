@@ -195,22 +195,22 @@ class TriMeshWrapper:
 
         print(round(path_len / self.num_edges, 3))
         # print(path_len - 1)
-        self.x_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.v_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.y_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-        self.g_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
-
-        self.m_inv_euler = ti.field(dtype=float, shape=path_len)
-        self.fixed_euler = ti.field(dtype=float, shape=path_len)
-
-        self.a_euler = ti.field(dtype=float, shape=path_len) # top 1st off-diagonal elements
-        self.b_euler = ti.field(dtype=float, shape=path_len) # diag elements
-        self.c_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
-        self.c_tilde_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
-        self.d_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=path_len) # bottom 1st off-diagonal elements
-
-        self.l0_euler = ti.field(dtype=float, shape=l0_len)
+        # self.x_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.dx_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.v_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.y_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        # self.g_euler = ti.Vector.field(n=3, dtype=float, shape=path_len)
+        #
+        # self.m_inv_euler = ti.field(dtype=float, shape=path_len)
+        # self.fixed_euler = ti.field(dtype=float, shape=path_len)
+        #
+        # self.a_euler = ti.field(dtype=float, shape=path_len) # top 1st off-diagonal elements
+        # self.b_euler = ti.field(dtype=float, shape=path_len) # diag elements
+        # self.c_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        # self.c_tilde_euler = ti.field(dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        # self.d_tilde_euler = ti.Vector.field(n=3, dtype=float, shape=path_len) # bottom 1st off-diagonal elements
+        #
+        # self.l0_euler = ti.field(dtype=float, shape=l0_len)
         self.colored_edge_pos_euler = ti.Vector.field(n=3, dtype=float, shape=l0_len)
         self.colors_edge_euler = ti.Vector.field(n=3, dtype=float, shape=l0_len)
         self.path_euler = ti.field(dtype=ti.i32, shape=path_len)
@@ -230,30 +230,30 @@ class TriMeshWrapper:
         self.render_bending_vert = ti.Vector.field(3, dtype=float, shape=(len(self.mesh.verts),))
         self.init_render_bending_vert()
 
-    @ti.kernel
-    def init_l0_euler(self):
-        # print("shape: ", self.path_euler.shape)
-        len = self.path_euler.shape[0]
-        for i in range(len - 1):
-            v0, v1 = self.path_euler[i], self.path_euler[i + 1]
-            x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
-            self.l0_euler[i] = x01.norm()
-            self.x_euler[i] = self.verts.x0[v0]
-
-        self.x_euler[len - 1] = self.verts.x0[self.path_euler[len - 1]]
-
-        for i in range(len - 1):
-            self.edge_indices_euler[2 * i] = i
-            self.edge_indices_euler[2 * i + 1] = i + 1
-
-        for i in range(len - 1):
-            v0, v1 = self.edge_indices_euler[2 * i + 0], self.edge_indices_euler[2 * i + 1]
-            self.colored_edge_pos_euler[i] = 0.5 * (self.x_euler[v0] + self.x_euler[v1])
-
-            if i % 2 == 0:
-                self.colors_edge_euler[i] = ti.math.vec3(1.0, 0.0, 0.0)
-            else:
-                self.colors_edge_euler[i] = ti.math.vec3(0.0, 0.0, 1.0)
+    # @ti.kernel
+    # def init_l0_euler(self):
+    #     # print("shape: ", self.path_euler.shape)
+    #     len = self.path_euler.shape[0]
+    #     for i in range(len - 1):
+    #         v0, v1 = self.path_euler[i], self.path_euler[i + 1]
+    #         x01 = self.mesh.verts.x0[v0] - self.mesh.verts.x0[v1]
+    #         self.l0_euler[i] = x01.norm()
+    #         self.x_euler[i] = self.verts.x0[v0]
+    #
+    #     self.x_euler[len - 1] = self.verts.x0[self.path_euler[len - 1]]
+    #
+    #     for i in range(len - 1):
+    #         self.edge_indices_euler[2 * i] = i
+    #         self.edge_indices_euler[2 * i + 1] = i + 1
+    #
+    #     for i in range(len - 1):
+    #         v0, v1 = self.edge_indices_euler[2 * i + 0], self.edge_indices_euler[2 * i + 1]
+    #         self.colored_edge_pos_euler[i] = 0.5 * (self.x_euler[v0] + self.x_euler[v1])
+    #
+    #         if i % 2 == 0:
+    #             self.colors_edge_euler[i] = ti.math.vec3(1.0, 0.0, 0.0)
+    #         else:
+    #             self.colors_edge_euler[i] = ti.math.vec3(0.0, 0.0, 1.0)
 
     @ti.kernel
     def init_face_edge_indices(self):
@@ -372,9 +372,9 @@ class TriMeshWrapper:
         self.mesh.verts.x.copy_from(self.mesh.verts.x0)
         self.mesh.verts.v.fill(0.)
         self.mesh.verts.fixed.fill(0.0)
-        self.v_euler.fill(0.0)
-
-        self.init_l0_euler()
+        # self.v_euler.fill(0.0)
+        #
+        # self.init_l0_euler()
 
     @ti.kernel
     def initFaceIndices(self):
