@@ -340,7 +340,7 @@ class TriMesh:
 
             # print("______")
 
-        print(offset_vert)
+        # print(offset_vert)
         eid_dup = np.array(eid_dup)
         # print("eid_dup // 2 =", eid_dup.shape[0] // 2)
 
@@ -367,6 +367,7 @@ class TriMesh:
         # print(self.partition_offset)
 
         self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.v_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.a_dup = ti.field(dtype=float, shape=offset_vert[-1])
         self.b_dup = ti.field(dtype=float, shape=offset_vert[-1])
@@ -566,6 +567,7 @@ class TriMesh:
         self.y_origin.fill(0.0)
         self.x.from_numpy(self.x_np)
         self.v.fill(0.0)
+        self.v_dup.fill(0.0)
         self.dx.fill(0.0)
         self.dv.fill(0.0)
         self.nc.fill(0.0)
