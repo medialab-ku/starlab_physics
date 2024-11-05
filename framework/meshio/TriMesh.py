@@ -288,6 +288,7 @@ class TriMesh:
 
         #very dubious
         dup_to_or = np.zeros(offset_vert[-1], dtype=int)
+        dup_pid = np.zeros(offset_vert[-1], dtype=int)
         # print(offset)
 
         # print(offset_vert)
@@ -304,6 +305,7 @@ class TriMesh:
                 eid_dup.append(j + off_v)
                 eid_dup.append(j + off_v + 1)
                 dup_to_or[off_v + j] = vi
+                dup_pid[off_v + j] = pi
                 # id += 1
 
             vi = partition[pi][2 * (size - 1) + 1]
@@ -353,6 +355,10 @@ class TriMesh:
 
         self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
         self.eid_dup = ti.field(dtype=int, shape=eid_dup.shape[0])
+        self.dup_pid = ti.field(dtype=float, shape=offset_vert[-1])
+
+        self.dup_pid.from_numpy(dup_pid)
+
         self.color_test = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
 
         self.vert_offset.from_numpy(offset_vert)
@@ -360,6 +366,9 @@ class TriMesh:
         # print(self.vert_offset)
 
         self.dup_to_ori = ti.field(dtype=int, shape=offset_vert[-1])
+
+
+        self.dup_id_set = ti.field(dtype=int, shape=(self.num_verts, 20))
         self.dup_to_ori.from_numpy(dup_to_or)
         self.eid_dup.from_numpy(eid_dup)
         # print(self.dup_to_ori)
@@ -369,6 +378,8 @@ class TriMesh:
         self.l0_dup = ti.field(dtype=float, shape=self.num_edges)
 
         self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.y_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.y_tilde_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.v_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.a_dup = ti.field(dtype=float, shape=offset_vert[-1])
@@ -376,6 +387,7 @@ class TriMesh:
         self.c_dup = ti.field(dtype=float, shape=offset_vert[-1])
         self.c_dup_tilde = ti.field(dtype=float, shape=offset_vert[-1])
         # print(self.c_tilde.shape)
+        self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.d_dup_tilde = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         # print(self.x_dup.shape)
@@ -575,8 +587,7 @@ class TriMesh:
         self.nc.fill(0.0)
 
         self.init_num_dup()
-
-        print(self.num_dup)
+        print(self.dup_id_set)
 
     @ti.kernel
     def init_edge_indices_flatten(self):
@@ -615,7 +626,10 @@ class TriMesh:
         self.num_dup.fill(0.0)
         for di in self.x_dup:
             vi = self.dup_to_ori[di]
-            self.num_dup[vi] += 1.0
+            nd = ti.cast(ti.atomic_add(self.num_dup[vi], 1.0), int)
+            self.dup_id_set[vi, nd] = di
+
+
 
     @ti.kernel
     def init_l0_m_inv(self):

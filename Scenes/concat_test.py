@@ -38,7 +38,7 @@ obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=[
                      # "tshirt.obj",
-                     "plane30k.obj"
+                     "square.obj"
                     ],
     trans_list=[
                 # (0.0, -2.4, 0.0),
@@ -46,7 +46,7 @@ obj_mesh_dy = TriMesh(
                ],
     scale_list=[
                 # 2.3,
-                1.0
+                3.0
                ],
     rot_list=[
               (1.0, 0.0, 0.0, 0.0),
