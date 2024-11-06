@@ -295,6 +295,10 @@ class TriMesh:
 
         eid_dup = []
         id = 0
+
+        num_dup = np.zeros(self.num_verts, dtype=int)
+
+        dup_set = [[] for _ in range(self.num_verts)]
         for pi in range(len(partition)):
             off_v = offset_vert[pi]
 
@@ -302,6 +306,8 @@ class TriMesh:
 
             for j in range(size):
                 vi = partition[pi][2 * j]
+                dup_set[vi].append(j + off_v)
+                num_dup[vi] += 1
                 eid_dup.append(j + off_v)
                 eid_dup.append(j + off_v + 1)
                 dup_to_or[off_v + j] = vi
@@ -309,8 +315,42 @@ class TriMesh:
                 # id += 1
 
             vi = partition[pi][2 * (size - 1) + 1]
+            dup_set[vi].append(off_v + size)
+            num_dup[vi] += 1
             dup_to_or[off_v + size] = vi
             # id += 1
+
+        print(dup_set)
+
+
+        dup = [x for x in dup_set if len(x) > 1]
+
+        attach_set = []
+
+        for di in dup:
+            for j in range(len(di) - 1):
+                attach_set.append(di[j])
+                attach_set.append(di[j + 1])
+
+        print(attach_set)
+
+        attach_set = np.array(attach_set)
+
+        # dup_flattened = [item for sublist in dup for item in sublist]
+        # print(dup_flattened)
+        #
+        # off_dup = [0]
+        #
+        # of_dup = 0
+        # for di in dup:
+        #     of_dup += len(di)
+        #     off_dup.append(of_dup)
+        #
+        #
+        # print(off_dup)
+        # print(dup_pid)
+        # print(num_dup)
+
 
         # print("eid-dup : ", end="")
         # for i in range(len(eid_dup) - 1):
@@ -349,8 +389,14 @@ class TriMesh:
         #data structures for partitioned euler path
         self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
         self.eid_test = ti.field(dtype=int, shape=partition_flattened.shape[0])
+
+        self.attach_set = ti.field(dtype=int, shape=attach_set.shape[0])
+
         self.partition_offset.from_numpy(offset)
         self.eid_test.from_numpy(partition_flattened)
+        self.attach_set.from_numpy(attach_set)
+
+        print(self.attach_set)
 
 
         self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
@@ -587,7 +633,7 @@ class TriMesh:
         self.nc.fill(0.0)
 
         self.init_num_dup()
-        print(self.dup_id_set)
+        print(self.num_dup)
 
     @ti.kernel
     def init_edge_indices_flatten(self):

@@ -236,9 +236,9 @@ class Solver:
     @ti.kernel
     def compute_y(self, g: ti.math.vec3, dt: ti.f32):
         # compute apporximate x_(t+1) (== y) by explicit way before projecting constraints to x_(t+1)...
-        # for i in range(self.num_verts_dy):
-        #     self.mesh_dy.y[i] = (self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt))
-        #     self.mesh_dy.y_tilde[i] = self.mesh_dy.y[i]
+        for i in range(self.num_verts_dy):
+            self.mesh_dy.y[i] = (self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt))
+            self.mesh_dy.y_tilde[i] = self.mesh_dy.y[i]
 
         for i in self.mesh_dy.y_dup:
             vi = self.mesh_dy.dup_to_ori[i]
@@ -269,8 +269,8 @@ class Solver:
     @ti.kernel
     def compute_v(self, damping: ti.f32, dt: ti.f32):
         # compute v after all constraints are projected to x_(t+1)
-        # for i in range(self.num_verts_dy):
-        #     self.mesh_dy.v[i] = (1.0 - damping) * self.mesh_dy.fixed[i] * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
+        for i in range(self.num_verts_dy):
+            self.mesh_dy.v[i] = (1.0 - damping) * self.mesh_dy.fixed[i] * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
 
 
 
@@ -295,8 +295,8 @@ class Solver:
     @ti.kernel
     def update_x(self, dt: float):
         # eventually, update actual position x_(t+1) after velocities are computed...
-        # for i in range(self.num_verts_dy):
-        #     self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * self.mesh_dy.v[i]
+        for i in range(self.num_verts_dy):
+            self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * self.mesh_dy.v[i]
 
         for i in self.mesh_dy.x_dup:
             vi = self.mesh_dy.dup_to_ori[i]
@@ -628,6 +628,25 @@ class Solver:
 
             self.b[v0_d] += compliance_stretch
             self.b[v1_d] += compliance_stretch
+
+
+        num_attach = self.mesh_dy.attach_set.shape[0] // 2
+        compliance_attach = 0.1
+
+        # print(num_attach)
+        for i in range(num_attach):
+            v0_d, v1_d = self.mesh_dy.attach_set[2 * i + 0], self.mesh_dy.attach_set[2 * i + 1]
+
+            # print(v0_d, v1_d)
+            # v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+            x01 = self.mesh_dy.y_dup[v0_d] - self.mesh_dy.y_dup[v1_d]
+            dp01 = x01
+
+            self.d[v0_d] -= compliance_attach * dp01
+            self.d[v1_d] += compliance_attach * dp01
+
+            self.b[v0_d] += compliance_attach
+            self.b[v1_d] += compliance_attach
 
         # for di in self.mesh_dy.x_dup:
         #     vi = self.mesh_dy.dup_to_ori[di]
@@ -1740,29 +1759,30 @@ class Solver:
 
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
-            self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+            # self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
             # self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
-            # for _ in range(n_iter):
-            #
-            #     if self.selected_solver_type == 0:
-            #         self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
-            #
-            #     elif self.selected_solver_type == 1:
-            #         self.E_curr = self.solve_constraints_pd_test_x(dt_sub)
-            #
-            #     elif self.selected_solver_type == 2:
-            #         self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-            #
-            #     elif self.selected_solver_type == 3:
-            #         self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
-            #
-            #     elif self.selected_solver_type == 4:
-            #         self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
-            #
-            #     elif self.selected_solver_type == 5:
-            #         self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+            for _ in range(n_iter):
+
+                if self.selected_solver_type == 0:
+                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+
+                elif self.selected_solver_type == 1:
+                    self.E_curr = self.solve_constraints_pd_test_x(dt_sub)
+
+                elif self.selected_solver_type == 2:
+                    self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+
+                elif self.selected_solver_type == 3:
+                    self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+
+                elif self.selected_solver_type == 4:
+                    self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
+
+                elif self.selected_solver_type == 5:
+                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
 
-            # self.copy_to_dup()
+            if self.selected_solver_type == 0:
+                self.copy_to_dup()
