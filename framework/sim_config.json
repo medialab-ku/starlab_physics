@@ -1,6 +1,6 @@
 {
     "sim_type": 0,
-    "solver_type": 0,
+    "solver_type": 3,
     "precond_type": 1,
     "dt_tri": 0.029999999329447746,
     "dt_tet": 0.02,
