@@ -112,24 +112,26 @@ class TriMesh:
             self.edge_offsets.append(self.edge_offsets[-1] + len(edges))
             self.face_offsets.append(self.face_offsets[-1] + len(mesh.cells_dict.get("triangle", [])))
 
-            ################################################################################################################
-            # Euler Path
+        ################################################################################################################
+        # Euler Path
 
-        self.duplicates_np = np.zeros(self.num_verts, dtype=int)
+        self.vertex_duplicates_count_np = np.zeros(self.num_verts, dtype=int)
         self.euler_path_np = np.empty(0, dtype=int)
-        self.duplicates_offsets = [0, ]
+        self.vertex_duplicates_offsets = [0, ]
         self.euler_path_offsets = [0, ]
-        partition = [[]]
+
+        # Euler path is only available on dynamic meshes!
         if not is_static:
             for i in range(self.num_model):
                 euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
                 precomputed_graph_file = euler_dir + "/" + model_name_list[i][:-len(".obj")] + ".edgelist"
 
                 if not os.path.exists(euler_dir):
-                    print(
-                        "The ""euler_graph"" dictionary does not exist. It will be made and then located in your path...")
+                    print("The ""euler_graph"" dictionary does not exist. "
+                          "The dictionary will be made and then located in your path...")
                     os.mkdir(dir)
 
+                # If the euler graph file does not exist, we should construct and export it!
                 if not os.path.isfile(precomputed_graph_file):
                     print(f"The original color graph of <{model_name_list[i]}> does not exist.")
                     print("Constructing an Euler graph...")
@@ -137,121 +139,141 @@ class TriMesh:
 
                     euler_graph = nx.MultiGraph()
                     for j in range(self.edge_offsets[i], self.edge_offsets[i + 1]):
+                        # to ensure independency of the graph, we have to subtract vertex id offset from concatenated mesh!
                         euler_graph.add_edge(self.e_np[j][0] - self.vert_offsets[i],
                                              self.e_np[j][1] - self.vert_offsets[i])
-                    euler_graph = nx.eulerize(euler_graph)
+                    euler_graph = nx.eulerize(euler_graph) # after adding edges, we eulerize the graph!
 
+                    # Check whether the constructed graph is eulearian or not...
+                    # and then make euler path and duplicates count!
                     if nx.is_eulerian(euler_graph):
                         print("Euler graph construction is completed!")
+                        euler_path_list = []
+                        euler_path = list(nx.eulerian_path(euler_graph))
 
-                        path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
-                        path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
+                        # For example; euler graph : [[0,1],[1,3],[3,1],[1,2],[2,4]] -> euler path : [0, 1, 3, 1, 2, 4]
+                        # Unlike above codes, we should add vertex id offset to the vid of euler path!
+                        euler_path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
+                        euler_path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
                         for j in range(1, len(euler_path)):
-                            path_list.append(int(euler_path[j][1]) + self.vert_offsets[i])
+                            euler_path_list.append(int(euler_path[j][1]) + self.vert_offsets[i])
 
-                        path_len = len(path_list)
-                        self.euler_path_np = np.append(self.euler_path_np, np.array(path_list), axis=0)
-                        for j in range(path_len):
-                            vid = path_list[j]
-                            self.duplicates_np[vid] += 1
+                        euler_path_len = len(euler_path_list)
+                        self.euler_path_np = np.append(self.euler_path_np, np.array(euler_path_list), axis=0)
 
-                        self.euler_path_offsets.append(self.euler_path_offsets[-1] + path_len)
-                        self.duplicates_offsets.append(self.vert_offsets[i + 1])
+                        # Record how many times euler path have visited each vertex... (duplicates count)
+                        for j in range(euler_path_len):
+                            vid = euler_path_list[j]
+                            self.vertex_duplicates_count_np[vid] += 1
+
+                        # To divide the euler path and duplicates offsets from other meshes...
+                        self.euler_path_offsets.append(self.euler_path_offsets[-1] + euler_path_len)
+                        self.vertex_duplicates_offsets.append(self.vert_offsets[i + 1])
 
                     end = time.time()
                     print("Euler Graph Elapsed Time :", round(end - start, 5), "sec.")
 
+                    # Export the constructed graph to the given directory!
                     print("Exporting the constructed Euler graph...")
                     nx.write_edgelist(euler_graph, precomputed_graph_file)
                     print("Export is completed!\n")
                     print(euler_graph.edges())
 
+                # If we already have the existing euler graph, we can just import it!
                 else:
-                    euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
-                    precomputed_graph_file = euler_dir + "/" + model_name_list[i][:-len(".obj")] + ".edgelist"
                     print("Importing a precomputed Euler graph...")
                     euler_graph = nx.read_edgelist(precomputed_graph_file, create_using=nx.MultiGraph)
                     print("Checking integrity... ", end='')
+
                     if nx.is_eulerian(euler_graph):
                         print("The imported graph is Eulerian!\n")
-                        path_list = []
+                        euler_path_list = []
                         euler_path = list(nx.eulerian_path(euler_graph))
-                        # print("euler path :", euler_path)
 
-                        edge_count = {}
-
-                        last_edge = (int(euler_path[0][0]), int(euler_path[0][1]))
-                        if last_edge[0] > last_edge[1]:
-                            last_edge[0], last_edge[1] = last_edge[1], last_edge[0]
-                        edge_count[last_edge] = 1
-
+                        # For example; euler graph : [[0,1],[1,3],[3,1],[1,2],[2,4]] -> euler path : [0, 1, 3, 1, 2, 4]
+                        # Unlike above codes, we should add vertex id offset to the vid of euler path!
+                        euler_path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
+                        euler_path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
                         for j in range(1, len(euler_path)):
-                            v0, v1 = int(euler_path[j][0]), int(euler_path[j][1])
-                            if v0 > v1:
-                                v0, v1 = v1, v0 # to unify edges to ascending order...
+                            euler_path_list.append(int(euler_path[j][1]) + self.vert_offsets[i])
 
-                            if (v0, v1) in edge_count:
-                                edge_count[(v0, v1)] += 1
-                            else:
-                                edge_count[(v0, v1)] = 1
+                        euler_path_len = len(euler_path_list)
+                        self.euler_path_np = np.append(self.euler_path_np, np.array(euler_path_list), axis=0)
 
-                            last_edge = (v0, v1)
+                        # Record how many times euler path have visited each vertex... (duplicates count)
+                        for j in range(euler_path_len):
+                            vid = euler_path_list[j]
+                            self.vertex_duplicates_count_np[vid] += 1
 
-                        duplicate_edges = [k for k, v in edge_count.items() if v > 1]
+                        # To divide the euler path and duplicates offsets from other meshes...
+                        self.euler_path_offsets.append(self.euler_path_offsets[-1] + euler_path_len)
+                        self.vertex_duplicates_offsets.append(self.vert_offsets[i + 1])
 
-                        # print("All duplicate edges :", duplicate_edges)
-                        # print("the number of duplicate edges :", len(duplicate_edges))
-
-                        temp_check_used_duplicate_edges = {k: 0 for k in
-                                                           duplicate_edges} # 0 means that the edge is not used yet, 1 is used
-                        pid = 0
-
-                        for j in range(len(euler_path)):
-                            v0, v1 = int(euler_path[j][0]), int(euler_path[j][1])
-
-                            if (v0, v1) in duplicate_edges:
-                                if temp_check_used_duplicate_edges[(v0, v1)] == 1 and len(partition[pid]) > 0:
-                                    partition.append([])
-                                    pid += 1
-                                elif temp_check_used_duplicate_edges[(v0, v1)] == 1 and len(partition[pid]) == 0:
-                                    continue
-                                else:
-                                    partition[pid].append(int(v0))
-                                    partition[pid].append(int(v1))
-                                    temp_check_used_duplicate_edges[(v0, v1)] = 1
-
-                            elif (v1, v0) in duplicate_edges:
-                                if temp_check_used_duplicate_edges[(v1, v0)] == 1 and len(partition[pid]) > 0:
-                                    partition.append([])
-                                    pid += 1
-                                elif temp_check_used_duplicate_edges[(v1, v0)] == 1 and len(partition[pid]) == 0:
-                                    continue
-                                else:
-                                    partition[pid].append(int(v0))
-                                    partition[pid].append(int(v1)) # it's v0, v1! not v1, v0...
-                                    temp_check_used_duplicate_edges[(v1, v0)] = 1
-
-                            else:
-                                partition[pid].append(int(v0))
-                                partition[pid].append(int(v1))
-
-                        path_list.append(int(euler_path[0][0]) + self.vert_offsets[i])
-                        path_list.append(int(euler_path[0][1]) + self.vert_offsets[i])
-                        for j in range(1, len(euler_path)):
-                            path_list.append(int(euler_path[j][1]) + self.vert_offsets[i])
-
-                        path_len = len(path_list)
-                        self.euler_path_np = np.append(self.euler_path_np, np.array(path_list), axis=0)
-                        for j in range(path_len):
-                            vid = path_list[j]
-                            self.duplicates_np[vid] += 1
-
-                        self.euler_path_offsets.append(self.euler_path_offsets[-1] + path_len)
-                        self.duplicates_offsets.append(self.vert_offsets[i + 1])
                     else:
-                        print("The imported graph is not eulerian...")
+                        print("Error : The imported graph is not Eulerian.")
+                        print("Please remove the graph file and try again. It will be made again.")
                         print("Simulation ended!\n")
                         sys.exit()
+
+                # Split the euler path into several paths
+                # whenever we meet a duplicated edge in traversal, we should split the edge to ensure stability of physics code...
+                # 여기서부터 시작하기
+                partition = [[]]
+                edge_count = {}
+                euler_path_lb, euler_path_ub = self.euler_path_offsets[i], self.euler_path_offsets[i + 1]
+
+                last_edge = (int(self.euler_path_np[euler_path_lb]), int(self.euler_path_np[euler_path_lb + 1]))
+                # to prevent us from confusing edges, we unify vertex order of edges as ascending order!
+                if last_edge[0] > last_edge[1]:
+                    last_edge[0], last_edge[1] = last_edge[1], last_edge[0]
+                edge_count[last_edge] = 1
+
+                for j in range(euler_path_lb + 1, euler_path_ub - 1):
+                    v0, v1 = int(self.euler_path_np[j]), int(self.euler_path_np[j + 1])
+                    if v0 > v1:
+                        v0, v1 = v1, v0  # to unify vertex order of edges as ascending order...
+
+                    if (v0, v1) in edge_count:
+                        edge_count[(v0, v1)] += 1
+                    else:
+                        edge_count[(v0, v1)] = 1
+
+                    last_edge = (v0, v1)
+
+                duplicate_edges = [k for k, v in edge_count.items() if v > 1]
+
+                temp_check_used_duplicate_edges = {k: 0 for k in
+                                                   duplicate_edges}  # 0 means that the edge is not used yet, 1 is used
+                pid = 0
+
+                for j in range(len(euler_path)):
+                    v0, v1 = int(euler_path[j][0]), int(euler_path[j][1])
+
+                    if (v0, v1) in duplicate_edges:
+                        if temp_check_used_duplicate_edges[(v0, v1)] == 1 and len(partition[pid]) > 0:
+                            partition.append([])
+                            pid += 1
+                        elif temp_check_used_duplicate_edges[(v0, v1)] == 1 and len(partition[pid]) == 0:
+                            continue
+                        else:
+                            partition[pid].append(int(v0))
+                            partition[pid].append(int(v1))
+                            temp_check_used_duplicate_edges[(v0, v1)] = 1
+
+                    elif (v1, v0) in duplicate_edges:
+                        if temp_check_used_duplicate_edges[(v1, v0)] == 1 and len(partition[pid]) > 0:
+                            partition.append([])
+                            pid += 1
+                        elif temp_check_used_duplicate_edges[(v1, v0)] == 1 and len(partition[pid]) == 0:
+                            continue
+                        else:
+                            partition[pid].append(int(v0))
+                            partition[pid].append(int(v1))  # it's v0, v1! not v1, v0...
+                            temp_check_used_duplicate_edges[(v1, v0)] = 1
+
+                    else:
+                        partition[pid].append(int(v0))
+                        partition[pid].append(int(v1))
 
             # print("partition :", partition)
 
