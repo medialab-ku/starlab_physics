@@ -403,6 +403,7 @@ class TriMesh:
         self.c_dup_tilde = ti.field(dtype=float, shape=offset_vert[-1])
         # print(self.c_tilde.shape)
         self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.d_dup_tilde = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         # print(self.x_dup.shape)
         self.color_test.from_numpy(colors_np)
