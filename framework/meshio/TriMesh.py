@@ -9,6 +9,7 @@ from pathlib import Path
 from pyquaternion import Quaternion
 import networkx as nx
 from collections import Counter
+import matplotlib.pyplot as plt
 
 model_path = Path(__file__).resolve().parent.parent.parent / "models"
 OBJ = "OBJ"
@@ -260,97 +261,82 @@ class TriMesh:
         # for p in partition:
         #     print(len(p), "/", end=' ')
         # print()
-        print("the number of partition :", len(partition))
+
+        partition_length = [len(p) for p in partition]
+        split_threshold = int(np.mean(partition_length)) // 2 * 2 # the nearest small even number from the average
+        print("Split threshold :", split_threshold)
+
+        # Split Algorithm
+        partition_splited = []
+        for p in partition:
+            if len(p) > split_threshold:
+                for i in range(0, len(p), split_threshold):
+                    partition_splited.append(p[i : i + split_threshold])
+            else:
+                partition_splited.append(p)
+
+        partition_splited_length = [len(p) for p in partition_splited]
+        print("all length (before splitting) :", sum(partition_length))
+        print("all length (after splitting) :", sum(partition_splited_length))
+
+        # Print plots
+        plt.hist(partition_length, bins=max(partition_length))
+        plt.show()
+        plt.hist(partition_splited_length, bins=max(partition_splited_length))
+        plt.show()
+
+        print("the number of partition (before splitting):", len(partition))
+        print("the number of partition (after splitting):", len(partition_splited))
+        print("partition (before splitting) :", partition)
+        print("partition (after splitting) :", partition_splited)
 
         offset = [0]
         offset_vert = [0]
         of = 0
         of_vert = 0
         partition_flattened = []
-        for i in range(len(partition)):
-            of += len(partition[i])
-            of_vert += (len(partition[i]) // 2 + 1)
+        for i in range(len(partition_splited)):
+            of += len(partition_splited[i])
+            of_vert += (len(partition_splited[i]) // 2 + 1)
             offset.append(of)
             offset_vert.append(of_vert)
 
-        for i in range(len(partition)):
-            for j in range(len(partition[i])):
-                partition_flattened.append(partition[i][j])
+        for i in range(len(partition_splited)):
+            for j in range(len(partition_splited[i])):
+                partition_flattened.append(partition_splited[i][j])
 
         partition_flattened = np.array(partition_flattened, dtype=int)
         offset = np.array(offset, dtype=int)
         offset_vert = np.array(offset_vert, dtype=int)
 
-        # print("offset :", offset)
-        # print("offset_vert :", offset_vert)
+        print("offset :", offset)
+        print("offset_vert :", offset_vert)
         # print(colors_np)
         # print(partition_flattened)
 
         #very dubious
         dup_to_or = np.zeros(offset_vert[-1], dtype=int)
-        dup_pid = np.zeros(offset_vert[-1], dtype=int)
         # print(offset)
 
         # print(offset_vert)
 
         eid_dup = []
         id = 0
-
-        num_dup = np.zeros(self.num_verts, dtype=int)
-
-        dup_set = [[] for _ in range(self.num_verts)]
-        for pi in range(len(partition)):
+        for pi in range(len(partition_splited)):
             off_v = offset_vert[pi]
 
-            size = len(partition[pi]) // 2
+            size = len(partition_splited[pi]) // 2
 
             for j in range(size):
-                vi = partition[pi][2 * j]
-                dup_set[vi].append(j + off_v)
-                num_dup[vi] += 1
+                vi = partition_splited[pi][2 * j]
                 eid_dup.append(j + off_v)
                 eid_dup.append(j + off_v + 1)
                 dup_to_or[off_v + j] = vi
-                dup_pid[off_v + j] = pi
                 # id += 1
 
-            vi = partition[pi][2 * (size - 1) + 1]
-            dup_set[vi].append(off_v + size)
-            num_dup[vi] += 1
+            vi = partition_splited[pi][2 * (size - 1) + 1]
             dup_to_or[off_v + size] = vi
             # id += 1
-
-        print(dup_set)
-
-
-        dup = [x for x in dup_set if len(x) > 1]
-
-        attach_set = []
-
-        for di in dup:
-            for j in range(len(di) - 1):
-                attach_set.append(di[j])
-                attach_set.append(di[j + 1])
-
-        print(attach_set)
-
-        attach_set = np.array(attach_set)
-
-        # dup_flattened = [item for sublist in dup for item in sublist]
-        # print(dup_flattened)
-        #
-        # off_dup = [0]
-        #
-        # of_dup = 0
-        # for di in dup:
-        #     of_dup += len(di)
-        #     off_dup.append(of_dup)
-        #
-        #
-        # print(off_dup)
-        # print(dup_pid)
-        # print(num_dup)
-
 
         # print("eid-dup : ", end="")
         # for i in range(len(eid_dup) - 1):
@@ -382,29 +368,19 @@ class TriMesh:
 
             # print("______")
 
-        # print(offset_vert)
+        print(offset_vert)
         eid_dup = np.array(eid_dup)
-        # print("eid_dup // 2 =", eid_dup.shape[0] // 2)
+        print("eid_dup // 2 =", eid_dup.shape[0] // 2)
 
         #data structures for partitioned euler path
         self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
         self.eid_test = ti.field(dtype=int, shape=partition_flattened.shape[0])
-
-        self.attach_set = ti.field(dtype=int, shape=attach_set.shape[0])
-
         self.partition_offset.from_numpy(offset)
         self.eid_test.from_numpy(partition_flattened)
-        self.attach_set.from_numpy(attach_set)
-
-        print(self.attach_set)
 
 
         self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
         self.eid_dup = ti.field(dtype=int, shape=eid_dup.shape[0])
-        self.dup_pid = ti.field(dtype=float, shape=offset_vert[-1])
-
-        self.dup_pid.from_numpy(dup_pid)
-
         self.color_test = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
 
         self.vert_offset.from_numpy(offset_vert)
@@ -412,24 +388,15 @@ class TriMesh:
         # print(self.vert_offset)
 
         self.dup_to_ori = ti.field(dtype=int, shape=offset_vert[-1])
-
-
-        self.dup_id_set = ti.field(dtype=int, shape=(self.num_verts, 20))
         self.dup_to_ori.from_numpy(dup_to_or)
         self.eid_dup.from_numpy(eid_dup)
         # print(self.dup_to_ori)
         # print(self.eid_test)
         # print(self.partition_offset)
 
-        self.l0_dup = ti.field(dtype=float, shape=self.num_edges)
-
         self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.y_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.y_tilde_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.v_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.dx_c_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.nabla_c_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.a_dup = ti.field(dtype=float, shape=offset_vert[-1])
         self.b_dup = ti.field(dtype=float, shape=offset_vert[-1])
         self.c_dup = ti.field(dtype=float, shape=offset_vert[-1])
@@ -634,6 +601,7 @@ class TriMesh:
         self.nc.fill(0.0)
 
         self.init_num_dup()
+
         print(self.num_dup)
 
     @ti.kernel
@@ -673,18 +641,12 @@ class TriMesh:
         self.num_dup.fill(0.0)
         for di in self.x_dup:
             vi = self.dup_to_ori[di]
-            nd = ti.cast(ti.atomic_add(self.num_dup[vi], 1.0), int)
-            self.dup_id_set[vi, nd] = di
-
-
+            self.num_dup[vi] += 1.0
 
     @ti.kernel
     def init_l0_m_inv(self):
         for i in range(self.num_edges):
-            # v0, v1 = self.eid_field[i,0], self.eid_field[i,1]
-            v0_d, v1_d = self.eid_dup[2 * i + 0], self.eid_dup[2 * i + 1]
-            v0, v1 = self.dup_to_ori[v0_d], self.dup_to_ori[v1_d]
-            # self.l0_dup[i] = (self.x[v0] - self.x[v1]).norm()
+            v0, v1 = self.eid_field[i,0], self.eid_field[i,1]
             self.l0[i] = (self.x[v0] - self.x[v1]).norm()
             self.m[v0] += 0.5 * self.l0[i]
             self.m[v1] += 0.5 * self.l0[i]
