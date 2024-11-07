@@ -240,10 +240,10 @@ class Solver:
             self.mesh_dy.y[i] = (self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt))
             self.mesh_dy.y_tilde[i] = self.mesh_dy.y[i]
 
-        for i in self.mesh_dy.y_dup:
-            vi = self.mesh_dy.dup_to_ori[i]
-            self.mesh_dy.y_dup[i] = (self.mesh_dy.x_dup[i] + self.mesh_dy.fixed[vi] * (self.mesh_dy.v_dup[i] * dt + g * dt * dt))
-            self.mesh_dy.y_tilde_dup[i] = self.mesh_dy.y_dup[i]
+        # for i in self.mesh_dy.y_dup:
+        #     vi = self.mesh_dy.dup_to_ori[i]
+        #     self.mesh_dy.y_dup[i] = (self.mesh_dy.x_dup[i] + self.mesh_dy.fixed[vi] * (self.mesh_dy.v_dup[i] * dt + g * dt * dt))
+        #     self.mesh_dy.y_tilde_dup[i] = self.mesh_dy.y_dup[i]
 
         # for Euler path...
         # for i in range(self.euler_path_len):
@@ -274,9 +274,9 @@ class Solver:
 
 
 
-        for i in self.mesh_dy.v_dup:
-            vi = self.mesh_dy.dup_to_ori[i]
-            self.mesh_dy.v_dup[i] = (1.0 - damping) * self.mesh_dy.fixed[vi] * (self.mesh_dy.y_dup[i] - self.mesh_dy.x_dup[i]) / dt
+        # for i in self.mesh_dy.v_dup:
+        #     vi = self.mesh_dy.dup_to_ori[i]
+        #     self.mesh_dy.v_dup[i] = (1.0 - damping) * self.mesh_dy.fixed[vi] * (self.mesh_dy.y_dup[i] - self.mesh_dy.x_dup[i]) / dt
 
 
         # self.particle_st.x_prev.copy_from(self.particle_st.x)
@@ -298,9 +298,9 @@ class Solver:
         for i in range(self.num_verts_dy):
             self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * self.mesh_dy.v[i]
 
-        for i in self.mesh_dy.x_dup:
-            vi = self.mesh_dy.dup_to_ori[i]
-            self.mesh_dy.x_dup[i] += self.mesh_dy.fixed[vi] * dt * self.mesh_dy.v_dup[i]
+        # for i in self.mesh_dy.x_dup:
+        #     vi = self.mesh_dy.dup_to_ori[i]
+        #     self.mesh_dy.x_dup[i] += self.mesh_dy.fixed[vi] * dt * self.mesh_dy.v_dup[i]
 
 
         # center = ti.math.vec3(0.0)
@@ -600,69 +600,42 @@ class Solver:
                                                           compliance_bending: ti.f32
                                                           ):
 
-        # self.mesh_dy.dx.fill(0.0)
-
-
         self.a.fill(-compliance_stretch)
         self.c.fill(-compliance_stretch)
 
-        self.d.fill(0.0)
-        self.b.fill(0.0)
 
+        for i in self.mesh_dy.dx:
 
-        for i in self.mesh_dy.y_dup:
-
-            vi = self.mesh_dy.dup_to_ori[i]
-            self.b[i] = self.mesh_dy.m[vi]
-            self.d[i] = self.mesh_dy.m[vi] * (self.mesh_dy.y_tilde_dup[i] - self.mesh_dy.y_dup[i])
+            self.mesh_dy.dx[i] = self.mesh_dy.m[i] * (self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i])
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
             v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
-            # v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
-            x01 = self.mesh_dy.y_dup[v0_d] - self.mesh_dy.y_dup[v1_d]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+            x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             dp01 = x01 - l0 * x01.normalized()
 
-            self.d[v0_d] -= compliance_stretch * dp01
-            self.d[v1_d] += compliance_stretch * dp01
+            self.mesh_dy.dx[v0] -= compliance_stretch * dp01
+            self.mesh_dy.dx[v1] += compliance_stretch * dp01
 
-            self.b[v0_d] += compliance_stretch
-            self.b[v1_d] += compliance_stretch
+            self.mesh_dy.nc[v0] += compliance_stretch
+            self.mesh_dy.nc[v1] += compliance_stretch
 
 
-        num_attach = self.mesh_dy.attach_set.shape[0] // 2
-        compliance_attach = 0.1
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
 
-        # print(num_attach)
-        for i in range(num_attach):
-            v0_d, v1_d = self.mesh_dy.attach_set[2 * i + 0], self.mesh_dy.attach_set[2 * i + 1]
-
-            # print(v0_d, v1_d)
-            # v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
-            x01 = self.mesh_dy.y_dup[v0_d] - self.mesh_dy.y_dup[v1_d]
-            dp01 = x01
-
-            self.d[v0_d] -= compliance_attach * dp01
-            self.d[v1_d] += compliance_attach * dp01
-
-            self.b[v0_d] += compliance_attach
-            self.b[v1_d] += compliance_attach
-
-        # for di in self.mesh_dy.x_dup:
-        #     vi = self.mesh_dy.dup_to_ori[di]
-        #
-        #     self.b[di] = self.mesh_dy.nc[vi]
-        #     self.d[di] = self.mesh_dy.dx[vi]
+            self.b[di] = self.mesh_dy.nc[vi]
+            self.d[di] = self.mesh_dy.dx[vi]
 
         n_part = (self.mesh_dy.partition_offset.shape[0] - 1)
         for pi in range(n_part):
 
             size =  self.mesh_dy.vert_offset[pi + 1] - self.mesh_dy.vert_offset[pi]
-            # print(size)
             offset = self.mesh_dy.vert_offset[pi]
-            # print(size, offset)
-        #     # Thomas algorithm
-        #     # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
+
+            # Thomas algorithm
+            # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
 
 
             self.c_tilde[offset] = self.c[offset] / self.b[offset]
@@ -685,17 +658,14 @@ class Solver:
 
                 self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_dup[idx + 1]
 
-        # self.mesh_dy.dx.fill(0.0)
-        # for di in self.mesh_dy.x_dup:
-        #     vi = self.mesh_dy.dup_to_ori[di]
-        #     self.mesh_dy.dx[vi] = self.mesh_dy.dx_dup[di]
-        #
-        # for di in self.mesh_dy.x_dup:
-        #     vi = self.mesh_dy.dup_to_ori[di]w
-        #     self.mesh_dy.dx_dup[vi] = self.mesh_dy.dx[vi]
+        self.mesh_dy.dx.fill(0.0)
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+            self.mesh_dy.dx[vi] += self.mesh_dy.dx_dup[di]
 
-        for i in self.mesh_dy.y_dup:
-            self.mesh_dy.y_dup[i] += self.mesh_dy.dx_dup[i]
+
+        for i in self.mesh_dy.y:
+            self.mesh_dy.y[i] +=  self.mesh_dy.dx[i] / self.mesh_dy.num_dup[i]
 
     @ti.kernel
     def solve_spring_constraints_pd_diag_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32)->ti.f32:
@@ -713,6 +683,7 @@ class Solver:
             l0 = self.mesh_dy.l0[i]
             v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
             v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+            # v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
             x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             l = x01.norm()
             dp01 = x01 - l0 * x01.normalized()
@@ -1784,5 +1755,5 @@ class Solver:
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
 
-            if self.selected_solver_type == 0:
-                self.copy_to_dup()
+            # if self.selected_solver_type == 0:
+            self.copy_to_dup()
