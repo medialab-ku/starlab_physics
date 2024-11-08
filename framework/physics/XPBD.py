@@ -59,6 +59,7 @@ class Solver:
         # self.euler_edge_len = self.mesh_dy.euler_edge_len
         #
         self.a = self.mesh_dy.a_dup
+        self.a_tilde = self.mesh_dy.a_dup_tilde
         self.b = self.mesh_dy.b_dup
         self.c = self.mesh_dy.c_dup
         self.c_tilde = self.mesh_dy.c_dup_tilde
@@ -408,16 +409,10 @@ class Solver:
         compliance_bending = self.stiffness_bending * dt * dt
         self.mesh_dy.nc.copy_from(self.mesh_dy.m)
         E_curr = self.solve_spring_constraints_pd_diag_x(compliance_stretch, compliance_bending)
+        # self.solve_spring_constraints_hess_diag_x(compliance_stretch, compliance_bending)
 
-        return E_curr
+        # return E_curr
 
-    def solve_constraints_pd_test_x(self, dt):
-        compliance_stretch = self.stiffness_stretch * dt * dt
-        compliance_bending = self.stiffness_bending * dt * dt
-
-        E_curr = self.solve_spring_constraints_pd_gs_x(compliance_stretch, compliance_bending)
-
-        return E_curr
 
 
 
@@ -569,16 +564,25 @@ class Solver:
                                                           compliance_bending: ti.f32
                                                           ):
 
-        self.a.fill(-compliance_stretch)
-        self.c.fill(-compliance_stretch)
+
+        id3 = ti.Matrix.identity(dt=float, n=3)
+
+        # self.a.fill(-compliance_stretch * id3)
+        # self.c.fill(-compliance_stretch * id3)
+
+        for i in self.c:
+
+            self.a[i] = -compliance_stretch * id3
+            self.c[i] = -compliance_stretch * id3
 
         compliance_attach =1e5
         for i in self.mesh_dy.dx:
             self.mesh_dy.dx[i] = self.mesh_dy.m[i] * (self.mesh_dy.y_tilde[i] - self.mesh_dy.y[i])
+            self.mesh_dy.hii[i] = self.mesh_dy.m[i] * id3
 
             if self.mesh_dy.fixed[i] < 1.0:
                 self.mesh_dy.dx[i] += compliance_attach * (self.mesh_dy.x0[i] - self.mesh_dy.y[i])
-                self.mesh_dy.nc[i] += compliance_attach
+                self.mesh_dy.hii[i] += compliance_attach * id3
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
@@ -590,14 +594,14 @@ class Solver:
             self.mesh_dy.dx[v0] -= compliance_stretch * dp01
             self.mesh_dy.dx[v1] += compliance_stretch * dp01
 
-            self.mesh_dy.nc[v0] += compliance_stretch
-            self.mesh_dy.nc[v1] += compliance_stretch
+            self.mesh_dy.hii[v0] += compliance_stretch * id3
+            self.mesh_dy.hii[v1] += compliance_stretch * id3
 
 
         for di in self.mesh_dy.x_dup:
             vi = self.mesh_dy.dup_to_ori[di]
 
-            self.b[di] = self.mesh_dy.nc[vi]
+            self.b[di] = self.mesh_dy.hii[vi]
             self.d[di] = self.mesh_dy.dx[vi]
 
         n_part = (self.mesh_dy.partition_offset.shape[0] - 1)
@@ -609,26 +613,28 @@ class Solver:
             # Thomas algorithm
             # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
 
-
-            self.c_tilde[offset] = self.c[offset] / self.b[offset]
+            # for j in ti.static(range(3)):
+            self.c_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.c[offset]
 
             ti.loop_config(serialize=True)
             for id in range(size): # lb+1 ~ ub-1
                 i = id + offset
-                self.c_tilde[i] = self.c[i] / (self.b[i] - self.a[i] * self.c_tilde[i - 1])
+                tmp = ti.math.inverse(self.b[i] - self.a[i] * self.c_tilde[i - 1])
 
-            self.d_tilde[offset] = self.d[offset] / self.b[offset]
+                self.c_tilde[i] = tmp @ self.c[i]
+            #
+            self.d_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.d[offset]
             ti.loop_config(serialize=True)
             for id in range(1, size): # lb+1 ~ ub
                 i = id + offset
-                self.d_tilde[i] = (self.d[i] - self.a[i] * self.d_tilde[i - 1]) / (self.b[i] - self.a[i] * self.c_tilde[i-1])
-
+                tmp = ti.math.inverse(self.b[i] - self.a[i] * self.c_tilde[i - 1])
+                self.d_tilde[i] = tmp @ (self.d[i] - self.a[i] @ self.d_tilde[i - 1])
+            #
             self.mesh_dy.dx_dup[offset + size - 1] = self.d_tilde[offset + size - 1]
             ti.loop_config(serialize=True)
             for i in range(0, size - 1):
                 idx = size - 2 - i + offset # ub-1 ~ lb
-
-                self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.c_tilde[idx] * self.mesh_dy.dx_dup[idx + 1]
+                self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.c_tilde[idx] @ self.mesh_dy.dx_dup[idx + 1]
 
         self.mesh_dy.dx.fill(0.0)
         for di in self.mesh_dy.x_dup:
@@ -810,7 +816,8 @@ class Solver:
         ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv)
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
-            v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
             x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             dp01 = x01 - l0 * x01.normalized()
             n = x01.normalized()
@@ -824,6 +831,7 @@ class Solver:
 
             self.mesh_dy.nc[v0] += compliance_stretch * alpha
             self.mesh_dy.nc[v1] += compliance_stretch * alpha
+
         ti.block_local(self.mesh_dy.y, self.mesh_dy.dx, self.mesh_dy.nc)
         for i in range(self.num_verts_dy):
             # if self.mesh_dy.nc[i] > 0:
@@ -858,7 +866,6 @@ class Solver:
             # alpha = 0.5
 
             self.mesh_dy.hij[i] = compliance_stretch * (alpha * id3 + (1.0 - alpha) * n.outer_product(n))
-
             self.mesh_dy.b[v0] -= compliance_stretch * dp01
             self.mesh_dy.b[v1] += compliance_stretch * dp01
 
@@ -1691,7 +1698,7 @@ class Solver:
     def solve_constraints_euler_path_tridiagonal_x(self, dt):
         # self.init_variables()
 
-        self.mesh_dy.nc.copy_from(self.mesh_dy.m)
+        # self.mesh_dy.nc.copy_from(self.mesh_dy.m)
 
         compliance_stretch = self.stiffness_stretch * dt * dt
         compliance_bending = self.stiffness_bending * dt * dt
@@ -1703,14 +1710,11 @@ class Solver:
 
         dt_sub = self.dt / n_substeps
 
-        # self.mesh_dy.fixed.fill(1.0)
-
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
             for _ in range(n_iter):
-
                 if self.selected_solver_type == 0:
-                    self.E_curr = self.solve_constraints_pd_diag_x(dt_sub)
+                   self.solve_constraints_pd_diag_x(dt_sub)
 
                 elif self.selected_solver_type == 2:
                     self.solve_constraints_pd_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
