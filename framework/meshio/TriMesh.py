@@ -120,8 +120,13 @@ class TriMesh:
         self.vertex_duplicates_offsets = [0, ]
         self.euler_path_offsets = [0, ]
 
+        partition = []
+        partition_offset = []
+        partition_offset_vert = []
+
         # Euler path is only available on dynamic meshes!
         if not is_static:
+            # The Euler path process is operated per mesh...
             for i in range(self.num_model):
                 euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
                 precomputed_graph_file = euler_dir + "/" + model_name_list[i][:-len(".obj")] + ".edgelist"
@@ -200,7 +205,7 @@ class TriMesh:
                         euler_path_len = len(euler_path_list)
                         self.euler_path_np = np.append(self.euler_path_np, np.array(euler_path_list), axis=0)
 
-                        # Record how many times euler path have visited each vertex... (duplicates count)
+                        # Record how many times the euler path has visited each vertex... (duplicates count)
                         for j in range(euler_path_len):
                             vid = euler_path_list[j]
                             self.vertex_duplicates_count_np[vid] += 1
@@ -215,184 +220,167 @@ class TriMesh:
                         print("Simulation ended!\n")
                         sys.exit()
 
-                # Split the euler path into several paths
-                # whenever we meet a duplicated edge in traversal, we should split the edge to ensure stability of physics code...
-                # 여기서부터 시작하기
-                partition = [[]]
-                edge_count = {}
+                # To ensure stability of physics code, we split the euler path into several paths per duplicate edge
+                # whenever we meet a duplicated edge in traversal, we should split the edge
+                euler_path_edge_duplicates_count = {}
                 euler_path_lb, euler_path_ub = self.euler_path_offsets[i], self.euler_path_offsets[i + 1]
 
-                last_edge = (int(self.euler_path_np[euler_path_lb]), int(self.euler_path_np[euler_path_lb + 1]))
+                # Count how many times euler path edge have been visited
                 # to prevent us from confusing edges, we unify vertex order of edges as ascending order!
+                last_edge = (int(self.euler_path_np[euler_path_lb]), int(self.euler_path_np[euler_path_lb + 1]))
                 if last_edge[0] > last_edge[1]:
                     last_edge[0], last_edge[1] = last_edge[1], last_edge[0]
-                edge_count[last_edge] = 1
+                euler_path_edge_duplicates_count[last_edge] = 1
 
                 for j in range(euler_path_lb + 1, euler_path_ub - 1):
                     v0, v1 = int(self.euler_path_np[j]), int(self.euler_path_np[j + 1])
                     if v0 > v1:
-                        v0, v1 = v1, v0  # to unify vertex order of edges as ascending order...
+                        v0, v1 = v1, v0
 
-                    if (v0, v1) in edge_count:
-                        edge_count[(v0, v1)] += 1
+                    if (v0, v1) in euler_path_edge_duplicates_count:
+                        euler_path_edge_duplicates_count[(v0, v1)] += 1
                     else:
-                        edge_count[(v0, v1)] = 1
+                        euler_path_edge_duplicates_count[(v0, v1)] = 1
 
                     last_edge = (v0, v1)
 
-                duplicate_edges = [k for k, v in edge_count.items() if v > 1]
+                # the list that contains edges that have been visited more than two times
+                duplicate_edges_list = [k for k, v in euler_path_edge_duplicates_count.items() if v > 1]
 
-                temp_check_used_duplicate_edges = {k: 0 for k in
-                                                   duplicate_edges}  # 0 means that the edge is not used yet, 1 is used
-                pid = 0
+                # the dictionary that informs the status whether a duplicate edge is visited or not
+                # 0 : the edge is not visited yet / 1 : the edge is used
+                check_used_duplicate_edges = {k: 0 for k in duplicate_edges_list}
 
-                for j in range(len(euler_path)):
-                    v0, v1 = int(euler_path[j][0]), int(euler_path[j][1])
+                subpartition = [[]] # the partition of each mesh
+                pid = 0 # partition id
 
-                    if (v0, v1) in duplicate_edges:
-                        if temp_check_used_duplicate_edges[(v0, v1)] == 1 and len(partition[pid]) > 0:
-                            partition.append([])
+                for j in range(euler_path_lb, euler_path_ub - 1):
+                    v0, v1 = int(self.euler_path_np[j]), int(self.euler_path_np[j + 1])
+                    if v0 > v1:
+                        v0, v1 = v1, v0
+
+                    if (v0, v1) in duplicate_edges_list:
+                        # the duplicate edge is already used + the current partition have edge
+                        if check_used_duplicate_edges[(v0, v1)] == 1 and len(subpartition[pid]) > 0:
+                            subpartition.append([])
                             pid += 1
-                        elif temp_check_used_duplicate_edges[(v0, v1)] == 1 and len(partition[pid]) == 0:
+                        # the duplicate edge is already used + the current partition is not used yet
+                        elif check_used_duplicate_edges[(v0, v1)] == 1 and len(subpartition[pid]) == 0:
                             continue
+                        # the duplicate edge is not used yet
                         else:
-                            partition[pid].append(int(v0))
-                            partition[pid].append(int(v1))
-                            temp_check_used_duplicate_edges[(v0, v1)] = 1
-
-                    elif (v1, v0) in duplicate_edges:
-                        if temp_check_used_duplicate_edges[(v1, v0)] == 1 and len(partition[pid]) > 0:
-                            partition.append([])
-                            pid += 1
-                        elif temp_check_used_duplicate_edges[(v1, v0)] == 1 and len(partition[pid]) == 0:
-                            continue
-                        else:
-                            partition[pid].append(int(v0))
-                            partition[pid].append(int(v1))  # it's v0, v1! not v1, v0...
-                            temp_check_used_duplicate_edges[(v1, v0)] = 1
+                            subpartition[pid].append(int(v0))
+                            subpartition[pid].append(int(v1))
+                            check_used_duplicate_edges[(v0, v1)] = 1
 
                     else:
-                        partition[pid].append(int(v0))
-                        partition[pid].append(int(v1))
+                        subpartition[pid].append(int(v0))
+                        subpartition[pid].append(int(v1))
 
-            # print("partition :", partition)
+                # After all blocks are added to the partition of mesh, this subpartition is also added to the partition!
+                partition.append(subpartition)
 
-            print("=====================================================================================\n")
+                # Split Algorithm
+                # to prevent a block of partition that have excessively long length, we should split the partition!
+                block_length_per_subpartition = [len(p) for p in subpartition]
+                split_threshold = int(np.median(block_length_per_subpartition)) // 2 * 2 # the nearest small even number from the average
+                print("Split threshold :", split_threshold)
 
-        # print("the length of each partition : ", end='')
-        # for p in partition:
-        #     print(len(p), "/", end=' ')
-        # print()
+                subpartition_split = []
+                for block in subpartition:
+                    if len(block) > split_threshold:
+                        for j in range(0, len(block), split_threshold):
+                            subpartition_split.append(block[i : i + split_threshold])
+                    else:
+                        subpartition_split.append(block)
 
-        partition_length = [len(p) for p in partition]
-        split_threshold = int(np.mean(partition_length)) // 2 * 2 # the nearest small even number from the average
-        print("Split threshold :", split_threshold)
+                subpartition_split_length = [len(p) for p in subpartition_split]
+                print("all length (before splitting) :", sum(block_length_per_subpartition))
+                print("all length (after splitting) :", sum(subpartition_split_length))
 
-        # Split Algorithm
-        partition_splited = []
-        for p in partition:
-            if len(p) > split_threshold:
-                for i in range(0, len(p), split_threshold):
-                    partition_splited.append(p[i : i + split_threshold])
-            else:
-                partition_splited.append(p)
+                # Print plots
+                plt.hist(block_length_per_subpartition, bins=max(block_length_per_subpartition))
+                plt.show()
+                plt.hist(subpartition_split_length, bins=max(subpartition_split_length))
+                plt.show()
 
-        partition_splited_length = [len(p) for p in partition_splited]
-        print("all length (before splitting) :", sum(partition_length))
-        print("all length (after splitting) :", sum(partition_splited_length))
+                print("the number of partition (before splitting):", len(partition))
+                print("the number of partition (after splitting):", len(subpartition_split))
+                print("partition (before splitting) :", partition)
+                print("partition (after splitting) :", subpartition_split)
 
-        # Print plots
-        plt.hist(partition_length, bins=max(partition_length))
-        plt.show()
-        plt.hist(partition_splited_length, bins=max(partition_splited_length))
-        plt.show()
+                # 여기서부터 시작하기
+                subpartition_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [0, 6, 10]
+                subpartition_vert_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [[1,2,3,4],[5,6,7]] -> [0,4,7]
+                subpartition_flattened = []
+                of = 0
+                vert_of = 0
 
-        print("the number of partition (before splitting):", len(partition))
-        print("the number of partition (after splitting):", len(partition_splited))
-        print("partition (before splitting) :", partition)
-        print("partition (after splitting) :", partition_splited)
+                for block in subpartition_split:
+                    of += len(block)
+                    vert_of += (len(block) // 2) + 1
+                    subpartition_offset.append(of)
+                    subpartition_vert_offset.append(vert_of)
 
-        offset = [0]
-        offset_vert = [0]
-        of = 0
-        of_vert = 0
-        partition_flattened = []
-        for i in range(len(partition_splited)):
-            of += len(partition_splited[i])
-            of_vert += (len(partition_splited[i]) // 2 + 1)
-            offset.append(of)
-            offset_vert.append(of_vert)
+                for block in subpartition_split:
+                    for j in range(len(block)):
+                        subpartition_flattened.append(block[j])
 
-        for i in range(len(partition_splited)):
-            for j in range(len(partition_splited[i])):
-                partition_flattened.append(partition_splited[i][j])
+                subpartition_flattened_np = np.array(subpartition_flattened, dtype=int)
+                subpartition_offset_np = np.array(subpartition_offset, dtype=int)
+                subpartition_offset_vert_np = np.array(subpartition_vert_offset, dtype=int)
 
-        partition_flattened = np.array(partition_flattened, dtype=int)
-        offset = np.array(offset, dtype=int)
-        offset_vert = np.array(offset_vert, dtype=int)
+                dup_to_or = np.zeros(subpartition_vert_offset[-1], dtype=int)
 
-        print("offset :", offset)
-        print("offset_vert :", offset_vert)
-        # print(colors_np)
-        # print(partition_flattened)
+                eid_dup = []
+                for pi in range(len(subpartition_split)):
+                    off_vert = subpartition_vert_offset[pi]
+                    size = len(subpartition_split[pi]) // 2
 
-        #very dubious
-        dup_to_or = np.zeros(offset_vert[-1], dtype=int)
-        # print(offset)
+                    for j in range(size):
+                        vi = subpartition_split[pi][2 * j]
+                        eid_dup.append(j + off_vert)
+                        eid_dup.append(j + off_vert + 1)
+                        dup_to_or[j + off_vert] = vi
+                        # id += 1
 
-        # print(offset_vert)
+                    vi = subpartition_split[pi][2 * (size - 1) + 1]
+                    dup_to_or[off_vert + size] = vi
+                    # id += 1
 
-        eid_dup = []
-        id = 0
-        for pi in range(len(partition_splited)):
-            off_v = offset_vert[pi]
+                # print("eid-dup : ", end="")
+                # for i in range(len(eid_dup) - 1):
+                #     print(int(eid_dup[i]), end=" ")
+                # print()
+                # print("the number of eid-dup :", len(eid_dup))
 
-            size = len(partition_splited[pi]) // 2
+                # print("dup-to-origin : ", end="")
+                # for i in dup_to_or:
+                #     print(int(i), end=" ")
+                # print()
+                # print("the number of dup-to-origin :", len(dup_to_or))
 
-            for j in range(size):
-                vi = partition_splited[pi][2 * j]
-                eid_dup.append(j + off_v)
-                eid_dup.append(j + off_v + 1)
-                dup_to_or[off_v + j] = vi
-                # id += 1
+                colors_np = np.zeros((offset_vert[-1], 3))
 
-            vi = partition_splited[pi][2 * (size - 1) + 1]
-            dup_to_or[off_v + size] = vi
-            # id += 1
+                for i in range(0, offset.shape[0] - 1):
 
-        # print("eid-dup : ", end="")
-        # for i in range(len(eid_dup) - 1):
-        #     print(int(eid_dup[i]), end=" ")
-        # print()
-        # print("the number of eid-dup :", len(eid_dup))
+                    r = float(random.randrange(0, 255) / 256)
+                    g = float(random.randrange(0, 255) / 256)
+                    b = float(random.randrange(0, 255) / 256)
 
-        # print("dup-to-origin : ", end="")
-        # for i in dup_to_or:
-        #     print(int(i), end=" ")
-        # print()
-        # print("the number of dup-to-origin :", len(dup_to_or))
+                    off = offset_vert[i]
+                    # print(off)
+                    size = (offset_vert[i + 1] - offset_vert[i])
+                    # print(size)
 
-        colors_np = np.zeros((offset_vert[-1], 3))
+                    for j in range(size):
+                        colors_np[off + j] = np.array([r, g, b])
 
-        for i in range(0, offset.shape[0] - 1):
+                    # print("______")
 
-            r = float(random.randrange(0, 255) / 256)
-            g = float(random.randrange(0, 255) / 256)
-            b = float(random.randrange(0, 255) / 256)
-
-            off = offset_vert[i]
-            # print(off)
-            size = (offset_vert[i + 1] - offset_vert[i])
-            # print(size)
-
-            for j in range(size):
-                colors_np[off + j] = np.array([r, g, b])
-
-            # print("______")
-
-        print(offset_vert)
-        eid_dup = np.array(eid_dup)
-        print("eid_dup // 2 =", eid_dup.shape[0] // 2)
+                print(offset_vert)
+                eid_dup = np.array(eid_dup)
+                print("eid_dup // 2 =", eid_dup.shape[0] // 2)
 
         #data structures for partitioned euler path
         self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
