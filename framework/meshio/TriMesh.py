@@ -124,6 +124,9 @@ class TriMesh:
         main_partition_offset = [0]
         main_partition_offset_vert = [0]
 
+        dup_to_origin_main = []
+        eid_dup_main = []
+
         # Euler path is only available on dynamic meshes!
         if not is_static:
             # The Euler path process is operated per mesh...
@@ -337,7 +340,7 @@ class TriMesh:
                 main_partition_offset_vert.extend(subpartition_vert_offset[1:])
                 
                 # 여기까지 했음
-                # 여기서부터 시작하기
+                # 여기서부터 시작하기 (127라인에 dup 관련 변수 만들어놨음)
 
                 # for block in subpartition_split:
                 #     for j in range(len(block)):
