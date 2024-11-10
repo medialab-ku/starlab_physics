@@ -322,15 +322,22 @@ class TriMesh:
                 # Partition offset process
                 subpartition_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [0, 6, 10]
                 subpartition_vert_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [[1,2,3,4],[5,6,7]] -> [0,4,7]
-                subpartition_flattened = []
-                of = 0
-                vert_of = 0
+                # subpartition_flattened = []
+                of = main_partition_offset[-1]
+                vert_of = main_partition_offset_vert[-1]
 
                 for block in subpartition_split:
                     of += len(block)
                     vert_of += (len(block) // 2) + 1
                     subpartition_offset.append(of)
                     subpartition_vert_offset.append(vert_of)
+
+                # add the offsets to main partition except first elements...
+                main_partition_offset.extend(subpartition_offset[1:])
+                main_partition_offset_vert.extend(subpartition_vert_offset[1:])
+                
+                # 여기까지 했음
+                # 여기서부터 시작하기
 
                 # for block in subpartition_split:
                 #     for j in range(len(block)):
@@ -360,18 +367,9 @@ class TriMesh:
                 dup_to_origin_sub_np = np.array(dup_to_origin_sub, dtype=int)
                 eid_dup_sub_np = np.array(eid_dup_sub, dtype=int)
 
-                print("eid_dup // 2 =", eid_dup_sub_np.shape[0] // 2)
-                print("edge_len :", self.num_edges)
-
-                print("partition_offset :", subpartition_offset_np)
-                print("partition_offset_vert :", subpartition_offset_vert_np)
-                print("dup_to_origin_sub :", dup_to_origin_sub)
-                print("eid_dup_sub :", eid_dup_sub)
-
                 colors_np = np.zeros((subpartition_offset_vert_np[-1], 3))
 
                 for j in range(0, subpartition_offset_np.shape[0] - 1):
-
                     r = float(random.randrange(0, 255) / 256)
                     g = float(random.randrange(0, 255) / 256)
                     b = float(random.randrange(0, 255) / 256)
@@ -381,6 +379,14 @@ class TriMesh:
 
                     for k in range(size_per_subpartition):
                         colors_np[color_offset + k] = np.array([r, g, b])
+
+        print("eid_dup // 2 =", eid_dup_sub_np.shape[0] // 2)
+        print("edge_len :", self.num_edges)
+
+        print("partition_offset :", main_partition_offset)
+        print("partition_offset_vert :", main_partition_offset_vert)
+        print("dup_to_origin_sub :", dup_to_origin_sub)
+        print("eid_dup_sub :", eid_dup_sub)
 
         #data structures for partitioned euler path
         self.partition_offset = ti.field(dtype=int, shape=(offset.shape[0]))
