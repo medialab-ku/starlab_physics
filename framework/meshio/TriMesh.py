@@ -120,9 +120,9 @@ class TriMesh:
         self.vertex_duplicates_offsets = [0, ]
         self.euler_path_offsets = [0, ]
 
-        partition = []
-        partition_offset = []
-        partition_offset_vert = []
+        main_partition = []
+        main_partition_offset = [0]
+        main_partition_offset_vert = [0]
 
         # Euler path is only available on dynamic meshes!
         if not is_static:
@@ -256,8 +256,6 @@ class TriMesh:
 
                 for j in range(euler_path_lb, euler_path_ub - 1):
                     v0, v1 = int(self.euler_path_np[j]), int(self.euler_path_np[j + 1])
-                    if v0 > v1:
-                        v0, v1 = v1, v0
 
                     if (v0, v1) in duplicate_edges_list:
                         # the duplicate edge is already used + the current partition have edge
@@ -273,12 +271,20 @@ class TriMesh:
                             subpartition[pid].append(int(v1))
                             check_used_duplicate_edges[(v0, v1)] = 1
 
+                    elif (v1, v0) in duplicate_edges_list:
+                        if check_used_duplicate_edges[(v1, v0)] == 1 and len(subpartition[pid]) > 0:
+                            subpartition.append([])
+                            pid += 1
+                        elif check_used_duplicate_edges[(v1, v0)] == 1 and len(subpartition[pid]) == 0:
+                            continue
+                        else:
+                            subpartition[pid].append(int(v0))
+                            subpartition[pid].append(int(v1))  # it's v0, v1! not v1, v0...
+                            check_used_duplicate_edges[(v1, v0)] = 1
+
                     else:
                         subpartition[pid].append(int(v0))
                         subpartition[pid].append(int(v1))
-
-                # After all blocks are added to the partition of mesh, this subpartition is also added to the partition!
-                partition.append(subpartition)
 
                 # Split Algorithm
                 # to prevent a block of partition that have excessively long length, we should split the partition!
@@ -290,26 +296,30 @@ class TriMesh:
                 for block in subpartition:
                     if len(block) > split_threshold:
                         for j in range(0, len(block), split_threshold):
-                            subpartition_split.append(block[i : i + split_threshold])
+                            subpartition_split.append(block[j : j + split_threshold])
                     else:
                         subpartition_split.append(block)
 
-                subpartition_split_length = [len(p) for p in subpartition_split]
+                # After all blocks are added to the partition of mesh and then split,
+                # this subpartition is also added to the main partition!
+                main_partition.append(subpartition)
+
+                block_length_per_subpartition_split = [len(p) for p in subpartition_split]
                 print("all length (before splitting) :", sum(block_length_per_subpartition))
-                print("all length (after splitting) :", sum(subpartition_split_length))
+                print("all length (after splitting) :", sum(block_length_per_subpartition_split))
 
                 # Print plots
                 plt.hist(block_length_per_subpartition, bins=max(block_length_per_subpartition))
                 plt.show()
-                plt.hist(subpartition_split_length, bins=max(subpartition_split_length))
+                plt.hist(block_length_per_subpartition_split, bins=max(block_length_per_subpartition_split))
                 plt.show()
 
-                print("the number of partition (before splitting):", len(partition))
+                print("the number of partition (before splitting):", len(subpartition))
                 print("the number of partition (after splitting):", len(subpartition_split))
-                print("partition (before splitting) :", partition)
+                print("partition (before splitting) :", subpartition)
                 print("partition (after splitting) :", subpartition_split)
 
-                # 여기서부터 시작하기
+                # Partition offset process
                 subpartition_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [0, 6, 10]
                 subpartition_vert_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [[1,2,3,4],[5,6,7]] -> [0,4,7]
                 subpartition_flattened = []
@@ -322,68 +332,58 @@ class TriMesh:
                     subpartition_offset.append(of)
                     subpartition_vert_offset.append(vert_of)
 
-                for block in subpartition_split:
-                    for j in range(len(block)):
-                        subpartition_flattened.append(block[j])
+                # for block in subpartition_split:
+                #     for j in range(len(block)):
+                #         subpartition_flattened.append(block[j])
 
-                subpartition_flattened_np = np.array(subpartition_flattened, dtype=int)
+                # subpartition_flattened_np = np.array(subpartition_flattened, dtype=int)
                 subpartition_offset_np = np.array(subpartition_offset, dtype=int)
                 subpartition_offset_vert_np = np.array(subpartition_vert_offset, dtype=int)
 
-                dup_to_or = np.zeros(subpartition_vert_offset[-1], dtype=int)
+                dup_to_origin_sub = np.zeros(subpartition_vert_offset[-1], dtype=int)
 
-                eid_dup = []
+                eid_dup_sub = []
                 for pi in range(len(subpartition_split)):
                     off_vert = subpartition_vert_offset[pi]
                     size = len(subpartition_split[pi]) // 2
 
                     for j in range(size):
                         vi = subpartition_split[pi][2 * j]
-                        eid_dup.append(j + off_vert)
-                        eid_dup.append(j + off_vert + 1)
-                        dup_to_or[j + off_vert] = vi
-                        # id += 1
+                        eid_dup_sub.append(off_vert + j)
+                        eid_dup_sub.append(off_vert + j + 1)
+                        dup_to_origin_sub[off_vert + j] = vi
 
                     vi = subpartition_split[pi][2 * (size - 1) + 1]
-                    dup_to_or[off_vert + size] = vi
+                    dup_to_origin_sub[off_vert + size] = vi
                     # id += 1
 
-                # print("eid-dup : ", end="")
-                # for i in range(len(eid_dup) - 1):
-                #     print(int(eid_dup[i]), end=" ")
-                # print()
-                # print("the number of eid-dup :", len(eid_dup))
+                dup_to_origin_sub_np = np.array(dup_to_origin_sub, dtype=int)
+                eid_dup_sub_np = np.array(eid_dup_sub, dtype=int)
 
-                # print("dup-to-origin : ", end="")
-                # for i in dup_to_or:
-                #     print(int(i), end=" ")
-                # print()
-                # print("the number of dup-to-origin :", len(dup_to_or))
+                print("eid_dup // 2 =", eid_dup_sub_np.shape[0] // 2)
+                print("edge_len :", self.num_edges)
 
-                colors_np = np.zeros((offset_vert[-1], 3))
+                print("partition_offset :", subpartition_offset_np)
+                print("partition_offset_vert :", subpartition_offset_vert_np)
+                print("dup_to_origin_sub :", dup_to_origin_sub)
+                print("eid_dup_sub :", eid_dup_sub)
 
-                for i in range(0, offset.shape[0] - 1):
+                colors_np = np.zeros((subpartition_offset_vert_np[-1], 3))
+
+                for j in range(0, subpartition_offset_np.shape[0] - 1):
 
                     r = float(random.randrange(0, 255) / 256)
                     g = float(random.randrange(0, 255) / 256)
                     b = float(random.randrange(0, 255) / 256)
 
-                    off = offset_vert[i]
-                    # print(off)
-                    size = (offset_vert[i + 1] - offset_vert[i])
-                    # print(size)
+                    color_offset = subpartition_offset_vert_np[j]
+                    size_per_subpartition = (subpartition_offset_vert_np[j + 1] - subpartition_offset_vert_np[j])
 
-                    for j in range(size):
-                        colors_np[off + j] = np.array([r, g, b])
-
-                    # print("______")
-
-                print(offset_vert)
-                eid_dup = np.array(eid_dup)
-                print("eid_dup // 2 =", eid_dup.shape[0] // 2)
+                    for k in range(size_per_subpartition):
+                        colors_np[color_offset + k] = np.array([r, g, b])
 
         #data structures for partitioned euler path
-        self.partition_offset =  ti.field(dtype=int, shape=(offset.shape[0]))
+        self.partition_offset = ti.field(dtype=int, shape=(offset.shape[0]))
         self.eid_test = ti.field(dtype=int, shape=partition_flattened.shape[0])
         self.partition_offset.from_numpy(offset)
         self.eid_test.from_numpy(partition_flattened)
@@ -412,7 +412,6 @@ class TriMesh:
         self.c_dup = ti.field(dtype=float, shape=offset_vert[-1])
         self.c_dup_tilde = ti.field(dtype=float, shape=offset_vert[-1])
         # print(self.c_tilde.shape)
-        self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         self.d_dup_tilde = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
         # print(self.x_dup.shape)
