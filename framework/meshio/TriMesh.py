@@ -123,9 +123,12 @@ class TriMesh:
         main_partition = []
         main_partition_offset = [0]
         main_partition_offset_vert = [0]
+        main_partition_flattened = []
 
-        dup_to_origin_main = []
-        eid_dup_main = []
+        dup_to_origin_main_np = np.array([], dtype=int)
+        eid_dup_main_np = np.array([], dtype=int)
+        dup_to_origin_main_offset_np = np.array([0], dtype=int)
+        eid_dup_main_offset_np = np.array([0], dtype=int)
 
         # Euler path is only available on dynamic meshes!
         if not is_static:
@@ -325,7 +328,7 @@ class TriMesh:
                 # Partition offset process
                 subpartition_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [0, 6, 10]
                 subpartition_vert_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [[1,2,3,4],[5,6,7]] -> [0,4,7]
-                # subpartition_flattened = []
+                subpartition_flattened = []
                 of = main_partition_offset[-1]
                 vert_of = main_partition_offset_vert[-1]
 
@@ -335,24 +338,23 @@ class TriMesh:
                     subpartition_offset.append(of)
                     subpartition_vert_offset.append(vert_of)
 
+                for block in subpartition_split:
+                    for j in range(len(block)):
+                        subpartition_flattened.append(block[j])
+
                 # add the offsets to main partition except first elements...
                 main_partition_offset.extend(subpartition_offset[1:])
                 main_partition_offset_vert.extend(subpartition_vert_offset[1:])
-                
-                # 여기까지 했음
-                # 여기서부터 시작하기 (127라인에 dup 관련 변수 만들어놨음)
+                # add the flattened subpartition to main partition
+                main_partition_flattened.extend(subpartition_flattened)
 
-                # for block in subpartition_split:
-                #     for j in range(len(block)):
-                #         subpartition_flattened.append(block[j])
-
-                # subpartition_flattened_np = np.array(subpartition_flattened, dtype=int)
+                subpartition_flattened_np = np.array(subpartition_flattened, dtype=int)
                 subpartition_offset_np = np.array(subpartition_offset, dtype=int)
                 subpartition_offset_vert_np = np.array(subpartition_vert_offset, dtype=int)
 
                 dup_to_origin_sub = np.zeros(subpartition_vert_offset[-1], dtype=int)
-
                 eid_dup_sub = []
+
                 for pi in range(len(subpartition_split)):
                     off_vert = subpartition_vert_offset[pi]
                     size = len(subpartition_split[pi]) // 2
@@ -370,6 +372,13 @@ class TriMesh:
                 dup_to_origin_sub_np = np.array(dup_to_origin_sub, dtype=int)
                 eid_dup_sub_np = np.array(eid_dup_sub, dtype=int)
 
+                dup_to_origin_main_np = np.concatenate((dup_to_origin_main_np, dup_to_origin_sub_np))
+                dup_to_origin_main_offset_np = np.append(
+                    dup_to_origin_main_offset_np, dup_to_origin_main_offset_np[-1] + dup_to_origin_sub_np.shape[0])
+                eid_dup_main_np = np.concatenate((eid_dup_main_np, eid_dup_sub_np))
+                eid_dup_main_offset_np = np.append(
+                    eid_dup_main_offset_np, eid_dup_main_offset_np[-1] + eid_dup_sub_np.shape[0])
+
                 colors_np = np.zeros((subpartition_offset_vert_np[-1], 3))
 
                 for j in range(0, subpartition_offset_np.shape[0] - 1):
@@ -383,46 +392,52 @@ class TriMesh:
                     for k in range(size_per_subpartition):
                         colors_np[color_offset + k] = np.array([r, g, b])
 
+        main_partition_offset_np = np.array(main_partition_offset, dtype=int)
+        main_partition_offset_vert_np = np.array(main_partition_offset_vert, dtype=int)
+        main_partition_flattened_np = np.array(main_partition_flattened, dtype=int)
+
         print("eid_dup // 2 =", eid_dup_sub_np.shape[0] // 2)
         print("edge_len :", self.num_edges)
 
-        print("partition_offset :", main_partition_offset)
-        print("partition_offset_vert :", main_partition_offset_vert)
-        print("dup_to_origin_sub :", dup_to_origin_sub)
-        print("eid_dup_sub :", eid_dup_sub)
+        print("partition_offset :", main_partition_offset_np)
+        print("partition_offset_vert :", main_partition_offset_vert_np)
+        print("partition_flattened :", main_partition_flattened_np)
+        print("dup_to_origin :", dup_to_origin_main_np)
+        print("dup_to_origin_offset :", dup_to_origin_main_offset_np)
+        print("eid_dup :", eid_dup_main_np)
+        print("eid_dup_offset :", eid_dup_main_offset_np)
 
         #data structures for partitioned euler path
-        self.partition_offset = ti.field(dtype=int, shape=(offset.shape[0]))
-        self.eid_test = ti.field(dtype=int, shape=partition_flattened.shape[0])
-        self.partition_offset.from_numpy(offset)
-        self.eid_test.from_numpy(partition_flattened)
+        self.partition_offset = ti.field(dtype=int, shape=(main_partition_offset_np.shape[0]))
+        self.eid_test = ti.field(dtype=int, shape=main_partition_flattened_np.shape[0])
+        self.partition_offset.from_numpy(main_partition_offset_np)
+        self.eid_test.from_numpy(main_partition_flattened_np)
 
+        self.vert_offset =  ti.field(dtype=int, shape=(main_partition_offset_vert_np.shape[0]))
+        self.eid_dup = ti.field(dtype=int, shape=eid_dup_main_np.shape[0])
+        self.color_test = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
 
-        self.vert_offset =  ti.field(dtype=int, shape=(offset_vert.shape[0]))
-        self.eid_dup = ti.field(dtype=int, shape=eid_dup.shape[0])
-        self.color_test = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-
-        self.vert_offset.from_numpy(offset_vert)
+        self.vert_offset.from_numpy(main_partition_offset_vert_np)
 
         # print(self.vert_offset)
 
-        self.dup_to_ori = ti.field(dtype=int, shape=offset_vert[-1])
-        self.dup_to_ori.from_numpy(dup_to_or)
-        self.eid_dup.from_numpy(eid_dup)
+        self.dup_to_ori = ti.field(dtype=int, shape=main_partition_offset_vert_np[-1])
+        self.dup_to_ori.from_numpy(dup_to_origin_main_np)
+        self.eid_dup.from_numpy(eid_dup_main_np)
         # print(self.dup_to_ori)
         # print(self.eid_test)
         # print(self.partition_offset)
 
-        self.x_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.v_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.a_dup = ti.field(dtype=float, shape=offset_vert[-1])
-        self.b_dup = ti.field(dtype=float, shape=offset_vert[-1])
-        self.c_dup = ti.field(dtype=float, shape=offset_vert[-1])
-        self.c_dup_tilde = ti.field(dtype=float, shape=offset_vert[-1])
+        self.x_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.v_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.a_dup = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.b_dup = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.c_dup = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.c_dup_tilde = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
         # print(self.c_tilde.shape)
-        self.d_dup = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
-        self.d_dup_tilde = ti.Vector.field(n=3, dtype=float, shape=offset_vert[-1])
+        self.d_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.d_dup_tilde = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
         # print(self.x_dup.shape)
         self.color_test.from_numpy(colors_np)
         # print(self.eid_test)
