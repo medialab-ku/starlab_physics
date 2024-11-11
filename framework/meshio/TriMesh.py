@@ -45,7 +45,7 @@ class TriMesh:
 
 
         model_name = model_name_list[0][:-4]
-        print(model_name)
+        # print(model_name)
 
         path = 'C:/Users/mhkee/Desktop/workspace/starlab_physics/models/sampling/'+model_name+'.npy'
         # load_array = np.load(path, allow_pickle=True)
@@ -130,10 +130,13 @@ class TriMesh:
         dup_to_origin_main_offset_np = np.array([0], dtype=int)
         eid_dup_main_offset_np = np.array([0], dtype=int)
 
+        main_colors_np = np.empty(shape=(0,3), dtype=int)
+
         # Euler path is only available on dynamic meshes!
         if not is_static:
             # The Euler path process is operated per mesh...
             for i in range(self.num_model):
+                print("Model name :", model_name_list[i][:-len(".obj")])
                 euler_dir = model_dir[:-len("models/OBJ")] + "euler_graph"
                 precomputed_graph_file = euler_dir + "/" + model_name_list[i][:-len(".obj")] + ".edgelist"
 
@@ -324,19 +327,20 @@ class TriMesh:
                 print("the number of partition (after splitting):", len(subpartition_split))
                 print("partition (before splitting) :", subpartition)
                 print("partition (after splitting) :", subpartition_split)
+                print()
 
                 # Partition offset process
                 subpartition_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [0, 6, 10]
                 subpartition_vert_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [[1,2,3,4],[5,6,7]] -> [0,4,7]
                 subpartition_flattened = []
-                of = main_partition_offset[-1]
-                vert_of = main_partition_offset_vert[-1]
+                of = 0
+                vert_of = 0
 
                 for block in subpartition_split:
                     of += len(block)
                     vert_of += (len(block) // 2) + 1
-                    subpartition_offset.append(of)
-                    subpartition_vert_offset.append(vert_of)
+                    subpartition_offset.append(of + main_partition_offset[-1])
+                    subpartition_vert_offset.append(vert_of + main_partition_offset_vert[-1])
 
                 for block in subpartition_split:
                     for j in range(len(block)):
@@ -352,17 +356,22 @@ class TriMesh:
                 subpartition_offset_np = np.array(subpartition_offset, dtype=int)
                 subpartition_offset_vert_np = np.array(subpartition_vert_offset, dtype=int)
 
-                dup_to_origin_sub = np.zeros(subpartition_vert_offset[-1], dtype=int)
+                dup_to_origin_sub = np.full(shape=(subpartition_vert_offset[-1] - dup_to_origin_main_offset_np[-1]),
+                                            fill_value=-1, dtype=int)
                 eid_dup_sub = []
 
+                # print(subpartition_vert_offset)
                 for pi in range(len(subpartition_split)):
                     off_vert = subpartition_vert_offset[pi]
+                    if off_vert > 0:
+                        off_vert -= dup_to_origin_main_offset_np[-1]
                     size = len(subpartition_split[pi]) // 2
+                    # print(off_vert)
 
                     for j in range(size):
                         vi = subpartition_split[pi][2 * j]
-                        eid_dup_sub.append(off_vert + j)
-                        eid_dup_sub.append(off_vert + j + 1)
+                        eid_dup_sub.append(dup_to_origin_main_offset_np[-1] + off_vert + j)
+                        eid_dup_sub.append(dup_to_origin_main_offset_np[-1] + off_vert + j + 1)
                         dup_to_origin_sub[off_vert + j] = vi
 
                     vi = subpartition_split[pi][2 * (size - 1) + 1]
@@ -392,11 +401,14 @@ class TriMesh:
                     for k in range(size_per_subpartition):
                         colors_np[color_offset + k] = np.array([r, g, b])
 
+                main_colors_np = np.concatenate((main_colors_np, colors_np))
+
         main_partition_offset_np = np.array(main_partition_offset, dtype=int)
         main_partition_offset_vert_np = np.array(main_partition_offset_vert, dtype=int)
         main_partition_flattened_np = np.array(main_partition_flattened, dtype=int)
 
-        print("eid_dup // 2 =", eid_dup_sub_np.shape[0] // 2)
+        print()
+        print("eid_dup // 2 =", eid_dup_main_np.shape[0] // 2)
         print("edge_len :", self.num_edges)
 
         print("partition_offset :", main_partition_offset_np)
@@ -439,7 +451,7 @@ class TriMesh:
         self.d_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
         self.d_dup_tilde = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
         # print(self.x_dup.shape)
-        self.color_test.from_numpy(colors_np)
+        self.color_test.from_numpy(main_colors_np)
         # print(self.eid_test)
         # fields about vertices
         self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
