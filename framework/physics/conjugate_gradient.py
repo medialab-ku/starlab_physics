@@ -27,6 +27,54 @@ class ConjugateGradient:
             z[i] = mesh.hii[i].inverse() @ r[i]
 
     @ti.kernel
+    def preconditioning_tri(self, mesh: ti.template(), z: ti.template(), r: ti.template()):
+
+        for di in mesh.x_dup:
+            vi = mesh.dup_to_ori[di]
+
+            mesh.b_dup[di] = mesh.hii[vi]
+            mesh.d_dup[di] = r[vi]
+
+        n_part = (mesh.partition_offset.shape[0] - 1)
+        for pi in range(n_part):
+
+            size   = mesh.vert_offset[pi + 1] - mesh.vert_offset[pi]
+            offset = mesh.vert_offset[pi]
+
+            # Thomas algorithm
+            # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
+
+            # for j in ti.static(range(3)):
+            mesh.c_dup_tilde[offset] = ti.math.inverse(mesh.b_dup[offset]) @ mesh.c_dup[offset]
+            ti.loop_config(serialize=True)
+            for id in range(size):  # lb+1 ~ ub-1
+                i = id + offset
+                tmp = ti.math.inverse(mesh.b_dup[i] - mesh.a_dup[i] * mesh.c_dup_tilde[i - 1])
+
+                mesh.c_dup_tilde[i] = tmp @ mesh.c_dup[i]
+            #
+            mesh.d_dup_tilde[offset] = ti.math.inverse(mesh.b_dup[offset]) @ mesh.d_dup[offset]
+            ti.loop_config(serialize=True)
+            for id in range(1, size):  # lb+1 ~ ub
+                i = id + offset
+                tmp = ti.math.inverse(mesh.b_dup[i] - mesh.a_dup[i] * mesh.c_dup_tilde[i - 1])
+                mesh.d_dup_tilde[i] = tmp @ (mesh.d_dup[i] - mesh.a_dup[i] @ mesh.d_dup_tilde[i - 1])
+
+            mesh.dx_dup[offset + size - 1] = mesh.d_dup_tilde[offset + size - 1]
+            ti.loop_config(serialize=True)
+            for i in range(0, size - 1):
+                idx = size - 2 - i + offset  # ub-1 ~ lb
+                mesh.dx_dup[idx] = mesh.d_dup_tilde[idx] - mesh.c_dup_tilde[idx] @ mesh.dx_dup[idx + 1]
+
+        mesh.z.fill(0.0)
+        for di in mesh.x_dup:
+            vi = mesh.dup_to_ori[di]
+            mesh.z[vi] += mesh.dx_dup[di]
+
+        for i in z:
+            z[i] /= mesh.num_dup[i]
+
+    @ti.kernel
     def preconditioning_identity(self, mesh: ti.template(), z: ti.template(), r: ti.template()):
         for i in z:
             z[i] = r[i]
@@ -39,7 +87,8 @@ class ConjugateGradient:
             Ax[i] += mesh.hii[i] @ x[i]
 
         for i in range(mesh.num_edges):
-            vi, vj = mesh.eid_field[i, 0], mesh.eid_field[i, 1]
+            vi_d, vj_d = mesh.eid_dup[2 * i + 0], mesh.eid_dup[2 * i + 1]
+            vi, vj = mesh.dup_to_ori[vi_d], mesh.dup_to_ori[vj_d]
             hij = mesh.hij[i]
             xij = x[vi] - x[vj]
             hijxij = hij @ xij
@@ -53,7 +102,7 @@ class ConjugateGradient:
         mesh.r.copy_from(mesh.b)
 
         if precond_type == 0:
-            self.preconditioning_identity(mesh, mesh.z, mesh.r)
+            self.preconditioning_tri(mesh, mesh.z, mesh.r)
         elif precond_type == 1:
             self.preconditioning_jacobi(mesh, mesh.z, mesh.r)
         # print(mesh.b)
@@ -81,7 +130,7 @@ class ConjugateGradient:
             self.vector_add(mesh.r_next, mesh.r, mesh.Ax, -alpha)
 
             if precond_type == 0:
-                self.preconditioning_identity(mesh, mesh.z_next, mesh.r_next)
+                self.preconditioning_tri(mesh, mesh.z_next, mesh.r_next)
             elif precond_type == 1:
                 self.preconditioning_jacobi(mesh, mesh.z_next, mesh.r_next)
             # beta = r_k+1 ^T r_k+1 / z_k ^T r_k
