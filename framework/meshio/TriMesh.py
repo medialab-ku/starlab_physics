@@ -427,6 +427,7 @@ class TriMesh:
 
         self.vert_offset =  ti.field(dtype=int, shape=(main_partition_offset_vert_np.shape[0]))
         self.eid_dup = ti.field(dtype=int, shape=eid_dup_main_np.shape[0])
+
         self.color_test = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
 
         self.vert_offset.from_numpy(main_partition_offset_vert_np)
@@ -436,17 +437,23 @@ class TriMesh:
         self.dup_to_ori = ti.field(dtype=int, shape=main_partition_offset_vert_np[-1])
         self.dup_to_ori.from_numpy(dup_to_origin_main_np)
         self.eid_dup.from_numpy(eid_dup_main_np)
+        print(self.eid_dup)
         # print(self.dup_to_ori)
         # print(self.eid_test)
         # print(self.partition_offset)
 
-        self.x_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
-        self.v_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.x_dup  = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.v_dup  = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
         self.dx_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
-        self.a_dup = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
-        self.b_dup = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
-        self.c_dup = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
-        self.c_dup_tilde = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+
+
+        self.a_dup       = ti.Matrix.field(n=3, m=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.b_dup       = ti.Matrix.field(n=3, m=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.c_dup       = ti.Matrix.field(n=3, m=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.c_dup_tilde = ti.Matrix.field(n=3, m=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+        # print(main_partition_offset_vert_np[-1])
+
+
         # print(self.c_tilde.shape)
         self.d_dup = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
         self.d_dup_tilde = ti.Vector.field(n=3, dtype=float, shape=main_partition_offset_vert_np[-1])
@@ -505,6 +512,7 @@ class TriMesh:
         self.l0 = ti.field(dtype=float, shape=self.num_edges)
 
         self.hii = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_verts)
+        self.hii_e = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_verts)
         self.hi = ti.field(dtype=float, shape=self.num_verts)
         self.hij = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_edges)
 

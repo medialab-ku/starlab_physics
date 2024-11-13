@@ -24,7 +24,8 @@ class ConjugateGradient:
     @ti.kernel
     def preconditioning_jacobi(self, mesh: ti.template(), z: ti.template(), r: ti.template()):
         for i in z:
-            z[i] = mesh.hii[i].inverse() @ r[i]
+            h = mesh.hii[i] + mesh.hii_e[i]
+            z[i] = h.inverse() @ r[i]
 
     @ti.kernel
     def preconditioning_tri(self, mesh: ti.template(), z: ti.template(), r: ti.template()):
@@ -32,10 +33,16 @@ class ConjugateGradient:
         for di in mesh.x_dup:
             vi = mesh.dup_to_ori[di]
 
-            mesh.b_dup[di] = mesh.hii[vi]
+            mesh.b_dup[di] = mesh.hii[vi] + mesh.hii_e[vi]
             mesh.d_dup[di] = r[vi]
 
         n_part = (mesh.partition_offset.shape[0] - 1)
+
+        # for di in mesh.x_dup:
+        #     b = mesh.b_dup[di]
+        #     mesh.dx_dup[di] = b.inverse() @ mesh.d_dup[di]
+
+
         for pi in range(n_part):
 
             size   = mesh.vert_offset[pi + 1] - mesh.vert_offset[pi]
@@ -66,10 +73,10 @@ class ConjugateGradient:
                 idx = size - 2 - i + offset  # ub-1 ~ lb
                 mesh.dx_dup[idx] = mesh.d_dup_tilde[idx] - mesh.c_dup_tilde[idx] @ mesh.dx_dup[idx + 1]
 
-        mesh.z.fill(0.0)
+        z.fill(0.0)
         for di in mesh.x_dup:
             vi = mesh.dup_to_ori[di]
-            mesh.z[vi] += mesh.dx_dup[di]
+            z[vi] += mesh.dx_dup[di]
 
         for i in z:
             z[i] /= mesh.num_dup[i]
@@ -83,7 +90,7 @@ class ConjugateGradient:
     def compute_mat_free_Ax(self, mesh: ti.template(), Ax: ti.template(), x: ti.template()):
 
         Ax.fill(0.0)
-        for i in range(mesh.num_edges):
+        for i in x:
             Ax[i] += mesh.hii[i] @ x[i]
 
         for i in range(mesh.num_edges):

@@ -58,13 +58,13 @@ class Solver:
         # self.euler_path_len = self.mesh_dy.euler_path_len
         # self.euler_edge_len = self.mesh_dy.euler_edge_len
         #
-        # self.a = self.mesh_dy.a_dup
+        self.a = self.mesh_dy.a_dup
         # self.a_tilde = self.mesh_dy.a_dup_tilde
-        # self.b = self.mesh_dy.b_dup
-        # self.c = self.mesh_dy.c_dup
-        # self.c_tilde = self.mesh_dy.c_dup_tilde
-        # self.d = self.mesh_dy.d_dup
-        # self.d_tilde = self.mesh_dy.d_dup_tilde
+        self.b = self.mesh_dy.b_dup
+        self.c = self.mesh_dy.c_dup
+        self.c_tilde = self.mesh_dy.c_dup_tilde
+        self.d = self.mesh_dy.d_dup
+        self.d_tilde = self.mesh_dy.d_dup_tilde
         # self.dx = ti.Vector.field(n=3, dtype=float, shape=self.euler_path_len)
 
         self.compute_duplicates = True
@@ -483,10 +483,10 @@ class Solver:
                                                           ):
 
         id3 = ti.Matrix.identity(dt=float, n=3)
-        for i in self.c:
-
-            self.a[i] = -compliance_stretch * id3
-            self.c[i] = -compliance_stretch * id3
+        # for i in self.c:
+        #
+        #     self.a[i] = -compliance_stretch * id3
+        #     self.c[i] = -compliance_stretch * id3
 
         compliance_attach =1e5
         for i in self.mesh_dy.dx:
@@ -504,19 +504,26 @@ class Solver:
             x01 = self.mesh_dy.y[v0] - self.mesh_dy.y[v1]
             l = x01.norm()
             n = x01.normalized()
-            alpha = 1.0 - l0 / x01.norm()
-            if alpha < 1e-3:
-                alpha = 1e-3
 
+            nnT = n.outer_product(n)
+            alpha = (1.0 - l0 / l)
+            alpha = 1.0
+            B = compliance_stretch * (alpha * id3 + (1.0 - alpha) * nnT)
             # alpha = 0.5
-            # self.mesh_dy.hij[i] = compliance_stretch * (alpha * id3 + (1.0 - alpha) * n.outer_product(n))
+            # self.mesh_dy.hij[i] = -compliance_stretch * (alpha * id3 + (1.0 - alpha) * n.outer_product(n))
+            # self.mesh_dy.hij[i] = -compliance_stretch * id3
+
+            self.c[v0_d] = -B
+            self.a[v1_d] = -B
+
             dp01 = x01 - l0 * x01.normalized()
 
             self.mesh_dy.dx[v0] -= compliance_stretch * dp01
             self.mesh_dy.dx[v1] += compliance_stretch * dp01
 
-            self.mesh_dy.hii[v0] += compliance_stretch * id3
-            self.mesh_dy.hii[v1] += compliance_stretch * id3
+            self.mesh_dy.hii[v0] += B
+            self.mesh_dy.hii[v1] += B
+
 
 
         for di in self.mesh_dy.x_dup:
@@ -762,6 +769,8 @@ class Solver:
     def compute_grad_and_hess_spring_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32, definite_fix: bool)-> float:
 
         self.mesh_dy.b.fill(0.0)
+        self.mesh_dy.hii_e.fill(0.0)
+
         E_cur = 0.0
         id3 = ti.math.mat3([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         for i in range(self.num_verts_dy):
@@ -784,11 +793,19 @@ class Solver:
             if definite_fix and alpha < 1e-3:
                 alpha = 1e-3
 
-            # alpha = 0.5
+            alpha = 1.0
+            test = compliance_stretch * (alpha * id3 + (1.0 - alpha) * n.outer_product(n))
+            self.mesh_dy.hij[i] = test
 
-            self.mesh_dy.hij[i] = compliance_stretch * (alpha * id3 + (1.0 - alpha) * n.outer_product(n))
+            self.c[v0_d] = -test
+            self.a[v1_d] = -test
+
+
             self.mesh_dy.b[v0] -= compliance_stretch * dp01
             self.mesh_dy.b[v1] += compliance_stretch * dp01
+
+            self.mesh_dy.hii_e[v0] += test
+            self.mesh_dy.hii_e[v1] += test
 
         return E_cur
     @ti.kernel
@@ -1633,6 +1650,9 @@ class Solver:
 
         for _ in range(n_substeps):
             self.compute_y(self.g, dt_sub)
+
+            # self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+            # self.solve_constraints_pd_diag_x(dt_sub)
             self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             # self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
