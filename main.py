@@ -583,11 +583,11 @@ while window.running:
             #     scene.particles(sim_tri.particle_st.x, radius=sim_tri.dHat, color=(0.3, 0.3, 0.3))
         # else:
 
-        scene.lines(sim_tri.mesh_dy.x_dup, indices=sim_tri.mesh_dy.eid_dup, per_vertex_color=sim_tri.mesh_dy.color_test, width=2.0)
+        # scene.lines(sim_tri.mesh_dy.x_dup, indices=sim_tri.mesh_dy.eid_dup, per_vertex_color=sim_tri.mesh_dy.color_test, width=2.0)
         # scene.lines(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.eid_test, color=(0., 0., 0.), width=1.0)
 
         # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
-        # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+        scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
 
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0.3, 0.3, 0.3))
             # scene.mesh(sim_tri.mesh_st.x, indices=sim_tri.mesh_st.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
