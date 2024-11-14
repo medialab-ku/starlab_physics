@@ -1,7 +1,10 @@
+import random
+
 import numpy as np
 import matplotlib.pyplot as plt
 import taichi as ti
 import json
+import random as rd
 
 from Scenes import concat_test as scene1
 import os
@@ -10,6 +13,7 @@ from framework.physics import XPBD
 from framework.physics import XPBFEM
 from framework.utilities import selection_tool as st
 from framework.collision import SpatialHash as shash
+from framework.utilities.make_plot import make_plot
 
 import pandas as pd
 import matplotlib
@@ -39,6 +43,12 @@ default_data = {
 
     "PR": 0.2
 }
+
+# plot
+plot_export_path = str(Path(__file__).resolve().parent / "results") + "/"
+plot = make_plot(plot_export_path, "iter", "energy")
+characters = 'ABCDEF0123456789'
+plot_data_temp = {}
 
 if not os.path.exists(config_path):
     with open(config_path, 'w') as json_file:
@@ -116,6 +126,7 @@ g_selector_tri = st.SelectionTool(sim_tri.num_verts_dy, sim_tri.mesh_dy.x, windo
 
 frame_end = 100
 mesh_export = False
+result_export = False
 frame_cpu = 0
 
 def show_options_tri():
@@ -138,6 +149,7 @@ def show_options_tri():
     global USE_HEATMAP
     global PARTICLE
     global mesh_export
+    global result_export
     global frame_end
 
     old_dt = dt_tri_ui
@@ -182,6 +194,7 @@ def show_options_tri():
         sim_tri.enable_velocity_update = w.checkbox("velocity constraint", sim_tri.enable_velocity_update)
         # sim.enable_collision_handling = w.checkbox("handle collisions", sim.enable_collision_handling)
         mesh_export = w.checkbox("export mesh", mesh_export)
+        result_export = w.checkbox("export result", result_export)
 
         if mesh_export is True:
             frame_end = w.slider_int("end frame", frame_end, 1, 2000)
@@ -327,6 +340,15 @@ while window.running:
             print("fix vertices")
             sim_tri.set_fixed_vertices(g_selector_tri.is_selected)
 
+        if window.event.key == 'l':
+            p = plot.make_graph()
+            if p is None:
+                print("The graph is not correctly created!")
+                print("You should not change the end frame number during collecting data...")
+            else:
+                plot.export_result(p)
+                print("The graph is successfully exported!")
+
         if window.event.key == ti.ui.BACKSPACE:
             g_selector_tri.is_selected.fill(0)
 
@@ -381,6 +403,29 @@ while window.running:
             run_sim = False
         # sim_tri.mesh_dy.export(os.path.basename(scene1.__file__), frame_cpu)
 
+    if result_export:
+        if not run_sim:
+            plot_data_temp = {
+                "name": ''.join(random.choices(characters, k=16)), # Hash
+                "label": "Identity" if precond_type_ui == 0 else "Jacobi",
+                "conditions": {
+                    "precond_type": "Identity" if precond_type_ui == 0 else "Jacobi",
+                    "dt": dt_tri_ui,
+                    "substep": n_substep,
+                    "iter": n_iter,
+                    "damping": damping_ui,
+                    "YM": YM_ui,
+                    "YM_b": YM_b_ui,
+                },
+                "data": {}
+            }
+        else:
+            if frame_cpu < frame_end:
+                E = sim_tri.compute_spring_energy(YM_ui)
+                plot_data_temp["data"][frame_cpu] = E
+            else:
+                plot.collect_data(plot_data_temp)
+                run_sim = False
 
     scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
     scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)

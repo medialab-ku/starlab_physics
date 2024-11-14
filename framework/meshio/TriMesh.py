@@ -299,7 +299,7 @@ class TriMesh:
                 # to prevent a block of partition that have excessively long length, we should split the partition!
                 block_length_per_subpartition = [len(p) for p in subpartition]
                 split_threshold = int(np.median(block_length_per_subpartition)) // 2 * 2 # the nearest small even number from the average
-                print("Split threshold :", split_threshold)
+                # print("Split threshold :", split_threshold)
 
                 subpartition_split = []
                 for block in subpartition:
@@ -314,8 +314,8 @@ class TriMesh:
                 main_partition.append(subpartition)
 
                 block_length_per_subpartition_split = [len(p) for p in subpartition_split]
-                print("all length (before splitting) :", sum(block_length_per_subpartition))
-                print("all length (after splitting) :", sum(block_length_per_subpartition_split))
+                # print("all length (before splitting) :", sum(block_length_per_subpartition))
+                # print("all length (after splitting) :", sum(block_length_per_subpartition_split))
 
                 # Print plots
                 plt.hist(block_length_per_subpartition, bins=max(block_length_per_subpartition))
@@ -323,11 +323,11 @@ class TriMesh:
                 plt.hist(block_length_per_subpartition_split, bins=max(block_length_per_subpartition_split))
                 plt.show()
 
-                print("the number of partition (before splitting):", len(subpartition))
-                print("the number of partition (after splitting):", len(subpartition_split))
-                print("partition (before splitting) :", subpartition)
-                print("partition (after splitting) :", subpartition_split)
-                print()
+                # print("the number of partition (before splitting):", len(subpartition))
+                # print("the number of partition (after splitting):", len(subpartition_split))
+                # print("partition (before splitting) :", subpartition)
+                # print("partition (after splitting) :", subpartition_split)
+                # print()
 
                 # Partition offset process
                 subpartition_offset = [0] # partition [[1,2,2,3,3,4], [5,6,6,7]] -> [0, 6, 10]
@@ -408,16 +408,16 @@ class TriMesh:
         main_partition_flattened_np = np.array(main_partition_flattened, dtype=int)
 
         print()
-        print("eid_dup // 2 =", eid_dup_main_np.shape[0] // 2)
-        print("edge_len :", self.num_edges)
-
-        print("partition_offset :", main_partition_offset_np)
-        print("partition_offset_vert :", main_partition_offset_vert_np)
-        print("partition_flattened :", main_partition_flattened_np)
-        print("dup_to_origin :", dup_to_origin_main_np)
-        print("dup_to_origin_offset :", dup_to_origin_main_offset_np)
-        print("eid_dup :", eid_dup_main_np)
-        print("eid_dup_offset :", eid_dup_main_offset_np)
+        # print("eid_dup // 2 =", eid_dup_main_np.shape[0] // 2)
+        # print("edge_len :", self.num_edges)
+        #
+        # print("partition_offset :", main_partition_offset_np)
+        # print("partition_offset_vert :", main_partition_offset_vert_np)
+        # print("partition_flattened :", main_partition_flattened_np)
+        # print("dup_to_origin :", dup_to_origin_main_np)
+        # print("dup_to_origin_offset :", dup_to_origin_main_offset_np)
+        # print("eid_dup :", eid_dup_main_np)
+        # print("eid_dup_offset :", eid_dup_main_offset_np)
 
         #data structures for partitioned euler path
         self.partition_offset = ti.field(dtype=int, shape=(main_partition_offset_np.shape[0]))
