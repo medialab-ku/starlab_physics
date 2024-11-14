@@ -392,10 +392,12 @@ class Solver:
         E_cur = 0.0
         id3 = ti.math.mat3([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         for i in range(self.num_verts_dy):
-            test = 1.0
+            # test = 1.0
+            self.mesh_dy.hii[i] =self.mesh_dy.m[i] * id3
             if self.mesh_dy.fixed[i] < 1.0:
-                test = 1e5
-            self.mesh_dy.hii[i] = test * self.mesh_dy.m[i] * id3
+                test = 1e8
+                self.mesh_dy.b[i]   += test * (self.mesh_dy.x0[i] - self.mesh_dy.y[i])
+                self.mesh_dy.hii[i] += test * id3
 
         # ti.loop_config(serialize=True)
         for i in range(self.num_edges_dy):
@@ -408,22 +410,22 @@ class Solver:
             dp01 = (l - l0) * n
             E_cur += 0.5 * compliance_stretch * (l - l0) ** 2
             alpha = 1.0 - l0 / x01.norm()
-            if definite_fix and alpha < 1e-3:
-                alpha = 1e-3
+            if definite_fix and alpha < 1e-2:
+                alpha = 1e-2
 
-            alpha = 1.0
+            # alpha = 1.0
             test = compliance_stretch * (alpha * id3 + (1.0 - alpha) * n.outer_product(n))
             self.mesh_dy.hij[i] = test
 
-            self.c[v0_d] = -test
-            self.a[v1_d] = -test
+            self.c[v0_d] = -compliance_stretch * id3
+            self.a[v1_d] = -compliance_stretch * id3
 
 
             self.mesh_dy.b[v0] -= compliance_stretch * dp01
             self.mesh_dy.b[v1] += compliance_stretch * dp01
 
-            self.mesh_dy.hii_e[v0] += test
-            self.mesh_dy.hii_e[v1] += test
+            self.mesh_dy.hii_e[v0] += compliance_stretch * id3
+            self.mesh_dy.hii_e[v1] += compliance_stretch * id3
 
         return E_cur
 

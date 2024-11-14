@@ -422,9 +422,11 @@ while window.running:
             }
         else:
             if frame_cpu < frame_end:
-                print(sim_tri.PCG.cg_iter)
+                # print(sim_tri.PCG.cg_iter)
                 E = sim_tri.compute_spring_energy(YM_ui)
+                # plot_data_temp["data"][frame_cpu] = E
                 plot_data_temp["data"][frame_cpu] = sim_tri.PCG.cg_iter
+
             else:
                 plot.collect_data(plot_data_temp)
                 run_sim = False

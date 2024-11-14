@@ -8,12 +8,12 @@
     "n_iter": 1,
     "dHat": 0.029999999329447746,
     "fric_coef": 0.0,
-    "damping": 0.009999999776482582,
-    "YM": 30000.0,
+    "damping": 0.0,
+    "YM": 100000.0,
     "YM_b": 0.0,
-    "PCG_threshold": 0.004999999888241291,
+    "PCG_threshold": 0.05000000074505806,
     "PCG_definiteness_fix": true,
     "PCG_use_line_search": true,
     "PCG_print_stats": false,
-    "PCG_max_cg_iter": 1000
+    "PCG_max_cg_iter": 100
 }
