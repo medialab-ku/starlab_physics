@@ -46,7 +46,7 @@ default_data = {
 
 # plot
 plot_export_path = str(Path(__file__).resolve().parent / "results") + "/"
-plot = make_plot(plot_export_path, "iter", "energy")
+plot = make_plot(plot_export_path, "frame", "energy")
 characters = 'ABCDEF0123456789'
 plot_data_temp = {}
 
@@ -420,6 +420,7 @@ while window.running:
             }
         else:
             if frame_cpu < frame_end:
+                print(sim_tri.PCG.cg_iter)
                 E = sim_tri.compute_spring_energy(YM_ui)
                 plot_data_temp["data"][frame_cpu] = E
             else:

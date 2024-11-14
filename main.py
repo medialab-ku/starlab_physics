@@ -36,7 +36,6 @@ default_data = {
     "PCG_use_line_search": True,
     "PCG_print_stats": False,
     "PCG_max_cg_iter": 100,
-
     "PR": 0.2
 }
 

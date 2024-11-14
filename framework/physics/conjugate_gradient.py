@@ -112,19 +112,17 @@ class ConjugateGradient:
             self.preconditioning_tri(mesh, mesh.z, mesh.r)
         elif precond_type == 1:
             self.preconditioning_jacobi(mesh, mesh.z, mesh.r)
-        # print(mesh.b)
-        # p_0 = r_0
+
         mesh.p.copy_from(mesh.z)
         self.cg_iter = 0
-        # r_normSq = self.dot_product(mesh.r, mesh.r)
-        # if r_normSq > 1e-6:
+
         while True:
             # Ap_k = A * p_k
             self.compute_mat_free_Ax(mesh, mesh.Ax, mesh.p)
 
             # alpha = r_k ^T r_k / p_k ^T (Ap_k)
             self.cg_err = self.dot_product(mesh.r, mesh.r)
-            # print(r_normSq)
+
             if self.cg_err < threshold or self.cg_iter >= max_cg_iter:
                 break
 
@@ -133,6 +131,7 @@ class ConjugateGradient:
 
             # dx_k+1 = dx_k + alpha * p_k
             self.vector_add(mesh.dx, mesh.dx, mesh.p, alpha)
+
             # r_k+1 = r_k + alpha * Ap_k
             self.vector_add(mesh.r_next, mesh.r, mesh.Ax, -alpha)
 
@@ -140,6 +139,7 @@ class ConjugateGradient:
                 self.preconditioning_tri(mesh, mesh.z_next, mesh.r_next)
             elif precond_type == 1:
                 self.preconditioning_jacobi(mesh, mesh.z_next, mesh.r_next)
+
             # beta = r_k+1 ^T r_k+1 / z_k ^T r_k
             beta = self.dot_product(mesh.z_next, mesh.r_next) / rTz
 

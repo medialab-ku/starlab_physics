@@ -181,6 +181,8 @@ class Solver:
         #     else:
         #         alpha = 1.0
 
+        # print( self.PCG.cg_iter)
+
         # if self.print_stats:
         #     print("CG err: ", r_sq)
         #     print("CG iter: ", cg_iter)
