@@ -599,8 +599,18 @@ class Solver:
     @ti.kernel
     def apply_pncg(self):
 
+        #g_k+1:  self.mesh_dy.grad
+        #g_k:    self.mesh_dy.grad_prev
+        #y_k:    g_k+1 - g_k
+
+        #p_k+1:    self.mesh_dy.dx
+        #p_k:    self.mesh_dy.dx_prev
+
+        beta = 0.0
+
         for i in self.mesh_dy.y:
-            self.mesh_dy.y[i] += self.mesh_dy.dx[i]
+            self.mesh_dy.y[i] += self.mesh_dy.dx[i] + beta * self.mesh_dy.dx_prev[i]
+
             self.mesh_dy.dx_prev[i] = self.mesh_dy.dx[i]
             self.mesh_dy.grad_prev[i] = self.mesh_dy.grad[i]
 
