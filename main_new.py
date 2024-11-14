@@ -165,7 +165,7 @@ def show_options_tri():
 
         precond_type_ui = w.slider_int("precond. type", precond_type_ui, 0, 1)
         if precond_type_ui == 0:
-            w.text("precond. type: Identity")
+            w.text("precond. type: Euler")
         elif precond_type_ui == 1:
             w.text("precond. type: Jacobi")
         sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
@@ -173,7 +173,6 @@ def show_options_tri():
         sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
         sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
         sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 1000)
-
 
 
 
@@ -196,7 +195,7 @@ def show_options_tri():
         mesh_export = w.checkbox("export mesh", mesh_export)
         result_export = w.checkbox("export result", result_export)
 
-        if mesh_export is True:
+        if mesh_export or result_export:
             frame_end = w.slider_int("end frame", frame_end, 1, 2000)
 
         w.text("")
@@ -407,9 +406,9 @@ while window.running:
         if not run_sim:
             plot_data_temp = {
                 "name": ''.join(random.choices(characters, k=16)), # Hash
-                "label": "Identity" if precond_type_ui == 0 else "Jacobi",
+                "label": "Euler" if precond_type_ui == 0 else "Jacobi",
                 "conditions": {
-                    "precond_type": "Identity" if precond_type_ui == 0 else "Jacobi",
+                    "precond_type": "Euler" if precond_type_ui == 0 else "Jacobi",
                     "dt": dt_tri_ui,
                     "substep": n_substep,
                     "iter": n_iter,
