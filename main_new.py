@@ -46,7 +46,9 @@ default_data = {
 
 # plot
 plot_export_path = str(Path(__file__).resolve().parent / "results") + "/"
-plot = make_plot(plot_export_path, "frame", "energy")
+# x_name == "frame" and y_name == "iteration" -> line graph
+# x_name == "frame" and y_name == "energy" -> line graph
+plot = make_plot(plot_export_path, "frame", "iteration")
 characters = 'ABCDEF0123456789'
 plot_data_temp = {}
 
@@ -405,7 +407,7 @@ while window.running:
     if result_export:
         if not run_sim:
             plot_data_temp = {
-                "name": ''.join(random.choices(characters, k=16)), # Hash
+                "name": ''.join(random.choices(characters, k=16)), # Hash name
                 "label": "Euler" if precond_type_ui == 0 else "Jacobi",
                 "conditions": {
                     "precond_type": "Euler" if precond_type_ui == 0 else "Jacobi",
@@ -422,7 +424,7 @@ while window.running:
             if frame_cpu < frame_end:
                 print(sim_tri.PCG.cg_iter)
                 E = sim_tri.compute_spring_energy(YM_ui)
-                plot_data_temp["data"][frame_cpu] = E
+                plot_data_temp["data"][frame_cpu] = sim_tri.PCG.cg_iter
             else:
                 plot.collect_data(plot_data_temp)
                 run_sim = False

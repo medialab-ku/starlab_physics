@@ -1,7 +1,7 @@
 {
     "sim_type": 0,
     "solver_type": 4,
-    "precond_type": 0,
+    "precond_type": 1,
     "dt_tri": 0.029999999329447746,
     "dt_tet": 0.02,
     "n_substep": 1,
@@ -9,11 +9,11 @@
     "dHat": 0.029999999329447746,
     "fric_coef": 0.0,
     "damping": 0.009999999776482582,
-    "YM": 20000.0,
+    "YM": 30000.0,
     "YM_b": 0.0,
-    "PCG_threshold": 9.999999747378752e-05,
+    "PCG_threshold": 0.004999999888241291,
     "PCG_definiteness_fix": true,
     "PCG_use_line_search": true,
     "PCG_print_stats": false,
-    "PCG_max_cg_iter": 100
+    "PCG_max_cg_iter": 1000
 }
