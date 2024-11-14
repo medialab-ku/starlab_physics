@@ -468,7 +468,11 @@ class TriMesh:
         self.num_dup = ti.field(dtype=float, shape=self.num_verts)
         self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+
+        self.grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.grad_prev = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dx = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.dx_prev = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dv = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.nc = ti.field(dtype=float, shape=self.num_verts)
         self.dup = ti.field(dtype=float, shape=self.num_verts)
