@@ -104,7 +104,7 @@ class ConjugateGradient:
 
     def run(self, precond_type, mesh: ti.template(), max_cg_iter, threshold):
 
-        mesh.dx.fill(0.0)
+        mesh.p.fill(0.0)
         # r_0 = b - Ax_0
         mesh.r.copy_from(mesh.b)
 
@@ -130,7 +130,7 @@ class ConjugateGradient:
             alpha = rTz / self.dot_product(mesh.p, mesh.Ax)
 
             # dx_k+1 = dx_k + alpha * p_k
-            self.vector_add(mesh.dx, mesh.dx, mesh.p, alpha)
+            self.vector_add(mesh.p, mesh.p, mesh.p, alpha)
 
             # r_k+1 = r_k + alpha * Ap_k
             self.vector_add(mesh.r_next, mesh.r, mesh.Ax, -alpha)

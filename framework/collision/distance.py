@@ -186,16 +186,16 @@ def g_PE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3):
 @ti.func
 def h_PE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3):
     t17 = -v1.x + v0.x
-    t18 = -v1.y + v0.y
+    t18 = -v1.x_k + v0.x_k
     t19 = -v1.z + v0.z
     t20 = -v2.x + v0.x
-    t21 = -v2.y + v0.y
+    t21 = -v2.x_k + v0.x_k
     t22 = -v2.z + v0.z
     t23 = -v2.x + v1.x
-    t24 = -v2.y + v1.y
+    t24 = -v2.x_k + v1.x_k
     t25 = -v2.z + v1.z
     t26 = v1.x * 2.0 + -(v2.x * 2.0)
-    t27 = v1.y * 2.0 + -(v2.y * 2.0)
+    t27 = v1.x_k * 2.0 + -(v2.x_k * 2.0)
     t28 = v1.z * 2.0 + -(v2.z * 2.0)
     t35 = t23 * t23
     t36 = t24 * t24
@@ -461,16 +461,16 @@ def g_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3)
 @ti.func
 def h_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3):
     t11 = -v1.x + v0.x
-    t12 = -v1.y + v0.y
+    t12 = -v1.x_k + v0.x_k
     t13 = -v1.z + v0.z
     t18 = -v2.x + v1.x
-    t20 = -v2.y + v1.y
+    t20 = -v2.x_k + v1.x_k
     t22 = -v2.z + v1.z
     t23 = -v3.x + v1.x
-    t24 = -v3.y + v1.y
+    t24 = -v3.x_k + v1.x_k
     t25 = -v3.z + v1.z
     t26 = -v3.x + v2.x
-    t27 = -v3.y + v2.y
+    t27 = -v3.x_k + v2.x_k
     t28 = -v3.z + v2.z
     t65 = t18 * t24
     t66 = t20 * t23
@@ -536,11 +536,11 @@ def h_PT(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3)
     t310 = t12 * t202 * t205 * 2.0
     t13 = t13 * t202 * t205 * 2.0
     t312 = (-v2.x + v0.x) * t202 * t205 * 2.0
-    t313 = (-v2.y + v0.y) * t202 * t205 * 2.0
+    t313 = (-v2.x_k + v0.x_k) * t202 * t205 * 2.0
     t314 = (-v2.z + v0.z) * t202 * t205 * 2.0
     t315 = (-v3.x + v0.x) * t202 * t205 * 2.0
     t316 = t18 * t202 * t205 * 2.0
-    t317 = (-v3.y + v0.y) * t202 * t205 * 2.0
+    t317 = (-v3.x_k + v0.x_k) * t202 * t205 * 2.0
     t318 = t20 * t202 * t205 * 2.0
     t319 = (-v3.z + v0.z) * t202 * t205 * 2.0
     t11 = t22 * t202 * t205 * 2.0
@@ -949,10 +949,10 @@ def compute_e_g(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.mat
 def computeEECrossSqNormGradient(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3):
 
     t8 = -v1.x + v0.x
-    t9 = -v1.y + v0.y
+    t9 = -v1.x_k + v0.x_k
     t10 = -v1.z + v0.z
     t11 = -v3.x + v2.x
-    t12 = -v3.y + v2.y
+    t12 = -v3.x_k + v2.x_k
     t13 = -v3.z + v2.z
     t23 = t8 * t12 + -(t9 * t11)
     t24 = t8 * t13 + -(t10 * t11)

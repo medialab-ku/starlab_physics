@@ -217,8 +217,8 @@ class Solver:
     @ti.kernel
     def compute_y(self, g: ti.math.vec3, dt: float):
         for v in self.mesh_dy.verts:
-            v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
-            v.y = self.confine_boundary(v.y)
+            v.x_k = v.x + v.fixed * (v.v * dt + g * dt * dt)
+            v.x_k = self.confine_boundary(v.x_k)
 
         # path_len = self.mesh_dy.path_euler.shape[0]
         # # print(path_len)
@@ -254,7 +254,7 @@ class Solver:
         # for v in self.mesh_dy.verts:
         #     v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
 
-        self.mesh_dy.verts.dx.fill(0.0)
+        self.mesh_dy.verts.p.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
 
         for i in range(self.max_num_edges_dy):
@@ -264,7 +264,7 @@ class Solver:
                 bi = i
                 l0 = self.mesh_dy.edges.l0[bi]
                 v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
-                x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+                x10 = self.mesh_dy.verts.x_k[v0] - self.mesh_dy.verts.x_k[v1]
                 lij = x10.norm()
 
                 C = (lij - l0)
@@ -273,8 +273,8 @@ class Solver:
 
                 ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
-                self.mesh_dy.verts.dx[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
-                self.mesh_dy.verts.dx[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
+                self.mesh_dy.verts.p[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
+                self.mesh_dy.verts.p[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
                 self.mesh_dy.verts.nc[v0] += 1.0
                 self.mesh_dy.verts.nc[v1] += 1.0
 
@@ -295,13 +295,13 @@ class Solver:
                 schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv)
                 ld = compliance * C / (compliance * schur + 1.0)
 
-                self.mesh_dy.verts.dx[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
-                self.mesh_dy.verts.dx[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
+                self.mesh_dy.verts.p[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
+                self.mesh_dy.verts.p[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
                 self.mesh_dy.verts.nc[v0] += 1.0
                 self.mesh_dy.verts.nc[v1] += 1.0
 
         for v in self.mesh_dy.verts:
-            v.y += v.fixed * (v.dx / v.nc)
+            v.x_k += v.fixed * (v.p / v.nc)
 
     @ti.kernel
     def solve_spring_constraints_pd_diag_x(self, g: ti.math.vec3, dt: float, compliance_stretch: float, compliance_bending: float,
@@ -310,7 +310,7 @@ class Solver:
                                            enable_velocity_update: bool, mu: float):
 
         for v in self.mesh_dy.verts:
-            v.y = v.x + v.fixed * (v.v * dt + g * dt * dt)
+            v.x_k = v.x + v.fixed * (v.v * dt + g * dt * dt)
 
         self.mesh_dy.verts.gii.fill(0.0)
         self.mesh_dy.verts.hii.fill(1.0)
@@ -322,7 +322,7 @@ class Solver:
                 bi = i
                 l0 = self.mesh_dy.edges.l0[bi]
                 v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
-                x01 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+                x01 = self.mesh_dy.verts.x_k[v0] - self.mesh_dy.verts.x_k[v1]
                 lij = x01.norm()
 
                 C = (lij - l0)
@@ -381,7 +381,7 @@ class Solver:
         for i in range(size):
             if i < self.max_num_verts_dy:
                 vid = i
-                y = self.mesh_dy.verts.y[vid]
+                y = self.mesh_dy.verts.x_k[vid]
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
                 self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, vid,
@@ -389,7 +389,7 @@ class Solver:
 
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
-                y = self.mesh_dy.verts.y[vid]
+                y = self.mesh_dy.verts.x_k[vid]
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
                 self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid,
@@ -452,8 +452,8 @@ class Solver:
 
         for v in self.mesh_dy.verts:
             # if v.nc > 0:
-            v.y -= (v.gii / v.hii)
-            v.v = (1.0 - damping) * (v.y - v.x) / dt
+            v.x_k -= (v.gii / v.hii)
+            v.v = (1.0 - damping) * (v.x_k - v.x) / dt
 
         self.mesh_dy.verts.dv.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
@@ -511,7 +511,7 @@ class Solver:
             bi = i
             l0 = self.mesh_dy.edges.l0[bi]
             v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
-            x10 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            x10 = self.mesh_dy.verts.x_k[v0] - self.mesh_dy.verts.x_k[v1]
             lij = x10.norm()
 
             C = (lij - l0)
@@ -521,8 +521,8 @@ class Solver:
 
             ld = compliance_stretch * C / (compliance_stretch * schur + 1.0)
 
-            self.mesh_dy.verts.y[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
-            self.mesh_dy.verts.y[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
+            self.mesh_dy.verts.x_k[v0] -= self.mesh_dy.verts.fixed[v0] * self.mesh_dy.verts.m_inv[v0] * ld * nabla_C
+            self.mesh_dy.verts.x_k[v1] += self.mesh_dy.verts.fixed[v1] * self.mesh_dy.verts.m_inv[v1] * ld * nabla_C
             # self.mesh_dy.verts.nc[v0] += 1.0
             # self.mesh_dy.verts.nc[v1] += 1.0
 
@@ -533,7 +533,7 @@ class Solver:
             bi = i
             l0 = self.mesh_dy.edges.l0[bi]
             v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
-            x01 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            x01 = self.mesh_dy.verts.x_k[v0] - self.mesh_dy.verts.x_k[v1]
             lij = x01.norm()
 
             C = (lij - l0)
@@ -564,11 +564,11 @@ class Solver:
 
             det = h0 * h1 - m_inv0 * m_inv1 * compliance_stretch * compliance_stretch
 
-            self.mesh_dy.verts.dx[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
-            self.mesh_dy.verts.dx[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
+            self.mesh_dy.verts.p[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
+            self.mesh_dy.verts.p[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
 
         for v in self.mesh_dy.verts:
-            v.y += (v.dx / v.nc)
+            v.x_k += (v.p / v.nc)
 
 
     @ti.kernel
@@ -582,8 +582,8 @@ class Solver:
 
             det = h0 * h1 - m_inv0 * m_inv1 * compliance_stretch * compliance_stretch
 
-            self.mesh_dy.verts.dx[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
-            self.mesh_dy.verts.dx[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
+            self.mesh_dy.verts.p[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
+            self.mesh_dy.verts.p[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
 
         for i in range(self.max_num_edges_dy):
             v0, v1 = self.mesh_dy.edge_indices[2 * i], self.mesh_dy.edge_indices[2 * i + 1]
@@ -593,8 +593,8 @@ class Solver:
 
             det = h0 * h1 - m_inv0 * m_inv1 * compliance_stretch * compliance_stretch
 
-            self.mesh_dy.verts.dx[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
-            self.mesh_dy.verts.dx[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
+            self.mesh_dy.verts.p[v0] -= (h1 * g0 - m_inv0 * compliance_stretch * g1) / det
+            self.mesh_dy.verts.p[v1] -= (-m_inv1 * compliance_stretch * g0 + h0 * g1) / det
 
     @ti.kernel
     def solve_bending_constraints_gauss_seidel_x(self, compliance_bending: float):
@@ -616,8 +616,8 @@ class Solver:
             schur = (e_v0_fixed * e_v0_m_inv + e_v1_fixed * e_v1_m_inv) * nabla_C.dot(nabla_C)
             ld = compliance_bending * C / (compliance_bending * schur + 1.0)
 
-            self.mesh_dy.verts.y[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
-            self.mesh_dy.verts.y[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
+            self.mesh_dy.verts.x_k[v0] -= e_v0_fixed * e_v0_m_inv * ld * nabla_C
+            self.mesh_dy.verts.x_k[v1] += e_v1_fixed * e_v1_m_inv * ld * nabla_C
             # self.mesh_dy.verts.nc[v0] += 1.0
             # self.mesh_dy.verts.nc[v1] += 1.0
 
@@ -707,8 +707,8 @@ class Solver:
 
         for v in self.mesh_dy.verts:
             # if v.nc > 0:
-            v.y += v.fixed * (v.dx / v.nc)
-            v.v = (1.0 - damping) * (v.y - v.x) / dt
+            v.x_k += v.fixed * (v.p / v.nc)
+            v.v = (1.0 - damping) * (v.x_k - v.x) / dt
 
         # for v in self.mesh_dy.verts:
         #     v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
@@ -729,14 +729,14 @@ class Solver:
 
             if i < self.max_num_verts_dy:
                 vid = i
-                y = self.mesh_dy.verts.y[vid]
+                y = self.mesh_dy.verts.x_k[vid]
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
                 self.lbvh_st.traverse_cell_bvh_single(cell_size_st, origin_st, aabb_min, aabb_max, vid, self.vt_st_candidates, self.vt_st_candidates_num)
 
             elif i < 2 * self.max_num_verts_dy:
                 vid = i - self.max_num_verts_dy
-                y = self.mesh_dy.verts.y[vid]
+                y = self.mesh_dy.verts.x_k[vid]
                 aabb_min = y - self.padding * ti.math.vec3(1.0)
                 aabb_max = y + self.padding * ti.math.vec3(1.0)
                 self.lbvh_dy.traverse_cell_bvh_single(cell_size_dy, origin_dy, aabb_min, aabb_max, vid, self.vt_dy_candidates, self.vt_dy_candidates_num)
@@ -797,8 +797,8 @@ class Solver:
 
         for v in self.mesh_dy.verts:
             # if v.nc > 0:
-            v.y -= (v.gii / v.hii)
-            v.v = (1.0 - damping) * (v.y - v.x) / dt
+            v.x_k -= (v.gii / v.hii)
+            v.v = (1.0 - damping) * (v.x_k - v.x) / dt
 
         # for v in self.mesh_dy.verts:
         #     v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
@@ -818,7 +818,7 @@ class Solver:
         # self.ee_st_pair_num.fill(0)
         # self.ee_dy_pair_num.fill(0)
 
-        self.mesh_dy.verts.dx.fill(0.0)
+        self.mesh_dy.verts.p.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
 
         # d = self.dHat
@@ -849,23 +849,23 @@ class Solver:
 
 
         for v in self.mesh_dy.verts:
-            cell_id = self.pos_to_cell_id(v.y)
+            cell_id = self.pos_to_cell_id(v.x_k)
             for offs in ti.static(ti.grouped(ti.ndrange((-1, 2), (-1, 2), (-1, 2)))):
                 cell_to_check = cell_id + offs
                 if self.is_in_grid(cell_to_check):
                     for j in range(self.grid_num_particles[cell_to_check]):
                         vj = self.particles2grid[cell_to_check, j]
                         pos_j = self.mesh_st.verts.x[vj]
-                        xji = pos_j - v.y
+                        xji = pos_j - v.x_k
                         if xji.norm() < 2.0 * d:
                             dir = ti.math.normalize(xji)
-                            self.mesh_dy.verts.dx[v.id] += ((xji.norm() - 2.0 * d) * dir)
+                            self.mesh_dy.verts.p[v.id] += ((xji.norm() - 2.0 * d) * dir)
                             self.mesh_dy.verts.nc[v.id] += 1
                         # collision_constraints_x.__vt_st(compliance_col, v.id, fj, self.mesh_dy, self.mesh_st, d)
 
         for v in self.mesh_dy.verts:
             if v.nc > 0:
-                v.y += v.fixed * (v.dx / v.nc)
+                v.x_k += v.fixed * (v.p / v.nc)
         #
         # for v in self.mesh_dy.verts:
         #     v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
@@ -963,7 +963,7 @@ class Solver:
     @ti.kernel
     def compute_velocity(self, damping: float, dt: float):
         for v in self.mesh_dy.verts:
-            v.v = (1.0 - damping) * v.fixed * (v.y - v.x) / dt
+            v.v = (1.0 - damping) * v.fixed * (v.x_k - v.x) / dt
 
         # path_len = self.mesh_dy.path_euler.shape[0]
         # # print(path_len)
@@ -972,7 +972,7 @@ class Solver:
 
     def init_variables(self):
 
-        self.mesh_dy.verts.dx.fill(0.0)
+        self.mesh_dy.verts.p.fill(0.0)
         self.mesh_dy.verts.nc.fill(0.0)
 
     def solve_constraints_jacobi_x(self, dt):
@@ -1030,7 +1030,7 @@ class Solver:
     @ti.kernel
     def update_jacobi_DOT_dx(self):
         for v in self.mesh_dy.verts:
-            v.y += (v.dx / v.nc)
+            v.x_k += (v.p / v.nc)
 
     def solve_constraints_gauss_seidel_x(self, dt):
 
@@ -1071,7 +1071,7 @@ class Solver:
         self.solve_stretch_constraints_euler_x(compliance_stretch, size0, 0)
         self.solve_stretch_constraints_euler_x(compliance_stretch, size1, 1)
 
-        self.mesh_dy.verts.y.fill(0.0)
+        self.mesh_dy.verts.x_k.fill(0.0)
         self.aggregate_duplicates()
 
     #ls: linear solve
@@ -1125,7 +1125,7 @@ class Solver:
 
         self.update_y_euler()
 
-        self.mesh_dy.verts.y.fill(0.0)
+        self.mesh_dy.verts.x_k.fill(0.0)
         # self.aggregate_duplicates()
 
     @ti.kernel
@@ -1136,14 +1136,14 @@ class Solver:
         # ti.loop_config(serialize=True)
         for i in range(path_len):
             vid = self.mesh_dy.path_euler[i]
-            self.mesh_dy.verts.y[vid] += self.mesh_dy.y_euler[i]
+            self.mesh_dy.verts.x_k[vid] += self.mesh_dy.y_euler[i]
 
         for v in self.mesh_dy.verts:
-            v.y /= v.dup
+            v.x_k /= v.dup
 
         for i in range(path_len):
             vid = self.mesh_dy.path_euler[i]
-            self.mesh_dy.y_euler[i] = self.mesh_dy.verts.y[vid]
+            self.mesh_dy.y_euler[i] = self.mesh_dy.verts.x_k[vid]
 
     @ti.kernel
     def copy_to_duplicates(self):
@@ -1184,7 +1184,7 @@ class Solver:
             bi = i
             l0 = self.mesh_dy.edges.l0[bi]
             v0, v1 = self.mesh_dy.edge_indices[2 * bi], self.mesh_dy.edge_indices[2 * bi + 1]
-            x01 = self.mesh_dy.verts.y[v0] - self.mesh_dy.verts.y[v1]
+            x01 = self.mesh_dy.verts.x_k[v0] - self.mesh_dy.verts.x_k[v1]
             lij = x01.norm()
 
             C = (lij - l0)
@@ -1262,7 +1262,7 @@ class Solver:
     def update_dx(self):
         for v in self.mesh_dy.verts:
             if v.nc > 0:
-                v.y += v.fixed * (v.dx / v.nc)
+                v.x_k += v.fixed * (v.p / v.nc)
 
         # path_len = self.mesh_dy.path_euler.shape[0]
         # for i in range(path_len):
@@ -1318,16 +1318,16 @@ class Solver:
         for i in range(self.sewing_pairs_num[None]):
             v1_id = self.sewing_pairs[i][0]
             v2_id = self.sewing_pairs[i][1]
-            v1_y = self.mesh_dy.verts.y[v1_id]
-            v2_y = self.mesh_dy.verts.y[v2_id]
+            v1_y = self.mesh_dy.verts.x_k[v1_id]
+            v2_y = self.mesh_dy.verts.x_k[v2_id]
 
             C = (v2_y - v1_y).norm()
             nabla_C = (v1_y - v2_y).normalized()
             schur = (self.mesh_dy.verts.fixed[v1_id] * self.mesh_dy.verts.m_inv[v1_id] + self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id])
             ld = compliance * C / (compliance * schur + 1.0)
 
-            self.mesh_dy.verts.dx[v1_id] -= self.mesh_dy.verts.fixed[v1_id] * self.mesh_dy.verts.m_inv[v1_id] * ld * nabla_C
-            self.mesh_dy.verts.dx[v2_id] += self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id] * ld * nabla_C
+            self.mesh_dy.verts.p[v1_id] -= self.mesh_dy.verts.fixed[v1_id] * self.mesh_dy.verts.m_inv[v1_id] * ld * nabla_C
+            self.mesh_dy.verts.p[v2_id] += self.mesh_dy.verts.fixed[v2_id] * self.mesh_dy.verts.m_inv[v2_id] * ld * nabla_C
             self.mesh_dy.verts.nc[v1_id] += 1.0
             self.mesh_dy.verts.nc[v2_id] += 1.0
 

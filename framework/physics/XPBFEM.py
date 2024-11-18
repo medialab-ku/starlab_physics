@@ -29,9 +29,9 @@ class Solver:
         self.enable_velocity_update = False
         self.export_mesh = False
 
-        self.y = self.mesh_dy.y
+        self.y = self.mesh_dy.x_k
         self.x = self.mesh_dy.x
-        self.dx = self.mesh_dy.dx
+        self.dx = self.mesh_dy.p
         # self.hii = self.tet_mesh.hii
         self.nc = self.mesh_dy.nc
         self.v = self.mesh_dy.v

@@ -53,10 +53,10 @@ class Solver:
         self.kernel_radius = 1.1
         # self.particle_rad = 0.2 * self.kernel_radius
         self.x = self.particle_dy.x
-        self.dx = self.particle_dy.dx
+        self.dx = self.particle_dy.p
         self.nc = self.particle_dy.nc
         self.x0 = self.particle_dy.x0
-        self.y = self.particle_dy.y
+        self.y = self.particle_dy.x_k
         self.v = self.particle_dy.v
         self.V0 = self.particle_dy.V0
         self.F = self.particle_dy.F

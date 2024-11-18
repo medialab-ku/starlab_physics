@@ -10,7 +10,7 @@ def __vt_st(compliance, vi_d, fi_s, mesh_dy, mesh_st, dHat):
     v2 = mesh_st.face_indices[3 * fi_s + 1]
     v3 = mesh_st.face_indices[3 * fi_s + 2]
 
-    x0 = mesh_dy.verts.y[v0]
+    x0 = mesh_dy.verts.x_k[v0]
     x1 = mesh_st.verts.x[v1]
     x2 = mesh_st.verts.x[v2]
     x3 = mesh_st.verts.x[v3]
@@ -55,7 +55,7 @@ def __vt_st(compliance, vi_d, fi_s, mesh_dy, mesh_st, dHat):
 
         schur = mesh_dy.verts.m_inv[v0] * g0.dot(g0)
         ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-        mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
+        mesh_dy.verts.p[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
         mesh_dy.verts.nc[v0] += 1
         #
         # if vt_st_pair_num[vi_d] < vt_st_cache_size:
@@ -77,9 +77,9 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
     v3 = mesh_dy.face_indices[3 * fi_d + 2]
 
     x0 = mesh_st.verts.x[v0]
-    x1 = mesh_dy.verts.y[v1]
-    x2 = mesh_dy.verts.y[v2]
-    x3 = mesh_dy.verts.y[v3]
+    x1 = mesh_dy.verts.x_k[v1]
+    x2 = mesh_dy.verts.x_k[v2]
+    x3 = mesh_dy.verts.x_k[v3]
 
     dtype = di.d_type_PT(x0, x1, x2, x3)
     d = dHat
@@ -91,7 +91,7 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
             g0, g1 = di.g_PP(x0, x1)
             schur = mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1)
             ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
             mesh_dy.verts.nc[v1] += 1
 
     elif dtype == 1:
@@ -100,7 +100,7 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
             g0, g2 = di.g_PP(x0, x2)
             schur = mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2)
             ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
             mesh_dy.verts.nc[v2] += 1
 
 
@@ -110,7 +110,7 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
             g0, g3 = di.g_PP(x0, x3)
             schur = mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3)
             ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
             mesh_dy.verts.nc[v3] += 1
 
     elif dtype == 3:
@@ -119,8 +119,8 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
             g0, g1, g2 = di.g_PE(x0, x1, x2)
             schur = mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1) + mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2)
             ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
             mesh_dy.verts.nc[v1] += 1
             mesh_dy.verts.nc[v2] += 1
 
@@ -130,8 +130,8 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
             g0, g2, g3 = di.g_PE(x0, x2, x3)
             schur = mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2) + mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3)
             ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
 
             mesh_dy.verts.nc[v2] += 1
             mesh_dy.verts.nc[v3] += 1
@@ -142,8 +142,8 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
             g0, g1, g3 = di.g_PE(x0, x1, x3)
             schur = mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1) + mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3)
             ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
             mesh_dy.verts.nc[v1] += 1
             mesh_dy.verts.nc[v3] += 1
 
@@ -155,9 +155,9 @@ def __tv_st(compliance, fi_d, vi_s, mesh_dy, mesh_st, dHat, tv_st_cache_size, tv
                      mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2) +
                      mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3) )
             ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
             mesh_dy.verts.nc[v1] += 1
             mesh_dy.verts.nc[v2] += 1
             mesh_dy.verts.nc[v3] += 1
@@ -180,10 +180,10 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
     v2 = mesh_dy.face_indices[3 * fi_d + 1]
     v3 = mesh_dy.face_indices[3 * fi_d + 2]
 
-    x0 = mesh_dy.verts.y[v0]
-    x1 = mesh_dy.verts.y[v1]
-    x2 = mesh_dy.verts.y[v2]
-    x3 = mesh_dy.verts.y[v3]
+    x0 = mesh_dy.verts.x_k[v0]
+    x1 = mesh_dy.verts.x_k[v1]
+    x2 = mesh_dy.verts.x_k[v2]
+    x3 = mesh_dy.verts.x_k[v3]
 
     dtype = di.d_type_PT(x0, x1, x2, x3)
     d = dHat
@@ -196,8 +196,8 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
             schur = (mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0) +
                      mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1) + 1e-4)
             ld = (dHat - d) / schur
-            mesh_dy.verts.dx[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v0] += mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.p[v1] += mesh_dy.verts.m_inv[v1] * ld * g1
 
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v1] += 1
@@ -209,8 +209,8 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
             schur = (mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0) +
                      mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2) + 1e-4)
             ld = (dHat - d) / schur
-            mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v2] += 1
 
@@ -223,8 +223,8 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
                      mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4)
             ld = (dHat - d) / schur
 
-            mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
 
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v3] += 1
@@ -239,9 +239,9 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
                      mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2) + 1e-4)
             ld = (dHat - d) / schur
 
-            mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
 
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v1] += 1
@@ -257,9 +257,9 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
                      mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4)
             ld = (dHat - d) / schur
 
-            mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v2] += 1
             mesh_dy.verts.nc[v3] += 1
@@ -273,9 +273,9 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
                      mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4)
             ld = (dHat - d) / schur
 
-            mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v1] += 1
             mesh_dy.verts.nc[v3] += 1
@@ -290,10 +290,10 @@ def __vt_dy(vi_d, fi_d, mesh_dy, dHat, vt_dy_cache_size, vt_dy_pair, vt_dy_pair_
                      mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2) +
                      mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3) + 1e-4)
             ld = (dHat - d) / schur
-            mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-            mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
-            mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
-            mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+            mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+            mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+            mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+            mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
             mesh_dy.verts.nc[v0] += 1
             mesh_dy.verts.nc[v1] += 1
             mesh_dy.verts.nc[v2] += 1
@@ -318,11 +318,11 @@ def __ee_dy(compliance_col, ei0, ei1, mesh_dy, dHat, ee_dy_cache_size, ee_dy_pai
     v2 = mesh_dy.edge_indices[2 * ei1 + 0]
     v3 = mesh_dy.edge_indices[2 * ei1 + 1]
 
-    x0 = mesh_dy.verts.y[v0]
-    x1 = mesh_dy.verts.y[v1]
+    x0 = mesh_dy.verts.x_k[v0]
+    x1 = mesh_dy.verts.x_k[v1]
 
-    x2 = mesh_dy.verts.y[v2]
-    x3 = mesh_dy.verts.y[v3]
+    x2 = mesh_dy.verts.x_k[v2]
+    x3 = mesh_dy.verts.x_k[v3]
 
     dtype = di.d_type_EE(x0, x1, x2, x3)
     d = dHat
@@ -444,10 +444,10 @@ def __ee_dy(compliance_col, ei0, ei1, mesh_dy, dHat, ee_dy_cache_size, ee_dy_pai
                          + mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * g2.dot(g2) + mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * g3.dot(g3))
                 ld = compliance_col * (dHat - d) / (compliance_col * schur + 1.0)
 
-                mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-                mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
-                mesh_dy.verts.dx[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
-                mesh_dy.verts.dx[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
+                mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+                mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+                mesh_dy.verts.p[v2] += mesh_dy.verts.fixed[v2] * mesh_dy.verts.m_inv[v2] * ld * g2
+                mesh_dy.verts.p[v3] += mesh_dy.verts.fixed[v3] * mesh_dy.verts.m_inv[v3] * ld * g3
 
                 mesh_dy.verts.nc[v0] += 1
                 mesh_dy.verts.nc[v1] += 1
@@ -473,7 +473,7 @@ def __ee_st(compliance, ei_d, ei_s, mesh_dy, mesh_st, dHat, ee_st_cache_size, ee
     v2 = mesh_st.edge_indices[2 * ei_s + 0]
     v3 = mesh_st.edge_indices[2 * ei_s + 1]
 
-    x0, x1 = mesh_dy.verts.y[v0], mesh_dy.verts.y[v1]
+    x0, x1 = mesh_dy.verts.x_k[v0], mesh_dy.verts.x_k[v1]
     x2, x3 = mesh_st.verts.x[v2], mesh_st.verts.x[v3]
 
     dtype = di.d_type_EE(x0, x1, x2, x3)
@@ -572,8 +572,8 @@ def __ee_st(compliance, ei_d, ei_s, mesh_dy, mesh_st, dHat, ee_st_cache_size, ee
                 schur = (mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * g0.dot(g0) +
                          mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * g1.dot(g1))
                 ld = compliance * (dHat - d) / (compliance * schur + 1.0)
-                mesh_dy.verts.dx[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
-                mesh_dy.verts.dx[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
+                mesh_dy.verts.p[v0] += mesh_dy.verts.fixed[v0] * mesh_dy.verts.m_inv[v0] * ld * g0
+                mesh_dy.verts.p[v1] += mesh_dy.verts.fixed[v1] * mesh_dy.verts.m_inv[v1] * ld * g1
                 mesh_dy.verts.nc[v0] += 1
                 mesh_dy.verts.nc[v1] += 1
     #

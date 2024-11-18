@@ -461,7 +461,7 @@ class TriMesh:
         self.color_test.from_numpy(main_colors_np)
         # print(self.eid_test)
         # fields about vertices
-        self.y = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.x_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_tilde = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_origin = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -470,10 +470,13 @@ class TriMesh:
         self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
         self.grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
-        self.grad_prev = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.P_grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+
+        self.grad_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.grad_delta = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
-        self.dx = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
-        self.dx_prev = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.P_grad_delta = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.p_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dv = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.nc = ti.field(dtype=float, shape=self.num_verts)
         self.dup = ti.field(dtype=float, shape=self.num_verts)
@@ -497,12 +500,12 @@ class TriMesh:
         # self.neighbour_ids_dy = ti.field(dtype=int, shape=(load_array.shape[0], self.cache_size_dy))
 
         # initialize the vertex fields
-        self.y.fill(0.0)
+        self.x_k.fill(0.0)
         self.y_origin.fill(0.0)
         self.x.from_numpy(self.x_np)
         self.x0.copy_from(self.x)
         self.v.fill(0.0)
-        self.dx.fill(0.0)
+        self.p.fill(0.0)
         self.dv.fill(0.0)
         self.nc.fill(0.0)
         self.dup.fill(0.0)
@@ -650,12 +653,12 @@ class TriMesh:
 
     ####################################################################################################################
     def reset(self):
-        self.y.fill(0.0)
+        self.x_k.fill(0.0)
         self.y_origin.fill(0.0)
         self.x.from_numpy(self.x_np)
         self.v.fill(0.0)
         self.v_dup.fill(0.0)
-        self.dx.fill(0.0)
+        self.p.fill(0.0)
         self.dv.fill(0.0)
         self.nc.fill(0.0)
 

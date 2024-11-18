@@ -577,7 +577,7 @@ def __ee_st(eid_d, eid_s, dtype, mesh_dy, mesh_st, g0, g1, g2, g3, schur, mu):
     v2 = mesh_st.edge_indices[2 * eid_s + 0]
     v3 = mesh_st.edge_indices[2 * eid_s + 1]
 
-    x0, x1 = mesh_dy.verts.y[v0], mesh_dy.verts.y[v1]
+    x0, x1 = mesh_dy.verts.x_k[v0], mesh_dy.verts.x_k[v1]
     x2, x3 = mesh_st.verts.x[v2], mesh_st.verts.x[v3]
 
     # if dtype == 0:
