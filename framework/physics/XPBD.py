@@ -726,14 +726,14 @@ class Solver:
                 self.proceed(beta)
                 E_after = self.compute_spring_E(self.mesh_dy.x_k,compliance_stretch, compliance_bending)
 
-                if cnt == 0:
-                    E_delta0 = E_after
-                else:
-                    condition = E_after / E_delta0
-                    print(condition)
-                    if condition < 1e-3: break
-                cnt += 1
-            print(cnt)
+                # if cnt == 0:
+                #     E_delta0 = E_after
+                # else:
+                #     condition = E_after / E_delta0
+                #     print(condition)
+                #     if condition < 1e-3: break
+                # cnt += 1
+            # print(cnt)
 
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
