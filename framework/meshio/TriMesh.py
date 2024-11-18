@@ -471,6 +471,7 @@ class TriMesh:
 
         self.grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.P_grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.H_p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
         self.grad_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.grad_delta = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
