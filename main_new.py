@@ -72,6 +72,8 @@ friction_coeff_ui = config_data["fric_coef"]
 damping_ui = config_data["damping"]
 YM_ui = config_data["YM"]
 YM_b_ui = config_data["YM_b"]
+
+
 # PR_ui = config_data["PR"]
 
 sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
@@ -122,6 +124,7 @@ MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 SHOW_GRAPH = False
 USE_HEATMAP = True
+USE_PNCG = True
 PARTICLE = True
 #selector
 g_selector_tri = st.SelectionTool(sim_tri.num_verts_dy, sim_tri.mesh_dy.x, window, camera)
@@ -150,6 +153,7 @@ def show_options_tri():
     global LOOKAt_ORIGIN
     global USE_HEATMAP
     global PARTICLE
+    global USE_PNCG
     global mesh_export
     global result_export
     global frame_end
@@ -174,8 +178,8 @@ def show_options_tri():
         sim_tri.definiteness_fix = w.checkbox("definiteness fix", sim_tri.definiteness_fix)
         sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
         sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
-        sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 1000)
-
+        sim_tri.enable_pncg = w.checkbox("enable pncg",  sim_tri.enable_pncg)
+        # sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 1000)
 
 
         dt_tri_ui = w.slider_float("dt", dt_tri_ui, 0.001, 0.101)

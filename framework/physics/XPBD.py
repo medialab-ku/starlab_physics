@@ -39,6 +39,7 @@ class Solver:
         self.print_stats = False
         self.use_line_search = True
         self.enable_velocity_update = True
+        self.enable_pncg = True
 
         self.num_verts_dy = self.mesh_dy.num_verts
         self.num_edges_dy = self.mesh_dy.num_edges
@@ -664,7 +665,7 @@ class Solver:
                     self.apply_preconditioning_jacobi(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
                 beta = 0.0
-                if cnt > 0:
+                if cnt > 0 and self.enable_pncg:
                     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
                     if self.selected_precond_type == 0:
                         self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
@@ -672,6 +673,7 @@ class Solver:
                     elif self.selected_precond_type == 1:
                         self.apply_preconditioning_jacobi(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
 
+                    # if self.enable_pncg:
                     beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
 
                 # print(beta)
