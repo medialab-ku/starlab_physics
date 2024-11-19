@@ -318,13 +318,13 @@ class TriMesh:
                 # print("all length (after splitting) :", sum(block_length_per_subpartition_split))
 
                 # Print plots
-                # plt.hist(block_length_per_subpartition, bins=max(block_length_per_subpartition))
-                # plt.show()
-                # plt.hist(block_length_per_subpartition_split, bins=max(block_length_per_subpartition_split))
-                # plt.show()
+                plt.hist(block_length_per_subpartition, bins=max(block_length_per_subpartition))
+                plt.show()
+                plt.hist(block_length_per_subpartition_split, bins=max(block_length_per_subpartition_split))
+                plt.show()
 
-                # print("the number of partition (before splitting):", len(subpartition))
-                # print("the number of partition (after splitting):", len(subpartition_split))
+                print("the number of partition (before splitting):", len(subpartition))
+                print("the number of partition (after splitting):", len(subpartition_split))
                 # print("partition (before splitting) :", subpartition)
                 # print("partition (after splitting) :", subpartition_split)
                 # print()
