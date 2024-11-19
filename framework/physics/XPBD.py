@@ -37,7 +37,7 @@ class Solver:
         self.PCG = ConjugateGradient()
         self.definiteness_fix = True
         self.print_stats = False
-        self.use_line_search = True
+        self.enable_line_search = True
         self.enable_velocity_update = True
         self.enable_pncg = True
 
@@ -52,10 +52,15 @@ class Solver:
 
 
         self.a = self.mesh_dy.a_dup
-
         self.b = self.mesh_dy.b_dup
         self.c = self.mesh_dy.c_dup
         self.c_tilde = self.mesh_dy.c_dup_tilde
+
+        self.a_1d = self.mesh_dy.a_dup_1d
+        self.b_1d = self.mesh_dy.b_dup_1d
+        self.c_1d = self.mesh_dy.c_dup_1d
+        self.c_tilde_1d = self.mesh_dy.c_dup_tilde_1d
+
         self.d = self.mesh_dy.d_dup
         self.d_tilde = self.mesh_dy.d_dup_tilde
 
@@ -112,22 +117,16 @@ class Solver:
     def compute_y(self, g: ti.math.vec3, dt: ti.f32):
         # compute apporximate x_(t+1) (== y) by explicit way before projecting constraints to x_(t+1)...
         for i in range(self.num_verts_dy):
-            self.mesh_dy.x_k[i] = (self.mesh_dy.x[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.v[i] * dt + g * dt * dt))
+            self.mesh_dy.x_k[i] = (self.mesh_dy.x[i] + (self.mesh_dy.v[i] * dt + g * dt * dt))
             self.mesh_dy.y_tilde[i] = self.mesh_dy.x_k[i]
 
 
 
     @ti.kernel
-    def update_y(self):
-        # update x_(t+1) by adding dx (used in the Euler path solver)
-        for i in range(self.num_verts_dy):
-            self.mesh_dy.x_k[i] = (self.mesh_dy.y_tilde[i] + self.mesh_dy.fixed[i] * (self.mesh_dy.p[i] / self.mesh_dy.nc[i]))
-
-    @ti.kernel
     def compute_v(self, damping: ti.f32, dt: ti.f32):
         # compute v after all constraints are projected to x_(t+1)
         for i in range(self.num_verts_dy):
-            self.mesh_dy.v[i] = (1.0 - damping) * self.mesh_dy.fixed[i] * (self.mesh_dy.x_k[i] - self.mesh_dy.x[i]) / dt
+            self.mesh_dy.v[i] = (1.0 - damping) * (self.mesh_dy.x_k[i] - self.mesh_dy.x[i]) / dt
 
 
     @ti.kernel
@@ -141,7 +140,7 @@ class Solver:
     def update_x(self, dt: float):
         # eventually, update actual position x_(t+1) after velocities are computed...
         for i in range(self.num_verts_dy):
-            self.mesh_dy.x[i] += self.mesh_dy.fixed[i] * dt * self.mesh_dy.v[i]
+            self.mesh_dy.x[i] += dt * self.mesh_dy.v[i]
 
 
     def solve_constraints_pd_diag_x(self, dt):
@@ -497,20 +496,27 @@ class Solver:
         self.solve_spring_constraints_euler_path_tridiagonal_x(compliance_stretch, compliance_bending)
 
     @ti.kernel
-    def compute_spring_E_grad_and_hess(self, compliance_stretch: ti.f32, compliance_bending: ti.f32)->ti.f32:
+    def compute_spring_E_grad_and_hess(self, compliance_stretch: ti.f32, compliance_bending: ti.f32) -> ti.f32:
 
         id3 = ti.Matrix.identity(dt=float, n=3)
-        compliance_attach = 1e5
+        compliance_attach = 1e4
         self.mesh_dy.hii_e.fill(0.0)
+        self.mesh_dy.hi_e.fill(0.0)
         E = 0.0
 
         for i in self.mesh_dy.p:
-            self.mesh_dy.grad[i] = self.mesh_dy.m[i] * (self.mesh_dy.x_k[i] - self.mesh_dy.y_tilde[i])
+            dx_m = (self.mesh_dy.x_k[i] - self.mesh_dy.y_tilde[i])
+            self.mesh_dy.grad[i] = self.mesh_dy.m[i] * dx_m
+            E += 0.5 * self.mesh_dy.m[i] * dx_m.dot(dx_m)
             self.mesh_dy.hii[i] = self.mesh_dy.m[i] * id3
+            self.mesh_dy.hi[i] = self.mesh_dy.m[i]
 
             if self.mesh_dy.fixed[i] < 1.0:
-                self.mesh_dy.grad[i] += compliance_attach * (self.mesh_dy.x_k[i] - self.mesh_dy.x0[i])
+                dx = (self.mesh_dy.x_k[i] - self.mesh_dy.x0[i])
+                self.mesh_dy.grad[i] += compliance_attach * dx
                 self.mesh_dy.hii[i] += compliance_attach * id3
+                self.mesh_dy.hi[i] += compliance_attach
+                E += 0.5 * compliance_attach * dx.dot(dx)
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
@@ -520,6 +526,7 @@ class Solver:
             l = x01.norm()
             n = x01.normalized()
 
+            E += 0.5 * compliance_stretch * (l0 - l) ** 2
             nnT = n.outer_product(n)
             # alpha = (1.0 - l0 / l)
 
@@ -530,7 +537,9 @@ class Solver:
             # self.mesh_dy.hij[i] = -compliance_stretch * id3
 
             self.c[v0_d] = -B
+            self.c_1d[v0_d] = -compliance_stretch
             self.a[v1_d] = -B
+            self.a_1d[v1_d] = -compliance_stretch
 
             dp01 = x01 - l0 * x01.normalized()
 
@@ -539,6 +548,9 @@ class Solver:
 
             self.mesh_dy.hii_e[v0] += B
             self.mesh_dy.hii_e[v1] += B
+
+            self.mesh_dy.hi_e[v0] += compliance_stretch
+            self.mesh_dy.hi_e[v1] += compliance_stretch
 
         return E
 
@@ -549,9 +561,12 @@ class Solver:
         E = 0.0
 
         for i in self.mesh_dy.p:
+            dx_m = (x[i] - self.mesh_dy.y_tilde[i])
+            E += 0.5 * self.mesh_dy.m[i] * dx_m.dot(dx_m)
+
             if self.mesh_dy.fixed[i] < 1.0:
                 dx = x[i] - self.mesh_dy.x0[i]
-                E += compliance_attach * dx.dot(dx)
+                E += 0.5 * compliance_attach * dx.dot(dx)
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
@@ -613,10 +628,59 @@ class Solver:
             ret[i] /= self.mesh_dy.num_dup[i]
 
     @ti.kernel
+    def apply_preconditioning_euler_1d(self, ret: ti.template(), x: ti.template()):
+
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+
+            self.b_1d[di] = self.mesh_dy.hi[vi] + self.mesh_dy.hi_e[vi]
+            self.d[di] = x[vi]
+
+        n_part = (self.mesh_dy.partition_offset.shape[0] - 1)
+        for pi in range(n_part):
+
+            size = self.mesh_dy.vert_offset[pi + 1] - self.mesh_dy.vert_offset[pi]
+            offset = self.mesh_dy.vert_offset[pi]
+
+            # Thomas algorithm
+            # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
+
+            # for j in ti.static(range(3)):
+            # self.c_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.c[offset]
+            self.c_tilde_1d[offset] = self.c_1d[offset] / self.b_1d[offset]
+            ti.loop_config(serialize=True)
+            for id in range(size):  # lb+1 ~ ub-1
+                i = id + offset
+
+                self.c_tilde_1d[i] = self.c_1d[i] / (self.b_1d[i] - self.a_1d[i] * self.c_tilde_1d[i - 1])
+            #
+            # self.d_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.d[offset]
+            self.d_tilde[offset] = self.d[offset] / self.b_1d[offset]
+            ti.loop_config(serialize=True)
+            for id in range(1, size):  # lb+1 ~ ub
+                i = id + offset
+                # tmp = ti.math.inverse(self.b[i] - self.a[i] * self.c_tilde[i - 1])
+                self.d_tilde[i] = (self.d[i] - self.a_1d[i] * self.d_tilde[i - 1]) / (self.b_1d[i] - self.a_1d[i] * self.c_tilde_1d[i - 1])
+
+            self.mesh_dy.dx_dup[offset + size - 1] = self.d_tilde[offset + size - 1]
+            ti.loop_config(serialize=True)
+            for i in range(0, size - 1):
+                idx = size - 2 - i + offset  # ub-1 ~ lb
+                self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] -  self.mesh_dy.dx_dup[idx + 1] / self.c_tilde_1d[idx]
+
+        ret.fill(0.0)
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+            ret[vi] += self.mesh_dy.dx_dup[di]
+
+        for i in self.mesh_dy.x_k:
+            ret[i] /= self.mesh_dy.num_dup[i]
+
+    @ti.kernel
     def apply_preconditioning_jacobi(self, ret: ti.template(), x: ti.template()):
 
         for i in self.mesh_dy.x_k:
-            ret[i] = ti.math.inverse(self.mesh_dy.hii[i]) @ x[i]
+            ret[i] = ti.math.inverse(self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]) @ x[i]
 
 
     @ti.kernel
@@ -625,10 +689,16 @@ class Solver:
         for i in ret:
             ret[i] = x[i] + y[i] * scale
 
+    @ti.kernel
+    def dot(self, x: ti.template(), y: ti.template()) -> ti.f32:
+        ret = 0.0
+        for i in x:
+            ret += x[i].dot(y[i])
 
+        return ret
 
     @ti.kernel
-    def proceed(self, beta: ti.f32):
+    def proceed(self, alpha: ti.f32):
 
         #g_k+1:  self.mesh_dy.grad
         #g_k:    self.mesh_dy.grad_prev
@@ -640,8 +710,8 @@ class Solver:
         # beta = 0.0
 
         for i in self.mesh_dy.x_k:
-            self.mesh_dy.p[i] = -self.mesh_dy.P_grad[i] + beta * self.mesh_dy.p_k[i]
-            self.mesh_dy.x_k[i] += self.mesh_dy.p[i]
+            # self.mesh_dy.p[i] = -self.mesh_dy.P_grad[i] + beta * self.mesh_dy.p_k[i]
+            self.mesh_dy.x_k[i] += alpha * self.mesh_dy.p[i]
 
             self.mesh_dy.p_k[i] = self.mesh_dy.p[i]
             self.mesh_dy.grad_k[i] = self.mesh_dy.grad[i]
@@ -665,31 +735,42 @@ class Solver:
         return (g_Py - (y_Py / y_p) * p_g)/y_p
 
     @ti.kernel
-    def compute_E_delta(self)-> ti.f32:
+    def compute_E_delta(self)-> (ti.f32, ti.f32):
 
         g_p = 0.0
         p_Hp = 0.0
+
+        # max_value = ti.math.vec3(-1e3)
+        # for i in self.mesh_dy.p:
+        #     max_value = ti.atomic_max(abs(self.mesh_dy.p[i]), max_value)
+        #
+
 
         # self.mesh_dy.Hp.fill(0.0)
         for i in self.mesh_dy.grad:
             g_p += self.mesh_dy.grad[i].dot(self.mesh_dy.p[i])
             p_Hp += self.mesh_dy.p[i].dot(self.mesh_dy.hii[i] @ self.mesh_dy.p[i])
 
-        # for i in range(self.num_edges_dy):
-        #     v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
-        #     v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
-        #     pji  = self.mesh_dy.p[v1] - self.mesh_dy.p[v0]
-        #     p_Hp += pji.dot(self.mesh_dy.hij[i] @ pji)
+        for i in range(self.num_edges_dy):
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+            pji  = self.mesh_dy.p[v1] - self.mesh_dy.p[v0]
+            p_Hp += pji.dot(self.mesh_dy.hij[i] @ pji)
 
 
+        # alpha = g_p / p_Hp
+        alpha = 1.0
+        delta_E = -alpha * (g_p + 0.5 * alpha * p_Hp)
 
-        return -g_p - 0.5 * p_Hp
+        return alpha, delta_E
+
+
 
 
     def forward(self, n_substeps, n_iter):
 
         dt_sub = self.dt / n_substeps
-        E_delta0 = 0.0
+        delta_E0 = 0.0
         for _ in range(n_substeps):
 
             self.compute_y(self.g, dt_sub)
@@ -699,10 +780,11 @@ class Solver:
                 compliance_stretch = self.stiffness_stretch * dt_sub * dt_sub
                 compliance_bending = self.stiffness_bending * dt_sub * dt_sub
 
-                E_before = self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
+                E_k = self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
 
                 if self.selected_precond_type == 0:
                     self.apply_preconditioning_euler(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
                 elif self.selected_precond_type == 1:
                     self.apply_preconditioning_jacobi(self.mesh_dy.P_grad, self.mesh_dy.grad)
@@ -713,27 +795,28 @@ class Solver:
                     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
                     if self.selected_precond_type == 0:
                         self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
+                        # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
 
                     elif self.selected_precond_type == 1:
                         self.apply_preconditioning_jacobi(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
 
-                    # if self.enable_pncg:
                     beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
 
-                # print(beta)
-                # if beta < 0.0:
-                #     beta = 0.0
-                self.proceed(beta)
-                E_after = self.compute_spring_E(self.mesh_dy.x_k,compliance_stretch, compliance_bending)
 
-                # if cnt == 0:
-                #     E_delta0 = E_after
-                # else:
-                #     condition = E_after / E_delta0
-                #     print(condition)
-                #     if condition < 1e-3: break
-                # cnt += 1
-            # print(cnt)
+                self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
+
+                gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
+                if gP_g < self.threshold:
+                    break
+
+                alpha = 1.0
+                self.proceed(-alpha)
+
+
+
+                cnt += 1
+
+            print(cnt)
 
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)

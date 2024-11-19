@@ -318,10 +318,10 @@ class TriMesh:
                 # print("all length (after splitting) :", sum(block_length_per_subpartition_split))
 
                 # Print plots
-                plt.hist(block_length_per_subpartition, bins=max(block_length_per_subpartition))
-                plt.show()
-                plt.hist(block_length_per_subpartition_split, bins=max(block_length_per_subpartition_split))
-                plt.show()
+                # plt.hist(block_length_per_subpartition, bins=max(block_length_per_subpartition))
+                # plt.show()
+                # plt.hist(block_length_per_subpartition_split, bins=max(block_length_per_subpartition_split))
+                # plt.show()
 
                 # print("the number of partition (before splitting):", len(subpartition))
                 # print("the number of partition (after splitting):", len(subpartition_split))
@@ -451,6 +451,12 @@ class TriMesh:
         self.b_dup       = ti.Matrix.field(n=3, m=3, dtype=float, shape=main_partition_offset_vert_np[-1])
         self.c_dup       = ti.Matrix.field(n=3, m=3, dtype=float, shape=main_partition_offset_vert_np[-1])
         self.c_dup_tilde = ti.Matrix.field(n=3, m=3, dtype=float, shape=main_partition_offset_vert_np[-1])
+
+        self.a_dup_1d = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.b_dup_1d = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.c_dup_1d = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+        self.c_dup_tilde_1d = ti.field(dtype=float, shape=main_partition_offset_vert_np[-1])
+
         # print(main_partition_offset_vert_np[-1])
 
 
@@ -465,6 +471,7 @@ class TriMesh:
         self.y_tilde = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_origin = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.x_tmp = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.num_dup = ti.field(dtype=float, shape=self.num_verts)
         self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -522,6 +529,7 @@ class TriMesh:
 
         self.hii = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_verts)
         self.hii_e = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_verts)
+        self.hi_e = ti.field(dtype=float, shape=self.num_verts)
         self.hi = ti.field(dtype=float, shape=self.num_verts)
         self.hij = ti.Matrix.field(n=3, m=3, dtype=float, shape=self.num_edges)
 

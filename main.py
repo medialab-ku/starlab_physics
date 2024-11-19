@@ -163,7 +163,7 @@ def show_options_tri():
         elif solver_type_ui == 2:
             w.text("solver type: PD-PCG")
             sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
-            sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
+            sim_tri.enable_line_search = w.checkbox("line search", sim_tri.enable_line_search)
             sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
             sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 1000)
         elif solver_type_ui == 3:
@@ -177,7 +177,7 @@ def show_options_tri():
                 w.text("precond. type: Jacobi")
             sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.0001, 0.101)
             sim_tri.definiteness_fix = w.checkbox("definiteness fix", sim_tri.definiteness_fix)
-            sim_tri.use_line_search = w.checkbox("line search", sim_tri.use_line_search)
+            sim_tri.enable_line_search = w.checkbox("line search", sim_tri.enable_line_search)
             sim_tri.print_stats = w.checkbox("print stats.", sim_tri.print_stats)
             sim_tri.max_cg_iter = w.slider_int("CG max iter", sim_tri.max_cg_iter, 1, 1000)
 
@@ -432,7 +432,7 @@ while window.running:
                 "YM_b": YM_b_ui,
                 "PCG_threshold": sim_tri.threshold,
                 "PCG_definiteness_fix": sim_tri.definiteness_fix,
-                "PCG_use_line_search": sim_tri.use_line_search,
+                "PCG_use_line_search": sim_tri.enable_line_search,
                 "PCG_print_stats": sim_tri.print_stats,
                 "PCG_max_cg_iter": sim_tri.max_cg_iter,
                 "PR": sim_tet.PR
