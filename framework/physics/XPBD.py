@@ -563,6 +563,7 @@ class Solver:
         compliance_attach = 1e5
         E = 0.0
 
+        # Momentum term: 1/2 * || x - y ||^2_M
         for i in self.mesh_dy.p:
             dx_m = (x[i] - self.mesh_dy.y_tilde[i])
             E += 0.5 * self.mesh_dy.m[i] * dx_m.dot(dx_m)
@@ -571,6 +572,8 @@ class Solver:
                 dx = x[i] - self.mesh_dy.x0[i]
                 E += 0.5 * compliance_attach * dx.dot(dx)
 
+
+        # Easticity term: spring energy
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
             v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
@@ -787,11 +790,13 @@ class Solver:
                 E_k = self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
 
                 if self.selected_precond_type == 0:
+
                     ti.profiler.clear_kernel_profiler_info()  # [1]
                     self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
                     # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
                     query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler_1d.__name__)  # [2]
                     print("Euler elapsed time(avg_in_ms) =", query_result.avg)
+
                     # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
                 elif self.selected_precond_type == 1:
@@ -813,9 +818,9 @@ class Solver:
 
                     beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
 
+                E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
 
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
-
                 gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
                 if gP_g < self.threshold:
                     break

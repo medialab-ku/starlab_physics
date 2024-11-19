@@ -299,6 +299,8 @@ class TriMesh:
                 # to prevent a block of partition that have excessively long length, we should split the partition!
                 block_length_per_subpartition = [len(p) for p in subpartition]
                 split_threshold = int(np.median(block_length_per_subpartition)) // 2 * 2 # the nearest small even number from the average
+
+                # split_threshold = 10
                 # print("Split threshold :", split_threshold)
 
                 subpartition_split = []
@@ -407,7 +409,7 @@ class TriMesh:
         main_partition_offset_vert_np = np.array(main_partition_offset_vert, dtype=int)
         main_partition_flattened_np = np.array(main_partition_flattened, dtype=int)
 
-        print()
+        # print()
         # print("eid_dup // 2 =", eid_dup_main_np.shape[0] // 2)
         # print("edge_len :", self.num_edges)
         #
