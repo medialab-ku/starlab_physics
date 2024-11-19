@@ -470,6 +470,7 @@ class TriMesh:
         # print(self.eid_test)
         # fields about vertices
         self.x_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.x_prev = ti.Vector.field(n=3, dtype=float, shape=self.num_verts) # used in backward
         self.y_tilde = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.y_origin = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.x = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -477,6 +478,7 @@ class TriMesh:
         self.num_dup = ti.field(dtype=float, shape=self.num_verts)
         self.x0 = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.v = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.v_prev = ti.Vector.field(n=3, dtype=float, shape=self.num_verts) # used in backward
 
         self.grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.P_grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -513,8 +515,10 @@ class TriMesh:
         self.x_k.fill(0.0)
         self.y_origin.fill(0.0)
         self.x.from_numpy(self.x_np)
+        self.x_prev.copy_from(self.x)
         self.x0.copy_from(self.x)
         self.v.fill(0.0)
+        self.v_prev.fill(0.0)
         self.p.fill(0.0)
         self.dv.fill(0.0)
         self.nc.fill(0.0)
@@ -667,7 +671,9 @@ class TriMesh:
         self.x_k.fill(0.0)
         self.y_origin.fill(0.0)
         self.x.from_numpy(self.x_np)
+        self.x_prev.copy_from(self.x)
         self.v.fill(0.0)
+        self.v_prev.fill(0.0)
         self.v_dup.fill(0.0)
         self.p.fill(0.0)
         self.dv.fill(0.0)

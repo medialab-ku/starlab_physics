@@ -50,6 +50,8 @@ class make_plot:
             self.graph_type = "line"
         elif self.x_name == "frame" and self.y_name == "iteration":
             self.graph_type = "line"
+        elif self.x_name == "iteration" and self.y_name == "energy":
+            self.graph_type = "line"
 
         self.aggregated_data = {}
 

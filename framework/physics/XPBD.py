@@ -2,6 +2,8 @@ import taichi as ti
 from pandas.core.ops.mask_ops import raise_for_nan
 
 from framework.physics.conjugate_gradient import ConjugateGradient
+from framework.utilities.make_plot import make_plot
+
 @ti.data_oriented
 class Solver:
     def __init__(
@@ -72,6 +74,8 @@ class Solver:
         self.E_curr = 0.0
         self.E_max = 0.0
         self.E_min = 0.0
+
+        self.plot = make_plot("../../results/", "iteration", "energy")
 
     ####################################################################################################################
 
@@ -770,18 +774,39 @@ class Solver:
 
         return alpha, delta_E
 
-
-
+    def backward(self):
+        self.mesh_dy.x.copy_from(self.mesh_dy.x_prev)
+        self.mesh_dy.v.copy_from(self.mesh_dy.v_prev)
 
     def forward(self, n_substeps, n_iter):
 
         dt_sub = self.dt / n_substeps
         delta_E0 = 0.0
 
+        # store current x,v to utilize the backward process
+        self.mesh_dy.x_prev.copy_from(self.mesh_dy.x)
+        self.mesh_dy.v_prev.copy_from(self.mesh_dy.v)
+
         for _ in range(n_substeps):
 
             self.compute_y(self.g, dt_sub)
             self.conv_iter = 0
+            #
+            # plot_data_temp = {
+            #     "name": ''.join(random.choices(characters, k=16)),  # Hash name
+            #     "label": "Euler" if precond_type_ui == 0 else "Jacobi",
+            #     "conditions": {
+            #         "precond_type": "Euler" if precond_type_ui == 0 else "Jacobi",
+            #         "dt": dt_tri_ui,
+            #         "substep": n_substep,
+            #         "iter": n_iter,
+            #         "damping": damping_ui,
+            #         "YM": YM_ui,
+            #         "YM_b": YM_b_ui,
+            #     },
+            #     "data": {}
+            # }
+
             for _ in range(n_iter):
 
                 compliance_stretch = self.stiffness_stretch * dt_sub * dt_sub

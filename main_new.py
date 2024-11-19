@@ -122,6 +122,7 @@ camera.fov(40)
 camera.up(0, 1, 0)
 
 run_sim = False
+already_backward = False
 MODE_WIREFRAME = False
 LOOKAt_ORIGIN = True
 SHOW_GRAPH = False
@@ -281,17 +282,37 @@ while window.running:
         if window.event.key == 'y':
             g_selector_tri.pop_sewing()
 
-        if window.event.key == 'u':
-            sim_tri.move_particle_x(-0.05)
-
-        if window.event.key == 'o':
-            sim_tri.move_particle_x(0.05)
+        # if window.event.key == 'u':
+        #     sim_tri.move_particle_x(-0.05)
+        #
+        # if window.event.key == 'o':
+        #     sim_tri.move_particle_x(0.05)
 
         # if window.event.key == 'u':
         #     g_selector.remove_all_sewing()
 
+        if window.event.key == 'o' and run_sim == False: # run only one frame + only available in paused simulation
+            run_sim = True
+            sim_tri.forward(n_substeps=n_substep, n_iter=n_iter)
+            frame_cpu += 1
+            print("The simulator ran only a frame! :", frame_cpu-1, "->", frame_cpu)
+            run_sim = False
+
+        if window.event.key == 'b' and run_sim == False: # run backward + only available in paused simulation
+            if frame_cpu == 0:
+                print("The current frame is 0")
+            else:
+                if already_backward:
+                    print("The simulation have gone backward. You have to forward simulation instead!")
+                else:
+                    sim_tri.backward()
+                    frame_cpu -= 1
+                    print("The simulator went backward frame! :", frame_cpu+1, "->", frame_cpu)
+                    already_backward = True
+
         if window.event.key == ' ':
             run_sim = not run_sim
+            already_backward = False
 
         if window.event.key == 'r':
             frame_cpu = 0
