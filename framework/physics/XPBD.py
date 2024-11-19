@@ -540,6 +540,7 @@ class Solver:
 
             self.c[v0_d] = -B
             self.c_1d[v0_d] = -compliance_stretch
+
             self.a[v1_d] = -B
             self.a_1d[v1_d] = -compliance_stretch
 
@@ -604,7 +605,7 @@ class Solver:
             ti.loop_config(serialize=True)
             for id in range(size):  # lb+1 ~ ub-1
                 i = id + offset
-                tmp = ti.math.inverse(self.b[i] - self.a[i] * self.c_tilde[i - 1])
+                tmp = ti.math.inverse(self.b[i] - self.a[i] @ self.c_tilde[i - 1])
 
                 self.c_tilde[i] = tmp @ self.c[i]
             #
@@ -612,7 +613,7 @@ class Solver:
             ti.loop_config(serialize=True)
             for id in range(1, size):  # lb+1 ~ ub
                 i = id + offset
-                tmp = ti.math.inverse(self.b[i] - self.a[i] * self.c_tilde[i - 1])
+                tmp = ti.math.inverse(self.b[i] - self.a[i] @ self.c_tilde[i - 1])
                 self.d_tilde[i] = tmp @ (self.d[i] - self.a[i] @ self.d_tilde[i - 1])
 
             self.mesh_dy.dx_dup[offset + size - 1] = self.d_tilde[offset + size - 1]
@@ -653,7 +654,6 @@ class Solver:
             ti.loop_config(serialize=True)
             for id in range(size):  # lb+1 ~ ub-1
                 i = id + offset
-
                 self.c_tilde_1d[i] = self.c_1d[i] / (self.b_1d[i] - self.a_1d[i] * self.c_tilde_1d[i - 1])
             #
             # self.d_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.d[offset]
@@ -668,7 +668,7 @@ class Solver:
             ti.loop_config(serialize=True)
             for i in range(0, size - 1):
                 idx = size - 2 - i + offset  # ub-1 ~ lb
-                self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] -  self.mesh_dy.dx_dup[idx + 1] / self.c_tilde_1d[idx]
+                self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.mesh_dy.dx_dup[idx + 1] * self.c_tilde_1d[idx]
 
         ret.fill(0.0)
         for di in self.mesh_dy.x_dup:
@@ -682,7 +682,8 @@ class Solver:
     def apply_preconditioning_jacobi(self, ret: ti.template(), x: ti.template()):
 
         for i in self.mesh_dy.x_k:
-            ret[i] = ti.math.inverse(self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]) @ x[i]
+            # ret[i] = ti.math.inverse(self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]) @ x[i]
+            ret[i] =  x[i] / (self.mesh_dy.hi[i] + self.mesh_dy.hi_e[i])
 
 
     @ti.kernel
@@ -773,6 +774,7 @@ class Solver:
 
         dt_sub = self.dt / n_substeps
         delta_E0 = 0.0
+
         for _ in range(n_substeps):
 
             self.compute_y(self.g, dt_sub)
@@ -785,11 +787,18 @@ class Solver:
                 E_k = self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
 
                 if self.selected_precond_type == 0:
-                    self.apply_preconditioning_euler(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    ti.profiler.clear_kernel_profiler_info()  # [1]
+                    self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler_1d.__name__)  # [2]
+                    print("Euler elapsed time(avg_in_ms) =", query_result.avg)
                     # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
                 elif self.selected_precond_type == 1:
+                    ti.profiler.clear_kernel_profiler_info()  # [1]
                     self.apply_preconditioning_jacobi(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_jacobi.__name__)  # [2]
+                    print("Jacobi elapsed time(avg_in_ms) =", query_result.avg)
 
                 beta = 0.0
 
@@ -819,4 +828,19 @@ class Solver:
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
+
+            # if self.selected_precond_type == 0:
+            #     query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler.__name__)  # [2]
+            #     # print("kernel executed times =", query_result.counter)
+            #     # print("kernel elapsed time(min_in_ms) =", query_result.min)
+            #     # print("kernel elapsed time(max_in_ms) =", query_result.max)
+            #     print("kernel elapsed time(avg_in_ms) =", query_result.avg)
+            #
+            # elif self.selected_precond_type == 1:
+            #     query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_jacobi.__name__)  # [2]
+            #     # print("kernel executed times =", query_result.counter)
+            #     # print("kernel elapsed time(min_in_ms) =", query_result.min)
+            #     # print("kernel elapsed time(max_in_ms) =", query_result.max)
+            #     print("kernel elapsed time(avg_in_ms) =", query_result.avg)
+
             # self.copy_to_dup()
