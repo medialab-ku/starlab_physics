@@ -52,6 +52,8 @@ plot = make_plot(plot_export_path, "frame", "iteration")
 characters = 'ABCDEF0123456789'
 plot_data_temp = {}
 
+avg_conv_iter = 0
+
 if not os.path.exists(config_path):
     with open(config_path, 'w') as json_file:
         json.dump(default_data, json_file, indent=4)
@@ -428,12 +430,14 @@ while window.running:
             if frame_cpu < frame_end:
                 # print(sim_tri.PCG.cg_iter)
                 E = sim_tri.compute_spring_energy(YM_ui)
+                avg_conv_iter += sim_tri.conv_iter
                 # plot_data_temp["data"][frame_cpu] = E
                 plot_data_temp["data"][frame_cpu] = sim_tri.PCG.cg_iter
-
             else:
                 plot.collect_data(plot_data_temp)
                 run_sim = False
+                print(avg_conv_iter / frame_end)
+                avg_conv_iter = 0
 
     scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
     scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)

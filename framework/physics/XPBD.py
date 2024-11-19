@@ -29,6 +29,8 @@ class Solver:
         self.stiffness_bending = stiffness_bending
         self.g = g
         self.dt = dt
+
+        self.conv_iter = 0
         self.damping = 0.001
         self.threshold = 1e-4
         self.max_cg_iter = 100
@@ -774,7 +776,7 @@ class Solver:
         for _ in range(n_substeps):
 
             self.compute_y(self.g, dt_sub)
-            cnt = 0
+            self.conv_iter = 0
             for _ in range(n_iter):
 
                 compliance_stretch = self.stiffness_stretch * dt_sub * dt_sub
@@ -791,7 +793,7 @@ class Solver:
 
                 beta = 0.0
 
-                if cnt > 0 and self.enable_pncg:
+                if self.conv_iter > 0 and self.enable_pncg:
                     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
                     if self.selected_precond_type == 0:
                         self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
@@ -811,12 +813,8 @@ class Solver:
 
                 alpha = 1.0
                 self.proceed(-alpha)
+                self.conv_iter += 1
 
-
-
-                cnt += 1
-
-            print(cnt)
 
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
