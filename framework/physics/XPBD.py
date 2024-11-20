@@ -844,11 +844,14 @@ class Solver:
 
                 E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
 
-                if is_run_once:
-                    plot_data_temp["data"][self.conv_iter] = E # i : substep
 
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
                 gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
+
+                if is_run_once:
+                    plot_data_temp["data"][self.conv_iter] = gP_g  # i : substep
+
+
                 if gP_g < self.threshold:
                     break
 
