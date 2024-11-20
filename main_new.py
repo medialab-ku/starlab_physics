@@ -292,11 +292,10 @@ while window.running:
         #     g_selector.remove_all_sewing()
 
         if window.event.key == 'o' and run_sim == False: # run only one frame + only available in paused simulation
-            run_sim = True
             sim_tri.forward(n_substeps=n_substep, n_iter=n_iter)
+            sim_tri.plot
             frame_cpu += 1
             print("The simulator ran only a frame! :", frame_cpu-1, "->", frame_cpu)
-            run_sim = False
 
         if window.event.key == 'b' and run_sim == False: # run backward + only available in paused simulation
             if frame_cpu == 0:

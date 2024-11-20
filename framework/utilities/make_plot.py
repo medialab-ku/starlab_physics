@@ -1,6 +1,9 @@
+import matplotlib
 import matplotlib.pyplot as plt
 import json
 from datetime import datetime
+
+matplotlib.use('Agg')
 
 # Sample data
 # data_1 = {
@@ -36,7 +39,7 @@ from datetime import datetime
 # }
 
 class make_plot:
-    def __init__(self, output_path, x_name: str, y_name: str):
+    def __init__(self, output_path, x_name: str, y_name: str, graph_name = "Graph"):
         self.color_palette = [
             '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
             '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
@@ -44,6 +47,7 @@ class make_plot:
         self.output_path = output_path
         self.x_name = x_name
         self.y_name = y_name
+        self.graph_name = graph_name
 
         self.graph_type = "line"
         if self.x_name == "frame" and self.y_name == "energy":
@@ -104,7 +108,7 @@ class make_plot:
         plt.xlabel(self.x_name)
         plt.ylabel(self.y_name)
         plt.ylim(min_value, max_value)
-        plt.title("Graph") # will be revised soon
+        plt.title(self.graph_name) # will be revised soon
         plt.legend()
 
         plot = plt.gcf() # make the plot object
