@@ -782,7 +782,7 @@ class Solver:
         self.mesh_dy.x.copy_from(self.mesh_dy.x_prev)
         self.mesh_dy.v.copy_from(self.mesh_dy.v_prev)
 
-    def forward(self, n_substeps, n_iter):
+    def forward(self, n_substeps, n_iter, is_run_once = False, frame = -1):
 
         dt_sub = self.dt / n_substeps
         delta_E0 = 0.0
@@ -796,14 +796,15 @@ class Solver:
             self.compute_y(self.g, dt_sub)
             self.conv_iter = 0
 
-            characters = 'ABCDEF0123456789'
-            plot_data_temp = {
-                "name": ''.join(random.choices(characters, k=16)),  # Hash name
-                "label": "Euler" if self.selected_precond_type == 0 else "Jacobi",
-                "substep": i+1,
-                "data": {} # per iter
-            }
-            self.plot.graph_name = "substep = " + str(i+1)
+            if is_run_once:
+                characters = 'ABCDEF0123456789'
+                plot_data_temp = {
+                    "name": ''.join(random.choices(characters, k=16)),  # Hash name
+                    "label": "Euler" if self.selected_precond_type == 0 else "Jacobi",
+                    "substep": i+1,
+                    "data": {} # per iter
+                }
+                self.plot.graph_name = "substep = " + str(i+1) + " / frame = " + str(frame)
 
             for _ in range(n_iter):
 
@@ -843,7 +844,8 @@ class Solver:
 
                 E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
 
-                plot_data_temp["data"][self.conv_iter] = E # i : substep
+                if is_run_once:
+                    plot_data_temp["data"][self.conv_iter] = E # i : substep
 
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
                 gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
@@ -854,14 +856,15 @@ class Solver:
                 self.proceed(-alpha)
                 self.conv_iter += 1
 
-            self.plot.collect_data(plot_data_temp)
-            p = self.plot.make_graph()
-            if p is None:
-                print("The graph is not correctly created!")
-                print("You should not change the end frame number during collecting data...")
-            else:
-                self.plot.export_result(p)
-                print("The graph is successfully exported!, substep :", i)
+            if is_run_once:
+                self.plot.collect_data(plot_data_temp)
+                p = self.plot.make_graph()
+                if p is None:
+                    print("The graph is not correctly created!")
+                    print("You should not change the end frame number during collecting data...")
+                else:
+                    self.plot.export_result(p)
+                    print("The graph is successfully exported!, substep :", i)
 
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)

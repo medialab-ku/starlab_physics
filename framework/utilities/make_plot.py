@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import json
 from datetime import datetime
 
-matplotlib.use('Agg')
+# matplotlib.use('TKAgg')
 
 # Sample data
 # data_1 = {
