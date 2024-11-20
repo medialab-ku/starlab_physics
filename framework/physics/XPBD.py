@@ -592,15 +592,32 @@ class Solver:
 
         return E
 
-
     @ti.kernel
-    def apply_preconditioning_euler(self, ret: ti.template(), x: ti.template()):
+    def copy_to_duplicates(self, x: ti.template()):
 
         for di in self.mesh_dy.x_dup:
             vi = self.mesh_dy.dup_to_ori[di]
 
             self.b[di] = self.mesh_dy.hii[vi] + self.mesh_dy.hii_e[vi]
             self.d[di] = x[vi]
+
+    @ti.kernel
+    def copy_to_duplicates_1d(self, x: ti.template()):
+
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+
+            self.b_1d[di] = self.mesh_dy.hi[vi] + self.mesh_dy.hi_e[vi]
+            self.d[di] = x[vi]
+
+    @ti.kernel
+    def apply_preconditioning_euler(self):
+
+        # for di in self.mesh_dy.x_dup:
+        #     vi = self.mesh_dy.dup_to_ori[di]
+        #
+        #     self.b[di] = self.mesh_dy.hii[vi] + self.mesh_dy.hii_e[vi]
+        #     self.d[di] = x[vi]
 
         n_part = (self.mesh_dy.partition_offset.shape[0] - 1)
         for pi in range(n_part):
@@ -633,6 +650,17 @@ class Solver:
                 idx = size - 2 - i + offset  # ub-1 ~ lb
                 self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.c_tilde[idx] @ self.mesh_dy.dx_dup[idx + 1]
 
+        # ret.fill(0.0)
+        # for di in self.mesh_dy.x_dup:
+        #     vi = self.mesh_dy.dup_to_ori[di]
+        #     ret[vi] += self.mesh_dy.dx_dup[di]
+        #
+        # for i in self.mesh_dy.x_k:
+        #     ret[i] /= self.mesh_dy.num_dup[i]
+
+    @ti.kernel
+    def copy_from_duplicates(self, ret: ti.template()):
+
         ret.fill(0.0)
         for di in self.mesh_dy.x_dup:
             vi = self.mesh_dy.dup_to_ori[di]
@@ -642,13 +670,13 @@ class Solver:
             ret[i] /= self.mesh_dy.num_dup[i]
 
     @ti.kernel
-    def apply_preconditioning_euler_1d(self, ret: ti.template(), x: ti.template()):
+    def apply_preconditioning_euler_1d(self):
 
-        for di in self.mesh_dy.x_dup:
-            vi = self.mesh_dy.dup_to_ori[di]
-
-            self.b_1d[di] = self.mesh_dy.hi[vi] + self.mesh_dy.hi_e[vi]
-            self.d[di] = x[vi]
+        # for di in self.mesh_dy.x_dup:
+        #     vi = self.mesh_dy.dup_to_ori[di]
+        #
+        #     self.b_1d[di] = self.mesh_dy.hi[vi] + self.mesh_dy.hi_e[vi]
+        #     self.d[di] = x[vi]
 
         n_part = (self.mesh_dy.partition_offset.shape[0] - 1)
         for pi in range(n_part):
@@ -681,13 +709,13 @@ class Solver:
                 idx = size - 2 - i + offset  # ub-1 ~ lb
                 self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.mesh_dy.dx_dup[idx + 1] * self.c_tilde_1d[idx]
 
-        ret.fill(0.0)
-        for di in self.mesh_dy.x_dup:
-            vi = self.mesh_dy.dup_to_ori[di]
-            ret[vi] += self.mesh_dy.dx_dup[di]
-
-        for i in self.mesh_dy.x_k:
-            ret[i] /= self.mesh_dy.num_dup[i]
+        # ret.fill(0.0)
+        # for di in self.mesh_dy.x_dup:
+        #     vi = self.mesh_dy.dup_to_ori[di]
+        #     ret[vi] += self.mesh_dy.dx_dup[di]
+        #
+        # for i in self.mesh_dy.x_k:
+        #     ret[i] /= self.mesh_dy.num_dup[i]
 
     @ti.kernel
     def apply_preconditioning_jacobi(self, ret: ti.template(), x: ti.template()):
@@ -816,10 +844,16 @@ class Solver:
                 if self.selected_precond_type == 0:
 
                     ti.profiler.clear_kernel_profiler_info()  # [1]
-                    self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    self.copy_to_duplicates_1d(self.mesh_dy.grad)
+                    self.apply_preconditioning_euler_1d()
+                    self.copy_from_duplicates(self.mesh_dy.P_grad)
                     # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
-                    query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler_1d.__name__)  # [2]
-                    print("Euler elapsed time(avg_in_ms) =", query_result.avg)
+                    query_result_1 = ti.profiler.query_kernel_profiler_info(self.copy_to_duplicates.__name__)  # [2]
+                    query_result_2 = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler_1d.__name__)  # [2]
+                    query_result_3 = ti.profiler.query_kernel_profiler_info(self.copy_from_duplicates.__name__)  # [2]
+                    print("copy elapsed time(avg_in_ms) =", query_result_1.avg + query_result_3.avg)
+                    print("PTS  elapsed time(avg_in_ms) =", query_result_2.avg)
+                    # print("PBTS elapsed time(avg_in_ms) =", query_result.avg)
 
                     # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
@@ -834,7 +868,10 @@ class Solver:
                 if self.conv_iter > 0 and self.enable_pncg:
                     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
                     if self.selected_precond_type == 0:
-                        self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
+                        # self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
+                        self.copy_to_duplicates_1d(self.mesh_dy.grad_delta)
+                        self.apply_preconditioning_euler_1d()
+                        self.copy_from_duplicates(self.mesh_dy.P_grad_delta)
                         # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
 
                     elif self.selected_precond_type == 1:
