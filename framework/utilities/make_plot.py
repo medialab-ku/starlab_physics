@@ -59,16 +59,6 @@ class make_plot:
 
         self.aggregated_data = {}
 
-        # self.collect_data(data_1["conditions"], data_1["data"])
-        # self.collect_data(data_2["conditions"], data_2["data"])
-
-        # plot = self.make_graph()
-        # if plot is None:
-        #     print("The graph is not correctly created!")
-        #     print("You should not change the end frame number during collecting data...")
-        #     return
-        # self.export_result(plot)
-
     def collect_data(self, data: dict):
         name = data["name"]
         if name in self.aggregated_data:
@@ -78,29 +68,22 @@ class make_plot:
             print("The result data is collected successfully!")
 
     def make_graph(self):
-        x = None
+        x = []
         y = []
         labels = []
 
         for name, cond_and_data in self.aggregated_data.items():
             labels.append(cond_and_data["label"])
 
-            if x == None:
-                x = list(cond_and_data["data"].keys())
-            elif x == list(cond_and_data["data"].keys()):
-                pass
-            else:
-                print("The x-axis data is not equal to other data!")
-                return None
-
+            x.append(list(cond_and_data["data"].keys()))
             y.append(list(cond_and_data["data"].values()))
 
         for i, label in enumerate(labels):
             color = self.color_palette[i % len(self.color_palette)]
             if self.graph_type == "line":
-                plt.plot(x, y[i], color=color, label=label)
+                plt.plot(x[i], y[i], color=color, label=label)
             elif self.graph_type == "bar":
-                plt.bar(x, y[i], color=color, label=label)
+                plt.bar(x[i], y[i], color=color, label=label)
 
         min_value = min(min(y_graph) for y_graph in y)
         max_value = max(max(y_graph) for y_graph in y)
@@ -116,8 +99,8 @@ class make_plot:
 
     def export_result(self, plot):
         current_time_str = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        json_file_path = self.output_path + current_time_str + ".json"
-        plot_file_path = self.output_path + current_time_str + ".png"
+        json_file_path = self.output_path + current_time_str + self.graph_name + ".json"
+        plot_file_path = self.output_path + current_time_str + self.graph_name + ".png"
 
         # export the dictionary to JSON
         with open(json_file_path, "w") as json_file:

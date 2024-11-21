@@ -78,9 +78,6 @@ class Solver:
         self.E_max = 0.0
         self.E_min = 0.0
 
-        self.plot_export_path = str(Path(__file__).resolve().parent.parent.parent / "results") + "/"
-        self.plot = make_plot(self.plot_export_path, "iteration", "energy")
-
     ####################################################################################################################
 
     @ti.kernel
@@ -830,9 +827,9 @@ class Solver:
                     "name": ''.join(random.choices(characters, k=16)),  # Hash name
                     "label": "Euler" if self.selected_precond_type == 0 else "Jacobi",
                     "substep": i+1,
+                    "frame": frame,
                     "data": {} # per iter
                 }
-                self.plot.graph_name = "substep = " + str(i+1) + " / frame = " + str(frame)
 
             for _ in range(n_iter):
 
@@ -886,8 +883,7 @@ class Solver:
                 gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
 
                 if is_run_once:
-                    plot_data_temp["data"][self.conv_iter] = gP_g  # i : substep
-
+                    plot_data_temp["data"][self.conv_iter] = gP_g
 
                 if gP_g < self.threshold:
                     break
@@ -896,19 +892,14 @@ class Solver:
                 self.proceed(-alpha)
                 self.conv_iter += 1
 
-            if is_run_once:
-                self.plot.collect_data(plot_data_temp)
-                p = self.plot.make_graph()
-                if p is None:
-                    print("The graph is not correctly created!")
-                    print("You should not change the end frame number during collecting data...")
-                else:
-                    self.plot.export_result(p)
-                    print("The graph is successfully exported!, substep :", i)
-
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
+
+            if is_run_once:
+                return plot_data_temp
+            else:
+                return None
 
             # if self.selected_precond_type == 0:
             #     query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler.__name__)  # [2]

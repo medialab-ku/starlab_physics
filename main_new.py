@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import taichi as ti
 import json
-import random as rd
+import random
+import copy
 
 from Scenes import concat_test as scene1
 import os
@@ -48,7 +49,7 @@ default_data = {
 plot_export_path = str(Path(__file__).resolve().parent / "results") + "/"
 # x_name == "frame" and y_name == "iteration" -> line graph
 # x_name == "frame" and y_name == "energy" -> line graph
-plot = make_plot(plot_export_path, "frame", "iteration")
+plot = make_plot(plot_export_path, "iteration", "energy")
 characters = 'ABCDEF0123456789'
 plot_data_temp = {}
 
@@ -307,6 +308,35 @@ while window.running:
                     frame_cpu -= 1
                     print("The simulator went backward frame! :", frame_cpu+1, "->", frame_cpu)
                     already_backward = True
+
+        if window.event.key == 'c' and run_sim == False: # make comparison between Jacobi and Euler
+            # Do Jacobi forward
+            sim_tri.selected_precond_type = 0
+            euler_data_temp = sim_tri.forward(n_substeps=n_substep, n_iter=n_iter, is_run_once=True, frame=frame_cpu)
+            euler_data = {}
+            if euler_data_temp is not None:
+                euler_data = copy.deepcopy(euler_data_temp)
+            frame_cpu += 1
+
+            # Go backward
+            sim_tri.backward()
+            frame_cpu -= 1
+
+            # Do Euler forward
+            sim_tri.selected_precond_type = 1
+            jacobi_data_temp = sim_tri.forward(n_substeps=n_substep, n_iter=n_iter, is_run_once=True, frame=frame_cpu)
+            jacobi_data = {}
+            if jacobi_data_temp is not None:
+                jacobi_data = copy.deepcopy(jacobi_data_temp)
+            frame_cpu += 1
+
+            # Make graph
+            plot.aggregated_data = {}
+            plot.aggregated_data[euler_data["name"]] = euler_data
+            plot.aggregated_data[jacobi_data["name"]] = jacobi_data
+            p = plot.make_graph()
+            plot.graph_name = f"_frame_{frame_cpu - 1}"
+            plot.export_result(p)
 
         if window.event.key == ' ':
             run_sim = not run_sim
