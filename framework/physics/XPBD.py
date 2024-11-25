@@ -853,6 +853,16 @@ class Solver:
         self.mesh_dy.x.copy_from(self.mesh_dy.x_prev)
         self.mesh_dy.v.copy_from(self.mesh_dy.v_prev)
 
+    def line_search(self):
+
+        gTp = self.dot(self.mesh_dy.grad, self.mesh_dy.p)
+        self.compute_matrix_free_H(self.mesh_dy.H_p, self.mesh_dy.p)
+        pHp = self.dot(self.mesh_dy.p, self.mesh_dy.H_p)
+        alpha = gTp / pHp
+
+        return alpha
+
+
     def forward(self, n_substeps, n_iter, is_run_once = False, frame = -1):
 
         dt_sub = self.dt / n_substeps
@@ -925,6 +935,8 @@ class Solver:
                 E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
 
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
+
+
                 gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
 
                 if is_run_once:
@@ -934,6 +946,9 @@ class Solver:
                     break
 
                 alpha = 1.0
+                if self.enable_line_search:
+                    alpha = self.line_search()
+
                 self.proceed(-alpha)
                 self.conv_iter += 1
 

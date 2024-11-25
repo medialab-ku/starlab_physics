@@ -545,7 +545,7 @@ class TriMesh:
         self.z = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.z_next = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.b = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
-        self.p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        # self.p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
 
         self.eid_field = ti.field(dtype=int, shape=(self.num_edges, 2))
