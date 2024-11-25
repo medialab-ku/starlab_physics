@@ -503,7 +503,7 @@ class Solver:
         self.solve_spring_constraints_euler_path_tridiagonal_x(compliance_stretch, compliance_bending)
 
     @ti.kernel
-    def compute_spring_E_grad_and_hess(self, compliance_stretch: ti.f32, compliance_bending: ti.f32) -> ti.f32:
+    def compute_spring_E_grad_and_hess(self, compliance_stretch: ti.f32, compliance_bending: ti.f32, definiteness_fix: bool) -> ti.f32:
 
         id3 = ti.Matrix.identity(dt=float, n=3)
         compliance_attach = 1e4
@@ -531,14 +531,38 @@ class Solver:
             v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
             x01 = self.mesh_dy.x_k[v0] - self.mesh_dy.x_k[v1]
             l = x01.norm()
+
+            # if l < 1e-5:
+            #     l = 1e-5
+
             n = x01.normalized()
-
-            E += 0.5 * compliance_stretch * (l0 - l) ** 2
+            alpha = l0 / l
             nnT = n.outer_product(n)
-            # alpha = (1.0 - l0 / l)
+            E += 0.5 * compliance_stretch * (l0 - l) ** 2
 
-            alpha = 1.0
-            B = compliance_stretch * (alpha * id3 + (1.0 - alpha) * nnT)
+            tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
+            t1 = ti.math.normalize(n.cross(tmp))
+            # t1 = ti.math.vec3([-n[1], n[0], 0.0])
+            t2 = n.cross(t1)
+
+
+            # if alpha > 1.0:
+            #    alpha = 1.0
+            D = ti.math.mat3([compliance_stretch, 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha), 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha)])
+            P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+
+            # print("det:", i, P.determinant())
+
+            B = (P @ D @ P.inverse())
+            # print(B)
+
+            # B = compliance_stretch * ((1.0 - alpha) * id3 + alpha * nnT)
+            # if self.definiteness_fix:
+            #     D = ti.math.mat3([1.0, 0.0, 0.0, 0.0, abs(1.0 - alpha), 0.0, 0.0, 0.0, abs(1.0 - alpha)])
+            #     P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+            #     B = compliance_stretch * (P @ D @ P.inverse())
+
+
             # alpha = 0.5
             self.mesh_dy.hij[i] = B
             # self.mesh_dy.hij[i] = -compliance_stretch * id3
@@ -594,7 +618,6 @@ class Solver:
 
         for di in self.mesh_dy.x_dup:
             vi = self.mesh_dy.dup_to_ori[di]
-
             self.b[di] = self.mesh_dy.hii[vi] + self.mesh_dy.hii_e[vi]
             self.d[di] = x[vi]
 
@@ -608,13 +631,13 @@ class Solver:
             self.d[di] = x[vi]
 
     @ti.kernel
-    def apply_preconditioning_euler(self):
+    def apply_preconditioning_euler(self, ret: ti.template(), x: ti.template()):
 
-        # for di in self.mesh_dy.x_dup:
-        #     vi = self.mesh_dy.dup_to_ori[di]
-        #
-        #     self.b[di] = self.mesh_dy.hii[vi] + self.mesh_dy.hii_e[vi]
-        #     self.d[di] = x[vi]
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+
+            self.b[di] = self.mesh_dy.hii[vi] + self.mesh_dy.hii_e[vi]
+            self.d[di] = x[vi]
 
         n_part = (self.mesh_dy.partition_offset.shape[0] - 1)
         for pi in range(n_part):
@@ -626,6 +649,7 @@ class Solver:
             # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
 
             # for j in ti.static(range(3)):
+
             self.c_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.c[offset]
             ti.loop_config(serialize=True)
             for id in range(size):  # lb+1 ~ ub-1
@@ -647,13 +671,14 @@ class Solver:
                 idx = size - 2 - i + offset  # ub-1 ~ lb
                 self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.c_tilde[idx] @ self.mesh_dy.dx_dup[idx + 1]
 
-        # ret.fill(0.0)
-        # for di in self.mesh_dy.x_dup:
-        #     vi = self.mesh_dy.dup_to_ori[di]
-        #     ret[vi] += self.mesh_dy.dx_dup[di]
-        #
-        # for i in self.mesh_dy.x_k:
-        #     ret[i] /= self.mesh_dy.num_dup[i]
+
+        ret.fill(0.0)
+        for di in self.mesh_dy.x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+            ret[vi] += self.mesh_dy.dx_dup[di]
+
+        for i in self.mesh_dy.x_k:
+            ret[i] /= self.mesh_dy.num_dup[i]
 
     @ti.kernel
     def copy_from_duplicates(self, ret: ti.template()):
@@ -836,29 +861,29 @@ class Solver:
                 compliance_stretch = self.stiffness_stretch * dt_sub * dt_sub
                 compliance_bending = self.stiffness_bending * dt_sub * dt_sub
 
-                E_k = self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
+                E_k = self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending, self.definiteness_fix)
 
                 if self.selected_precond_type == 0:
 
-                    ti.profiler.clear_kernel_profiler_info()  # [1]
-                    self.copy_to_duplicates_1d(self.mesh_dy.grad)
-                    self.apply_preconditioning_euler_1d()
-                    self.copy_from_duplicates(self.mesh_dy.P_grad)
+                    # ti.profiler.clear_kernel_profiler_info()  # [1]
+                    # self.copy_to_duplicates(self.mesh_dy.grad)
+                    self.apply_preconditioning_euler(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    # self.copy_from_duplicates()
                     # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
-                    query_result_1 = ti.profiler.query_kernel_profiler_info(self.copy_to_duplicates.__name__)  # [2]
-                    query_result_2 = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler_1d.__name__)  # [2]
-                    query_result_3 = ti.profiler.query_kernel_profiler_info(self.copy_from_duplicates.__name__)  # [2]
-                    print("copy elapsed time(avg_in_ms) =", query_result_1.avg + query_result_3.avg)
-                    print("PTS  elapsed time(avg_in_ms) =", query_result_2.avg)
+                    # query_result_1 = ti.profiler.query_kernel_profiler_info(self.copy_to_duplicates.__name__)  # [2]
+                    # query_result_2 = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler.__name__)  # [2]
+                    # query_result_3 = ti.profiler.query_kernel_profiler_info(self.copy_from_duplicates.__name__)  # [2]
+                    # print("copy elapsed time(avg_in_ms) =", query_result_1.avg + query_result_3.avg)
+                    # print("PTS  elapsed time(avg_in_ms) =", query_result_2.avg)
                     # print("PBTS elapsed time(avg_in_ms) =", query_result.avg)
 
                     # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
                 elif self.selected_precond_type == 1:
-                    ti.profiler.clear_kernel_profiler_info()  # [1]
+                    # ti.profiler.clear_kernel_profiler_info()  # [1]
                     self.apply_preconditioning_jacobi(self.mesh_dy.P_grad, self.mesh_dy.grad)
-                    query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_jacobi.__name__)  # [2]
-                    print("Jacobi elapsed time(avg_in_ms) =", query_result.avg)
+                    # query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_jacobi.__name__)  # [2]
+                    # print("Jacobi elapsed time(avg_in_ms) =", query_result.avg)
 
                 beta = 0.0
 
@@ -866,9 +891,9 @@ class Solver:
                     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
                     if self.selected_precond_type == 0:
                         # self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-                        self.copy_to_duplicates_1d(self.mesh_dy.grad_delta)
-                        self.apply_preconditioning_euler_1d()
-                        self.copy_from_duplicates(self.mesh_dy.P_grad_delta)
+                        # self.copy_to_duplicates(self.mesh_dy.grad_delta)
+                        self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
+                        # self.copy_from_duplicates(self.mesh_dy.P_grad_delta)
                         # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
 
                     elif self.selected_precond_type == 1:

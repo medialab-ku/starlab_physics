@@ -7,7 +7,7 @@ import numpy as np
 # import numpy as np
 from pathlib import Path
 
-enable_profiler = True
+enable_profiler = False
 ti.init(arch=ti.cuda, device_memory_GB=8, default_fp=ti.f32, kernel_profiler=enable_profiler)
 
 model_path = Path(__file__).resolve().parent.parent / "models"
