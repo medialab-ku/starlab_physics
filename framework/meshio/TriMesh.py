@@ -568,6 +568,8 @@ class TriMesh:
         self.bending_indices = ti.field(dtype=ti.i32)
         self.bending_constraint_count = 0
         self.bending_l0 = ti.field(dtype=float)
+        # self.hii_e_b = ti.Matrix.field(n=3, m=3, dtype=float)
+        self.hij_b = ti.Matrix.field(n=3, m=3, dtype=float)
         # self.num_bending = self.bending_l0.shape
         self.initBendingIndices()
 
@@ -579,6 +581,8 @@ class TriMesh:
         # print("# bending: ", self.bending_constraint_count)
         ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
         ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
+        # ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.hii_e_b)
+        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.hij_b)
 
         for i in range(bending_indices_np.shape[0]):
             self.bending_indices[2 * i] = bending_indices_np[i][0]

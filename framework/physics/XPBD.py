@@ -535,7 +535,7 @@ class Solver:
             P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
             B = (P @ D @ P.inverse())
 
-            self.mesh_dy.hij[i] = B
+            # self.mesh_dy.hij[i] = B
             self.c[v0_d] = -B
             self.c_1d[v0_d] = -compliance_stretch
 
@@ -552,8 +552,39 @@ class Solver:
 
             self.mesh_dy.hi_e[v0] += compliance_stretch
             self.mesh_dy.hi_e[v1] += compliance_stretch
-
             self.mesh_dy.hij[i] = B
+
+        num_bending = self.mesh_dy.bending_indices.shape[0] // 2
+        for i in range(num_bending):
+            l0 = self.mesh_dy.bending_l0[i]
+            v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
+            x01 = self.mesh_dy.x_k[v0] - self.mesh_dy.x_k[v1]
+            l = x01.norm()
+            n = x01.normalized()
+            alpha = l0 / l
+            tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
+            t1 = ti.math.normalize(n.cross(tmp))
+            t2 = n.cross(t1)
+
+            D = ti.math.mat3([compliance_bending, 0.0, 0.0, 0.0, compliance_bending * abs(1.0 - alpha), 0.0, 0.0, 0.0, compliance_bending * abs(1.0 - alpha)])
+            P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+            B = (P @ D @ P.inverse())
+
+            # self.mesh_dy.hij_b[i] = B
+            dp01 = x01 - l0 * x01.normalized()
+
+            self.mesh_dy.grad[v0] += compliance_bending * dp01
+            self.mesh_dy.grad[v1] -= compliance_bending * dp01
+
+            self.mesh_dy.hii_e[v0] += B
+            self.mesh_dy.hii_e[v1] += B
+
+            # self.mesh_dy.hi_e[v0] += compliance_bending
+            # self.mesh_dy.hi_e[v1] += compliance_bending
+            self.mesh_dy.hij_b[i] = B
+
+
+
 
 
     @ti.kernel
@@ -570,6 +601,15 @@ class Solver:
             v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
             x01 = x[v0] - x[v1]
             Hx01 = self.mesh_dy.hij[i] @ x01
+
+            ret[v0] += Hx01
+            ret[v1] -= Hx01
+
+        num_bending = self.mesh_dy.bending_indices.shape[0] // 2
+        for i in range(num_bending):
+            v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
+            x01 = x[v0] - x[v1]
+            Hx01 = self.mesh_dy.hij_b[i] @ x01
 
             ret[v0] += Hx01
             ret[v1] -= Hx01
@@ -734,8 +774,8 @@ class Solver:
             xt = x[i]
             hii = self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]
             # ret[i] = ti.math.vec3(xt[0] / hii[0, 0], xt[1] / hii[1, 1], xt[2] / hii[2, 2])
-            # ret[i] = ti.math.inverse(self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]) @ x[i]
-            ret[i] =  x[i] / (self.mesh_dy.hi[i] + self.mesh_dy.hi_e[i])
+            ret[i] = ti.math.inverse(self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]) @ x[i]
+            # ret[i] =  x[i] / (self.mesh_dy.hi[i] + self.mesh_dy.hi_e[i])
 
 
     @ti.kernel
@@ -862,6 +902,8 @@ class Solver:
                 }
 
             delta_E0 = 0.0
+
+            # ti.profiler.clear_kernel_profiler_info()
             for _ in range(n_iter):
 
                 compliance_stretch = self.stiffness_stretch * dt_sub * dt_sub
@@ -870,46 +912,22 @@ class Solver:
                 self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
 
                 if self.selected_precond_type == 0:
-
-                    # ti.profiler.clear_kernel_profiler_info()  # [1]
-                    # self.copy_to_duplicates(self.mesh_dy.grad)
                     self.apply_preconditioning_euler(self.mesh_dy.P_grad, self.mesh_dy.grad)
-                    # self.copy_from_duplicates()
-                    # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
-                    # query_result_1 = ti.profiler.query_kernel_profiler_info(self.copy_to_duplicates.__name__)  # [2]
-                    # query_result_2 = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler.__name__)  # [2]
-                    # query_result_3 = ti.profiler.query_kernel_profiler_info(self.copy_from_duplicates.__name__)  # [2]
-                    # print("copy elapsed time(avg_in_ms) =", query_result_1.avg + query_result_3.avg)
-                    # print("PTS  elapsed time(avg_in_ms) =", query_result_2.avg)
-                    # print("PBTS elapsed time(avg_in_ms) =", query_result.avg)
-
-                    # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
                 elif self.selected_precond_type == 1:
-                    # ti.profiler.clear_kernel_profiler_info()  # [1]
                     self.apply_preconditioning_jacobi(self.mesh_dy.P_grad, self.mesh_dy.grad)
-                    # query_result = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_jacobi.__name__)  # [2]
-                    # print("Jacobi elapsed time(avg_in_ms) =", query_result.avg)
 
                 beta = 0.0
 
                 if self.conv_iter > 0 and self.enable_pncg:
                     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
                     if self.selected_precond_type == 0:
-                        # self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-                        # self.copy_to_duplicates(self.mesh_dy.grad_delta)
                         self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-                        # self.copy_from_duplicates(self.mesh_dy.P_grad_delta)
-                        # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
 
                     elif self.selected_precond_type == 1:
                         self.apply_preconditioning_jacobi(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
 
                     beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
-
-
-                E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
-
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
 
 
@@ -935,11 +953,29 @@ class Solver:
                 self.proceed(-alpha)
                 self.conv_iter += 1
 
+
+            # query_g_and_h = ti.profiler.query_kernel_profiler_info(self.compute_spring_E_grad_and_hess.__name__)  # [2]
+            # print("compute g and h  elapsed time(avg_in_ms) =", query_g_and_h.avg)
+
+            query_precond = None
+            # if self.selected_precond_type == 0:
+            #     query_precond = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler.__name__)  # [2]
+            #     print("Euler conv iter, elapsed time(avg_in_ms): ", self.conv_iter, self.conv_iter * (query_g_and_h.avg + query_precond.avg))
+            # elif self.selected_precond_type == 1:
+            #     query_precond = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_jacobi.__name__)  # [2]
+            #     print("Jacobi conv iter, elapsed time(avg_in_ms): ", self.conv_iter, self.conv_iter * (query_g_and_h.avg + query_precond.avg))
+
+            # print("precond.  elapsed time(avg_in_ms) =", query_precond.avg)
+            # query_result_1 = ti.profiler.query_kernel_profiler_info(self.copy_to_duplicates.__name__)  # [2]
+            # query_result_2 = ti.profiler.query_kernel_profiler_info(self.apply_preconditioning_euler.__name__)  # [2]
+            # query_result_3 = ti.profiler.query_kernel_profiler_info(self.copy_from_duplicates.__name__)  # [2]
+
+            # if self.selected_precond_type == 0:
+            #  print("elapsed time(avg_in_ms): ", self.conv_iter * (query_g_and_h.avg + query_precond.avg))
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
-
-            print(self.conv_iter)
+            # print(self.conv_iter)
             if is_run_once:
                 return plot_data_temp
             else:
