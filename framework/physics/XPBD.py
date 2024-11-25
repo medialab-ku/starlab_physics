@@ -165,12 +165,6 @@ class Solver:
 
         self.solve_spring_constraints_hess_diag_x(compliance_stretch, compliance_bending)
 
-    @ti.kernel
-    def line_search(self, E_current: float) -> float:
-
-        alpha = 1.0
-
-        return alpha
 
     def solve_constraints_newton_pcg_x(self, dt, max_cg_iter, threshold):
 
@@ -503,18 +497,18 @@ class Solver:
         self.solve_spring_constraints_euler_path_tridiagonal_x(compliance_stretch, compliance_bending)
 
     @ti.kernel
-    def compute_spring_E_grad_and_hess(self, compliance_stretch: ti.f32, compliance_bending: ti.f32, definiteness_fix: bool) -> ti.f32:
+    def compute_spring_E_grad_and_hess(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
 
         id3 = ti.Matrix.identity(dt=float, n=3)
         compliance_attach = 1e4
         self.mesh_dy.hii_e.fill(0.0)
         self.mesh_dy.hi_e.fill(0.0)
-        E = 0.0
+        # E = 0.0
 
         for i in self.mesh_dy.p:
             dx_m = (self.mesh_dy.x_k[i] - self.mesh_dy.y_tilde[i])
             self.mesh_dy.grad[i] = self.mesh_dy.m[i] * dx_m
-            E += 0.5 * self.mesh_dy.m[i] * dx_m.dot(dx_m)
+            # E += 0.5 * self.mesh_dy.m[i] * dx_m.dot(dx_m)
             self.mesh_dy.hii[i] = self.mesh_dy.m[i] * id3
             self.mesh_dy.hi[i] = self.mesh_dy.m[i]
 
@@ -523,7 +517,7 @@ class Solver:
                 self.mesh_dy.grad[i] += compliance_attach * dx
                 self.mesh_dy.hii[i] += compliance_attach * id3
                 self.mesh_dy.hi[i] += compliance_attach
-                E += 0.5 * compliance_attach * dx.dot(dx)
+                # E += 0.5 * compliance_attach * dx.dot(dx)
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
@@ -531,42 +525,17 @@ class Solver:
             v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
             x01 = self.mesh_dy.x_k[v0] - self.mesh_dy.x_k[v1]
             l = x01.norm()
-
-            # if l < 1e-5:
-            #     l = 1e-5
-
             n = x01.normalized()
             alpha = l0 / l
-            nnT = n.outer_product(n)
-            E += 0.5 * compliance_stretch * (l0 - l) ** 2
-
             tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
             t1 = ti.math.normalize(n.cross(tmp))
-            # t1 = ti.math.vec3([-n[1], n[0], 0.0])
             t2 = n.cross(t1)
 
-
-            # if alpha > 1.0:
-            #    alpha = 1.0
             D = ti.math.mat3([compliance_stretch, 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha), 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha)])
             P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
-
-            # print("det:", i, P.determinant())
-
             B = (P @ D @ P.inverse())
-            # print(B)
 
-            # B = compliance_stretch * ((1.0 - alpha) * id3 + alpha * nnT)
-            # if self.definiteness_fix:
-            #     D = ti.math.mat3([1.0, 0.0, 0.0, 0.0, abs(1.0 - alpha), 0.0, 0.0, 0.0, abs(1.0 - alpha)])
-            #     P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
-            #     B = compliance_stretch * (P @ D @ P.inverse())
-
-
-            # alpha = 0.5
             self.mesh_dy.hij[i] = B
-            # self.mesh_dy.hij[i] = -compliance_stretch * id3
-
             self.c[v0_d] = -B
             self.c_1d[v0_d] = -compliance_stretch
 
@@ -585,8 +554,6 @@ class Solver:
             self.mesh_dy.hi_e[v1] += compliance_stretch
 
             self.mesh_dy.hij[i] = B
-
-        return E
 
 
     @ti.kernel
@@ -764,6 +731,9 @@ class Solver:
     def apply_preconditioning_jacobi(self, ret: ti.template(), x: ti.template()):
 
         for i in self.mesh_dy.x_k:
+            xt = x[i]
+            hii = self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]
+            # ret[i] = ti.math.vec3(xt[0] / hii[0, 0], xt[1] / hii[1, 1], xt[2] / hii[2, 2])
             # ret[i] = ti.math.inverse(self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]) @ x[i]
             ret[i] =  x[i] / (self.mesh_dy.hi[i] + self.mesh_dy.hi_e[i])
 
@@ -858,15 +828,19 @@ class Solver:
         gTp = self.dot(self.mesh_dy.grad, self.mesh_dy.p)
         self.compute_matrix_free_H(self.mesh_dy.H_p, self.mesh_dy.p)
         pHp = self.dot(self.mesh_dy.p, self.mesh_dy.H_p)
+
+        # alpha = 1.0
+        # if pHp  > 1e-5:
         alpha = gTp / pHp
 
-        return alpha
+        delta_E = alpha * (gTp + 0.5 * alpha * pHp)
+
+        return alpha, delta_E
 
 
     def forward(self, n_substeps, n_iter, is_run_once = False, frame = -1):
 
         dt_sub = self.dt / n_substeps
-        delta_E0 = 0.0
 
         # store current x,v to utilize the backward process
         self.mesh_dy.x_prev.copy_from(self.mesh_dy.x)
@@ -887,12 +861,13 @@ class Solver:
                     "data": {} # per iter
                 }
 
+            delta_E0 = 0.0
             for _ in range(n_iter):
 
                 compliance_stretch = self.stiffness_stretch * dt_sub * dt_sub
                 compliance_bending = self.stiffness_bending * dt_sub * dt_sub
 
-                E_k = self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending, self.definiteness_fix)
+                self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
 
                 if self.selected_precond_type == 0:
 
@@ -932,22 +907,30 @@ class Solver:
 
                     beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
 
+
                 E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
 
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
 
 
-                gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
+
+                # if self.enable_line_search:
+                alpha, delta_E = self.line_search()
+
+
+                if not self.enable_line_search:
+                    alpha = 1.0
+
+                if self.conv_iter < 1:
+                    delta_E0 = delta_E
+
+                criterion = delta_E / delta_E0
 
                 if is_run_once:
-                    plot_data_temp["data"][self.conv_iter] = gP_g
+                    plot_data_temp["data"][self.conv_iter] = criterion
 
-                if gP_g < self.threshold:
+                if criterion < 1e-5:
                     break
-
-                alpha = 1.0
-                if self.enable_line_search:
-                    alpha = self.line_search()
 
                 self.proceed(-alpha)
                 self.conv_iter += 1
