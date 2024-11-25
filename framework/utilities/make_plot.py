@@ -1,6 +1,8 @@
 import matplotlib
+import numpy as np
 import matplotlib.pyplot as plt
 import json
+import math
 from datetime import datetime
 
 # matplotlib.use('TKAgg')
@@ -54,7 +56,7 @@ class make_plot:
             self.graph_type = "line"
         elif self.x_name == "frame" and self.y_name == "iteration":
             self.graph_type = "line"
-        elif self.x_name == "iteration" and self.y_name == "energy":
+        elif self.x_name == "iteration" and self.y_name == "energy(log)":
             self.graph_type = "line"
 
         self.aggregated_data = {}
@@ -77,6 +79,11 @@ class make_plot:
 
             x.append(list(cond_and_data["data"].keys()))
             y.append(list(cond_and_data["data"].values()))
+
+        if self.x_name == "iteration" and self.y_name == "energy(log)":
+            for i in range(len(y)):
+                y_log = [math.log10(y_value) for y_value in y[i]]
+                y[i] = y_log
 
         for i, label in enumerate(labels):
             color = self.color_palette[i % len(self.color_palette)]

@@ -49,7 +49,7 @@ default_data = {
 plot_export_path = str(Path(__file__).resolve().parent / "results") + "/"
 # x_name == "frame" and y_name == "iteration" -> line graph
 # x_name == "frame" and y_name == "energy" -> line graph
-plot = make_plot(plot_export_path, "iteration", "energy")
+plot = make_plot(plot_export_path, "iteration", "energy(log)")
 characters = 'ABCDEF0123456789'
 plot_data_temp = {}
 
