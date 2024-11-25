@@ -584,7 +584,28 @@ class Solver:
             self.mesh_dy.hi_e[v0] += compliance_stretch
             self.mesh_dy.hi_e[v1] += compliance_stretch
 
+            self.mesh_dy.hij[i] = B
+
         return E
+
+
+    @ti.kernel
+    def compute_matrix_free_H(self, ret: ti.template(), x: ti.template()):
+        compliance_attach = 1e4
+        for i in self.mesh_dy.p:
+            ret[i] = self.mesh_dy.m[i] * x[i]
+
+            if self.mesh_dy.fixed[i] < 1.0:
+                ret[i] += compliance_attach * x[i]
+
+        for i in range(self.num_edges_dy):
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+            x01 = x[v0] - x[v1]
+            Hx01 = self.mesh_dy.hij[i] @ x01
+
+            ret[v0] += Hx01
+            ret[v1] -= Hx01
 
     @ti.kernel
     def compute_spring_E(self, x: ti.template(), compliance_stretch: ti.f32, compliance_bending: ti.f32) -> ti.f32:
@@ -903,7 +924,6 @@ class Solver:
 
                 E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
 
-
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
                 gP_g = self.dot(self.mesh_dy.grad, self.mesh_dy.P_grad)
 
@@ -921,6 +941,7 @@ class Solver:
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
 
+            print(self.conv_iter)
             if is_run_once:
                 return plot_data_temp
             else:
