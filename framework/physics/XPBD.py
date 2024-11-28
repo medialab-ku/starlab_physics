@@ -813,12 +813,12 @@ class Solver:
                 A[3 * ids[m] + o, 3 * ids[n] + p] += test[m, n] * B[o, p]
 
     @ti.kernel
-    def construct_PD(self, A: ti.types.sparse_matrix_builder(), compliance: float):
+    def construct_PD(self, A: ti.types.sparse_matrix_builder(), compliance_stretch: float, compliance_bending: float):
 
         test = ti.math.mat2([1, -1, -1, 1])
         compliance_attach = 1e4
 
-        id3 = compliance * ti.Matrix.identity(n=3, dt=ti.f32)
+        id3 = ti.Matrix.identity(n=3, dt=ti.f32)
 
         for i in self.mesh_dy.p:
 
@@ -835,7 +835,14 @@ class Solver:
             v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
             ids = ti.Vector([v0, v1], ti.i32)
             for o, p, m, n in ti.ndrange(3, 3, 2, 2):
-                A[3 * ids[m] + o, 3 * ids[n] + p] += test[m, n] * id3[o, p]
+                A[3 * ids[m] + o, 3 * ids[n] + p] += compliance_stretch * test[m, n] * id3[o, p]
+
+        num_bending = self.mesh_dy.bending_indices.shape[0] // 2
+        for i in range(num_bending):
+            v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
+            ids = ti.Vector([v0, v1], ti.i32)
+            for o, p, m, n in ti.ndrange(3, 3, 2, 2):
+                A[3 * ids[m] + o, 3 * ids[n] + p] += compliance_bending * test[m, n] * id3[o, p]
 
     # @ti.kernel
     def apply_preconditioning_Newton_LLT(self, ret, x):
@@ -1005,7 +1012,7 @@ class Solver:
                 elif self.selected_precond_type == 3:
                     if self.construct_pd_flag:
                         print("compute PD matrix")
-                        self.construct_PD(self.MatrixBuilder, compliance_stretch)
+                        self.construct_PD(self.MatrixBuilder, compliance_stretch, compliance_bending)
                         # self.MatrixBuilder.print_triplets()
                         H = self.MatrixBuilder.build()
                         self.LLT_PD.analyze_pattern(H)
