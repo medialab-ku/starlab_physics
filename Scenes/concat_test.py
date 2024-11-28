@@ -26,7 +26,7 @@ obj_model_dir = str(model_path) + "/OBJ"
 #                ],
 #     scale_list=[
 #                 # 2.3,
-#                 1.0
+#                 1.0s
 #                ],
 #     rot_list=[
 #               (1.0, 0.0, 0.0, 0.0),
@@ -38,7 +38,7 @@ obj_mesh_dy = TriMesh(
     obj_model_dir,
     model_name_list=[
                      # "square.obj"
-                     "plane.obj"
+                     "plane_32.obj"
                     ],
     trans_list=[
                 # (0.0, -2.4, 0.0),main_partition_offset_vert_np[-1]

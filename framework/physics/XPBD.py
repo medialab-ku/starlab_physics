@@ -1,5 +1,6 @@
 import taichi as ti
 from pandas.core.ops.mask_ops import raise_for_nan
+from taichi import Matrix
 
 from framework.physics.conjugate_gradient import ConjugateGradient
 from framework.utilities.make_plot import make_plot
@@ -78,6 +79,14 @@ class Solver:
         self.E_max = 0.0
         self.E_min = 0.0
 
+
+
+        self.MatrixBuilder = ti.linalg.SparseMatrixBuilder(3 * self.num_verts_dy, 3 * self.num_verts_dy, max_num_triplets=int(1e7))
+        self.LLT = ti.linalg.SparseSolver(solver_type="LLT")
+        self.ndarr = ti.ndarray(ti.f32, shape=3 * self.num_verts_dy)
+
+        # ti.s
+
     ####################################################################################################################
 
     @ti.kernel
@@ -135,6 +144,20 @@ class Solver:
         for i in range(self.num_verts_dy):
             self.mesh_dy.v[i] = (1.0 - damping) * (self.mesh_dy.x_k[i] - self.mesh_dy.x[i]) / dt
 
+
+    @ti.kernel
+    def ndarray_to_vec_field(self, ndarr: ti.types.ndarray(), vec: ti.template()):
+
+        for i in vec:
+            vec[i] = ti.math.vec3([ndarr[3 * i], ndarr[3 * i + 1], ndarr[3 * i + 2]])
+
+    @ti.kernel
+    def vec_field_to_ndarray(self, vec: ti.template(), ndarr: ti.types.ndarray()):
+
+        for i in vec:
+            vec_i = vec[i]
+            for j in range(3):
+                ndarr[3 * i + j] = vec_i[j]
 
     @ti.kernel
     def copy_to_dup(self):
@@ -501,28 +524,19 @@ class Solver:
 
         id3 = ti.Matrix.identity(dt=float, n=3)
         compliance_attach = 1e4
-        self.mesh_dy.hii_e.fill(0.0)
-        self.mesh_dy.hi_e.fill(0.0)
-        # E = 0.0
 
         for i in self.mesh_dy.p:
             dx_m = (self.mesh_dy.x_k[i] - self.mesh_dy.y_tilde[i])
             self.mesh_dy.grad[i] = self.mesh_dy.m[i] * dx_m
-            # E += 0.5 * self.mesh_dy.m[i] * dx_m.dot(dx_m)
-            self.mesh_dy.hii[i] = self.mesh_dy.m[i] * id3
-            self.mesh_dy.hi[i] = self.mesh_dy.m[i]
-
             if self.mesh_dy.fixed[i] < 1.0:
                 dx = (self.mesh_dy.x_k[i] - self.mesh_dy.x0[i])
                 self.mesh_dy.grad[i] += compliance_attach * dx
-                self.mesh_dy.hii[i] += compliance_attach * id3
-                self.mesh_dy.hi[i] += compliance_attach
-                # E += 0.5 * compliance_attach * dx.dot(dx)
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
             v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
             v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+
             x01 = self.mesh_dy.x_k[v0] - self.mesh_dy.x_k[v1]
             l = x01.norm()
             n = x01.normalized()
@@ -536,52 +550,42 @@ class Solver:
             B = (P @ D @ P.inverse())
 
             # self.mesh_dy.hij[i] = B
-            self.c[v0_d] = -B
-            self.c_1d[v0_d] = -compliance_stretch
-
-            self.a[v1_d] = -B
-            self.a_1d[v1_d] = -compliance_stretch
-
             dp01 = x01 - l0 * x01.normalized()
 
             self.mesh_dy.grad[v0] += compliance_stretch * dp01
             self.mesh_dy.grad[v1] -= compliance_stretch * dp01
-
-            self.mesh_dy.hii_e[v0] += B
-            self.mesh_dy.hii_e[v1] += B
-
-            self.mesh_dy.hi_e[v0] += compliance_stretch
-            self.mesh_dy.hi_e[v1] += compliance_stretch
             self.mesh_dy.hij[i] = B
 
-        num_bending = self.mesh_dy.bending_indices.shape[0] // 2
-        for i in range(num_bending):
-            l0 = self.mesh_dy.bending_l0[i]
-            v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
-            x01 = self.mesh_dy.x_k[v0] - self.mesh_dy.x_k[v1]
-            l = x01.norm()
-            n = x01.normalized()
-            alpha = l0 / l
-            tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
-            t1 = ti.math.normalize(n.cross(tmp))
-            t2 = n.cross(t1)
 
-            D = ti.math.mat3([compliance_bending, 0.0, 0.0, 0.0, compliance_bending * abs(1.0 - alpha), 0.0, 0.0, 0.0, compliance_bending * abs(1.0 - alpha)])
-            P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
-            B = (P @ D @ P.inverse())
 
-            # self.mesh_dy.hij_b[i] = B
-            dp01 = x01 - l0 * x01.normalized()
-
-            self.mesh_dy.grad[v0] += compliance_bending * dp01
-            self.mesh_dy.grad[v1] -= compliance_bending * dp01
-
-            self.mesh_dy.hii_e[v0] += B
-            self.mesh_dy.hii_e[v1] += B
-
-            # self.mesh_dy.hi_e[v0] += compliance_bending
-            # self.mesh_dy.hi_e[v1] += compliance_bending
-            self.mesh_dy.hij_b[i] = B
+        # num_bending = self.mesh_dy.bending_indices.shape[0] // 2
+        # for i in range(num_bending):
+        #     l0 = self.mesh_dy.bending_l0[i]
+        #     v0, v1 = self.mesh_dy.bending_indices[2 * i + 0], self.mesh_dy.bending_indices[2 * i + 1]
+        #     x01 = self.mesh_dy.x_k[v0] - self.mesh_dy.x_k[v1]
+        #     l = x01.norm()
+        #     n = x01.normalized()
+        #     alpha = l0 / l
+        #     tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
+        #     t1 = ti.math.normalize(n.cross(tmp))
+        #     t2 = n.cross(t1)
+        #
+        #     D = ti.math.mat3([compliance_bending, 0.0, 0.0, 0.0, compliance_bending * abs(1.0 - alpha), 0.0, 0.0, 0.0, compliance_bending * abs(1.0 - alpha)])
+        #     P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+        #     B = (P @ D @ P.inverse())
+        #
+        #     # self.mesh_dy.hij_b[i] = B
+        #     dp01 = x01 - l0 * x01.normalized()
+        #
+        #     self.mesh_dy.grad[v0] += compliance_bending * dp01
+        #     self.mesh_dy.grad[v1] -= compliance_bending * dp01
+        #
+        #     self.mesh_dy.hii_e[v0] += B
+        #     self.mesh_dy.hii_e[v1] += B
+        #
+        #     # self.mesh_dy.hi_e[v0] += compliance_bending
+        #     # self.mesh_dy.hi_e[v1] += compliance_bending
+        #     self.mesh_dy.hij_b[i] = B
 
 
 
@@ -779,6 +783,48 @@ class Solver:
 
 
     @ti.kernel
+    def construct_H(self, A: ti.types.sparse_matrix_builder()):
+
+        test = ti.math.mat2([1, -1, -1, 1])
+        compliance_attach = 1e4
+
+        for i in self.mesh_dy.p:
+
+            for j in range(3):
+                A[3 * i + j, 3 * i + j] += self.mesh_dy.m[i]
+
+            if self.mesh_dy.fixed[i] < 1.0:
+                for j in range(3):
+                    A[3 * i + j, 3 * i + j] += compliance_attach
+                # E += 0.5 * compliance_attach * dx.dot(dx)
+
+        for i in range(self.num_edges_dy):
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+            # v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
+            B = self.mesh_dy.hij[i]
+            ids = ti.Vector([v0, v1], ti.i32)
+            for o, p, m, n in ti.ndrange(3, 3, 2, 2):
+                A[3 * ids[m] + o, 3 * ids[n] + p] += test[m, n] * B[o, p]
+
+    # @ti.kernel
+    def apply_preconditioning_Newton_LLT(self, ret, x):
+
+        self.construct_H(self.MatrixBuilder)
+
+        # self.MatrixBuilder.print_triplets()
+
+        H = self.MatrixBuilder.build()
+
+        self.LLT.analyze_pattern(H)
+        self.LLT.factorize(H)
+
+        self.vec_field_to_ndarray(x, self.ndarr)
+        ret_ndarr = self.LLT.solve(self.ndarr)
+        self.ndarray_to_vec_field(ret_ndarr, ret)
+
+
+    @ti.kernel
     def add(self, ret: ti.template(), x: ti.template(), y: ti.template(), scale: ti.f32):
 
         for i in ret:
@@ -917,38 +963,42 @@ class Solver:
                 elif self.selected_precond_type == 1:
                     self.apply_preconditioning_jacobi(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
-                beta = 0.0
+                elif self.selected_precond_type == 2:
+                    self.apply_preconditioning_Newton_LLT(self.mesh_dy.p, self.mesh_dy.grad)
 
-                if self.conv_iter > 0 and self.enable_pncg:
-                    self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
-                    if self.selected_precond_type == 0:
-                        self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-
-                    elif self.selected_precond_type == 1:
-                        self.apply_preconditioning_jacobi(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-
-                    beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
-                self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
-
-
-
-                # if self.enable_line_search:
-                alpha, delta_E = self.line_search()
-
-
-                if not self.enable_line_search:
-                    alpha = 1.0
-
-                if self.conv_iter < 1:
-                    delta_E0 = delta_E
-
-                criterion = delta_E / delta_E0
-
-                if is_run_once:
-                    plot_data_temp["data"][self.conv_iter] = criterion
-
-                if criterion < 1e-5:
-                    break
+                alpha = 1.0
+                # beta = 0.0
+                #
+                # if self.conv_iter > 0 and self.enable_pncg:
+                #     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
+                #     if self.selected_precond_type == 0:
+                #         self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
+                #
+                #     elif self.selected_precond_type == 1:
+                #         self.apply_preconditioning_jacobi(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
+                #
+                #     beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
+                # self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
+                #
+                #
+                #
+                # # if self.enable_line_search:
+                # alpha, delta_E = self.line_search()
+                #
+                #
+                # if not self.enable_line_search:
+                #     alpha = 1.0
+                #
+                # if self.conv_iter < 1:
+                #     delta_E0 = delta_E
+                #
+                # criterion = delta_E / delta_E0
+                #
+                # if is_run_once:
+                #     plot_data_temp["data"][self.conv_iter] = criterion
+                #
+                # if criterion < 1e-5:
+                #     break
 
                 self.proceed(-alpha)
                 self.conv_iter += 1
