@@ -2,6 +2,7 @@ import taichi as ti
 from pandas.core.ops.mask_ops import raise_for_nan
 
 from framework.physics.conjugate_gradient import ConjugateGradient
+from framework.physics.collision_detection import CollisionDetection
 from framework.utilities.make_plot import make_plot
 
 import random
@@ -77,6 +78,8 @@ class Solver:
         self.E_curr = 0.0
         self.E_max = 0.0
         self.E_min = 0.0
+
+        self.collision = CollisionDetection(mesh_dy)
 
     ####################################################################################################################
 
@@ -975,6 +978,8 @@ class Solver:
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
+            self.collision.find_collision_jacobi()
+
             # print(self.conv_iter)
             if is_run_once:
                 return plot_data_temp

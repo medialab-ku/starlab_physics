@@ -6,7 +6,7 @@ from framework.meshio.TriMesh import *
 
 @ti.data_oriented
 class CollisionDetection:
-    def __init__(self, mesh: TriMesh, dHat=1e-4, grid_size=1e-1, max_num_objects=100000):
+    def __init__(self, mesh: TriMesh, dHat=1e-2, grid_size=0.1, max_num_objects=100000):
         self.mesh = mesh
         self.dHat = dHat
         self.grid_size = grid_size
@@ -51,8 +51,8 @@ class CollisionDetection:
         # Euler
 
     ####################################################################################################################
+    # Jacobi functions
 
-    @ti.kernel
     def find_collision_jacobi(self):
         self.cid_root_jacobi.deactivate_all()
 
@@ -72,13 +72,14 @@ class CollisionDetection:
         self.fill_cells_edges_jacobi()
         self.find_constraints_edge_edge_jacobi()
 
+        self.print_constraints_jacobi()
+
     @ti.kernel
     def count_cells_verts_jacobi(self):
         for i in range(self.mesh.num_verts):
             x = self.mesh.x[i]
             hash_id = self.get_hash(x)
             ti.atomic_add(self.cell_start_idx_verts_jacobi[hash_id], 1)
-            print(x[0], x[1], x[2], hash_id)
 
     @ti.kernel
     def fill_cells_verts_jacobi(self):
@@ -94,8 +95,8 @@ class CollisionDetection:
             t0, t1, t2 = self.mesh.fid_field[i, 0], self.mesh.fid_field[i, 1], self.mesh.fid_field[i, 2]
             x0, x1, x2 = self.mesh.x[t0], self.mesh.x[t1], self.mesh.x[t2]
             # compute AABB
-            lower = ti.floor((ti.min(x0, x1, x2) - self.dHat) * self.inv_grid_size)
-            upper = ti.floor((ti.max(x0, x1, x2) + self.dHat) * self.inv_grid_size) + 1
+            lower = ti.cast(ti.floor((ti.min(x0, x1, x2) - self.dHat) * self.inv_grid_size), ti.i32)
+            upper = ti.cast(ti.floor((ti.max(x0, x1, x2) + self.dHat) * self.inv_grid_size) + 1, ti.i32)
             # traverse all grid cells in the AABB region
             for I in ti.grouped(ti.ndrange((lower[0], upper[0]), (lower[1], upper[1]), (lower[2], upper[2]))):
                 hash_id = self.get_hash(I)
@@ -110,11 +111,12 @@ class CollisionDetection:
     def attempt_vert_face_jacobi(self, triangle_id, pid, t0, t1, t2, xp, x0, x1, x2):
         # check whether the point belongs to the face, and the point is too far to inspect
         if pid != t0 and pid != t1 and pid != t2 and self.vert_face_ccd_broadphase(xp, x0, x1, x2, self.dHat):
-            # if it is not, get barycentric coordinate of the projection point of xp, and the projection point itself
+            # if it is not, get a barycentric coordinate of the projection point of xp, and the projection point itself
             cord0, cord1, cord2 = self.dist3D_vert_face(xp, x0, x1, x2)
-            xt = cord0 * x0 + cord1 * x1 + cord2 * x2
+            xt = cord0 * x0 + cord1 * x1 + cord2 * x2 # projection point
             t_pt = xp - xt
             dist = t_pt.norm()
+            print(f"vert-face broad phase / face id : {triangle_id} / point : {pid} / dist : {dist}")
 
             # if the distance between xp and xt is lower than dHat, add this to the constraint struct(self.cid)
             if self.epsilon < ti.abs(dist) and ti.abs(dist) < self.dHat:
@@ -330,6 +332,8 @@ class CollisionDetection:
                     self.edge_edge_ccd_broadphase(x_a0, x_a1, x_b0, x_b1, self.dHat)):
                     t_ee, sc, tc = self.dist3D_edge_edge(x_a0, x_a1, x_b0, x_b1)
                     dist = t_ee.norm()
+                    print(f"edge-edge broad phase / a0 : {a0} / a1 : {a1} / b0 : {b0} / b1 : {b1} / dist : {dist}")
+
                     if self.epsilon < ti.abs(dist) and dist < self.dHat:
                         cord = ti.Vector([sc - 1.0, -sc, 1.0 - tc, tc], ti.f32)
                         ids = ti.Vector([a0, a1, b0, b1], ti.i32)
@@ -337,7 +341,24 @@ class CollisionDetection:
                         self.cid_jacobi[1, hash_index] = self.pair_jacobi(ids, dist, cord, t_ee)
 
     ####################################################################################################################
-    # Utility function
+    # Euler functions
+
+    ####################################################################################################################
+    # Utility functions
+
+    @ti.kernel
+    def print_constraints_jacobi(self):
+        count = 0
+        for ctype, index in self.cid_jacobi:  # ctype은 constraint type(0: PT, 1: EE), index는 hash index
+            constraint = self.cid_jacobi[ctype, index]
+            print(
+                f"\n[Constraint {count}] Type: {ctype}, "
+                f"IDs: {constraint.a[0]}, {constraint.a[1]}, {constraint.a[2]}, {constraint.a[3]}, "
+                f"Distance: {constraint.b}, "
+                f"Coords: [{constraint.c[0]}, {constraint.c[1]}, {constraint.a[2]}, {constraint.a[3]}], "
+                f"Direction: [{constraint.d[0]}, {constraint.d[1]}, {constraint.d[2]}]")
+            count += 1
+        print(f"\nTotal Constraints: {count}")
 
     @ti.func
     def coord_to_grid(self, coord: ti.template()) -> ti.template():
@@ -380,14 +401,14 @@ class CollisionDetection:
         P0 = P - s_p * n
         w = P0 - V0
         n_cross_v, n_cross_u = n.cross(v), n.cross(u)
-        s, t = w.dot(n_cross_v) / (u.dot(n_cross_v)), w.dot(n_cross_u) / (v.dot(n_cross_u))
+        s, t = w.dot(n_cross_v) / u.dot(n_cross_v), w.dot(n_cross_u) / v.dot(n_cross_u)
 
         if s >= 0.0 and t >= 0.0:
             if s + t <= 1.0:
                 cord0, cord1, cord2 = 1.0 - s - t, s, t
             else:
                 q = V2 - V1
-                k = (P - V1).dot(q) / (q.dot(q))
+                k = (P - V1).dot(q) / q.dot(q)
                 if k > 1.0:
                     cord2 = 1.0
                 elif k < 0.0:
@@ -397,7 +418,7 @@ class CollisionDetection:
                     cord2 = k
 
         elif s >= 0.0 and t < 0.0:
-            k = w.dot(u) / (u.dot(u))
+            k = w.dot(u) / u.dot(u)
             if k > 1.0:
                 cord1 = 1.0
             elif k < 0.0:
@@ -407,7 +428,7 @@ class CollisionDetection:
                 cord1 = k
 
         elif s < 0.0 and t >= 0.0:
-            k = w.dot(v) / (v.dot(v))
+            k = w.dot(v) / v.dot(v)
             if k > 1.0:
                 cord2 = 1.0
             elif k < 0.0:
@@ -421,10 +442,9 @@ class CollisionDetection:
 
         return cord0, cord1, cord2
 
-    @ti.func
     def dist3D_edge_edge(self, A0, A1, B0, B1):
         u, v, w = A1 - A0, B1 - B0, A0 - B0
-        a, b, c, d, e = u.norm_sqr(), u.dot(v), v.norm_sqr(), u.dot(w), v.dot(w)
+        a, b, c, d, e = u.dot(u), u.dot(v), v.dot(v), u.dot(w), v.dot(w)
 
         D = a * c - b * b
         sc, sN, sD = D, D, D
