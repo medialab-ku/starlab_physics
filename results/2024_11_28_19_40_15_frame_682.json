@@ -1,0 +1,22 @@
+{
+    "A066F3A436962CFD": {
+        "name": "A066F3A436962CFD",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 682,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "9800BF7E01B1EBAC": {
+        "name": "9800BF7E01B1EBAC",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 682,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}

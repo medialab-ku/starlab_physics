@@ -1,0 +1,22 @@
+{
+    "F06C4D100C5E0F19": {
+        "name": "F06C4D100C5E0F19",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 695,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "864ACAF7AB8AE55E": {
+        "name": "864ACAF7AB8AE55E",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 695,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}

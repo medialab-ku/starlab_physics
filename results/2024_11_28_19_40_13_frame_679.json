@@ -1,0 +1,22 @@
+{
+    "4728DAFDDA716AC0": {
+        "name": "4728DAFDDA716AC0",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 679,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "BDA5D85C173B2F09": {
+        "name": "BDA5D85C173B2F09",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 679,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}

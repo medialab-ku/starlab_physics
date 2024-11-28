@@ -1,0 +1,22 @@
+{
+    "BDF59CCFB78803C9": {
+        "name": "BDF59CCFB78803C9",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 688,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "F2CBF602EA11897C": {
+        "name": "F2CBF602EA11897C",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 688,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}

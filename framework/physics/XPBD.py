@@ -892,6 +892,12 @@ class Solver:
         for i in range(n_substeps):
 
             self.compute_y(self.g, dt_sub)
+
+            if self.selected_precond_type == 0:
+                pass # self.collision.find_collision_euler()
+            elif self.selected_precond_type == 1:
+                self.collision.find_collision_jacobi()
+
             self.conv_iter = 0
 
             if is_run_once:
@@ -978,7 +984,6 @@ class Solver:
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
-            self.collision.find_collision_jacobi()
 
             # print(self.conv_iter)
             if is_run_once:

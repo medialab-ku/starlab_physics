@@ -1,0 +1,22 @@
+{
+    "894B5F3E51D3B7B4": {
+        "name": "894B5F3E51D3B7B4",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 687,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "360D3BEBC658A0AF": {
+        "name": "360D3BEBC658A0AF",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 687,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}

@@ -1,0 +1,22 @@
+{
+    "BB34B2512C2FBD49": {
+        "name": "BB34B2512C2FBD49",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 692,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "D3BE7E096C7FEF9D": {
+        "name": "D3BE7E096C7FEF9D",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 692,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}

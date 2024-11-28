@@ -6,15 +6,19 @@ from framework.meshio.TriMesh import *
 
 @ti.data_oriented
 class CollisionDetection:
-    def __init__(self, mesh: TriMesh, dHat=1e-2, grid_size=0.1, max_num_objects=100000):
+    def __init__(self, mesh: TriMesh, max_num_objects=100000):
         self.mesh = mesh
-        self.dHat = dHat
-        self.grid_size = grid_size
+        self.grid_size = self.get_mean_edge_length()
+        self.inv_grid_size = 1 / self.grid_size
+        self.dHat = self.grid_size * 0.05 # should take dt into account...
         self.max_num_objects = max_num_objects
 
-        self.inv_grid_size = 1 / self.grid_size
         self.epsilon = 1e-6
         self.table_size = self.max_num_objects * 2
+
+        print("Mean of edges (grid size) :", self.grid_size)
+        print("inverse of grid size :", self.inv_grid_size)
+        print("initial dHat :", self.dHat)
 
         ################################################################################################################
         # Jacobi
@@ -116,7 +120,7 @@ class CollisionDetection:
             xt = cord0 * x0 + cord1 * x1 + cord2 * x2 # projection point
             t_pt = xp - xt
             dist = t_pt.norm()
-            print(f"vert-face broad phase / face id : {triangle_id} / point : {pid} / dist : {dist}")
+            # print(f"vert-face broad phase / face id : {triangle_id} / point : {pid} / dist : {dist}")
 
             # if the distance between xp and xt is lower than dHat, add this to the constraint struct(self.cid)
             if self.epsilon < ti.abs(dist) and ti.abs(dist) < self.dHat:
@@ -131,14 +135,13 @@ class CollisionDetection:
             e0, e1 = self.mesh.eid_field[e, 0], self.mesh.eid_field[e, 1]
             x_e0, x_e1 = self.mesh.x[e0], self.mesh.x[e1]
             e0_grid_coord, e1_grid_coord = self.coord_to_grid(x_e0), self.coord_to_grid(x_e1)
-
             et = e0_grid_coord
             x0, y0, z0 = e0_grid_coord[0], e0_grid_coord[1], e0_grid_coord[2]
             x1, y1, z1 = e1_grid_coord[0], e1_grid_coord[1], e1_grid_coord[2]
             dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
-            x_increase, y_increase, z_increase = (1 if dx > 0 else -1), (1 if dy > 0 else -1), (1 if dz > 0 else -1)
             l, m, n = ti.abs(dx), ti.abs(dy), ti.abs(dz)
-            dx1, dy1, dz1 = 2*l, 2*m, 2*n
+            dx1, dy1, dz1 = 2 * l, 2 * m, 2 * n
+            x_increase, y_increase, z_increase = (1 if dx >= 0 else -1), (1 if dy >= 0 else -1), (1 if dz >= 0 else -1)
 
             if (l >= m) and (l >= n):
                 err_1, err_2 = dy1 - l, dz1 - l
@@ -194,14 +197,13 @@ class CollisionDetection:
             e0, e1 = self.mesh.eid_field[e, 0], self.mesh.eid_field[e, 1]
             x_e0, x_e1 = self.mesh.x[e0], self.mesh.x[e1]
             e0_grid_coord, e1_grid_coord = self.coord_to_grid(x_e0), self.coord_to_grid(x_e1)
-
             et = e0_grid_coord
             x0, y0, z0 = e0_grid_coord[0], e0_grid_coord[1], e0_grid_coord[2]
             x1, y1, z1 = e1_grid_coord[0], e1_grid_coord[1], e1_grid_coord[2]
             dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
-            x_increase, y_increase, z_increase = (1 if dx > 0 else -1), (1 if dy > 0 else -1), (1 if dz > 0 else -1)
             l, m, n = ti.abs(dx), ti.abs(dy), ti.abs(dz)
-            dx1, dy1, dz1 = 2*l, 2*m, 2*n
+            dx1, dy1, dz1 = 2 * l, 2 * m, 2 * n
+            x_increase, y_increase, z_increase = (1 if dx >= 0 else -1), (1 if dy >= 0 else -1), (1 if dz >= 0 else -1)
 
             if (l >= m) and (l >= n):
                 err_1, err_2 = dy1 - l, dz1 - l
@@ -261,14 +263,13 @@ class CollisionDetection:
             e0, e1 = self.mesh.eid_field[e, 0], self.mesh.eid_field[e, 1]
             x_e0, x_e1 = self.mesh.x[e0], self.mesh.x[e1]
             e0_grid_coord, e1_grid_coord = self.coord_to_grid(x_e0), self.coord_to_grid(x_e1)
-
             et = e0_grid_coord
             x0, y0, z0 = e0_grid_coord[0], e0_grid_coord[1], e0_grid_coord[2]
             x1, y1, z1 = e1_grid_coord[0], e1_grid_coord[1], e1_grid_coord[2]
             dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
-            x_increase, y_increase, z_increase = (1 if dx > 0 else -1), (1 if dy > 0 else -1), (1 if dz > 0 else -1)
             l, m, n = ti.abs(dx), ti.abs(dy), ti.abs(dz)
             dx1, dy1, dz1 = 2 * l, 2 * m, 2 * n
+            x_increase, y_increase, z_increase = (1 if dx >= 0 else -1), (1 if dy >= 0 else -1), (1 if dz >= 0 else -1)
 
             if (l >= m) and (l >= n):
                 err_1, err_2 = dy1 - l, dz1 - l
@@ -319,24 +320,24 @@ class CollisionDetection:
             self.attempt_edge_edge_jacobi(hash_id, e, e0, e1, x_e0, x_e1)
 
     @ti.func
-    def attempt_edge_edge_jacobi(self, hash_id, eid_0, a0, a1, x_a0, x_a1):
+    def attempt_edge_edge_jacobi(self, hash_id, eid_0, e0, e1, x_e0, x_e1):
         start, end = self.cell_start_idx_edges_jacobi[hash_id], self.cell_start_idx_edges_jacobi[hash_id + 1]
         for k in range(start, end):
             j = self.cell_entries_edges_jacobi[k]
 
             if eid_0 < j:
-                b0, b1 = self.mesh.eid_field[eid_0, 0], self.mesh.eid_field[eid_0, 1]
-                x_b0, x_b1 = self.mesh.x[b0], self.mesh.x[b1]
+                e2, e3 = self.mesh.eid_field[j, 0], self.mesh.eid_field[j, 1]
+                x_e2, x_e3 = self.mesh.x[e2], self.mesh.x[e3]
 
-                if (a0 != b0 and a0 != b1 and a1 != b0 and a1 != b1 and
-                    self.edge_edge_ccd_broadphase(x_a0, x_a1, x_b0, x_b1, self.dHat)):
-                    t_ee, sc, tc = self.dist3D_edge_edge(x_a0, x_a1, x_b0, x_b1)
+                if (e0 != e2 and e0 != e3 and e1 != e2 and e1 != e3 and
+                    self.edge_edge_ccd_broadphase(x_e0, x_e1, x_e2, x_e3, self.dHat)):
+                    t_ee, sc, tc = self.dist3D_edge_edge(x_e0, x_e1, x_e2, x_e3)
                     dist = t_ee.norm()
-                    print(f"edge-edge broad phase / a0 : {a0} / a1 : {a1} / b0 : {b0} / b1 : {b1} / dist : {dist}")
+                    # print(f"edge-edge broad phase / a0 : {e0} / a1 : {e1} / b0 : {e2} / b1 : {e3} / dist : {dist}")
 
                     if self.epsilon < ti.abs(dist) and dist < self.dHat:
                         cord = ti.Vector([sc - 1.0, -sc, 1.0 - tc, tc], ti.f32)
-                        ids = ti.Vector([a0, a1, b0, b1], ti.i32)
+                        ids = ti.Vector([e0, e1, e2, e3], ti.i32)
                         hash_index = self.two_int_to_hash(eid_0, j)
                         self.cid_jacobi[1, hash_index] = self.pair_jacobi(ids, dist, cord, t_ee)
 
@@ -347,12 +348,22 @@ class CollisionDetection:
     # Utility functions
 
     @ti.kernel
+    def get_mean_edge_length(self) -> ti.f32:
+        total = 0.0
+        for i in range(self.mesh.num_edges):
+            e0, e1 = self.mesh.eid_field[i, 0], self.mesh.eid_field[i, 1]
+            ti.atomic_add(total, (self.mesh.x[e0] - self.mesh.x[e1]).norm())
+        result = total / ti.cast(self.mesh.num_edges, ti.f32)
+        return result
+
+
+    @ti.kernel
     def print_constraints_jacobi(self):
         count = 0
         for ctype, index in self.cid_jacobi:  # ctype은 constraint type(0: PT, 1: EE), index는 hash index
             constraint = self.cid_jacobi[ctype, index]
             print(
-                f"\n[Constraint {count}] Type: {ctype}, "
+                f"\n[Constraint] Type: {ctype}, Index: {index}"
                 f"IDs: {constraint.a[0]}, {constraint.a[1]}, {constraint.a[2]}, {constraint.a[3]}, "
                 f"Distance: {constraint.b}, "
                 f"Coords: [{constraint.c[0]}, {constraint.c[1]}, {constraint.a[2]}, {constraint.a[3]}], "
@@ -362,9 +373,8 @@ class CollisionDetection:
 
     @ti.func
     def coord_to_grid(self, coord: ti.template()) -> ti.template():
-        x = ti.floor(self.inv_grid_size * coord)
-        x_int = ti.cast(x, ti.int32)
-        return x_int
+        x = ti.cast(ti.floor(self.inv_grid_size * coord), ti.i32)
+        return x
 
     @ti.func
     def coord_to_hash(self, x: ti.template()) -> ti.int32:
@@ -442,6 +452,7 @@ class CollisionDetection:
 
         return cord0, cord1, cord2
 
+    @ti.func
     def dist3D_edge_edge(self, A0, A1, B0, B1):
         u, v, w = A1 - A0, B1 - B0, A0 - B0
         a, b, c, d, e = u.dot(u), u.dot(v), v.dot(v), u.dot(w), v.dot(w)
@@ -491,19 +502,19 @@ class CollisionDetection:
         dP = - w - (sc * u) + (tc * v)  # Qc - Pc
         return dP, sc, tc
 
-ti.init(arch=ti.gpu)
-collision = CollisionDetection(TriMesh(
-    model_dir = "D:\Sehyeon\Projects\Research\starlab_physics\models\OBJ",
-    model_name_list=[
-                     "square.obj"
-                    ],
-    trans_list=[
-                (0.0, 1.0, 0.0)
-               ],
-    scale_list=[
-                2.0,
-               ],
-    rot_list=[
-              (1.0, 0.0, 0.0, 0.0)
-            ], # (axis.x, axis.y, axis.z, radian)
-    is_static=False))
+# ti.init(arch=ti.gpu)
+# collision = CollisionDetection(TriMesh(
+#     model_dir = "D:\Sehyeon\Projects\Research\starlab_physics\models\OBJ",
+#     model_name_list=[
+#                      "square.obj"
+#                     ],
+#     trans_list=[
+#                 (0.0, 1.0, 0.0)
+#                ],
+#     scale_list=[
+#                 2.0,
+#                ],
+#     rot_list=[
+#               (1.0, 0.0, 0.0, 0.0)
+#             ], # (axis.x, axis.y, axis.z, radian)
+#     is_static=False))

@@ -1,0 +1,22 @@
+{
+    "E5DAB622FB38EF7D": {
+        "name": "E5DAB622FB38EF7D",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 674,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "8C1F5A7F338E48DB": {
+        "name": "8C1F5A7F338E48DB",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 674,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}

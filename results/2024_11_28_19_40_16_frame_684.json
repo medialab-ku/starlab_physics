@@ -1,0 +1,22 @@
+{
+    "BCEE4F72F93920F4": {
+        "name": "BCEE4F72F93920F4",
+        "label": "Euler",
+        "substep": 1,
+        "frame": 684,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703765167693042e-06
+        }
+    },
+    "8A7D1CAEF934748B": {
+        "name": "8A7D1CAEF934748B",
+        "label": "Jacobi",
+        "substep": 1,
+        "frame": 684,
+        "data": {
+            "0": 1.0,
+            "1": 1.0703764343571402e-06
+        }
+    }
+}
