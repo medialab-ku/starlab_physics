@@ -173,13 +173,15 @@ def show_options_tri():
 
     with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.7) as w:
 
-        precond_type_ui = w.slider_int("precond. type", precond_type_ui, 0, 2)
+        precond_type_ui = w.slider_int("precond. type", precond_type_ui, 0, 3)
         if precond_type_ui == 0:
             w.text("precond. type: Euler")
         elif precond_type_ui == 1:
             w.text("precond. type: Jacobi")
         elif precond_type_ui == 2:
             w.text("precond. type: Newton-LLT")
+        elif precond_type_ui == 3:
+            w.text("precond. type: PD-LLT")
 
         sim_tri.threshold = w.slider_float("CG threshold", sim_tri.threshold, 0.00001, 0.101)
         sim_tri.definiteness_fix = w.checkbox("definiteness fix", sim_tri.definiteness_fix)

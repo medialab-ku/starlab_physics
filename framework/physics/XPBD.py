@@ -79,11 +79,16 @@ class Solver:
         self.E_max = 0.0
         self.E_min = 0.0
 
+        self.construct_pd_flag = True
 
 
-        self.MatrixBuilder = ti.linalg.SparseMatrixBuilder(3 * self.num_verts_dy, 3 * self.num_verts_dy, max_num_triplets=int(1e7))
-        self.LLT = ti.linalg.SparseSolver(solver_type="LLT")
+        self.MatrixBuilder = ti.linalg.SparseMatrixBuilder(3 * self.num_verts_dy, 3 * self.num_verts_dy, max_num_triplets=int(1e6))
+        # self.LLT = ti.linalg.SparseSolver(solver_type="LLT")
+
+        self.LLT_PD = ti.linalg.SparseSolver(solver_type="LLT")
         self.ndarr = ti.ndarray(ti.f32, shape=3 * self.num_verts_dy)
+
+        self.construct_pd_flag = True
 
         # ti.s
 
@@ -807,6 +812,31 @@ class Solver:
             for o, p, m, n in ti.ndrange(3, 3, 2, 2):
                 A[3 * ids[m] + o, 3 * ids[n] + p] += test[m, n] * B[o, p]
 
+    @ti.kernel
+    def construct_PD(self, A: ti.types.sparse_matrix_builder(), compliance: float):
+
+        test = ti.math.mat2([1, -1, -1, 1])
+        compliance_attach = 1e4
+
+        id3 = compliance * ti.Matrix.identity(n=3, dt=ti.f32)
+
+        for i in self.mesh_dy.p:
+
+            for j in range(3):
+                A[3 * i + j, 3 * i + j] += self.mesh_dy.m[i]
+
+            if self.mesh_dy.fixed[i] < 1.0:
+                for j in range(3):
+                    A[3 * i + j, 3 * i + j] += compliance_attach
+                # E += 0.5 * compliance_attach * dx.dot(dx)
+
+        for i in range(self.num_edges_dy):
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+            ids = ti.Vector([v0, v1], ti.i32)
+            for o, p, m, n in ti.ndrange(3, 3, 2, 2):
+                A[3 * ids[m] + o, 3 * ids[n] + p] += test[m, n] * id3[o, p]
+
     # @ti.kernel
     def apply_preconditioning_Newton_LLT(self, ret, x):
 
@@ -815,12 +845,18 @@ class Solver:
         # self.MatrixBuilder.print_triplets()
 
         H = self.MatrixBuilder.build()
-
-        self.LLT.analyze_pattern(H)
-        self.LLT.factorize(H)
+        solver = ti.linalg.SparseSolver(solver_type="LLT")
+        solver.analyze_pattern(H)
+        solver.compute(H)
 
         self.vec_field_to_ndarray(x, self.ndarr)
-        ret_ndarr = self.LLT.solve(self.ndarr)
+        ret_ndarr = solver.solve(self.ndarr)
+        self.ndarray_to_vec_field(ret_ndarr, ret)
+
+    def apply_preconditioning_PD_LLT(self, ret, x):
+
+        self.vec_field_to_ndarray(x, self.ndarr)
+        ret_ndarr = self.LLT_PD.solve(self.ndarr)
         self.ndarray_to_vec_field(ret_ndarr, ret)
 
 
@@ -965,6 +1001,18 @@ class Solver:
 
                 elif self.selected_precond_type == 2:
                     self.apply_preconditioning_Newton_LLT(self.mesh_dy.p, self.mesh_dy.grad)
+
+                elif self.selected_precond_type == 3:
+                    if self.construct_pd_flag:
+                        print("compute PD matrix")
+                        self.construct_PD(self.MatrixBuilder, compliance_stretch)
+                        # self.MatrixBuilder.print_triplets()
+                        H = self.MatrixBuilder.build()
+                        self.LLT_PD.analyze_pattern(H)
+                        self.LLT_PD.compute(H)
+                        self.construct_pd_flag = False
+
+                    self.apply_preconditioning_PD_LLT(self.mesh_dy.p, self.mesh_dy.grad)
 
                 alpha = 1.0
                 # beta = 0.0
