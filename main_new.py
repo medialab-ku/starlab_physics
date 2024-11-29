@@ -486,15 +486,16 @@ while window.running:
                 E = sim_tri.compute_spring_energy(YM_ui)
                 avg_conv_iter += sim_tri.conv_iter
                 # plot_data_temp["data"][frame_cpu] = E
-                plot_data_temp["data"][frame_cpu] = sim_tri.PCG.cg_iter
+                plot_data_temp["data"][frame_cpu] = sim_tri.PCG.cg_iters
             else:
                 plot.collect_data(plot_data_temp)
                 run_sim = False
                 print(avg_conv_iter / frame_end)
                 avg_conv_iter = 0
 
-    scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
-    scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+    # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
+    # scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+    scene.lines(sim_tri.mesh_dy.x_dup, indices=sim_tri.mesh_dy.eid_dup, per_vertex_color=sim_tri.mesh_dy.color_test, width=2.0)
 
     scene.lines(sh_st.bbox_vertices, width=1.0, indices=sh_st.bbox_edge_indices_flattened, color=(0, 0, 0))
 

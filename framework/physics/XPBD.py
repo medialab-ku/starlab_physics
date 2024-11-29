@@ -52,6 +52,10 @@ class Solver:
         self.num_verts_dy = self.mesh_dy.num_verts
         self.num_edges_dy = self.mesh_dy.num_edges
         self.num_faces_dy = self.mesh_dy.num_faces
+        self.num_verts_dy_dup = self.mesh_dy.num_verts_dup
+
+        print(self.num_verts_dy_dup)
+
         self.selected_solver_type = 2
         self.selected_precond_type = 2
 
@@ -81,12 +85,14 @@ class Solver:
 
         self.construct_pd_flag = True
 
-
         self.MatrixBuilder = ti.linalg.SparseMatrixBuilder(3 * self.num_verts_dy, 3 * self.num_verts_dy, max_num_triplets=int(1e6))
+        self.MatrixBuilder_dup = ti.linalg.SparseMatrixBuilder(3 * self.num_verts_dy_dup, 3 *  self.num_verts_dy_dup, max_num_triplets=int(1e6))
+
         # self.LLT = ti.linalg.SparseSolver(solver_type="LLT")
 
         self.LLT_PD = ti.linalg.SparseSolver(solver_type="LLT")
         self.ndarr = ti.ndarray(ti.f32, shape=3 * self.num_verts_dy)
+        self.ndarr_dup = ti.ndarray(ti.f32, shape=3 * self.num_verts_dy_dup)
 
         self.construct_pd_flag = True
 
@@ -529,13 +535,16 @@ class Solver:
 
         id3 = ti.Matrix.identity(dt=float, n=3)
         compliance_attach = 1e4
-
+        # self.mesh_dy.hii.fill(0.0)
         for i in self.mesh_dy.p:
             dx_m = (self.mesh_dy.x_k[i] - self.mesh_dy.y_tilde[i])
             self.mesh_dy.grad[i] = self.mesh_dy.m[i] * dx_m
+            self.mesh_dy.hii[i] = self.mesh_dy.m[i] * id3
+
             if self.mesh_dy.fixed[i] < 1.0:
                 dx = (self.mesh_dy.x_k[i] - self.mesh_dy.x0[i])
                 self.mesh_dy.grad[i] += compliance_attach * dx
+                self.mesh_dy.hii[i] += compliance_attach * id3
 
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
@@ -560,6 +569,7 @@ class Solver:
             self.mesh_dy.grad[v0] += compliance_stretch * dp01
             self.mesh_dy.grad[v1] -= compliance_stretch * dp01
             self.mesh_dy.hij[i] = B
+            self.mesh_dy.hii[i] += B
 
 
 
@@ -592,7 +602,44 @@ class Solver:
         #     # self.mesh_dy.hi_e[v1] += compliance_bending
         #     self.mesh_dy.hij_b[i] = B
 
+    @ti.kernel
+    def compute_spring_E_grad_and_hess_dup(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
 
+        id3 = ti.Matrix.identity(dt=float, n=3)
+        compliance_attach = 1e4
+
+        for di in self.mesh_dy.p_dup:
+            i = self.mesh_dy.dup_to_ori[di]
+            dx_m = (self.mesh_dy.x_k[i] - self.mesh_dy.y_tilde[i])
+            self.mesh_dy.grad_dup[di] = self.mesh_dy.m[i] * dx_m
+            if self.mesh_dy.fixed[i] < 1.0:
+                dx = (self.mesh_dy.x_k[i] - self.mesh_dy.x0[i])
+                self.mesh_dy.grad_dup[di] += compliance_attach * dx
+
+        for i in range(self.num_edges_dy):
+            l0 = self.mesh_dy.l0[i]
+            v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+            v0, v1 = self.mesh_dy.dup_to_ori[v0_d], self.mesh_dy.dup_to_ori[v1_d]
+
+            x01 = self.mesh_dy.x_k[v0] - self.mesh_dy.x_k[v1]
+            l = x01.norm()
+            n = x01.normalized()
+            alpha = l0 / l
+            tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
+            t1 = ti.math.normalize(n.cross(tmp))
+            t2 = n.cross(t1)
+
+            D = ti.math.mat3([compliance_stretch, 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha), 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha)])
+            P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+            B = (P @ D @ P.inverse())
+
+            # self.mesh_dy.hij[i] = B
+            dp01 = x01 - l0 * x01.normalized()
+
+            self.mesh_dy.grad_dup[v0_d] += compliance_stretch * dp01
+            self.mesh_dy.grad_dup[v1_d] -= compliance_stretch * dp01
+            self.mesh_dy.hij[i] = B
+            self.mesh_dy.hii[i] += B
 
 
 
@@ -658,6 +705,14 @@ class Solver:
             self.b[di] = self.mesh_dy.hii[vi] + self.mesh_dy.hii_e[vi]
             self.d[di] = x[vi]
 
+
+    @ti.kernel
+    def copy_to_duplicate(self, x: ti.template(), x_dup: ti.template()):
+
+        for di in x_dup:
+            vi = self.mesh_dy.dup_to_ori[di]
+            x_dup[di] = x[vi]
+
     @ti.kernel
     def copy_to_duplicates_1d(self, x: ti.template()):
 
@@ -716,6 +771,32 @@ class Solver:
 
         for i in self.mesh_dy.x_k:
             ret[i] /= self.mesh_dy.num_dup[i]
+
+    def apply_preconditioning_euler_dup(self, ret, x):
+
+        self.construct_H_dup(self.MatrixBuilder_dup)
+        H = self.MatrixBuilder_dup.build()
+        # print(H)
+        solver = ti.linalg.SparseSolver(solver_type="LLT")
+        solver.analyze_pattern(H)
+        solver.compute(H)
+
+        self.vec_field_to_ndarray(x, self.ndarr_dup)
+        ret_ndarr = solver.solve(self.ndarr_dup)
+        self.ndarray_to_vec_field(ret_ndarr, ret)
+
+    @ti.kernel
+    def aggregate_duplicates(self, x: ti.template(), x_dup: ti.template()):
+
+        x.fill(0.0)
+
+        for i in x_dup:
+            vi = self.mesh_dy.dup_to_ori[i]
+            x[vi] += x_dup[i]
+
+        for i in x:
+            x[i] /= self.mesh_dy.num_dup[i]
+
 
     @ti.kernel
     def copy_from_duplicates(self, ret: ti.template()):
@@ -794,7 +875,6 @@ class Solver:
         compliance_attach = 1e4
 
         for i in self.mesh_dy.p:
-
             for j in range(3):
                 A[3 * i + j, 3 * i + j] += self.mesh_dy.m[i]
 
@@ -811,6 +891,32 @@ class Solver:
             ids = ti.Vector([v0, v1], ti.i32)
             for o, p, m, n in ti.ndrange(3, 3, 2, 2):
                 A[3 * ids[m] + o, 3 * ids[n] + p] += test[m, n] * B[o, p]
+
+    @ti.kernel
+    def construct_H_dup(self, A: ti.types.sparse_matrix_builder()):
+
+        test = ti.math.mat2([1, -1, -1, 1])
+        compliance_attach = 1e4
+        a = ti.math.mat3([1, 1, 1, 1, 1, 1, 1, 1, 1])
+        for i in self.mesh_dy.p_dup:
+            vi = self.mesh_dy.dup_to_ori[i]
+            # for j in range(3):
+            #     A[3 * i + j, 3 * i + j] += self.mesh_dy.m[vi]
+            #
+            # if self.mesh_dy.fixed[vi] < 1.0:
+            #     for j in range(3):
+            #         A[3 * i + j, 3 * i + j] += compliance_attach
+
+            hii = self.mesh_dy.hii[vi]
+            for o, p in ti.ndrange(3, 3):
+                A[3 * i + o, 3 * i + p] += hii[o, p]
+
+        # for i in range(self.num_edges_dy):
+        #     v0_d, v1_d = self.mesh_dy.eid_dup[2 * i + 0], self.mesh_dy.eid_dup[2 * i + 1]
+        #     B = self.mesh_dy.hij[i]
+        #     for o, p in ti.ndrange(3, 3):
+        #         A[3 * v0_d + o, 3 * v1_d + p] -= a[o, p]
+        #         A[3 * v1_d + o, 3 * v0_d + p] -= a[o, p]
 
     @ti.kernel
     def construct_PD(self, A: ti.types.sparse_matrix_builder(), compliance_stretch: float, compliance_bending: float):
@@ -848,9 +954,7 @@ class Solver:
     def apply_preconditioning_Newton_LLT(self, ret, x):
 
         self.construct_H(self.MatrixBuilder)
-
         # self.MatrixBuilder.print_triplets()
-
         H = self.MatrixBuilder.build()
         solver = ti.linalg.SparseSolver(solver_type="LLT")
         solver.analyze_pattern(H)
@@ -994,22 +1098,26 @@ class Solver:
 
             # ti.profiler.clear_kernel_profiler_info()
             for _ in range(n_iter):
-
                 compliance_stretch = self.stiffness_stretch * dt_sub * dt_sub
                 compliance_bending = self.stiffness_bending * dt_sub * dt_sub
 
-                self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
-
                 if self.selected_precond_type == 0:
-                    self.apply_preconditioning_euler(self.mesh_dy.P_grad, self.mesh_dy.grad)
+                    self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
+
+                    self.copy_to_duplicate(self.mesh_dy.grad, self.mesh_dy.grad_dup)
+                    self.apply_preconditioning_euler_dup(self.mesh_dy.p_dup, self.mesh_dy.grad_dup)
+                    self.aggregate_duplicates(self.mesh_dy.p, self.mesh_dy.p_dup)
 
                 elif self.selected_precond_type == 1:
+                    self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
                     self.apply_preconditioning_jacobi(self.mesh_dy.P_grad, self.mesh_dy.grad)
 
                 elif self.selected_precond_type == 2:
+                    self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
                     self.apply_preconditioning_Newton_LLT(self.mesh_dy.p, self.mesh_dy.grad)
 
                 elif self.selected_precond_type == 3:
+                    self.compute_spring_E_grad_and_hess(compliance_stretch, compliance_bending)
                     if self.construct_pd_flag:
                         print("compute PD matrix")
                         self.construct_PD(self.MatrixBuilder, compliance_stretch, compliance_bending)
@@ -1100,4 +1208,4 @@ class Solver:
             #     # print("kernel elapsed time(max_in_ms) =", query_result.max)
             #     print("kernel elapsed time(avg_in_ms) =", query_result.avg)
 
-            # self.copy_to_dup()
+            self.copy_to_dup()

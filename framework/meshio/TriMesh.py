@@ -440,6 +440,8 @@ class TriMesh:
         self.dup_to_ori.from_numpy(dup_to_origin_main_np)
         self.eid_dup.from_numpy(eid_dup_main_np)
         print(self.eid_dup)
+        self.num_verts_dup = main_partition_offset_vert_np[-1]
+        print(self.num_verts_dup)
         # print(self.dup_to_ori)
         # print(self.eid_test)
         # print(self.partition_offset)
@@ -481,6 +483,8 @@ class TriMesh:
         self.v_prev = ti.Vector.field(n=3, dtype=float, shape=self.num_verts) # used in backward
 
         self.grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.grad_dup = ti.Vector.field(n=3, dtype=float, shape=self.num_verts_dup)
+
         self.P_grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.H_p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
@@ -488,6 +492,7 @@ class TriMesh:
         self.grad_delta = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.P_grad_delta = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.p_dup = ti.Vector.field(n=3, dtype=float, shape=self.num_verts_dup)
         self.p_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.dv = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.nc = ti.field(dtype=float, shape=self.num_verts)

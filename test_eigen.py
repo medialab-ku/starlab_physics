@@ -64,3 +64,21 @@ def foo():
     print(P @ D @ P.inverse())
 
 foo()
+n = 3
+K = ti.linalg.SparseMatrixBuilder(3 * n, 3 * n, max_num_triplets=100)
+
+@ti.kernel
+def fill(A: ti.types.sparse_matrix_builder()):
+    test = ti.math.mat3([1, 1, 1, 1, 1, 1, 1, 1, 1])
+    ids = ti.Vector([0, 2], ti.i32)
+    for o, p in ti.ndrange(3, 3):
+        A[3 * ids[0] + o, 3 * ids[1] + p] -= test[o, p]
+        A[3 * ids[1] + o, 3 * ids[0] + p] -= test[o, p]
+
+        A[3 * ids[0] + o, 3 * ids[0] + p] += test[o, p]
+        A[3 * ids[1] + o, 3 * ids[1] + p] += test[o, p]
+
+fill(K)
+
+A = K.build()
+print(A)
