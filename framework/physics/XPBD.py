@@ -24,7 +24,7 @@ class Solver:
             dt):
 
         self.mesh_dy = mesh_dy
-        self.particle_st = particle_st
+        # self.particle_st = particle_st
         # self.mesh_st = mesh_st
         self.dHat = dHat
         self.sh_dy = sh_dy
@@ -84,6 +84,7 @@ class Solver:
     def set_fixed_vertices(self, fixed_vertices: ti.template()):
         for i in range(self.num_verts_dy):
             if fixed_vertices[i] >= 1:
+                self.mesh_dy.fixed_point[i] = self.mesh_dy.x[i]
                 self.mesh_dy.fixed[i] = 0.0
             else:
                 self.mesh_dy.fixed[i] = 1.0
@@ -94,6 +95,7 @@ class Solver:
     def reset(self):
         print("reset...")
         self.mesh_dy.reset()
+        # self.mesh_dy.scale_test(10.0)
         # self.x_pbd_jacobi.copy_from(self.mesh_dy.x)
         self.compute_duplicates = True
         self.copy_to_dup()
@@ -513,7 +515,7 @@ class Solver:
             self.mesh_dy.hi[i] = self.mesh_dy.m[i]
 
             if self.mesh_dy.fixed[i] < 1.0:
-                dx = (self.mesh_dy.x_k[i] - self.mesh_dy.x0[i])
+                dx = (self.mesh_dy.x_k[i] -  self.mesh_dy.fixed_point[i])
                 self.mesh_dy.grad[i] += compliance_attach * dx
                 self.mesh_dy.hii[i] += compliance_attach * id3
                 self.mesh_dy.hi[i] += compliance_attach
@@ -530,7 +532,6 @@ class Solver:
             tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
             t1 = ti.math.normalize(n.cross(tmp))
             t2 = n.cross(t1)
-
             D = ti.math.mat3([compliance_stretch, 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha), 0.0, 0.0, 0.0, compliance_stretch * abs(1.0 - alpha)])
             P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
             B = (P @ D @ P.inverse())
@@ -633,30 +634,30 @@ class Solver:
             size = self.mesh_dy.vert_offset[pi + 1] - self.mesh_dy.vert_offset[pi]
             offset = self.mesh_dy.vert_offset[pi]
 
-            # Thomas algorithm
-            # https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
-
-            # for j in ti.static(range(3)):
-
             self.c_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.c[offset]
-            ti.loop_config(serialize=True)
-            for id in range(size):  # lb+1 ~ ub-1
-                i = id + offset
-                tmp = ti.math.inverse(self.b[i] - self.a[i] @ self.c_tilde[i - 1])
-
-                self.c_tilde[i] = tmp @ self.c[i]
-            #
             self.d_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.d[offset]
+
             ti.loop_config(serialize=True)
-            for id in range(1, size):  # lb+1 ~ ub
+            for id in range(1, size - 1):  # lb+1 ~ ub-1
                 i = id + offset
                 tmp = ti.math.inverse(self.b[i] - self.a[i] @ self.c_tilde[i - 1])
+                self.c_tilde[i] = tmp @ self.c[i]
                 self.d_tilde[i] = tmp @ (self.d[i] - self.a[i] @ self.d_tilde[i - 1])
+
+            it = size - 1 + offset
+            tmp = ti.math.inverse(self.b[it] - self.a[it] @ self.c_tilde[it - 1])
+            self.d_tilde[it] = tmp @ (self.d[it] - self.a[it] @ self.d_tilde[it - 1])
+            # self.d_tilde[offset] = ti.math.inverse(self.b[offset]) @ self.d[offset]
+            # ti.loop_config(serialize=True)
+            # for id in range(1, size):  # lb+1 ~ ub
+            #     i = id + offset
+            #     tmp = ti.math.inverse(self.b[i] - self.a[i] @ self.c_tilde[i - 1])
+            #     self.d_tilde[i] = tmp @ (self.d[i] - self.a[i] @ self.d_tilde[i - 1])
 
             self.mesh_dy.dx_dup[offset + size - 1] = self.d_tilde[offset + size - 1]
             ti.loop_config(serialize=True)
             for i in range(0, size - 1):
-                idx = size - 2 - i + offset  # ub-1 ~ lb
+                idx = size - 1 - i + offset  # ub-1 ~ lb
                 self.mesh_dy.dx_dup[idx] = self.d_tilde[idx] - self.c_tilde[idx] @ self.mesh_dy.dx_dup[idx + 1]
 
 
@@ -733,9 +734,9 @@ class Solver:
         for i in self.mesh_dy.x_k:
             xt = x[i]
             hii = self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]
-            # ret[i] = ti.math.vec3(xt[0] / hii[0, 0], xt[1] / hii[1, 1], xt[2] / hii[2, 2])
+            ret[i] = ti.math.vec3(xt[0] / hii[0, 0], xt[1] / hii[1, 1], xt[2] / hii[2, 2])
             # ret[i] = ti.math.inverse(self.mesh_dy.hii[i] + self.mesh_dy.hii_e[i]) @ x[i]
-            ret[i] =  x[i] / (self.mesh_dy.hi[i] + self.mesh_dy.hi_e[i])
+            # ret[i] =  x[i] / (self.mesh_dy.hi[i] + self.mesh_dy.hi_e[i])
 
 
     @ti.kernel
@@ -768,8 +769,8 @@ class Solver:
             # self.mesh_dy.p[i] = -self.mesh_dy.P_grad[i] + beta * self.mesh_dy.p_k[i]
             self.mesh_dy.x_k[i] += alpha * self.mesh_dy.p[i]
 
-            self.mesh_dy.p_k[i] = self.mesh_dy.p[i]
-            self.mesh_dy.grad_k[i] = self.mesh_dy.grad[i]
+            # self.mesh_dy.p_k[i] = self.mesh_dy.p[i]
+            # self.mesh_dy.grad_k[i] = self.mesh_dy.grad[i]
 
     @ti.kernel
     def compute_beta(self, g:ti.template(), Py:ti.template(), y:ti.template(), p:ti.template()) -> ti.f32:
@@ -895,21 +896,11 @@ class Solver:
 
                 if self.conv_iter > 0 and self.enable_pncg:
                     self.add(self.mesh_dy.grad_delta, self.mesh_dy.grad, self.mesh_dy.grad_k, -1.0)
-                    if self.selected_precond_type == 0:
-                        # self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-                        # self.copy_to_duplicates(self.mesh_dy.grad_delta)
-                        self.apply_preconditioning_euler(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-                        # self.copy_from_duplicates(self.mesh_dy.P_grad_delta)
-                        # self.apply_preconditioning_euler_1d(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-
-                    elif self.selected_precond_type == 1:
-                        self.apply_preconditioning_jacobi(self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta)
-
+                    self.add(self.mesh_dy.P_grad_delta, self.mesh_dy.P_grad, self.mesh_dy.P_grad_k, -1.0)
                     beta = self.compute_beta(self.mesh_dy.grad, self.mesh_dy.P_grad_delta, self.mesh_dy.grad_delta, self.mesh_dy.p_k)
 
-
+                # print(beta)
                 E = self.compute_spring_E(self.mesh_dy.x, compliance_stretch, compliance_bending)
-
                 self.add(self.mesh_dy.p, self.mesh_dy.P_grad, self.mesh_dy.p_k, -beta)
 
 
@@ -933,13 +924,20 @@ class Solver:
                     break
 
                 self.proceed(-alpha)
+
+                self.mesh_dy.p_k.copy_from(self.mesh_dy.p)
+                self.mesh_dy.grad_k.copy_from(self.mesh_dy.grad)
+                self.mesh_dy.P_grad_k.copy_from(self.mesh_dy.P_grad)
+
+                # self.mesh_dy.p_k[i] = self.mesh_dy.p[i]
+                # self.mesh_dy.grad_k[i] = self.mesh_dy.grad[i]
                 self.conv_iter += 1
 
             # self.solve_constraints_newton_pcg_x(dt_sub, self.max_cg_iter, self.threshold)
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
 
-            print(self.conv_iter)
+            # print(self.conv_iter)
             if is_run_once:
                 return plot_data_temp
             else:
@@ -959,4 +957,4 @@ class Solver:
             #     # print("kernel elapsed time(max_in_ms) =", query_result.max)
             #     print("kernel elapsed time(avg_in_ms) =", query_result.avg)
 
-            # self.copy_to_dup()
+        self.copy_to_dup()

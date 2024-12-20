@@ -106,8 +106,6 @@ class TriMesh:
             edge_temp = edge_temp + self.vert_offsets[i]
             self.e_np = np.append(self.e_np, edge_temp, axis=0)
 
-
-
             self.vert_offsets.append(self.vert_offsets[-1] + mesh.points.shape[0])
             self.edge_offsets.append(self.edge_offsets[-1] + len(edges))
             self.face_offsets.append(self.face_offsets[-1] + len(mesh.cells_dict.get("triangle", [])))
@@ -300,16 +298,16 @@ class TriMesh:
                 block_length_per_subpartition = [len(p) for p in subpartition]
                 split_threshold = int(np.median(block_length_per_subpartition)) // 2 * 2 # the nearest small even number from the average
 
-                # split_threshold = 10
+                split_threshold = 2
                 # print("Split threshold :", split_threshold)
 
                 subpartition_split = []
                 for block in subpartition:
-                    if len(block) > split_threshold:
-                        for j in range(0, len(block), split_threshold):
-                            subpartition_split.append(block[j : j + split_threshold])
-                    else:
-                        subpartition_split.append(block)
+                    # if len(block) > split_threshold:
+                    #     for j in range(0, len(block), split_threshold):
+                    #         subpartition_split.append(block[j : j + split_threshold])
+                    # else:
+                    subpartition_split.append(block)
 
                 # After all blocks are added to the partition of mesh and then split,
                 # this subpartition is also added to the main partition!
@@ -482,6 +480,7 @@ class TriMesh:
 
         self.grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.P_grad = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
+        self.P_grad_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.H_p = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
 
         self.grad_k = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -495,6 +494,7 @@ class TriMesh:
         self.m_inv = ti.field(dtype=float, shape=self.num_verts)
         self.m = ti.field(dtype=float, shape=self.num_verts)
         self.fixed = ti.field(dtype=float, shape=self.num_verts)
+        self.fixed_point = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.rho0 = ti.field(dtype=float, shape=self.num_verts)
         self.colors = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
         self.heat_map = ti.Vector.field(n=3, dtype=float, shape=self.num_verts)
@@ -733,6 +733,20 @@ class TriMesh:
 
         for i in range(self.num_verts):
             self.m_inv[i] = 1.0 /  self.m[i]
+
+    @ti.kernel
+    def scale_test(self, factor: float):
+
+        center = ti.math.vec3(0.0)
+        for i in self.x0:
+            center += self.x0[i]
+
+        center /= self.num_verts
+
+        for i in self.x0:
+            ri = self.x0[i] - center
+            self.x[i] = factor * ri + center
+
 
         # for i in range(self.euler_edge_len):
         #     v0, v1 = self.euler_path_field[i],  self.euler_path_field[i + 1]

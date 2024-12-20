@@ -77,7 +77,7 @@ YM_ui = config_data["YM"]
 YM_b_ui = config_data["YM_b"]
 
 
-# PR_ui = config_data["PR"]
+# PR_ui = config_data["PR"]s
 
 sh_st = shash.SpatialHash(grid_resolution=(64, 64, 64))
 sh_dy = shash.SpatialHash(grid_resolution=(64, 64, 64))
@@ -85,7 +85,7 @@ sh_dy = shash.SpatialHash(grid_resolution=(64, 64, 64))
 sim_tri = XPBD.Solver(scene1.obj_mesh_dy,
                       # scene1.obj_mesh_st,
                       scene1.particles_st,
-                      g=ti.math.vec3(0.0, -7.0, 0.0),
+                      g=ti.math.vec3(0.0, -10.0, 0.0),
                       dt=dt_tri_ui,
                       stiffness_stretch=YM_ui,
                       stiffness_bending=YM_b_ui,
@@ -188,7 +188,7 @@ def show_options_tri():
 
         dt_tri_ui = w.slider_float("dt", dt_tri_ui, 0.001, 0.101)
         n_substep = w.slider_int("# sub", n_substep, 1, 100)
-        n_iter = w.slider_int("# iter", n_iter, 1, 100)
+        n_iter = w.slider_int("# iter", n_iter, 1, 500)
         dHat_ui = w.slider_float("dHat", dHat_ui, 0.0001, 1.101)
         friction_coeff_ui = w.slider_float("fric. coef.", friction_coeff_ui, 0.0, 1.0)
         damping_ui = w.slider_float("damping", damping_ui, 0.0, 1.0)
@@ -490,6 +490,7 @@ while window.running:
 
     scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, per_vertex_color=sim_tri.mesh_dy.colors)
     scene.mesh(sim_tri.mesh_dy.x, indices=sim_tri.mesh_dy.face_indices_flatten, color=(0, 0.0, 0.0), show_wireframe=True)
+    # scene.lines(sim_tri.mesh_dy.x_dup, indices=sim_tri.mesh_dy.eid_dup, per_vertex_color=sim_tri.mesh_dy.color_test, width=2.0)
 
     scene.lines(sh_st.bbox_vertices, width=1.0, indices=sh_st.bbox_edge_indices_flattened, color=(0, 0, 0))
 
