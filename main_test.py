@@ -267,10 +267,10 @@ offset = 0
 
 
 # partition_cycle = partition_level
-for e in graph.edges:
-    path = [e[0], e[1]]
-    print(path)
-    partition_total.append(path)
+# for e in graph.edges:
+#     path = [e[0], e[1]]
+#     # print(path)
+#     partition_total.append(path)
 
 num_max_partition = len(partition_total)
 num_edges_per_partition_np = np.array([len(partition_total[i]) - 1 for i in range(num_max_partition)])
