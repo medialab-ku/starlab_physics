@@ -89,7 +89,7 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-x_np_temp, edges, faces = import_mesh("models/OBJ/square.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+x_np_temp, edges, faces = import_mesh("models/OBJ/even_plane.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = x_np_temp.shape[0]
 num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
@@ -195,7 +195,7 @@ partition_rest = []
 # print(aa)
 
 
-for a in range(15):
+for a in range(3):
     longest_path_size = 0
     longest_path = []
     for i in range(len(partition_cycle[0]) - 1):
@@ -546,7 +546,7 @@ def compute_grad_and_hessian_attachment(x: ti.template(), k: float):
 
     id3 = ti.Matrix.identity(dt=float, n=3)
     # ids = ti.Vector([i for i in range(num_particles_x)], dt=int)
-    ids = ti.Vector([0, 1, 2 , 3], dt=int)
+    ids = ti.Vector([0, 1, 2, 3], dt=int)
     # print(ids)
     for i in range(ids.n):
         grad[ids[i]] += k * (x[ids[i]] - x0[ids[i]])
@@ -623,14 +623,14 @@ def compute_grad_and_hessian_spring(x: ti.template(), k: float):
 # def BlockThomasAlgorithm(a: ti.template(), b: ti.template(), c: ti.template(), x: ti.template(), d: ti.template()):
 
 @ti.kernel
-def substep_Euler(Px: ti.template(), x: ti.template()):
+def substep_Euler(Px: ti.template(), x: ti.template(), k: float):
 
     Px.fill(0.0)
     b_part.fill(0.0)
     a_part.fill(0.0)
     c_part.fill(0.0)
-
-    # ti.loop_config(serialize=True)
+    id3 = ti.Matrix.identity(dt=float, n=3)
+    ti.loop_config(serialize=True)
     for pi in range(num_max_partition):
         size_pi = num_edges_per_partition[pi]
 
@@ -639,16 +639,42 @@ def substep_Euler(Px: ti.template(), x: ti.template()):
         ti.loop_config(serialize=True)
         for i in range(size_pi):
             ei = partitioned_set[pi, i]
-            # print(ei)
-            vi, vj = indices[2 * ei + 0], indices[2 * ei + 1]
-            # print(vi, vj)
-            b_part[pi, i]     = hii[vi]
-            b_part[pi, i + 1] = hii[vj]
-            a_part[pi, i + 1] = -hij[ei]
-            c_part[pi, i]     = -hij[ei]
+            vi = indices[2 * ei + 0]
+            b_part[pi, i] = mass[vi] * id3
+            d_part[pi, i] = mass[vi] * (x[vi] - y[vi])
 
-            d_part[pi, i]     = x[vi]
-            d_part[pi, i + 1] = x[vj]
+        ei = partitioned_set[pi, size_pi]
+        vi = indices[2 * ei + 1]
+        b_part[pi, size_pi] = mass[vi] * id3
+        d_part[pi, size_pi] = mass[vi] * (x[vi] - y[vi])
+
+        for i in range(size_pi):
+            ei = partitioned_set[pi, i]
+            vi, vj = indices[2 * ei + 0], indices[2 * ei + 1]
+            x01 = x[vi] - x[vj]
+            n = x01.normalized()
+            l = x01.norm()
+            dp01 = x01 - l0[i] * n
+
+            d_part[pi, i]     += k * dp01
+            d_part[pi, i + 1] -= k * dp01
+            # grad[v1] -= k * dp01
+
+            n = x01.normalized()
+            alpha = l0[i] / l
+            tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
+            t1 = ti.math.normalize(n.cross(tmp))
+            t2 = n.cross(t1)
+            D = ti.math.mat3([k, 0.0, 0.0, 0.0, k * abs(1.0 - alpha), 0.0, 0.0, 0.0, k * abs(1.0 - alpha)])
+            P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+            B = (P @ D @ P.inverse())
+
+            b_part[pi, i] += B
+            b_part[pi, i + 1] += B
+
+            a_part[pi, i + 1] = -B
+            c_part[pi, i] = -B
+
 
         c_tilde_part[pi, 0] = ti.math.inverse(b_part[pi, 0]) @ c_part[pi, 0]
         d_tilde_part[pi, 0] = ti.math.inverse(b_part[pi, 0]) @ d_part[pi, 0]
@@ -670,24 +696,24 @@ def substep_Euler(Px: ti.template(), x: ti.template()):
 
 
     # ti.loop_config(serialize=True)
-    for pi in range(num_max_partition):
-        size_pi = num_edges_per_partition[pi]
+    # for pi in range(num_max_partition):
+    #     size_pi = num_edges_per_partition[pi]
 
         ti.loop_config(serialize=True)
         for i in range(size_pi):
             ei = partitioned_set[pi, i]
             vi = indices[2 * ei + 0]
-            P_grad[vi] += x_part[pi, i]
+            x[vi] += x_part[pi, i]
 
-        ei = partitioned_set[pi, size_pi - 1]
-        vi = indices[2 * ei + 1]
-        Px[vi] += x_part[pi, size_pi]
-
-    for i in range(num_particles):
-        if num_dup[i] > 0:
-            Px[i] /= num_dup[i]
-        else:
-            Px[i] = ti.math.inverse(hii[i]) @ x[i]
+    #     ei = partitioned_set[pi, size_pi - 1]
+    #     vi = indices[2 * ei + 1]
+    #     Px[vi] += x_part[pi, size_pi]
+    #
+    # for i in range(num_particles):
+    #     if num_dup[i] > 0:
+    #         Px[i] /= num_dup[i]
+    #     else:
+    #         Px[i] = ti.math.inverse(hii[i]) @ x[i]
 
 @ti.kernel
 def substep_Jacobi(Px: ti.template(), x: ti.template()):
@@ -794,38 +820,18 @@ def forward():
     k_at = 5 * pow(10.0, PR) * dt ** 2
     termination_condition = pow(10.0, -threshold)
     itr_cnt = 0
-    # print(PR)
-    # radius = 2.0
-    # center = ti.math.vec3(0.0, -3.5, 0.0)
 
     for _ in range(num_iters):
-        # print(it)
-        compute_grad_and_hessian_momentum(x_k)
-        compute_grad_and_hessian_spring(x_k, k=k)
 
-        if enable_attachment:
-            compute_grad_and_hessian_attachment(x_k, k=k_at)
+        # compute_grad_and_hessian_momentum(x_k)
+        # if enable_attachment:
+        #     compute_grad_and_hessian_attachment(x_k, k=k_at)
 
-        if enable_detection:
-            detect_collision(x_k, radius, center[0])
-            compute_grad_and_hessian_collision(x_k, radius, center[0], k=k_col)
+        # compute_grad_and_hessian_spring(x_k, k=k)
 
-        if solver_type == 0:
-            substep_Euler(P_grad, grad)
-
-        elif solver_type == 1:
-            substep_Jacobi(P_grad, grad)
-
-        elif solver_type == 2:
-            substep_Newton(P_grad, grad)
+        substep_Euler(P_grad, x_k, k=k)
 
         beta = 0.0
-
-        if itr_cnt > 0 and enable_pncg:
-
-            add(grad_delta, grad, grad_k, -1.0)
-            add(P_grad_delta, P_grad, P_grad_k, -1.0)
-            beta = compute_beta(grad, P_grad_delta, grad_delta, dx_k)
 
         # print(beta)
         add(dx, P_grad, dx_k, -beta)
