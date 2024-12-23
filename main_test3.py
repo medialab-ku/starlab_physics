@@ -89,7 +89,7 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-x_np_temp, edges, faces = import_mesh("models/OBJ/even_plane.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+x_np_temp, edges, faces = import_mesh("models/OBJ/plane_3.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = x_np_temp.shape[0]
 num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
@@ -155,60 +155,67 @@ for i in range(2):
         path = []
         for edge in path_tmp:
             path.append(int(edge[0]))
-        path.append(path_tmp[-1][1])
+        # path.append(path_tmp[-1][1])
+
+        # a = []
+
         partition_cycle.append(path)
         partition_total.append(path)
+        partition_total.append(path_tmp[-1])
 
     graph.remove_edges_from(surface_edges[i])
 
 partition_rest = []
-
-for l in range(1):
-    path_test = []
-    for i in range(len(partition_cycle[l]) - 1):
-        src, dest = partition_cycle[l][i], partition_cycle[l][i + 1]
-        if nx.has_path(graph, src, dest):
-            path = nx.shortest_path(graph, src, dest)
-            # print(path)
-            path_test.append(path)
-            for j in range(len(path) - 1):
-                graph.remove_edge(path[j], path[j + 1])
+#
+# for l in range(1):
+#     path_test = []
+#     for i in range(len(partition_cycle[l]) - 1):
+#         src, dest = partition_cycle[l][i], partition_cycle[l][i + 1]
+#         if nx.has_path(graph, src, dest):
+#             path = nx.shortest_path(graph, src, dest)
+#             # print(path)
+#             # path_test.append(path)
+#             partition_total.append(path)
+#             for j in range(len(path) - 1):
+#                 graph.remove_edge(path[j], path[j + 1])
 
     # aa = []
-    while True:
-        if len(path_test) > 0:
-            a = path_test.pop(0)
-            if len(path_test) > 0:
-                if a[-1] == path_test[0][0]:
-                    b = path_test.pop(0)
-                    # print(path_test)
-                    path_test.append(a[:-1] + b)
-                else:
-                    partition_total.append(a)
-            else:
-                partition_total.append(a)
-        else:
-            break
+    # while True:
+    #     if len(path_test) > 0:
+    #         a = path_test.pop(0)
+    #         if len(path_test) > 0:
+    #             if a[-1] == path_test[0][0]:
+    #                 b = path_test.pop(0)
+    #                 # print(path_test)
+    #                 path_test.append(a[:-1] + b)
+    #             else:
+    #                 partition_total.append(a)
+    #         else:
+    #             partition_total.append(a)
+    #     else:
+    #         break
 #
-# for a in range(15):
-#     longest_path_size = 0
-#     longest_path = []
-#     for i in range(len(partition_cycle[0]) - 1):
-#         for j in range(i + 1, len(partition_cycle[0])):
-#             src, dest = partition_cycle[0][i], partition_cycle[0][j]
-#             if nx.has_path(graph, src, dest):
-#                 path = nx.shortest_path(graph, src, dest)
-#                 if longest_path_size < len(path):
-#                     longest_path_size = len(path)
-#                     longest_path = path
-#                     # partition_total.append(path)
-#                     # for k in range(len(path) - 1):
-#                     #     graph.remove_edge(path[k], path[k + 1])
+# print(partition_total)
 #
-#     if longest_path_size > 0:
-#         partition_total.append(longest_path)
-#         for k in range(len(longest_path) - 1):
-#             graph.remove_edge(longest_path[k], longest_path[k + 1])
+for a in range(1):
+    longest_path_size = 0
+    longest_path = []
+    for i in range(len(partition_cycle[0]) - 1):
+        for j in range(i + 1, len(partition_cycle[0])):
+            src, dest = partition_cycle[0][i], partition_cycle[0][j]
+            if nx.has_path(graph, src, dest):
+                path = nx.shortest_path(graph, src, dest)
+                if longest_path_size < len(path):
+                    longest_path_size = len(path)
+                    longest_path = path
+                    # partition_total.append(path)
+                    # for k in range(len(path) - 1):
+                    #     graph.remove_edge(path[k], path[k + 1])
+
+    if longest_path_size > 0:
+        partition_total.append(longest_path)
+        for k in range(len(longest_path) - 1):
+            graph.remove_edge(longest_path[k], longest_path[k + 1])
 #
 #     else: break
 
@@ -682,6 +689,92 @@ def substep_Euler(Px: ti.template(), x: ti.template()):
             Px[i] = ti.math.inverse(hii[i]) @ x[i]
 
 @ti.kernel
+def substep_Euler_GS(pi: int, x: ti.template(), k: float):
+
+    id3 = ti.Matrix.identity(dt=float, n=3)
+    ids = ti.Vector([0, 1, 2, 3], dt=int)
+
+    b_part.fill(0.0)
+    a_part.fill(0.0)
+    c_part.fill(0.0)
+    d_part.fill(0.0)
+
+    size_pi = num_edges_per_partition[pi]
+    # print(size_pi)
+    n_verts_pi = size_pi + 1
+    # ti.loop_config(serialize=True)
+    for i in range(size_pi):
+        ei = partitioned_set[pi, i]
+        v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
+
+        d_part[pi, i] += mass[v0] * (x[v0] - y[v0])
+        b_part[pi, i] += mass[v0] * id3
+
+        if v0 == 0 or v0 == 1:
+            d_part[pi, i] += k * (x[v0] - x0[v0])
+            b_part[pi, i] += k * id3
+
+        x01 = x[v0] - x[v1]
+        n = x01.normalized()
+        l = x01.norm()
+
+        dp01 = x01 - l0[ei] * n
+        d_part[pi, i]     += k * dp01
+        d_part[pi, i + 1] -= k * dp01
+
+        alpha = l0[ei] / l
+        tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
+        t1 = ti.math.normalize(n.cross(tmp))
+        t2 = n.cross(t1)
+        D = ti.math.mat3([k, 0.0, 0.0, 0.0, k * abs(1.0 - alpha), 0.0, 0.0, 0.0, k * abs(1.0 - alpha)])
+        P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+        B = (P @ D @ P.inverse())
+
+        b_part[pi, i]     += B
+        b_part[pi, i + 1] += B
+        a_part[pi, i + 1] = -B
+        c_part[pi, i]     = -B
+
+
+    ei = partitioned_set[pi, size_pi - 1]
+    vi = indices[2 * ei + 1]
+    if vi == 0 or vi == 1:
+        d_part[pi, size_pi] += k * (x[vi] - x0[vi])
+        b_part[pi, size_pi] += k * id3
+
+    d_part[pi, size_pi] += mass[vi] * (x[vi] - y[vi])
+    b_part[pi, size_pi] += mass[vi] * id3
+
+    c_tilde_part[pi, 0] = ti.math.inverse(b_part[pi, 0]) @ c_part[pi, 0]
+    d_tilde_part[pi, 0] = ti.math.inverse(b_part[pi, 0]) @ d_part[pi, 0]
+
+    ti.loop_config(serialize=True)
+    for i in range(1, n_verts_pi - 1):
+        tmp = ti.math.inverse(b_part[pi, i] - a_part[pi, i] @ c_tilde_part[pi, i - 1])
+        c_tilde_part[pi, i] = tmp @ c_part[pi, i]
+        d_tilde_part[pi, i] = tmp @ (d_part[pi, i] - a_part[pi, i] @ d_tilde_part[pi, i - 1])
+
+    tmp = ti.math.inverse(b_part[pi, n_verts_pi - 1] - a_part[pi, n_verts_pi - 1] @ c_tilde_part[pi, n_verts_pi - 2])
+    d_tilde_part[pi, n_verts_pi - 1] = tmp @ (d_part[pi, n_verts_pi - 1] - a_part[pi, n_verts_pi - 1] @ d_tilde_part[pi, n_verts_pi - 2])
+
+    x_part[pi, n_verts_pi - 1] = d_tilde_part[pi, n_verts_pi - 1]
+    ti.loop_config(serialize=True)
+    for i in range(n_verts_pi - 1):
+        idx = n_verts_pi - 2 - i
+        x_part[pi, idx] = d_tilde_part[pi, idx] - c_tilde_part[pi, idx] @ x_part[pi, idx + 1]
+
+
+    # ti.loop_config(serialize=True)
+    for i in range(size_pi):
+        ei = partitioned_set[pi, i]
+        vi = indices[2 * ei + 0]
+        x[vi] -= x_part[pi, i]
+
+    ei = partitioned_set[pi, size_pi - 1]
+    vi = indices[2 * ei + 1]
+    x[vi] -= x_part[pi, size_pi]
+
+@ti.kernel
 def substep_Jacobi(Px: ti.template(), x: ti.template()):
 
     for i in range(num_particles):
@@ -792,59 +885,9 @@ def forward():
 
     for _ in range(num_iters):
         # print(it)
-        compute_grad_and_hessian_momentum(x_k)
-        compute_grad_and_hessian_spring(x_k, k=k)
+        for j in range(len(partition_total)):
+            substep_Euler_GS(j, x_k, k)
 
-        if enable_attachment:
-            compute_grad_and_hessian_attachment(x_k, k=k_at)
-
-        if enable_detection:
-            detect_collision(x_k, radius, center[0])
-            compute_grad_and_hessian_collision(x_k, radius, center[0], k=k_col)
-
-        if solver_type == 0:
-            substep_Euler(P_grad, grad)
-
-        elif solver_type == 1:
-            substep_Jacobi(P_grad, grad)
-
-        elif solver_type == 2:
-            substep_Newton(P_grad, grad)
-
-        beta = 0.0
-
-        if itr_cnt > 0 and enable_pncg:
-
-            add(grad_delta, grad, grad_k, -1.0)
-            add(P_grad_delta, P_grad, P_grad_k, -1.0)
-            beta = compute_beta(grad, P_grad_delta, grad_delta, dx_k)
-
-        # print(beta)
-        add(dx, P_grad, dx_k, -beta)
-
-        # alpha = 1.0
-        # alpha_ccd = collision_aware_line_search(x_k, dx, radius, center)
-        # print(alpha_ccd)
-
-        # scale(dx, dx, alpha_ccd)
-        add(x_k, x_k, dx, -1.0)
-        inf_norm = infinity_norm(dx)
-
-        dx_k.copy_from(dx)
-        grad_k.copy_from(grad)
-        P_grad_k.copy_from(P_grad)
-
-        itr_cnt += 1
-        if print_stat:
-            print(inf_norm)
-
-        if inf_norm < termination_condition:
-
-            if print_stat:
-                print("conv iter: ,", itr_cnt)
-            break
-
-    # print(itr_cnt)
     compute_v()
 
     return itr_cnt

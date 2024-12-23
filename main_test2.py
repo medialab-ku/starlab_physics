@@ -145,8 +145,8 @@ graph.add_edges_from(edges)
 partition_cycle = []
 partition_total = []
 
-# for i in range(len(boundaries)):
-for i in range(1):
+for i in range(len(boundaries)):
+# for i in range(2):
     graph_tmp = nx.MultiGraph()
     graph_tmp.add_edges_from(surface_edges[i])
     # euler_graph = nx.eulerize(graph_tmp)  # after adding edges, we eulerize
@@ -155,7 +155,7 @@ for i in range(1):
         path = []
         for edge in path_tmp:
             path.append(int(edge[0]))
-        path.append(path_tmp[-1][1])
+        path.append(int(path_tmp[-1][1]))
         partition_cycle.append(path)
         partition_total.append(path)
 
@@ -195,7 +195,7 @@ partition_rest = []
 # print(aa)
 
 
-for a in range(3):
+for a in range(5):
     longest_path_size = 0
     longest_path = []
     for i in range(len(partition_cycle[0]) - 1):
@@ -210,55 +210,13 @@ for a in range(3):
                     # for k in range(len(path) - 1):
                     #     graph.remove_edge(path[k], path[k + 1])
 
+    longest_path = list(map(int, longest_path))
     if longest_path_size > 0:
         partition_total.append(longest_path)
         for k in range(len(longest_path) - 1):
             graph.remove_edge(longest_path[k], longest_path[k + 1])
 
     else: break
-
-
-# for k in range(len(partition_cycle)):
-#     set = len(partition_cycle[k]) // 4
-#     offset = len(partition_cycle[k]) // 2
-#     for i in range(set):
-#         src, dest = partition_cycle[k][i], partition_cycle[k][i + offset]
-#         if nx.has_path(graph, src, dest):
-#             path = nx.shortest_path(graph, src, dest)
-#             partition_rest.append(path)
-#             partition_total.append(path)
-#
-#             for i in range(len(path) - 1):
-#                 graph.remove_edge(path[i], path[i + 1])
-
-
-#                     path_tmp = len(nx.shortest_path(graph, vi, vj)) - 1
-
-# for b in range(len(boundaries)):
-#     print("lev: ", b)
-#     while True:
-#         path_max = 0
-#         src, dest = -1, -1
-#         for i in range(len(boundaries[b]) - 1):
-#             for j in range(i + 1, len(boundaries[b]) - 1):
-#                 vi, vj = boundaries[b][i], boundaries[b][j]
-#                 if nx.has_path(graph, vi, vj):
-#                     path_tmp = len(nx.shortest_path(graph, vi, vj)) - 1
-#                     if path_max < path_tmp:
-#                         path_max = path_tmp
-#                         src, dest = vi, vj
-#
-#
-#
-#         if path_max == 0:
-#             break
-#         path = nx.shortest_path(graph, src, dest)
-#         partition_cycle.append(path)
-#
-#         for i in range(len(path) - 1):
-#             graph.remove_edge(path[i], path[i + 1])
-
-# partition_cycle = partition_rest
 
 edges_test = np.array(graph.edges())
 edges_test = np.reshape(edges_test, (-1))
@@ -273,105 +231,116 @@ end = -1
 partition_level = []
 
 offset = 0
-# for t in range(1):
-#
-#     if len(boundaries[0]) <1:
-#         print("fuck")
-#         offset += 1
-#
-#     for bi in boundaries[offset]:
-#         start = bi
-#         end = -1
-#         short = 1e3
-#         path = [start]
-#
-#         for i in range(offset + 1, len(boundaries)):
-#
-#             if len(boundaries[i]) < 1:
-#                 print("fuck")
-#
-#             for bj in boundaries[i]:
-#                 # print(bj)
-#                 if nx.has_path(graph, path[-1], bj):
-#                     path_tmp = len(nx.shortest_path(graph, path[-1], bj)) - 1
-#                     # print(path_tmp)
-#                     if path_tmp < short:
-#                         short = path_tmp
-#                         start = bj
-#                         end = bj
-#
-#             if end == -1:
-#                 boundaries[i - 1].remove(path[-1])
-#                 break
-#
-#             if short > 1:
-#                 break
-#             else:
-#                 graph.remove_edge(path[-1], end)
-#                 path.append(end)
-#                 end = -1
-#                 short = 1e3
-#
-#         # print(path)
-#
-#         if len(path) > 1:
-#             partition_cycle.append(path)
+t = 0
 
+flattened = []
+offset = 0
+indices_dup_tmp = []
+partition_ids = []
+cnt = 0
+for i in range(0, len(partition_total)):
+    flattened += partition_total[i]
+    # print("__")
+    tmp = []
+    for j in range(len(partition_total[i]) - 1):
+        tmp.append(cnt)
+        cnt += 1
+        indices_dup_tmp.append(offset + j)
+        indices_dup_tmp.append(offset + j + 1)
 
-# print(partition_level)
-# print(nx.shortest_path(graph, 11, 57))
-# print(partition_cycle)
-# print(np.array(graph.edges))
+    partition_ids.append(tmp)
+    offset += len(partition_total[i])
 
+# print(partition_ids)
 
-# partition_cycle = partition_level
-# for e in graph.edges:
-#     path = [e[0], e[1]]
-#     # print(path)
-#     partition_total.append(path)
+indices_dup_tmp = np.array(indices_dup_tmp)
+num_edges_dup = int(indices_dup_tmp.shape[0] // 2)
+indices_dup = ti.field(dtype=int, shape= 2 * num_edges_dup)
+indices_dup.from_numpy(indices_dup_tmp)
 
-num_max_partition = len(partition_total)
-num_edges_per_partition_np = np.array([len(partition_total[i]) - 1 for i in range(num_max_partition)])
+# print(indices_dup)
+
+num_particles_dup = len(flattened)
+
+dup_set_tmp = [[] for i in range(num_particles)]
+
+for i in range(num_particles_dup):
+    vi = flattened[i]
+    dup_set_tmp[vi].append(i)
+
+dup_set = [i for i in dup_set_tmp if len(i) >= 2]
+# print(dup_set)
+
+# print([len(i) for i in dup_set])
+num_dup_set_np = np.array([len(i) for i in dup_set])
+
+num_dup_set = ti.field(dtype=int, shape=num_dup_set_np.shape[0])
+num_dup_set.from_numpy(num_dup_set_np)
+
+# print(num_dup_set)
+
+num_max_dup = len(max(dup_set, key=len))
+
+dup_ids_np = np.zeros((len(dup_set), num_max_dup), dtype=int)
+
+for i in range(len(dup_set)):
+    for j in range(num_dup_set_np[i]):
+        dup_ids_np[i, j] = dup_set[i][j]
+
+# print(dup_ids_np)
+dup_ids = ti.field(dtype=int, shape=(len(dup_set), num_max_dup))
+
+dup_ids.from_numpy(dup_ids_np)
+
+num_max_partition = len(partition_ids)
+num_edges_per_partition_np = np.array([len(partition_ids[i]) for i in range(num_max_partition)])
 num_max_edges_per_partition = max(num_edges_per_partition_np)
 
 num_edges_per_partition = ti.field(dtype=int, shape=num_max_partition)
 num_edges_per_partition.from_numpy(num_edges_per_partition_np)
 
 # print(num_edges_per_partition)
+
+###########################
 partitioned_set_np = np.zeros([num_max_partition, num_max_edges_per_partition], dtype=int)
 
-
-
-cnt = 0
-a = []
-
 for i in range(num_max_partition):
-    for j in range(len(partition_total[i]) - 1):
-        partitioned_set_np[i, j] = cnt
-        a.append(partition_total[i][j])
-        a.append(partition_total[i][j + 1])
-        cnt += 1
+    for j in range(num_edges_per_partition_np[i]):
+        partitioned_set_np[i, j] = partition_ids[i][j]
 
-a = np.array(a)
-b = np.array(graph.edges).reshape(-1)
-
-# a = np.append(a, b)
-# num_edges = cnt + len(graph.edges)
-
-num_edges = cnt
-
-indices = ti.field(int, shape= 2 * num_edges)
-indices.from_numpy(np.array(a))
 
 partitioned_set = ti.field(dtype=int, shape=(num_max_partition, num_max_edges_per_partition))
 partitioned_set.from_numpy(partitioned_set_np)
 # print(partitioned_set)
 
-colors_np = np.empty((num_particles, 3), dtype=float)
 
+dup_to_ori = ti.field(dtype=int, shape=num_particles_dup)
+dup_to_ori.from_numpy(np.array(flattened))
+
+x_dup    = ti.Vector.field(n=3, dtype=float, shape=num_particles_dup)
+y_dup    = ti.Vector.field(n=3, dtype=float, shape=num_particles_dup)
+v_dup    = ti.Vector.field(n=3, dtype=float, shape=num_particles_dup)
+dx_k_dup = ti.Vector.field(n=3, dtype=float, shape=num_particles_dup)
+x_k_dup = ti.Vector.field(n=3, dtype=float, shape=num_particles_dup)
+
+grad_dup   = ti.Vector.field(n=3, dtype=float, shape=num_particles_dup)
+P_grad_dup = ti.Vector.field(n=3, dtype=float, shape=num_particles_dup)
+hii_dup  = ti.Matrix.field(n=3, m=3, dtype=float, shape=num_particles_dup)
+hij_dup  = ti.Matrix.field(n=3, m=3, dtype=float, shape=num_edges_dup)
+mass_dup = ti.field(dtype=float, shape=num_particles_dup)
+l0_dup = ti.field(float, shape=2 * num_edges_dup)
+
+colors_np = np.empty((num_particles, 3), dtype=float)
 viridis = mpl.colormaps['viridis'].resampled(len(boundaries))
 
 show_partition_id = 0
+
+@ti.kernel
+def copy_to_dup(dup: ti.template(), ori: ti.template()):
+    for i in range(num_particles_dup):
+        vi = dup_to_ori[i]
+        dup[i] = ori[vi]
+
 
 def color_partition(id, set):
     for i in range(num_particles):
@@ -407,6 +376,8 @@ y  = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 x0 = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 v  = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 
+# x0_dup =
+
 grad   = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 P_grad = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 dx     = ti.Vector.field(n=3, dtype=float, shape=num_particles)
@@ -421,7 +392,6 @@ dx_k     = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 
 hii = ti.Matrix.field(n=3, m=3, dtype=float, shape=num_particles)
 hij = ti.Matrix.field(n=3, m=3, dtype=float, shape=num_edges)
-
 
 a_part       = ti.Matrix.field(n=3, m=3, dtype=float, shape=(num_max_partition, num_max_vertices_per_partition))
 b_part       = ti.Matrix.field(n=3, m=3, dtype=float, shape=(num_max_partition, num_max_vertices_per_partition))
@@ -444,7 +414,6 @@ ndarr = ti.ndarray(ti.f32, shape=3 * num_particles)
 def flattend_index(i: int, j: int):
 
     return i + num_particles_x * j
-
 
 @ti.kernel
 def generate_particles(num_particles: int, delta: float):
@@ -474,45 +443,39 @@ def centeralize(x: ti.template()):
 def generate_indices4():
 
     density = 1.0
-    for i in range(num_edges):
-        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
-        l0[i] = (x0[v0] - x0[v1]).norm()
-        mass[v0] += 0.5 * l0[i] * density
-        mass[v1] += 0.5 * l0[i] * density
+    for i in range(num_edges_dup):
+        v0, v1 = indices_dup[2 * i + 0], indices_dup[2 * i + 1]
+        l0_dup[i] = (x_dup[v0] - x_dup[v1]).norm()
+        mass_dup[v0] += 0.5 * l0_dup[i] * density
+        mass_dup[v1] += 0.5 * l0_dup[i] * density
+
+    for i in range(num_dup_set.shape[0]):
+        mass_total = 0.0
+        for j in range(num_dup_set[i]):
+            mass_total += mass_dup[dup_ids[i, j]]
 
 
-    ti.loop_config(serialize=True)
-    for pi in range(num_max_partition):
-        size_pi = num_edges_per_partition[pi]
-
-        ti.loop_config(serialize=True)
-        for i in range(size_pi):
-            ei = partitioned_set[pi, i]
-            vi = indices[2 * ei + 0]
-            # print(vi)
-            num_dup[vi] += 1.0
-        ei = partitioned_set[pi, size_pi - 1]
-        vi = indices[2 * ei + 1]
-        num_dup[vi] += 1.0
-
-    for i in range(num_particles):
-        if num_dup[i] < 1:
-            mass[i] = 1.0
+        for j in range(num_dup_set[i]):
+            mass_dup[dup_ids[i, j]] = mass_total
 
 # @ti.kernel
 def generate_mesh():
 
     x0.from_numpy(x_np_temp)
-    edges_flattened = edges.reshape(-1)
+    # edges_flattened = edges.reshape(-1)
     # indices.from_numpy(edges_flattened)
     # print(indices)
     # generate_particles(num_particles, delta=1.0)
     centeralize(x0)
 
-    mass.fill(0.0)
+    mass_dup.fill(0.0)
     num_dup.fill(0.0)
+
+    copy_to_dup(x_dup, x0)
+
     generate_indices4()
 
+    # print(mass_dup)
     # print(num_dup)
 
     # print(num_edges_per_partition)
@@ -523,34 +486,65 @@ def compute_y():
 
     # apply gravity within boundary
     g = ti.Vector([0.0, -9.81, 0.0])
-    for i in x:
-        xi, vi = x[i], v[i]
-        x_k[i] = y[i] = xi + vi * dt + g * dt * dt
+
+    for i in x_dup:
+        xi, vi = x_dup[i], v_dup[i]
+        x_k_dup[i] = y_dup[i] = xi + vi * dt + g * dt * dt
 
 @ti.kernel
 def compute_v():
-    for i in x:
-        v[i] = (x_k[i] - x[i])/ dt
-        x[i] = x_k[i]
+    for i in x_k_dup:
+        v_dup[i] = (x_k_dup[i] - x_dup[i]) / dt
+        x_dup[i] = x_k_dup[i]
 
 @ti.kernel
-def compute_grad_and_hessian_momentum(x: ti.template()):
+def compute_velocity_aggregate(v: ti.template()):
 
     id3 = ti.Matrix.identity(dt=float, n=3)
-    for i in range(num_particles):
-        grad[i] = mass[i] * (x[i] - y[i])
-        hii[i] = mass[i] * id3
+    for i in range(num_dup_set.shape[0]):
+        proj = ti.math.vec3(0.0)
+        for j in range(num_dup_set[i]):
+            proj += v[dup_ids[i, j]]
 
+        proj /= num_dup_set[i]
+
+        for j in range(num_dup_set[i]):
+            v[dup_ids[i, j]] = proj
+
+
+@ti.kernel
+def compute_grad_and_hessian_momentum(x: ti.template(), y: ti.template()):
+
+    id3 = ti.Matrix.identity(dt=float, n=3)
+    for i in x:
+        grad_dup[i] = mass_dup[i] * (x[i] - y[i])
+        hii_dup[i] = mass_dup[i] * id3
+
+@ti.kernel
+def compute_grad_and_hessian_aggregate(x: ti.template(), k: float):
+
+    id3 = ti.Matrix.identity(dt=float, n=3)
+    for i in range(num_dup_set.shape[0]):
+        proj = ti.math.vec3(0.0)
+        for j in range(num_dup_set[i]):
+            proj += x[dup_ids[i, j]]
+
+        proj /= num_dup_set[i]
+
+        for j in range(num_dup_set[i]):
+            grad_dup[dup_ids[i, j]] += k * (x[dup_ids[i, j]] - proj)
+            hii_dup[dup_ids[i, j]]  += k * id3
 @ti.kernel
 def compute_grad_and_hessian_attachment(x: ti.template(), k: float):
 
     id3 = ti.Matrix.identity(dt=float, n=3)
     # ids = ti.Vector([i for i in range(num_particles_x)], dt=int)
-    ids = ti.Vector([0, 1, 2, 3], dt=int)
+    ids = ti.Vector([0, 8], dt=int)
     # print(ids)
     for i in range(ids.n):
-        grad[ids[i]] += k * (x[ids[i]] - x0[ids[i]])
-        hii[ids[i]] += k * id3
+        vi = dup_to_ori[ids[i]]
+        grad_dup[ids[i]] += k * (x[ids[i]] - x0[vi])
+        hii_dup[ids[i]] += k * id3
 
 @ti.kernel
 def detect_collision(x: ti.template(), radius: float, center: ti.math.vec3):
@@ -595,19 +589,19 @@ def compute_grad_and_hessian_collision(x: ti.template(), radius: float, center: 
 @ti.kernel
 def compute_grad_and_hessian_spring(x: ti.template(), k: float):
 
-    for i in range(num_edges):
-        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
+    for i in range(num_edges_dup):
+        v0, v1 = indices_dup[2 * i + 0], indices_dup[2 * i + 1]
         # print(v0, v1)
         x01 = x[v0] - x[v1]
         n = x01.normalized()
         l = x01.norm()
-        dp01 = x01 - l0[i] * n
+        dp01 = x01 - l0_dup[i] * n
 
-        grad[v0] += k * dp01
-        grad[v1] -= k * dp01
+        grad_dup[v0] += k * dp01
+        grad_dup[v1] -= k * dp01
 
         n = x01.normalized()
-        alpha = l0[i] / l
+        alpha = l0_dup[i] / l
         tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
         t1 = ti.math.normalize(n.cross(tmp))
         t2 = n.cross(t1)
@@ -615,21 +609,18 @@ def compute_grad_and_hessian_spring(x: ti.template(), k: float):
         P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
         B = (P @ D @ P.inverse())
 
-        hii[v0] += B
-        hii[v1] += B
-        hij[i] = B
-
-# @ti.func
-# def BlockThomasAlgorithm(a: ti.template(), b: ti.template(), c: ti.template(), x: ti.template(), d: ti.template()):
+        hii_dup[v0] += B
+        hii_dup[v1] += B
+        hij_dup[i]   = B
 
 @ti.kernel
-def substep_Euler(Px: ti.template(), x: ti.template(), k: float):
+def substep_Euler(Px: ti.template(), x: ti.template()):
 
     Px.fill(0.0)
     b_part.fill(0.0)
     a_part.fill(0.0)
     c_part.fill(0.0)
-    id3 = ti.Matrix.identity(dt=float, n=3)
+
     ti.loop_config(serialize=True)
     for pi in range(num_max_partition):
         size_pi = num_edges_per_partition[pi]
@@ -639,41 +630,16 @@ def substep_Euler(Px: ti.template(), x: ti.template(), k: float):
         ti.loop_config(serialize=True)
         for i in range(size_pi):
             ei = partitioned_set[pi, i]
-            vi = indices[2 * ei + 0]
-            b_part[pi, i] = mass[vi] * id3
-            d_part[pi, i] = mass[vi] * (x[vi] - y[vi])
+            vi, vj = indices_dup[2 * ei + 0], indices_dup[2 * ei + 1]
 
-        ei = partitioned_set[pi, size_pi]
-        vi = indices[2 * ei + 1]
-        b_part[pi, size_pi] = mass[vi] * id3
-        d_part[pi, size_pi] = mass[vi] * (x[vi] - y[vi])
+            # print(vi, vj)
+            b_part[pi, i]     = hii_dup[vi]
+            b_part[pi, i + 1] = hii_dup[vj]
+            a_part[pi, i + 1] = -hij_dup[ei]
+            c_part[pi, i]     = -hij_dup[ei]
 
-        for i in range(size_pi):
-            ei = partitioned_set[pi, i]
-            vi, vj = indices[2 * ei + 0], indices[2 * ei + 1]
-            x01 = x[vi] - x[vj]
-            n = x01.normalized()
-            l = x01.norm()
-            dp01 = x01 - l0[i] * n
-
-            d_part[pi, i]     += k * dp01
-            d_part[pi, i + 1] -= k * dp01
-            # grad[v1] -= k * dp01
-
-            n = x01.normalized()
-            alpha = l0[i] / l
-            tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
-            t1 = ti.math.normalize(n.cross(tmp))
-            t2 = n.cross(t1)
-            D = ti.math.mat3([k, 0.0, 0.0, 0.0, k * abs(1.0 - alpha), 0.0, 0.0, 0.0, k * abs(1.0 - alpha)])
-            P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
-            B = (P @ D @ P.inverse())
-
-            b_part[pi, i] += B
-            b_part[pi, i + 1] += B
-
-            a_part[pi, i + 1] = -B
-            c_part[pi, i] = -B
+            d_part[pi, i]     = x[vi]
+            d_part[pi, i + 1] = x[vj]
 
 
         c_tilde_part[pi, 0] = ti.math.inverse(b_part[pi, 0]) @ c_part[pi, 0]
@@ -695,30 +661,20 @@ def substep_Euler(Px: ti.template(), x: ti.template(), k: float):
             x_part[pi, idx] = d_tilde_part[pi, idx] - c_tilde_part[pi, idx] @ x_part[pi, idx + 1]
 
 
-    # ti.loop_config(serialize=True)
-    # for pi in range(num_max_partition):
-    #     size_pi = num_edges_per_partition[pi]
-
         ti.loop_config(serialize=True)
         for i in range(size_pi):
             ei = partitioned_set[pi, i]
-            vi = indices[2 * ei + 0]
-            x[vi] += x_part[pi, i]
+            vi = indices_dup[2 * ei + 0]
+            Px[vi] = x_part[pi, i]
 
-    #     ei = partitioned_set[pi, size_pi - 1]
-    #     vi = indices[2 * ei + 1]
-    #     Px[vi] += x_part[pi, size_pi]
-    #
-    # for i in range(num_particles):
-    #     if num_dup[i] > 0:
-    #         Px[i] /= num_dup[i]
-    #     else:
-    #         Px[i] = ti.math.inverse(hii[i]) @ x[i]
+        ei = partitioned_set[pi, size_pi - 1]
+        vi = indices_dup[2 * ei + 1]
+        Px[vi] = x_part[pi, size_pi]
 
 @ti.kernel
-def substep_Jacobi(Px: ti.template(), x: ti.template()):
+def substep_Jacobi(Px: ti.template(), hii:ti.template(), x: ti.template()):
 
-    for i in range(num_particles):
+    for i in range(num_particles_dup):
         Px[i] = hii[i].inverse() @ x[i]
 
 @ti.kernel
@@ -730,7 +686,7 @@ def construct_Hessian(A: ti.types.sparse_matrix_builder()):
             A[3 * i + m, 3 * i + n] += B[m, n]
 
     for i in range(num_edges):
-        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
+        v0, v1 = indices_dup[2 * i + 0], indices_dup[2 * i + 1]
         B = hij[i]
         for m, n in ti.ndrange(3, 3):
             A[3 * v1 + m, 3 * v0 + n] -= B[m, n]
@@ -814,52 +770,60 @@ center[0] = ti.math.vec3(0.0, -3.5, 0.0)
 
 def forward():
 
+    # print(x_dup.shape)
     compute_y()
     k = pow(10.0, PR) * dt ** 2
     k_col = pow(10.0, PR) * dt ** 2
-    k_at = 5 * pow(10.0, PR) * dt ** 2
+    k_at = pow(10.0, PR + 1) * dt ** 2
     termination_condition = pow(10.0, -threshold)
     itr_cnt = 0
 
     for _ in range(num_iters):
 
-        # compute_grad_and_hessian_momentum(x_k)
+        compute_grad_and_hessian_momentum(x_k_dup, y_dup)
+        compute_grad_and_hessian_aggregate(x_k_dup, k=k_at)
         # if enable_attachment:
-        #     compute_grad_and_hessian_attachment(x_k, k=k_at)
+        compute_grad_and_hessian_attachment(x_k_dup, k=k_at)
 
-        # compute_grad_and_hessian_spring(x_k, k=k)
+        compute_grad_and_hessian_spring(x_k_dup, k=k)
 
-        substep_Euler(P_grad, x_k, k=k)
+        if solver_type == 0:
+            substep_Euler(P_grad_dup, grad_dup)
+
+        elif solver_type == 1:
+            substep_Jacobi(P_grad_dup, hii_dup, grad_dup)
 
         beta = 0.0
 
         # print(beta)
-        add(dx, P_grad, dx_k, -beta)
-
-        # alpha = 1.0
-        # alpha_ccd = collision_aware_line_search(x_k, dx, radius, center)
-        # print(alpha_ccd)
-
-        # scale(dx, dx, alpha_ccd)
-        add(x_k, x_k, dx, -1.0)
-        inf_norm = infinity_norm(dx)
-
-        dx_k.copy_from(dx)
-        grad_k.copy_from(grad)
-        P_grad_k.copy_from(P_grad)
-
+        # add(dx, P_grad, dx_k, -beta)
+    #
+    #     # alpha = 1.0
+    #     # alpha_ccd = collision_aware_line_search(x_k, dx, radius, center)
+    #     # print(alpha_ccd)
+    #
+    #     # scale(dx, dx, alpha_ccd)
+    #     P_grad_dup.fill(0.0)
+        add(x_k_dup, x_k_dup, P_grad_dup, -1.0)
+        inf_norm = infinity_norm(P_grad_dup)
+    #
+    #     dx_k.copy_from(dx)
+    #     grad_k.copy_from(grad)
+    #     P_grad_k.copy_from(P_grad)
+    #
         itr_cnt += 1
-        if print_stat:
-            print(inf_norm)
-
+    #     if print_stat:
+    #         print(inf_norm)
+    #
         if inf_norm < termination_condition:
-
-            if print_stat:
-                print("conv iter: ,", itr_cnt)
+    #
+    #         if print_stat:
+    #             print("conv iter: ,", itr_cnt)
             break
 
     # print(itr_cnt)
     compute_v()
+    # compute_velocity_aggregate(v)
 
     return itr_cnt
 
@@ -947,6 +911,8 @@ while window.running:
 
         if window.event.key == 'r':
             x.copy_from(x0)
+            copy_to_dup(x_dup, x0)
+            v_dup.fill(0.0)
             v.fill(0.0)
             if frame_cnt > 0:
                 if solver_type == 0:
@@ -990,16 +956,16 @@ while window.running:
     if has_end and frame_cnt >= end_frame:
         run_sim = False
 
-
     show_options()
 
-    scene.particles(x, radius=0.05, per_vertex_color=colors)
-    # scene.particles(center, radius=radius, color=(1.0, 0.5, 0.0))
-
+    # scene.particles(x, radius=0.05, per_vertex_color=colors)
+    scene.particles(x_dup, radius=0.05, color=(1.0, 0.5, 0.0))
     if enable_lines:
-        scene.lines(x, indices=indices_test, color=(0.0, 0.0, 1.0), width=1.0)
-    if enable_lines2:
-        scene.lines(x, indices=indices, color=(1.0, 0.0, 0.0), width=1.0)
+        scene.lines(x_dup, indices=indices_dup, color=(1.0, 0.0, 0.0), width=1.0)
+    # if enable_lines:
+    #     scene.lines(x, indices=indices_test, color=(0.0, 0.0, 1.0), width=1.0)
+    # if enable_lines2:
+    #     scene.lines(x, indices=indices, color=(1.0, 0.0, 0.0), width=1.0)
 
     camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
     canvas.scene(scene)
