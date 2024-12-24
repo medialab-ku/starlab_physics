@@ -95,12 +95,13 @@ num_particles = verts.shape[0]
 num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
 num_verts, num_edges, num_faces = verts.shape[0], edges.shape[0], faces.shape[0]
 
-indices_original = edges.flatten()
-# print(indices_original)
 
 ########################################################################################################################
 # create edge partitions and offsets
 # Sehyeon Park
+
+indices_original = edges.flatten()
+# print(indices_original)
 
 def share(fi, fj):
     ei = [(fi[0], fi[1]), (fi[1], fi[2]), (fi[0], fi[2])]
@@ -115,13 +116,6 @@ def share(fi, fj):
                 return True
     return False
 
-
-    # for i in range(3):
-    #     for j in range(3):
-    #         if fi[i] == fj[j]:
-    #             return True
-    # return False
-
 face_adj_list = [np.array([], dtype=int) for i in range(num_faces)]
 for i in range(num_faces - 1):
     for j in range(i + 1, num_faces):
@@ -129,14 +123,11 @@ for i in range(num_faces - 1):
             face_adj_list[i] = np.append(face_adj_list[i], j)
             face_adj_list[j] = np.append(face_adj_list[j], i)
 
-for i in range(num_faces):
-    print(f"face {i} adjacency : {face_adj_list[i]} / # of adj : {len(face_adj_list[i])}")
-
 num_partition = 2
 n_cuts, membership = pymetis.part_graph(num_partition, adjacency=face_adj_list)
 print(f"n_cuts : {n_cuts} / membership : {membership}")
 
-# membership [1, 0, 0, 2, 1] -> faces_part [[1,2], [0,4], [3]]
+# membership [1, 0, 0, 2, 1] -> faces_get_partitioned [[1,2], [0,4], [3]]
 partition_offsets = [0]
 faces_get_partitioned = []
 for i in range(num_partition):
@@ -149,6 +140,28 @@ faces_offsets_np = np.array(partition_offsets)
 
 print("faces_partition :", faces_get_partitioned_np)
 print("faces_offset :", faces_offsets_np)
+
+duplicate_count_per_vert_np = np.zeros(dtype=int, shape=num_verts) # number of duplicates of each original vertex
+for f in faces_get_partitioned_np:
+    v0, v1, v2 = faces[f][0], faces[f][1], faces[f][2]
+    duplicate_count_per_vert_np[v0] += 1
+    duplicate_count_per_vert_np[v1] += 1
+    duplicate_count_per_vert_np[v2] += 1
+print("\n# duplicate per vertex :", duplicate_count_per_vert_np)
+print("sum of duplicate :", duplicate_count_per_vert_np.sum(), "\n")
+
+partition_local_verts = []
+partition_local_verts_offsets = [0]
+for i in range(num_partition):
+    # face indices which consist of the partition i
+    partition_faces = faces_get_partitioned_np[faces_offsets_np[i] : faces_offsets_np[i+1]]
+    # extract all vertex indices that is used by each face index...
+    partition_verts = faces[partition_faces].flatten()
+    partition_local_verts.extend(partition_verts)
+    partition_local_verts_offsets.append(partition_local_verts_offsets[-1] + partition_verts.shape[0])
+
+print("partition_local_verts :", partition_local_verts)
+print("partition_local_verts_offset :", partition_local_verts_offsets)
 
 barycentric_x_np = np.zeros(shape=(num_faces, 3), dtype=float)
 barycentric_x_color_np = np.zeros(shape=(num_faces, 3), dtype=float)
