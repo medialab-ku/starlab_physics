@@ -93,101 +93,86 @@ verts, edges, faces = import_mesh("models/OBJ/plane_8.obj", scale = 3.0, transla
 
 num_particles = verts.shape[0]
 num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
-# num_partition = ti.field(int, shape=1)
 num_verts, num_edges, num_faces = verts.shape[0], edges.shape[0], faces.shape[0]
 
+indices_original = edges.flatten()
+# print(indices_original)
+
 ########################################################################################################################
-# create face partitions and offsets
+# create edge partitions and offsets
 # Sehyeon Park
 
-def share(ei, ej):
-    ret = 0
-    for i in range(2):
-        for j in range(2):
+def share(fi, fj):
+    ei = [(fi[0], fi[1]), (fi[1], fi[2]), (fi[0], fi[2])]
+    ej = [(fj[0], fj[1]), (fj[1], fj[2]), (fj[0], fj[2])]
+    for i in range(3):
+        if ei[i][0] > ei[i][1]:
+            ei[i] = (ei[i][1], ei[i][0])
+        for j in range(3):
+            if ej[j][0] > ej[j][1]:
+                ej[j] = (ej[j][1], ej[j][0])
             if ei[i] == ej[j]:
-                ret += 1
-    return ret
+                return True
+    return False
 
-edge_adj_list = [np.array([], dtype=int) for i in range(num_edges)]
-for i in range(num_edges - 1):
-    for j in range(i + 1, num_edges):
-        if share(edges[i], edges[j]):
-            edge_adj_list[i] = np.append(edge_adj_list[i], j)
-            edge_adj_list[j] = np.append(edge_adj_list[j], i)
-print("edge_adj_list :", edge_adj_list)
 
-num_partition = 6
-n_cuts, membership = pymetis.part_graph(num_partition, adjacency=edge_adj_list)
+    # for i in range(3):
+    #     for j in range(3):
+    #         if fi[i] == fj[j]:
+    #             return True
+    # return False
+
+face_adj_list = [np.array([], dtype=int) for i in range(num_faces)]
+for i in range(num_faces - 1):
+    for j in range(i + 1, num_faces):
+        if share(faces[i], faces[j]):
+            face_adj_list[i] = np.append(face_adj_list[i], j)
+            face_adj_list[j] = np.append(face_adj_list[j], i)
+
+for i in range(num_faces):
+    print(f"face {i} adjacency : {face_adj_list[i]} / # of adj : {len(face_adj_list[i])}")
+
+num_partition = 2
+n_cuts, membership = pymetis.part_graph(num_partition, adjacency=face_adj_list)
 print(f"n_cuts : {n_cuts} / membership : {membership}")
 
-# membership [1, 0, 0, 1, 1] -> edges_part [[1,2], [0,3,4]]
+# membership [1, 0, 0, 2, 1] -> faces_part [[1,2], [0,4], [3]]
 partition_offsets = [0]
-edges_get_partitioned = []
+faces_get_partitioned = []
 for i in range(num_partition):
     partition = np.argwhere(np.array(membership) == i).flatten()
     partition_offsets.append(partition_offsets[-1] + partition.shape[0])
-    edges_get_partitioned.append(partition)
+    faces_get_partitioned.append(partition)
 
-edges_get_partitioned_np = np.concatenate(edges_get_partitioned)
-edges_offsets_np = np.array(partition_offsets)
+faces_get_partitioned_np = np.concatenate(faces_get_partitioned)
+faces_offsets_np = np.array(partition_offsets)
 
-print("edges_partition :", edges_get_partitioned_np)
-print("edges_offset :", edges_offsets_np)
+print("faces_partition :", faces_get_partitioned_np)
+print("faces_offset :", faces_offsets_np)
 
-duplicate_information_per_vert_np = np.zeros(dtype=int, shape=num_verts) # number of duplicates of each original vertex
-for e in edges_get_partitioned_np:
-    v0, v1 = edges[e][0], edges[e][1]
-    duplicate_information_per_vert_np[v0] += 1
-    duplicate_information_per_vert_np[v1] += 1
-print("# duplicate per vertex :", duplicate_information_per_vert_np)
+barycentric_x_np = np.zeros(shape=(num_faces, 3), dtype=float)
+barycentric_x_color_np = np.zeros(shape=(num_faces, 3), dtype=float)
 
-prefix_sum_verts = np.zeros(num_verts + 1, dtype=int) # the offsets of vertex duplicates
-prefix_sum_verts[0] = 0
-for i in range(num_verts):
-    prefix_sum_verts[i+1] = prefix_sum_verts[i] + duplicate_information_per_vert_np[i]
+for i in range(num_faces):
+    i0, i1, i2 = faces[i][0], faces[i][1], faces[i][2]
+    barycentric_x_np[i] = (verts[i0] + verts[i1] + verts[i2]) / 3.0
 
-num_new_duplicated_verts = prefix_sum_verts[-1] # the number of new vertex duplicates
-
-allocated_dup = np.zeros(num_verts, dtype=int) # track how many duplicates of each vertex are used (0 ~ dup_size)
-new_edges = np.zeros((num_edges, 2), dtype=int)
-new_verts = np.zeros((num_new_duplicated_verts, 3), dtype=float)
-for i in range(num_edges):
-    v0, v1 = edges[i]
-    i0 = prefix_sum_verts[v0] + allocated_dup[v0]
-    i1 = prefix_sum_verts[v1] + allocated_dup[v1]
-    allocated_dup[v0] += 1
-    allocated_dup[v1] += 1
-
-    new_edges[i, 0] = i0
-    new_edges[i, 1] = i1
-    new_verts[i0] = verts[v0]
-    new_verts[i1] = verts[v1]
-
-allocated_dup[:] = 0 # init to zero again (to reuse them)
-new_colors = np.zeros(shape=(num_new_duplicated_verts, 3), dtype=float)
-for p in range(len(partition_offsets) - 1):
+for pidx in range(len(partition_offsets) - 1):
     r = float(random.randrange(0, 255) / 256)
     g = float(random.randrange(0, 255) / 256)
     b = float(random.randrange(0, 255) / 256)
 
-    current_offset, next_offset = partition_offsets[p], partition_offsets[p + 1]
+    current_offset, next_offset = partition_offsets[pidx], partition_offsets[pidx + 1]
     for i in range(current_offset, next_offset):
-        v0, v1 = edges[i]
-        i0 = prefix_sum_verts[v0] + allocated_dup[v0]
-        i1 = prefix_sum_verts[v1] + allocated_dup[v1]
-        allocated_dup[v0] += 1
-        allocated_dup[v1] += 1
+        face = faces_get_partitioned_np[i]
+        barycentric_x_color_np[face][0] = r
+        barycentric_x_color_np[face][1] = g
+        barycentric_x_color_np[face][2] = b
 
-        new_colors[i0, 0] = new_colors[i1, 0] = r
-        new_colors[i0, 1] = new_colors[i1, 1] = g
-        new_colors[i0, 2] = new_colors[i1, 2] = b
-
-new_edges_field = ti.field(shape=num_edges * 2, dtype=int)
-new_edges_field.from_numpy(new_edges.flatten())
-new_verts_field = ti.Vector.field(n=3, dtype=float, shape=num_new_duplicated_verts)
-new_verts_field.from_numpy(new_verts)
-new_colors_field = ti.Vector.field(n=3, dtype=float, shape=num_new_duplicated_verts)
-new_colors_field.from_numpy(new_colors)
+barycentric_x_field = ti.Vector.field(n=3, dtype=float, shape=num_faces)
+barycentric_x_field.from_numpy(barycentric_x_np)
+barycentric_x_color_field = ti.Vector.field(n=3, dtype=float, shape=num_faces)
+barycentric_x_color_field.from_numpy(barycentric_x_color_np)
 
 
 ########################################################################################################################
@@ -1024,11 +1009,11 @@ while window.running:
 
     show_options()
 
-    scene.particles(x, radius=0.05, per_vertex_color=colors)
+    # scene.particles(x, radius=0.05, per_vertex_color=colors)
 
     if enable_lines:
-        # scene.lines(x, indices=indices_test, color=(0.0, 0.0, 1.0), width=1.0)
-        scene.lines(new_verts_field, indices=new_edges_field, per_vertex_color=new_colors_field, width=5.0)
+        scene.lines(x, indices=indices_original, color=(0.0, 0.0, 0.0), width=1.0)
+        scene.particles(barycentric_x_field, radius=0.05, per_vertex_color=barycentric_x_color_field)
     if enable_lines2:
         scene.lines(x, indices=indices, color=(1.0, 0.0, 0.0), width=1.0)
 
