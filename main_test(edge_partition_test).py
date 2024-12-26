@@ -101,12 +101,11 @@ num_verts, num_edges, num_faces = verts.shape[0], edges.shape[0], faces.shape[0]
 # Sehyeon Park
 
 def share(ei, ej):
-    ret = 0
     for i in range(2):
         for j in range(2):
             if ei[i] == ej[j]:
-                ret += 1
-    return ret
+                return True
+    return False
 
 edge_adj_list = [np.array([], dtype=int) for i in range(num_edges)]
 for i in range(num_edges - 1):
@@ -116,7 +115,7 @@ for i in range(num_edges - 1):
             edge_adj_list[j] = np.append(edge_adj_list[j], i)
 print("edge_adj_list :", edge_adj_list)
 
-num_partition = 6
+num_partition = 2
 n_cuts, membership = pymetis.part_graph(num_partition, adjacency=edge_adj_list)
 print(f"n_cuts : {n_cuts} / membership : {membership}")
 
@@ -140,17 +139,21 @@ for e in edges_get_partitioned_np:
     duplicate_information_per_vert_np[v0] += 1
     duplicate_information_per_vert_np[v1] += 1
 print("# duplicate per vertex :", duplicate_information_per_vert_np)
+print("sum of duplicate :", duplicate_information_per_vert_np.sum(), "\n")
 
 prefix_sum_verts = np.zeros(num_verts + 1, dtype=int) # the offsets of vertex duplicates
 prefix_sum_verts[0] = 0
 for i in range(num_verts):
     prefix_sum_verts[i+1] = prefix_sum_verts[i] + duplicate_information_per_vert_np[i]
+print("prefix_sum_verts :", prefix_sum_verts)
 
 num_new_duplicated_verts = prefix_sum_verts[-1] # the number of new vertex duplicates
 
 allocated_dup = np.zeros(num_verts, dtype=int) # track how many duplicates of each vertex are used (0 ~ dup_size)
 new_edges = np.zeros((num_edges, 2), dtype=int)
 new_verts = np.zeros((num_new_duplicated_verts, 3), dtype=float)
+
+new_vert_idx_to_old_vert_idx = np.zeros(num_new_duplicated_verts, dtype=int)
 for i in range(num_edges):
     v0, v1 = edges[i]
     i0 = prefix_sum_verts[v0] + allocated_dup[v0]
@@ -162,6 +165,11 @@ for i in range(num_edges):
     new_edges[i, 1] = i1
     new_verts[i0] = verts[v0]
     new_verts[i1] = verts[v1]
+
+    new_vert_idx_to_old_vert_idx[i0] = v0
+    new_vert_idx_to_old_vert_idx[i1] = v1
+
+print("new_verts_to_old_verts :", new_vert_idx_to_old_vert_idx)
 
 allocated_dup[:] = 0 # init to zero again (to reuse them)
 new_colors = np.zeros(shape=(num_new_duplicated_verts, 3), dtype=float)
