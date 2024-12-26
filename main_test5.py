@@ -83,13 +83,16 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-x_np_temp, edges, faces = import_mesh("models/OBJ/plane_low.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+x_np_temp, edges, faces = import_mesh("models/OBJ/even_plane.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = x_np_temp.shape[0]
 num_edges = edges.shape[0]
 
 graph_tmp = nx.MultiGraph()
 graph_tmp.add_edges_from(edges)
+
+
+print(graph_tmp.number_of_nodes())
 
 partition_cycle = []
 partition_total = []
@@ -98,9 +101,40 @@ num_partitioned_edges = 0
 odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
 num_odd_degree_nodes = len(odd_degree_nodes)
 
-print(num_odd_degree_nodes)
+colors_np = np.empty((num_particles, 3), dtype=float)
+for i in range(num_particles):
+    colors_np[i, 0] = 0.0
+    colors_np[i, 1] = 0.0
+    colors_np[i, 2] = 0.0
 
-while num_odd_degree_nodes > 2:
+for vi in odd_degree_nodes:
+    colors_np[vi, 0] = 1.0
+    colors_np[vi, 1] = 0.0
+    colors_np[vi, 2] = 0.0
+
+show_partition_id = 0
+#
+# def color_partition(id, set):
+#     for i in range(num_particles):
+#         colors_np[i, 0] = 0.0
+#         colors_np[i, 1] = 0.0
+#         colors_np[i, 2] = 0.0
+#
+#
+#     # for i in range(id):
+#     for vi in set[id]:
+#         colors_np[vi, 0] = 1.0
+#         colors_np[vi, 1] = 0.0
+#         colors_np[vi, 2] = 0.0
+
+
+colors = ti.Vector.field(n=3, shape=num_particles, dtype=float)
+colors.from_numpy(colors_np)
+
+
+# print(num_odd_degree_nodes)
+num_max_edges_per_partition = 0
+for i in range(10):
 
     src = odd_degree_nodes.pop(0)
     dest = odd_degree_nodes.pop(0)
@@ -110,10 +144,14 @@ while num_odd_degree_nodes > 2:
         # print(sp)
         partition_total.append(sp)
 
-        print(len(sp))
+        if num_max_edges_per_partition < len(sp):
+            num_max_edges_per_partition = len(sp)
 
         for i in range(len(sp) - 1):
             graph_tmp.remove_edge(sp[i], sp[i + 1])
+
+    else:
+        odd_degree_nodes.append(dest)
 
     odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
     num_odd_degree_nodes = len(odd_degree_nodes)
@@ -129,9 +167,9 @@ graph_tmp.remove_nodes_from(isolated)
 
 # print(graph_tmp.number_of_edges())
 
-euler_path = list(nx.eulerian_path(graph_tmp))
+# euler_path = list(nx.eulerian_path(graph_tmp))
 
-print(len(euler_path))
+# print(len(euler_path))
 
 faces_tmp = faces
 
@@ -139,36 +177,36 @@ face_indices_np = np.array(faces_tmp).reshape(-1)
 face_indices = ti.field(dtype=int, shape=face_indices_np.shape[0])
 face_indices.from_numpy(face_indices_np)
 
-num_max_edges_per_partition = 5
+# num_max_edges_per_partition = 13
 
-while True:
-
-    path_tmp = []
-
-    for j in range(num_max_edges_per_partition):
-
-        if len(euler_path) > 0:
-            a = euler_path.pop(0)
-            path_tmp.append(a)
-
-
-    if (len(path_tmp)) > 1:
-        path = []
-        for edge in path_tmp:
-            path.append(int(edge[0]))
-
-        path.append(path_tmp[-1][1])
-
-        partition_cycle.append(path)
-        partition_total.append(path)
-
-    else:
-        break
+# while True:
+#
+#     path_tmp = []
+#
+#     for j in range(num_max_edges_per_partition):
+#
+#         if len(euler_path) > 0:
+#             a = euler_path.pop(0)
+#             path_tmp.append(a)
+#
+#
+#     if (len(path_tmp)) > 1:
+#         path = []
+#         for edge in path_tmp:
+#             path.append(int(edge[0]))
+#
+#         path.append(path_tmp[-1][1])
+#
+#         partition_cycle.append(path)
+#         partition_total.append(path)
+#
+#     else:
+#         break
 
 
 
 num_max_partition = len(partition_total)
-print(num_max_partition)
+# print(num_max_partition)
 
 num_edges_per_partition_np = np.array([len(partition_total[i]) - 1 for i in range(num_max_partition)])
 
@@ -200,28 +238,6 @@ indices.from_numpy(np.array(a))
 partitioned_set = ti.field(dtype=int, shape=(num_max_partition, num_max_edges_per_partition))
 partitioned_set.from_numpy(partitioned_set_np)
 # print(partitioned_set)
-
-colors_np = np.empty((num_particles, 3), dtype=float)
-
-
-show_partition_id = 0
-
-def color_partition(id, set):
-    for i in range(num_particles):
-        colors_np[i, 0] = 0.0
-        colors_np[i, 1] = 0.0
-        colors_np[i, 2] = 0.0
-
-
-    # for i in range(id):
-    for vi in set[id]:
-        colors_np[vi, 0] = 1.0
-        colors_np[vi, 1] = 0.0
-        colors_np[vi, 2] = 0.0
-
-
-colors = ti.Vector.field(n=3, shape=num_particles, dtype=float)
-colors.from_numpy(colors_np)
 
 num_max_vertices_per_partition = num_max_edges_per_partition + 1
 
@@ -851,7 +867,7 @@ while window.running:
             elapsed_time_total += elapsed_time
             frame_cnt += 1
 
-    color_partition(show_partition_id, debug)
+    # color_partition(show_partition_id, debug)
     colors.from_numpy(colors_np)
 
     if run_sim:
@@ -871,7 +887,7 @@ while window.running:
 
     show_options()
 
-    # scene.particles(x, radius=0.05, per_vertex_color=colors)
+    scene.particles(x, radius=0.05, per_vertex_color=colors)
     # scene.particles(center, radius=radius, color=(1.0, 0.5, 0.0))
 
     # if enable_lines:
