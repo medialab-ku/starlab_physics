@@ -35,7 +35,7 @@ frame_cnt = 0
 threshold = 2
 has_end = False
 end_frame = 200
-PR = 6
+PR = 1
 k_at = 5
 solver_type = 0
 enable_pncg = False
@@ -98,8 +98,8 @@ indices_np = np.reshape(indices_np, -1)
 indices = ti.field(dtype=int, shape=indices_np.shape[0])
 indices.from_numpy(indices_np)
 
-Dm_inv      = ti.Matrix.field(n=3, m=3, shape=num_tri, dtype=float)
-rest_volume = ti.field(shape=num_tri, dtype=float)
+Dm_inv      = ti.Matrix.field(n=2, m=2, shape=num_tri, dtype=float)
+rest_area = ti.field(shape=num_tri, dtype=float)
 mass        = ti.field(shape=num_particles, dtype=float)
 
 @ti.kernel
@@ -114,10 +114,19 @@ def reset():
 
         cross = x01.cross(x21)
         area = 0.5 * cross.norm()
-        n = cross / area
 
-        rest_volume[i] = abs(cross.dot(n)) / 6.0
-        Dm_inv[i] = ti.math.inverse(ti.Matrix.cols([x01, x21, n]))
+        rest_area[i] = area
+        n = cross.normalized()
+
+
+        t1 = n.cross(x01).normalized()
+        t2 = n.cross(t1).normalized()
+        R = ti.Matrix.cols([t2, t1, n]).transpose()
+
+        x01_2d = R @ x01
+        x21_2d = R @ x21
+
+        Dm_inv[i] = (ti.Matrix.cols([[x01_2d[0], x01_2d[1]], [x21_2d[0], x21_2d[1]]])).inverse()
 
         area_part = area / 3.0
 
@@ -130,7 +139,8 @@ def reset():
 def compute_y():
 
     # apply gravity within boundary
-    g = ti.Vector([0.0, -9.81, 0.0])
+    # g = ti.Vector([0.0, -9.81, 0.0])
+    g = ti.Vector([0.0, 0.0, 0.0])
     for i in x:
         xi, vi = x[i], v[i]
         x_k[i] = y[i] = xi + vi * dt + g * dt * dt
@@ -162,17 +172,42 @@ def compute_grad_and_hessian_attachment(x: ti.template(), k: float):
 
 
 @ti.func
-def ssvd(F):
-    U, sig, V = ti.svd(F)
+def svd3x2(F):
+    U, sigma2, V_T = ti.svd(F @ F.transpose())
+
     if U.determinant() < 0:
-        for i in ti.static(range(3)): U[i, 2] *= -1
-        sig[2, 2] = -sig[2, 2]
+        for i in ti.static(range(3)):
+            U[i, 2] *= -1
+        # sig[2, 2] = -sig[2, 2]
+        # sig[2, 2] = -sig[2, 2]
+
+    V, _, U_T = ti.svd(F.transpose() @ F)
     if V.determinant() < 0:
-        for i in ti.static(range(3)): V[i, 2] *= -1
-        sig[2, 2] = -sig[2, 2]
-    return U, sig, V
+        for i in ti.static(range(2)):
+            V[i, 1] *= -1
+
+    sigma = ti.Matrix.cols([[ti.sqrt(sigma2[0, 0]), 0, 0], [0, ti.sqrt(sigma2[1, 1]), 0]])
+
+    return U, sigma, V.transpose()
 
 
+@ti.func
+def compute_dFdx_T_N(B, N):
+    B00, B01, B10, B11 = B[0, 0], B[0, 1], B[1, 0], B[1, 1]
+    N00, N01, N10, N11, N20, N21 = N[0, 0], N[0, 1], N[1, 0], N[1, 1], N[2, 0], N[2, 1]
+
+    r3 = B00 * N00 + B01 * N01
+    r4 = B00 * N10 + B01 * N11
+    r5 = B00 * N20 + B01 * N21
+    r6 = B10 * N00 + B11 * N01
+    r7 = B10 * N10 + B11 * N11
+    r8 = B10 * N20 + B11 * N21
+
+    r0 = -r3 - r6
+    r1 = -r4 - r7
+    r2 = -r5 - r8
+
+    return ti.Matrix([r0, r1, r2, r3, r4, r5, r6, r7, r8], float)
 
 
 @ti.kernel
@@ -184,34 +219,47 @@ def compute_grad_and_hessian_stretch(x: ti.template(), k: float):
         x01 = x[v0] - x[v1]
         x21 = x[v2] - x[v1]
 
-        cross = x01.cross(x21)
-        n = cross / cross.norm()
+        Ds = ti.Matrix.cols([x01, x21])
+        B = Dm_inv[i]
+        F = Ds @ B
 
-        Ds = ti.Matrix.cols([x01, x21, n])
-        F = Ds @ Dm_inv[i]
+        U, sigma, V = svd3x2(F)
+        V_ext = ti.Matrix.cols([[V[0, 0], V[1, 0], 0.0], [V[0, 1], V[1, 1], 0.0]])
+        R = U @ V_ext
 
-        dPsidx = rest_volume[i] * k * e_util.compute_dPsidx_FCR(F, Dm_inv[i], k, 0.0)
+        P = F - R
+        test = (P.transpose() @ P).trace()
+        C = ti.sqrt(test)
+        # print(C)
+        eps = 0.0
+        # if C < 1e-3:
+        #     eps = 1e-3
+        dCdx = (F - R) @ B.transpose() / (C + eps)
 
-        ids = ti.Vector([v1, v0, v2], dt=int)
-        for j in range(3):
-            grad[ids[j]] += ti.Vector([dPsidx[3 * j], dPsidx[3 * j + 1], dPsidx[3 * j + 2]], float)
+        grad0 = ti.math.vec3(dCdx[0, 0], dCdx[1, 0], dCdx[2, 0])
+        grad2 = ti.math.vec3(dCdx[0, 1], dCdx[1, 1], dCdx[2, 1])
+        # grad3 = -(grad0 + grad1 + grad2)
 
-        # P = e_util.compute_dPsidF_FCR(F, k, 0.0)
-        # P_vec = e_util.flatten_matrix(P)
-        # dFdx = e_util.compute_dFdx(Dm_inv[i])
-        # # grad_vec = dFdx @ P_vec
-        # #
-        # d2PsidF2 = e_util.compute_d2PsidF2_FCR_filter(F, k, 0.0)
-        # H = (dFdx.transpose()) @ d2PsidF2 @ dFdx
-        #
-        # ids = ti.Vector([vi, vj, vk], dt=int)
-        # for l in ti.static(range(3)):
-        #     for j in ti.static(range(3)):
-        #         grad[ids[l]] += grad_vec[3 * l + j]
-        #
-        #     # for j, k in ti.static(range(3)):
-        #     #     hii[ids[l]][j, k] += H[3 * l + j, 3 * l + k]
+        schur = grad0.dot(grad0) + grad2.dot(grad2)
+        ld = -C / (schur + 1e-3)
 
+        p01 = ld * grad0
+        p21 = ld * grad2
+
+        # p33 = ld * grad3
+        # print(ld)
+        weight = k
+
+        grad[v0] -= weight * p01
+        grad[v2] -= weight * p21
+        grad[v1] += weight * (p01 + p21)
+
+        hii[v0] += weight * id3
+        hii[v2] += weight * id3
+        hii[v1] += 2 * weight * id3
+    # hii[v0] += k * id3
+        # hii[v2] += k * id3
+        # hii[v1] += k * 2 * id3
 
 
 @ti.kernel

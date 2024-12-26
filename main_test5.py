@@ -1,8 +1,6 @@
-from turtledemo.sorting_animate import partition
 
 import meshio
 import networkx as nx
-from PIL.ImagePalette import random
 from pyquaternion.quaternion import Quaternion
 import taichi as ti
 from timeit import default_timer as timer
@@ -11,8 +9,6 @@ import matplotlib as mpl
 
 from tqdm import tqdm
 import time
-
-from test2 import partitioned_set
 
 ti.init(arch=ti.gpu)
 
@@ -28,7 +24,7 @@ camera.up(0, 1, 0)
 
 run_sim = False
 
-num_iters = 5
+num_iters = 1
 frame_cnt = 0
 threshold = 2
 has_end = False
@@ -43,8 +39,6 @@ enable_detection = False
 enable_lines = False
 enable_lines2 = False
 
-num_particles_x = 151
-num_particles_y = 151
 
 def import_mesh(path, scale, translate, rotate):
 
@@ -89,252 +83,94 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-x_np_temp, edges, faces = import_mesh("models/OBJ/square.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+x_np_temp, edges, faces = import_mesh("models/OBJ/plane_low.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = x_np_temp.shape[0]
-num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
-num_partition = ti.field(int, shape=1)
 num_edges = edges.shape[0]
 
-num_partitioned_edges = 0
-faces_tmp = faces
+graph_tmp = nx.MultiGraph()
+graph_tmp.add_edges_from(edges)
 
-boundaries = []
-surface_edges = []
-
-while faces_tmp.shape[0] > 0:
-    # print(faces_tmp.shape[0])
-    edges_tmp = np.empty((0, 2), dtype=int)
-    # print(faces_tmp)
-    for face in faces_tmp:
-        edges_tmp = np.append(edges_tmp, sorted([face[0], face[1]]))
-        edges_tmp = np.append(edges_tmp, sorted([face[1], face[2]]))
-        edges_tmp = np.append(edges_tmp, sorted([face[2], face[0]]))
-
-    edges_tmp = np.reshape(edges_tmp, (-1, 2))
-    _, indxs, count = np.unique(edges_tmp, axis=0, return_index=True, return_counts=True)
-
-    s_edges = edges_tmp[indxs[count==1]]
-    s_edges.astype(int)
-    # print(surface_edges.shape[0])
-    # print(surface_edges[0, 1])
-    boundary_vertices = set()
-    for i in range(s_edges.shape[0]):
-        boundary_vertices.add(s_edges[i, 0])
-        boundary_vertices.add(s_edges[i, 1])
-
-    # print(len(boundary_vertices))
-    surface_edges.append(s_edges)
-    face_test = np.empty((0, 3), dtype=int)
-
-    for face in faces_tmp:
-        # print(face)
-        fset = set(face)
-        # print(fset)
-        if len(fset & boundary_vertices) < 1:
-            face_test = np.append(face_test, sorted([face[0], face[1], face[2]]))
-
-    # print(faces_tmp.shape[0])
-    faces_tmp = np.reshape(face_test, (-1, 3))
-    boundaries.append(list(boundary_vertices))
-
-
-graph = nx.Graph()
-graph.add_edges_from(edges)
-# print(boundaries)
 partition_cycle = []
 partition_total = []
+num_partitioned_edges = 0
 
-# for i in range(len(boundaries)):
-for i in range(2):
-    graph_tmp = nx.MultiGraph()
-    graph_tmp.add_edges_from(surface_edges[i])
-    # euler_graph = nx.eulerize(graph_tmp)  # after adding edges, we eulerize
-    if nx.is_eulerian(graph_tmp):
-        path_tmp = list(nx.eulerian_path(graph_tmp))
+odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
+num_odd_degree_nodes = len(odd_degree_nodes)
+
+print(num_odd_degree_nodes)
+
+while num_odd_degree_nodes > 2:
+
+    src = odd_degree_nodes.pop(0)
+    dest = odd_degree_nodes.pop(0)
+
+    if nx.has_path(graph_tmp, src, dest):
+        sp = nx.shortest_path(graph_tmp, src, dest)
+        # print(sp)
+        partition_total.append(sp)
+
+        print(len(sp))
+
+        for i in range(len(sp) - 1):
+            graph_tmp.remove_edge(sp[i], sp[i + 1])
+
+    odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
+    num_odd_degree_nodes = len(odd_degree_nodes)
+    # print(num_odd_degree_nodes)
+
+
+isolated = [node for node, degree in graph_tmp.degree() if degree == 0]
+num_isolated = len(isolated)
+# print(num_isolated)
+
+# for i in range(num_isolated):
+graph_tmp.remove_nodes_from(isolated)
+
+# print(graph_tmp.number_of_edges())
+
+euler_path = list(nx.eulerian_path(graph_tmp))
+
+print(len(euler_path))
+
+faces_tmp = faces
+
+face_indices_np = np.array(faces_tmp).reshape(-1)
+face_indices = ti.field(dtype=int, shape=face_indices_np.shape[0])
+face_indices.from_numpy(face_indices_np)
+
+num_max_edges_per_partition = 5
+
+while True:
+
+    path_tmp = []
+
+    for j in range(num_max_edges_per_partition):
+
+        if len(euler_path) > 0:
+            a = euler_path.pop(0)
+            path_tmp.append(a)
+
+
+    if (len(path_tmp)) > 1:
         path = []
         for edge in path_tmp:
             path.append(int(edge[0]))
-        # path.append(path_tmp[-1][1])
 
-        # a = []
+        path.append(path_tmp[-1][1])
 
         partition_cycle.append(path)
         partition_total.append(path)
-        partition_total.append(path_tmp[-1])
 
-    graph.remove_edges_from(surface_edges[i])
-
-partition_rest = []
-#
-# for l in range(1):
-#     path_test = []
-#     for i in range(len(partition_cycle[l]) - 1):
-#         src, dest = partition_cycle[l][i], partition_cycle[l][i + 1]
-#         if nx.has_path(graph, src, dest):
-#             path = nx.shortest_path(graph, src, dest)
-#             # print(path)
-#             # path_test.append(path)
-#             partition_total.append(path)
-#             for j in range(len(path) - 1):
-#                 graph.remove_edge(path[j], path[j + 1])
-
-    # aa = []
-    # while True:
-    #     if len(path_test) > 0:
-    #         a = path_test.pop(0)
-    #         if len(path_test) > 0:
-    #             if a[-1] == path_test[0][0]:
-    #                 b = path_test.pop(0)
-    #                 # print(path_test)
-    #                 path_test.append(a[:-1] + b)
-    #             else:
-    #                 partition_total.append(a)
-    #         else:
-    #             partition_total.append(a)
-    #     else:
-    #         break
-#
-# print(partition_total)
-#
-for a in range(1):
-    longest_path_size = 0
-    longest_path = []
-    for i in range(len(partition_cycle[0]) - 1):
-        for j in range(i + 1, len(partition_cycle[0])):
-            src, dest = partition_cycle[0][i], partition_cycle[0][j]
-            if nx.has_path(graph, src, dest):
-                path = nx.shortest_path(graph, src, dest)
-                if longest_path_size < len(path):
-                    longest_path_size = len(path)
-                    longest_path = path
-                    # partition_total.append(path)
-                    # for k in range(len(path) - 1):
-                    #     graph.remove_edge(path[k], path[k + 1])
-
-    if longest_path_size > 0:
-        partition_total.append(longest_path)
-        for k in range(len(longest_path) - 1):
-            graph.remove_edge(longest_path[k], longest_path[k + 1])
-#
-#     else: break
+    else:
+        break
 
 
-# for k in range(len(partition_cycle)):
-#     set = len(partition_cycle[k]) // 4
-#     offset = len(partition_cycle[k]) // 2
-#     for i in range(set):
-#         src, dest = partition_cycle[k][i], partition_cycle[k][i + offset]
-#         if nx.has_path(graph, src, dest):
-#             path = nx.shortest_path(graph, src, dest)
-#             partition_rest.append(path)
-#             partition_total.append(path)
-#
-#             for i in range(len(path) - 1):
-#                 graph.remove_edge(path[i], path[i + 1])
-
-
-#                     path_tmp = len(nx.shortest_path(graph, vi, vj)) - 1
-
-# for b in range(len(boundaries)):
-#     print("lev: ", b)
-#     while True:
-#         path_max = 0
-#         src, dest = -1, -1
-#         for i in range(len(boundaries[b]) - 1):
-#             for j in range(i + 1, len(boundaries[b]) - 1):
-#                 vi, vj = boundaries[b][i], boundaries[b][j]
-#                 if nx.has_path(graph, vi, vj):
-#                     path_tmp = len(nx.shortest_path(graph, vi, vj)) - 1
-#                     if path_max < path_tmp:
-#                         path_max = path_tmp
-#                         src, dest = vi, vj
-#
-#
-#
-#         if path_max == 0:
-#             break
-#         path = nx.shortest_path(graph, src, dest)
-#         partition_cycle.append(path)
-#
-#         for i in range(len(path) - 1):
-#             graph.remove_edge(path[i], path[i + 1])
-
-# partition_cycle = partition_rest
-
-edges_test = np.array(graph.edges())
-edges_test = np.reshape(edges_test, (-1))
-
-indices_test = ti.field(int, shape= edges_test.shape[0])
-indices_test.from_numpy(edges_test)
-
-short = 1e3
-start = -1
-end = -1
-
-partition_level = []
-
-offset = 0
-# for t in range(1):
-#
-#     if len(boundaries[0]) <1:
-#         print("fuck")
-#         offset += 1
-#
-#     for bi in boundaries[offset]:
-#         start = bi
-#         end = -1
-#         short = 1e3
-#         path = [start]
-#
-#         for i in range(offset + 1, len(boundaries)):
-#
-#             if len(boundaries[i]) < 1:
-#                 print("fuck")
-#
-#             for bj in boundaries[i]:
-#                 # print(bj)
-#                 if nx.has_path(graph, path[-1], bj):
-#                     path_tmp = len(nx.shortest_path(graph, path[-1], bj)) - 1
-#                     # print(path_tmp)
-#                     if path_tmp < short:
-#                         short = path_tmp
-#                         start = bj
-#                         end = bj
-#
-#             if end == -1:
-#                 boundaries[i - 1].remove(path[-1])
-#                 break
-#
-#             if short > 1:
-#                 break
-#             else:
-#                 graph.remove_edge(path[-1], end)
-#                 path.append(end)
-#                 end = -1
-#                 short = 1e3
-#
-#         # print(path)
-#
-#         if len(path) > 1:
-#             partition_cycle.append(path)
-
-
-# print(partition_level)
-# print(nx.shortest_path(graph, 11, 57))
-# print(partition_cycle)
-# print(np.array(graph.edges))
-
-
-# partition_cycle = partition_level
-# for e in graph.edges:
-#     path = [e[0], e[1]]
-#     # print(path)
-#     partition_total.append(path)
 
 num_max_partition = len(partition_total)
+print(num_max_partition)
+
 num_edges_per_partition_np = np.array([len(partition_total[i]) - 1 for i in range(num_max_partition)])
-num_max_edges_per_partition = max(num_edges_per_partition_np)
 
 num_edges_per_partition = ti.field(dtype=int, shape=num_max_partition)
 num_edges_per_partition.from_numpy(num_edges_per_partition_np)
@@ -352,8 +188,7 @@ for i in range(num_max_partition):
         cnt += 1
 
 a = np.array(a)
-b = np.array(graph.edges).reshape(-1)
-
+# print(a)
 # a = np.append(a, b)
 # num_edges = cnt + len(graph.edges)
 
@@ -368,7 +203,6 @@ partitioned_set.from_numpy(partitioned_set_np)
 
 colors_np = np.empty((num_particles, 3), dtype=float)
 
-viridis = mpl.colormaps['viridis'].resampled(len(boundaries))
 
 show_partition_id = 0
 
@@ -377,13 +211,7 @@ def color_partition(id, set):
         colors_np[i, 0] = 0.0
         colors_np[i, 1] = 0.0
         colors_np[i, 2] = 0.0
-    #
-    # for i in range(len(boundaries)):
-    #     r, g, b, _ = viridis(i)
-    #     for vi in boundaries[i]:
-    #         colors_np[vi, 0] = r
-    #         colors_np[vi, 1] = g
-    #         colors_np[vi, 2] = b
+
 
     # for i in range(id):
     for vi in set[id]:
@@ -397,7 +225,7 @@ colors.from_numpy(colors_np)
 
 num_max_vertices_per_partition = num_max_edges_per_partition + 1
 
-l0 = ti.field(float, shape=2 * num_edges)
+l0 = ti.field(float, shape= num_edges)
 dt = 0.03
 x    = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 mass = ti.field(dtype=float, shape=num_particles)
@@ -438,22 +266,6 @@ num_colliding_vertices = ti.field(int, shape=1)
 K = ti.linalg.SparseMatrixBuilder(3 * num_particles, 3 * num_particles, max_num_triplets=10000000)
 ndarr = ti.ndarray(ti.f32, shape=3 * num_particles)
 
-
-@ti.func
-def flattend_index(i: int, j: int):
-
-    return i + num_particles_x * j
-
-
-@ti.kernel
-def generate_particles(num_particles: int, delta: float):
-
-    for i in range(num_particles):
-        xi = i % num_particles_x
-        yi = i // num_particles_x
-        x0[i] = -ti.Vector([xi, 0, yi]) * delta
-
-    mass.fill(1.0)
 
 
 @ti.kernel
@@ -545,7 +357,7 @@ def compute_grad_and_hessian_attachment(x: ti.template(), k: float):
 
     id3 = ti.Matrix.identity(dt=float, n=3)
     # ids = ti.Vector([i for i in range(num_particles_x)], dt=int)
-    ids = ti.Vector([0, 1, 2 , 3], dt=int)
+    ids = ti.Vector([0, 1], dt=int)
     # print(ids)
     for i in range(ids.n):
         grad[ids[i]] += k * (x[ids[i]] - x0[ids[i]])
@@ -885,8 +697,45 @@ def forward():
 
     for _ in range(num_iters):
         # print(it)
-        for j in range(len(partition_total)):
-            substep_Euler_GS(j, x_k, k)
+
+        compute_grad_and_hessian_momentum(x_k)
+        compute_grad_and_hessian_attachment(x_k, k=k_at)
+        compute_grad_and_hessian_spring(x_k, k=k)
+
+        if solver_type == 0:
+            substep_Euler(P_grad, grad)
+
+        elif solver_type == 1:
+            substep_Jacobi(P_grad, grad)
+
+        elif solver_type ==2:
+            substep_Newton(P_grad, grad)
+
+        # print(beta)
+        # add(dx, P_grad, dx_k, -beta)
+        #
+        #     # alpha = 1.0
+        #     # alpha_ccd = collision_aware_line_search(x_k, dx, radius, center)
+        #     # print(alpha_ccd)
+        #
+        #     # scale(dx, dx, alpha_ccd)
+        #     P_grad_dup.fill(0.0)
+        add(x_k, x_k, P_grad, -1.0)
+        inf_norm = infinity_norm(P_grad)
+        #
+        #     dx_k.copy_from(dx)
+        #     grad_k.copy_from(grad)
+        #     P_grad_k.copy_from(P_grad)
+        #
+        itr_cnt += 1
+        #     if print_stat:
+        #         print(inf_norm)
+        #
+        if inf_norm < termination_condition:
+            #
+            #         if print_stat:
+            #             print("conv iter: ,", itr_cnt)
+            break
 
     compute_v()
 
@@ -1022,13 +871,14 @@ while window.running:
 
     show_options()
 
-    scene.particles(x, radius=0.05, per_vertex_color=colors)
+    # scene.particles(x, radius=0.05, per_vertex_color=colors)
     # scene.particles(center, radius=radius, color=(1.0, 0.5, 0.0))
 
-    if enable_lines:
-        scene.lines(x, indices=indices_test, color=(0.0, 0.0, 1.0), width=1.0)
-    if enable_lines2:
-        scene.lines(x, indices=indices, color=(1.0, 0.0, 0.0), width=1.0)
+    # if enable_lines:
+    #     scene.lines(x, indices=indices, color=(0.0, 0.0, 0.0), width=1.0)
+
+
+    scene.mesh(x, indices=face_indices, color=(0.0, 0.0, 0.0), show_wireframe=True)
 
     camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
     canvas.scene(scene)

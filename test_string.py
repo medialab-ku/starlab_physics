@@ -33,7 +33,7 @@ particle_color = ti.math.vec3(1.0, 1.0, 1.0)
 # print(particle_color)
 boundary_particle_color = 0xFFC433
 # boundary_color = 0x068587
-num_particles_x = 40
+num_particles_x = 3
 num_particles_y = 40
 num_particles = num_particles_x * num_particles_y
 

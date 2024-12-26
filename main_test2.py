@@ -784,7 +784,6 @@ def forward():
         compute_grad_and_hessian_aggregate(x_k_dup, k=k_at)
         # if enable_attachment:
         compute_grad_and_hessian_attachment(x_k_dup, k=k_at)
-
         compute_grad_and_hessian_spring(x_k_dup, k=k)
 
         if solver_type == 0:
