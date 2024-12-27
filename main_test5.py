@@ -38,6 +38,7 @@ print_stat = False
 enable_detection = False
 enable_lines = False
 enable_lines2 = False
+enable_lines3 = False
 
 
 def import_mesh(path, scale, translate, rotate):
@@ -86,7 +87,7 @@ def import_mesh(path, scale, translate, rotate):
 x_np_temp, edges, faces = import_mesh("models/OBJ/even_plane.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = x_np_temp.shape[0]
-num_edges = edges.shape[0]
+# num_edges = edges.shape[0]
 
 graph_tmp = nx.MultiGraph()
 graph_tmp.add_edges_from(edges)
@@ -98,8 +99,64 @@ partition_cycle = []
 partition_total = []
 num_partitioned_edges = 0
 
+# odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
+# degrees = graph_tmp.degree()
+
+num_max_edges_per_partition = 2
+partition_left = []
+partition_left2 = []
+while True:
+    degrees = graph_tmp.degree()
+    a = list(graph_tmp.edges())
+
+    cnt = 0
+    for j in a:
+        cnt += 1
+        deg0, deg1 = degrees[j[0]], degrees[j[1]]
+
+        if deg0 % 2 == 1 and deg1 % 2 == 1:
+            # print(deg0, deg1)
+            graph_tmp.remove_edge(j[0], j[1])
+            # partition_total.append([[j[0], j[1]]])
+            partition_left.append([[j[0], j[1]]])
+            break
+
+    if cnt == len(a):
+        break
+
+
+
+
+# print(num_odd_degree_nodes)
+num_max_edges_per_partition = 0
+for i in range(4):
+
+    odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
+    num_odd_degree_nodes = len(odd_degree_nodes)
+    src = odd_degree_nodes.pop(0)
+    dest = odd_degree_nodes.pop(0)
+
+    if nx.has_path(graph_tmp, src, dest):
+        sp = nx.shortest_path(graph_tmp, src, dest)
+        # print(sp)
+        # partition_total.append(sp)
+        tmp = []
+        if num_max_edges_per_partition < len(sp):
+            num_max_edges_per_partition = len(sp)
+
+        for i in range(len(sp) - 1):
+            graph_tmp.remove_edge(sp[i], sp[i + 1])
+            tmp.append(sp[i])
+            # partition_left2.append([sp[i], sp[i + 1]])
+        tmp.append(sp[-1])
+        partition_total.append(tmp)
+    else:
+        odd_degree_nodes.append(dest)
+#
 odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
 num_odd_degree_nodes = len(odd_degree_nodes)
+
+    # print(num_odd_degree_nodes)
 
 colors_np = np.empty((num_particles, 3), dtype=float)
 for i in range(num_particles):
@@ -132,31 +189,6 @@ colors = ti.Vector.field(n=3, shape=num_particles, dtype=float)
 colors.from_numpy(colors_np)
 
 
-# print(num_odd_degree_nodes)
-num_max_edges_per_partition = 0
-for i in range(10):
-
-    src = odd_degree_nodes.pop(0)
-    dest = odd_degree_nodes.pop(0)
-
-    if nx.has_path(graph_tmp, src, dest):
-        sp = nx.shortest_path(graph_tmp, src, dest)
-        # print(sp)
-        partition_total.append(sp)
-
-        if num_max_edges_per_partition < len(sp):
-            num_max_edges_per_partition = len(sp)
-
-        for i in range(len(sp) - 1):
-            graph_tmp.remove_edge(sp[i], sp[i + 1])
-
-    else:
-        odd_degree_nodes.append(dest)
-
-    odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
-    num_odd_degree_nodes = len(odd_degree_nodes)
-    # print(num_odd_degree_nodes)
-
 
 isolated = [node for node, degree in graph_tmp.degree() if degree == 0]
 num_isolated = len(isolated)
@@ -167,9 +199,8 @@ graph_tmp.remove_nodes_from(isolated)
 
 # print(graph_tmp.number_of_edges())
 
-# euler_path = list(nx.eulerian_path(graph_tmp))
-
-# print(len(euler_path))
+euler_path = list(nx.eulerian_path(graph_tmp))
+print(euler_path)
 
 faces_tmp = faces
 
@@ -177,35 +208,37 @@ face_indices_np = np.array(faces_tmp).reshape(-1)
 face_indices = ti.field(dtype=int, shape=face_indices_np.shape[0])
 face_indices.from_numpy(face_indices_np)
 
-# num_max_edges_per_partition = 13
+# num_max_edges_per_partition = 10
 
-# while True:
-#
-#     path_tmp = []
-#
-#     for j in range(num_max_edges_per_partition):
-#
-#         if len(euler_path) > 0:
-#             a = euler_path.pop(0)
-#             path_tmp.append(a)
-#
-#
-#     if (len(path_tmp)) > 1:
-#         path = []
-#         for edge in path_tmp:
-#             path.append(int(edge[0]))
-#
-#         path.append(path_tmp[-1][1])
-#
-#         partition_cycle.append(path)
-#         partition_total.append(path)
-#
-#     else:
-#         break
+while True:
 
+    path_tmp = []
+
+    for j in range(num_max_edges_per_partition):
+
+        if len(euler_path) > 0:
+            a = euler_path.pop(0)
+            path_tmp.append(a)
+
+
+    if (len(path_tmp)) > 1:
+        path = []
+        for edge in path_tmp:
+            path.append(int(edge[0]))
+
+        path.append(path_tmp[-1][1])
+
+        # partition_cycle.append(path)
+        partition_total.append(path)
+
+    else:
+        break
+
+print(partition_total)
 
 
 num_max_partition = len(partition_total)
+# num_max_partition = len(partition_total)
 # print(num_max_partition)
 
 num_edges_per_partition_np = np.array([len(partition_total[i]) - 1 for i in range(num_max_partition)])
@@ -216,6 +249,7 @@ num_edges_per_partition.from_numpy(num_edges_per_partition_np)
 # print(num_edges_per_partition)
 partitioned_set_np = np.zeros([num_max_partition, num_max_edges_per_partition], dtype=int)
 cnt = 0
+
 a = []
 
 for i in range(num_max_partition):
@@ -224,16 +258,27 @@ for i in range(num_max_partition):
         a.append(partition_total[i][j])
         a.append(partition_total[i][j + 1])
         cnt += 1
-
+#
 a = np.array(a)
+
+a = np.append(a, np.array(partition_left).reshape(-1))
+a = np.append(a, np.array(partition_left2).reshape(-1))
 # print(a)
 # a = np.append(a, b)
-# num_edges = cnt + len(graph.edges)
+num_edges = len(a) // 2
 
-num_edges = cnt
+# num_edges = graph_tmp.number_of_edges()
+# a = np.array(list(graph_tmp.edges())).reshape(-1)
+indices = ti.field(int, shape= len(a))
+indices.from_numpy(a.reshape(-1))
 
-indices = ti.field(int, shape= 2 * num_edges)
-indices.from_numpy(np.array(a))
+indices_test = ti.field(int, shape= 2 * len(partition_left))
+indices_test.from_numpy(np.array(partition_left).reshape(-1))
+
+
+# indices_test2 = ti.field(int, shape= 2 * len(partition_left2))
+# indices_test2.from_numpy(np.array(partition_left2).reshape(-1))
+
 
 partitioned_set = ti.field(dtype=int, shape=(num_max_partition, num_max_edges_per_partition))
 partitioned_set.from_numpy(partitioned_set_np)
@@ -340,7 +385,8 @@ def generate_mesh():
     num_dup.fill(0.0)
     generate_indices4()
 
-    # print(num_dup)
+    print(num_edges)
+    print(num_dup)
 
     # print(num_edges_per_partition)
 
@@ -775,6 +821,7 @@ def show_options():
     global end_frame
     global enable_lines
     global enable_lines2
+    global enable_lines3
     global show_partition_id
 
     PR_old = PR
@@ -800,6 +847,7 @@ def show_options():
         print_stat = w.checkbox("print_stats", print_stat)
         enable_lines = w.checkbox("enable lines", enable_lines)
         enable_lines2 = w.checkbox("enable lines2", enable_lines2)
+        enable_lines3 = w.checkbox("enable lines3", enable_lines3)
 
         show_partition_id = w.slider_int("partition id", show_partition_id, 0, len(debug) - 1)
 
@@ -887,14 +935,18 @@ while window.running:
 
     show_options()
 
-    scene.particles(x, radius=0.05, per_vertex_color=colors)
+    scene.particles(x, radius=0.03, per_vertex_color=colors)
     # scene.particles(center, radius=radius, color=(1.0, 0.5, 0.0))
 
-    # if enable_lines:
-    #     scene.lines(x, indices=indices, color=(0.0, 0.0, 0.0), width=1.0)
+    if enable_lines:
+        scene.lines(x, indices=indices, color=(0.0, 0.0, 0.0), width=1.0)
+    if enable_lines2:
+        scene.lines(x, indices=indices_test, color=(0.0, 0.0, 1.0), width=1.0)
+    # if enable_lines3:
+    #     scene.lines(x, indices=indices_test2, color=(0.0, 1.0, 0.0), width=1.0)
 
 
-    scene.mesh(x, indices=face_indices, color=(0.0, 0.0, 0.0), show_wireframe=True)
+    # scene.mesh(x, indices=face_indices, color=(0.0, 0.0, 0.0), show_wireframe=True)
 
     camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
     canvas.scene(scene)
