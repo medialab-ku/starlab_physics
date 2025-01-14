@@ -10,6 +10,8 @@ import matplotlib as mpl
 from tqdm import tqdm
 import time
 
+from test_string import definiteness_fix
+
 ti.init(arch=ti.gpu)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -26,12 +28,15 @@ run_sim = False
 
 num_iters = 1
 frame_cnt = 0
-threshold = 2
-has_end = False
-end_frame = 200
+threshold = 4
+has_end = True
+end_frame = 10
 PR = 6
+PR_b = 6
 k_at = 5
 solver_type = 0
+
+enable_definite_fix = True
 enable_pncg = False
 enable_attachment = False
 print_stat = False
@@ -84,79 +89,165 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-x_np_temp, edges, faces = import_mesh("models/OBJ/even_plane.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+
+def findTriNeighbors(f_np):
+
+    num_f = np.rint(f_np.shape[0]).astype(int)
+    edgeTable = np.zeros((num_f * 3, f_np.shape[1]), dtype=int)
+    # print(edgeTable.shape)
+
+    for f in range(f_np.shape[0]):
+        eT = np.zeros((3, 3))
+        v1, v2, v3 = np.sort(f_np[f])
+        e1, e2, e3 = 3 * f, 3 * f + 1, 3 * f + 2
+        eT[0, :] = [v1, v2, e1]
+        eT[1, :] = [v1, v3, e2]
+        eT[2, :] = [v2, v3, e3]
+
+        edgeTable[3 * f:3 * f + 3, :] = eT
+
+    ind = np.lexsort((edgeTable[:, 1], edgeTable[:, 0]))
+    edgeTable = edgeTable[ind]
+    # print(edgeTable)
+
+    neighbors = np.zeros((num_f * 3), dtype=int)
+    neighbors.fill(-1)
+
+    ii = 0
+    bending_constraint_count = 0
+    while (ii < 3 * num_f - 1):
+        e0 = edgeTable[ii, :]
+        e1 = edgeTable[ii + 1, :]
+
+        if (e0[0] == e1[0] and e0[1] == e1[1]):
+            neighbors[e0[2]] = e1[2]
+            neighbors[e1[2]] = e0[2]
+
+            bending_constraint_count = bending_constraint_count + 1
+            ii = ii + 2
+        else:
+            ii = ii + 1
+
+    # print(bending_constraint_count, "asdf!!")
+    return bending_constraint_count, neighbors
+
+def getBendingPair(f_np, bend_count, neighbors):
+
+    num_f = np.rint(f_np.shape[0]).astype(int)
+    pairs = np.zeros((bend_count, 2), dtype=int)
+
+    count = 0
+    # print(neighbors)
+    for f in range(num_f):
+        for i in range(3):
+            eid = 3 * f + i
+            neighbor_edge = neighbors[eid]
+
+            if neighbor_edge >= 0:
+                # print(eid,neighbor_edge,neighbors[neighbor_edge])
+                neighbors[neighbor_edge] = -1
+                # find not shared vertex in common edge of adjacent triangles
+                v = np.sort(f_np[f])
+
+                neighbor_fid = int(np.floor(neighbor_edge / 3.0 + 1e-4) + 1e-4)
+                neighbor_eid_local = neighbor_fid % 3
+
+                w = np.sort(f_np[neighbor_fid])
+
+                pairs[count, 0] = v[~np.isin(v, w)]
+                pairs[count, 1] = w[~np.isin(w, v)]
+
+                count = count + 1
+
+    # print("검산!!!",count == bend_count)
+    return pairs
+
+x_np_temp, edges, faces = import_mesh("models/OBJ/plane.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+bending_constraint_count, neighbors = findTriNeighbors(faces)
+bending_indices_np = getBendingPair(faces, bending_constraint_count, neighbors)
+
+num_b = bending_indices_np.shape[0]
+bending_indices = ti.field(dtype=int, shape=2 * num_b)
+bending_indices.from_numpy(bending_indices_np.reshape(-1))
+l0_b = ti.field(float, shape=num_b)
+hij_b = ti.Matrix.field(n=3, m=3, dtype=float, shape=num_b)
+
+# print(bending_indices_np)
+
+faces_tmp = faces
+boundaries = []
+surface_edges = []
+
+graph = nx.Graph()
+graph.add_edges_from(edges)
+
+while faces_tmp.shape[0] > 0:
+    # print(faces_tmp.shape[0])
+    edges_tmp = np.empty((0, 2), dtype=int)
+    # print(faces_tmp)
+    for face in faces_tmp:
+        edges_tmp = np.append(edges_tmp, sorted([face[0], face[1]]))
+        edges_tmp = np.append(edges_tmp, sorted([face[1], face[2]]))
+        edges_tmp = np.append(edges_tmp, sorted([face[2], face[0]]))
+
+    edges_tmp = np.reshape(edges_tmp, (-1, 2))
+    _, indxs, count = np.unique(edges_tmp, axis=0, return_index=True, return_counts=True)
+
+    s_edges = edges_tmp[indxs[count==1]]
+    s_edges.astype(int)
+    # print(surface_edges.shape[0])
+    # print(surface_edges[0, 1])
+    boundary_vertices = set()
+    for i in range(s_edges.shape[0]):
+        boundary_vertices.add(s_edges[i, 0])
+        boundary_vertices.add(s_edges[i, 1])
+
+    # print(len(boundary_vertices))
+    surface_edges.append(s_edges)
+    face_test = np.empty((0, 3), dtype=int)
+
+    for face in faces_tmp:
+        # print(face)
+        fset = set(face)
+        # print(fset)
+        if len(fset & boundary_vertices) < 1:
+            face_test = np.append(face_test, sorted([face[0], face[1], face[2]]))
+
+    # print(faces_tmp.shape[0])
+    faces_tmp = np.reshape(face_test, (-1, 3))
+    boundaries.append(list(boundary_vertices))
+
+partition_total = []
+
+for i in range(len(boundaries)):
+# for i in range(2):
+    graph_tmp = nx.MultiGraph()
+    graph_tmp.add_edges_from(surface_edges[i])
+    # euler_graph = nx.eulerize(graph_tmp)  # after adding edges, we eulerize
+    if nx.is_eulerian(graph_tmp):
+        path_tmp = list(nx.eulerian_path(graph_tmp))
+        path = []
+        for edge in path_tmp:
+            path.append(int(edge[0]))
+
+        path.append(path_tmp[-1][1])
+        partition_total.append(path)
+    graph.remove_edges_from(surface_edges[i])
+
+
+print(partition_total)
+
+edge_dictionary = {}
+
+cnt = 0
+for edge in edges:
+    edge_dictionary.update({cnt : sorted(edges[cnt])})
+    cnt += 1
+
+
+# print(edge_dictionary)
 
 num_particles = x_np_temp.shape[0]
-# num_edges = edges.shape[0]
-
-graph_tmp = nx.MultiGraph()
-graph_tmp.add_edges_from(edges)
-
-
-print(graph_tmp.number_of_nodes())
-
-partition_cycle = []
-partition_total = []
-num_partitioned_edges = 0
-
-# odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
-# degrees = graph_tmp.degree()
-
-num_max_edges_per_partition = 2
-partition_left = []
-partition_left2 = []
-while True:
-    degrees = graph_tmp.degree()
-    a = list(graph_tmp.edges())
-
-    cnt = 0
-    for j in a:
-        cnt += 1
-        deg0, deg1 = degrees[j[0]], degrees[j[1]]
-
-        if deg0 % 2 == 1 and deg1 % 2 == 1:
-            # print(deg0, deg1)
-            graph_tmp.remove_edge(j[0], j[1])
-            # partition_total.append([[j[0], j[1]]])
-            partition_left.append([[j[0], j[1]]])
-            break
-
-    if cnt == len(a):
-        break
-
-
-
-
-# print(num_odd_degree_nodes)
-num_max_edges_per_partition = 0
-for i in range(4):
-
-    odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
-    num_odd_degree_nodes = len(odd_degree_nodes)
-    src = odd_degree_nodes.pop(0)
-    dest = odd_degree_nodes.pop(0)
-
-    if nx.has_path(graph_tmp, src, dest):
-        sp = nx.shortest_path(graph_tmp, src, dest)
-        # print(sp)
-        # partition_total.append(sp)
-        tmp = []
-        if num_max_edges_per_partition < len(sp):
-            num_max_edges_per_partition = len(sp)
-
-        for i in range(len(sp) - 1):
-            graph_tmp.remove_edge(sp[i], sp[i + 1])
-            tmp.append(sp[i])
-            # partition_left2.append([sp[i], sp[i + 1]])
-        tmp.append(sp[-1])
-        partition_total.append(tmp)
-    else:
-        odd_degree_nodes.append(dest)
-#
-odd_degree_nodes = [node for node, degree in graph_tmp.degree() if degree % 2 != 0]
-num_odd_degree_nodes = len(odd_degree_nodes)
-
-    # print(num_odd_degree_nodes)
 
 colors_np = np.empty((num_particles, 3), dtype=float)
 for i in range(num_particles):
@@ -164,10 +255,10 @@ for i in range(num_particles):
     colors_np[i, 1] = 0.0
     colors_np[i, 2] = 0.0
 
-for vi in odd_degree_nodes:
-    colors_np[vi, 0] = 1.0
-    colors_np[vi, 1] = 0.0
-    colors_np[vi, 2] = 0.0
+# for vi in odd_degree_nodes:
+#     colors_np[vi, 0] = 1.0
+#     colors_np[vi, 1] = 0.0
+#     colors_np[vi, 2] = 0.0
 
 show_partition_id = 0
 #
@@ -188,58 +279,22 @@ show_partition_id = 0
 colors = ti.Vector.field(n=3, shape=num_particles, dtype=float)
 colors.from_numpy(colors_np)
 
-
-
-isolated = [node for node, degree in graph_tmp.degree() if degree == 0]
-num_isolated = len(isolated)
-# print(num_isolated)
-
-# for i in range(num_isolated):
-graph_tmp.remove_nodes_from(isolated)
-
-# print(graph_tmp.number_of_edges())
-
-euler_path = list(nx.eulerian_path(graph_tmp))
-print(euler_path)
-
-faces_tmp = faces
-
-face_indices_np = np.array(faces_tmp).reshape(-1)
+face_indices_np = np.array(faces).reshape(-1)
 face_indices = ti.field(dtype=int, shape=face_indices_np.shape[0])
 face_indices.from_numpy(face_indices_np)
 
-# num_max_edges_per_partition = 10
+num_max_edges_per_partition = 10
 
-while True:
-
-    path_tmp = []
-
-    for j in range(num_max_edges_per_partition):
-
-        if len(euler_path) > 0:
-            a = euler_path.pop(0)
-            path_tmp.append(a)
-
-
-    if (len(path_tmp)) > 1:
-        path = []
-        for edge in path_tmp:
-            path.append(int(edge[0]))
-
-        path.append(path_tmp[-1][1])
-
-        # partition_cycle.append(path)
-        partition_total.append(path)
-
-    else:
-        break
 
 print(partition_total)
 
 
 num_max_partition = len(partition_total)
+print(num_max_partition)
 # num_max_partition = len(partition_total)
 # print(num_max_partition)
+
+num_max_edges_per_partition = 500
 
 num_edges_per_partition_np = np.array([len(partition_total[i]) - 1 for i in range(num_max_partition)])
 
@@ -261,19 +316,21 @@ for i in range(num_max_partition):
 #
 a = np.array(a)
 
-a = np.append(a, np.array(partition_left).reshape(-1))
-a = np.append(a, np.array(partition_left2).reshape(-1))
+# b = np.array(list(graph.edges())).reshape(-1)
+
+a = np.append(a, np.array(list(graph.edges())).reshape(-1))
+# a = np.append(a, np.array(partition_left2).reshape(-1))
 # print(a)
 # a = np.append(a, b)
 num_edges = len(a) // 2
-
-# num_edges = graph_tmp.number_of_edges()
-# a = np.array(list(graph_tmp.edges())).reshape(-1)
+#
+# # num_edges = len(edges)
+# a = np.array(edges).reshape(-1)
 indices = ti.field(int, shape= len(a))
 indices.from_numpy(a.reshape(-1))
-
-indices_test = ti.field(int, shape= 2 * len(partition_left))
-indices_test.from_numpy(np.array(partition_left).reshape(-1))
+#
+# indices_test = ti.field(int, shape= 2 * len(partition_left))
+# indices_test.from_numpy(np.array(partition_left).reshape(-1))
 
 
 # indices_test2 = ti.field(int, shape= 2 * len(partition_left2))
@@ -289,6 +346,7 @@ num_max_vertices_per_partition = num_max_edges_per_partition + 1
 l0 = ti.field(float, shape= num_edges)
 dt = 0.03
 x    = ti.Vector.field(n=3, dtype=float, shape=num_particles)
+x_e  = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 mass = ti.field(dtype=float, shape=num_particles)
 x_k  = ti.Vector.field(n=3, dtype=float, shape=num_particles)
 y  = ti.Vector.field(n=3, dtype=float, shape=num_particles)
@@ -352,6 +410,12 @@ def generate_indices4():
         mass[v0] += 0.5 * l0[i] * density
         mass[v1] += 0.5 * l0[i] * density
 
+    for i in range(num_b):
+        v0, v1 = bending_indices[2 * i + 0], bending_indices[2 * i + 1]
+        l0_b[i] = (x0[v0] - x0[v1]).norm()
+        mass[v0] += 0.5 * l0_b[i] * density
+        mass[v1] += 0.5 * l0_b[i] * density
+
 
     ti.loop_config(serialize=True)
     for pi in range(num_max_partition):
@@ -370,6 +434,15 @@ def generate_indices4():
     for i in range(num_particles):
         if num_dup[i] < 1:
             mass[i] = 1.0
+
+    nx = ti.math.vec3([1.0, 0.0, 0.0])
+    nz = ti.math.vec3([0.0, 0.0, 1.0])
+    scale = 5.0
+    x0[0] += scale * (-nx + nz)
+    x0[1] += scale * (nx + nz)
+    x0[2] += scale * (-nx - nz)
+    x0[3] += scale * (nx - nz)
+
 
 # @ti.kernel
 def generate_mesh():
@@ -395,7 +468,8 @@ def generate_mesh():
 def compute_y():
 
     # apply gravity within boundary
-    g = ti.Vector([0.0, -9.81, 0.0])
+    # g = ti.Vector([0.0, -9.81, 0.0])
+    g = ti.Vector([0.0, 0.0, 0.0])
     for i in x:
         xi, vi = x[i], v[i]
         x_k[i] = y[i] = xi + vi * dt + g * dt * dt
@@ -419,7 +493,7 @@ def compute_grad_and_hessian_attachment(x: ti.template(), k: float):
 
     id3 = ti.Matrix.identity(dt=float, n=3)
     # ids = ti.Vector([i for i in range(num_particles_x)], dt=int)
-    ids = ti.Vector([0, 1], dt=int)
+    ids = ti.Vector([0, 1, 2, 3], dt=int)
     # print(ids)
     for i in range(ids.n):
         grad[ids[i]] += k * (x[ids[i]] - x0[ids[i]])
@@ -466,7 +540,7 @@ def compute_grad_and_hessian_collision(x: ti.template(), radius: float, center: 
             hii[id] += k * id3
 
 @ti.kernel
-def compute_grad_and_hessian_spring(x: ti.template(), k: float):
+def compute_grad_and_hessian_spring(x: ti.template(), k: float, definiteness_fix: bool):
 
     for i in range(num_edges):
         v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
@@ -480,17 +554,54 @@ def compute_grad_and_hessian_spring(x: ti.template(), k: float):
         grad[v1] -= k * dp01
 
         n = x01.normalized()
-        alpha = l0[i] / l
+
+        alpha = 1.0 - l0[i] / l
+
+        if definiteness_fix:
+            alpha = abs(alpha)
+
         tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
         t1 = ti.math.normalize(n.cross(tmp))
         t2 = n.cross(t1)
-        D = ti.math.mat3([k, 0.0, 0.0, 0.0, k * abs(1.0 - alpha), 0.0, 0.0, 0.0, k * abs(1.0 - alpha)])
+        D = ti.math.mat3([k, 0.0, 0.0, 0.0, k * alpha, 0.0, 0.0, 0.0, k * alpha])
         P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
         B = (P @ D @ P.inverse())
 
         hii[v0] += B
         hii[v1] += B
         hij[i] = B
+
+@ti.kernel
+def compute_grad_and_hessian_bending(x: ti.template(), k: float, definiteness_fix: bool):
+
+    for i in range(num_b):
+        v0, v1 = bending_indices[2 * i + 0], bending_indices[2 * i + 1]
+        # print(v0, v1)
+        x01 = x[v0] - x[v1]
+        n = x01.normalized()
+        l = x01.norm()
+        l0 = l0_b[i]
+        dp01 = x01 - l0 * n
+
+        grad[v0] += k * dp01
+        grad[v1] -= k * dp01
+
+        n = x01.normalized()
+        alpha = 1.0 - l0 / l
+
+        if definiteness_fix:
+            alpha = abs(alpha)
+
+        tmp = ti.math.vec3(n[0] + ti.random(float), n[1] + ti.random(float), n[2] + ti.random(float))
+        t1 = ti.math.normalize(n.cross(tmp))
+        t2 = n.cross(t1)
+        D = ti.math.mat3([k, 0.0, 0.0, 0.0, k * alpha, 0.0, 0.0, 0.0, k * alpha])
+        P = ti.math.mat3([n[0], t1[0], t2[0], n[1], t1[1], t2[1], n[2], t1[2], t2[2]])
+        B = (P @ D @ P.inverse())
+
+        hii[v0] += B
+        hii[v1] += B
+        hij_b[i] = B
 
 # @ti.func
 # def BlockThomasAlgorithm(a: ti.template(), b: ti.template(), c: ti.template(), x: ti.template(), d: ti.template()):
@@ -550,17 +661,17 @@ def substep_Euler(Px: ti.template(), x: ti.template()):
         for i in range(size_pi):
             ei = partitioned_set[pi, i]
             vi = indices[2 * ei + 0]
-            P_grad[vi] += x_part[pi, i]
+            Px[vi] += x_part[pi, i]
 
         ei = partitioned_set[pi, size_pi - 1]
         vi = indices[2 * ei + 1]
         Px[vi] += x_part[pi, size_pi]
 
     for i in range(num_particles):
-        if num_dup[i] > 0:
-            Px[i] /= num_dup[i]
-        else:
+        if num_dup[i] == 0:
             Px[i] = ti.math.inverse(hii[i]) @ x[i]
+        else:
+            Px[i] /= num_dup[i]
 
 @ti.kernel
 def substep_Euler_GS(pi: int, x: ti.template(), k: float):
@@ -655,16 +766,28 @@ def substep_Jacobi(Px: ti.template(), x: ti.template()):
         Px[i] = hii[i].inverse() @ x[i]
 
 @ti.kernel
-def construct_Hessian(A: ti.types.sparse_matrix_builder()):
+def construct_Hessian(A: ti.types.sparse_matrix_builder(), partition_id: int):
 
     for i in range(num_particles):
         B = hii[i]
         for m, n in ti.ndrange(3, 3):
             A[3 * i + m, 3 * i + n] += B[m, n]
 
+    # test = 1
     for i in range(num_edges):
         v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
         B = hij[i]
+
+        # if i // partition_id >= 1:
+        for m, n in ti.ndrange(3, 3):
+            A[3 * v1 + m, 3 * v0 + n] -= B[m, n]
+            A[3 * v0 + m, 3 * v1 + n] -= B[m, n]
+
+    for i in range(num_b):
+        v0, v1 = bending_indices[2 * i + 0], bending_indices[2 * i + 1]
+        B = hij_b[i]
+
+        # if i // partition_id >= 1:
         for m, n in ti.ndrange(3, 3):
             A[3 * v1 + m, 3 * v0 + n] -= B[m, n]
             A[3 * v0 + m, 3 * v1 + n] -= B[m, n]
@@ -686,7 +809,7 @@ def vec_field_to_ndarr(vec_field: ti.template(), ndarr: ti.types.ndarray()):
         ndarr[3 * i + 2] = vec_i[2]
 
 def substep_Newton(Px, x):
-    construct_Hessian(K)
+    construct_Hessian(K, show_partition_id)
     H = K.build()
     solver = ti.linalg.SparseSolver(solver_type="LLT")
     solver.analyze_pattern(H)
@@ -749,6 +872,7 @@ def forward():
 
     compute_y()
     k = pow(10.0, PR) * dt ** 2
+    k_b = pow(10.0, PR_b) * dt ** 2
     k_col = pow(10.0, PR) * dt ** 2
     k_at = 5 * pow(10.0, PR) * dt ** 2
     termination_condition = pow(10.0, -threshold)
@@ -762,7 +886,8 @@ def forward():
 
         compute_grad_and_hessian_momentum(x_k)
         compute_grad_and_hessian_attachment(x_k, k=k_at)
-        compute_grad_and_hessian_spring(x_k, k=k)
+        compute_grad_and_hessian_spring(x_k, k=k, definiteness_fix=enable_definite_fix)
+        # compute_grad_and_hessian_bending(x_k, k=k_b, definiteness_fix=enable_definite_fix)
 
         if solver_type == 0:
             substep_Euler(P_grad, grad)
@@ -772,7 +897,6 @@ def forward():
 
         elif solver_type ==2:
             substep_Newton(P_grad, grad)
-
         # print(beta)
         # add(dx, P_grad, dx_k, -beta)
         #
@@ -812,6 +936,7 @@ def show_options():
     global threshold
     global solver_type
     global PR
+    global PR_b
     global frame_cnt
     global print_stat
     global enable_pncg
@@ -819,6 +944,7 @@ def show_options():
     global enable_attachment
     global has_end
     global end_frame
+    global enable_definite_fix
     global enable_lines
     global enable_lines2
     global enable_lines3
@@ -839,17 +965,19 @@ def show_options():
         num_iters = w.slider_int("max iter.", num_iters, 1, 10000)
         threshold = w.slider_int("threshold", threshold, 1, 6)
         PR_old = w.slider_int("stiffness", PR_old, 1, 8)
+        PR_b = w.slider_int("PR_b", PR_b, 0, 8)
         # PR_old = w.slider_int("a", PR_old, 1, 8)
         enable_pncg = w.checkbox("enable PNCG", enable_pncg)
         enable_detection = w.checkbox("enable detection", enable_detection)
         enable_attachment = w.checkbox("enable attachment", enable_attachment)
         has_end = w.checkbox("has_end", has_end)
         print_stat = w.checkbox("print_stats", print_stat)
+        enable_definite_fix = w.checkbox("definiteness fix", enable_definite_fix)
         enable_lines = w.checkbox("enable lines", enable_lines)
         enable_lines2 = w.checkbox("enable lines2", enable_lines2)
         enable_lines3 = w.checkbox("enable lines3", enable_lines3)
 
-        show_partition_id = w.slider_int("partition id", show_partition_id, 0, len(debug) - 1)
+        show_partition_id = w.slider_int("partition id", show_partition_id, 0, num_edges)
 
         if not PR_old == PR:
             PR = PR_old
@@ -935,18 +1063,20 @@ while window.running:
 
     show_options()
 
-    scene.particles(x, radius=0.03, per_vertex_color=colors)
+    # scene.particles(x, radius=0.03, per_vertex_color=colors)
+    # scene.lines(x, indices=bending_indices, color=(1.0, 0.0, 0.0), width=1.0)
     # scene.particles(center, radius=radius, color=(1.0, 0.5, 0.0))
 
     if enable_lines:
-        scene.lines(x, indices=indices, color=(0.0, 0.0, 0.0), width=1.0)
+        scene.lines(x, indices=bending_indices, color=(1.0, 0.0, 0.0), width=1.0)
     if enable_lines2:
-        scene.lines(x, indices=indices_test, color=(0.0, 0.0, 1.0), width=1.0)
+        scene.lines(x, indices=indices, color=(0.0, 0.0, 1.0), width=1.0)
     # if enable_lines3:
     #     scene.lines(x, indices=indices_test2, color=(0.0, 1.0, 0.0), width=1.0)
 
 
-    # scene.mesh(x, indices=face_indices, color=(0.0, 0.0, 0.0), show_wireframe=True)
+    scene.mesh(x, indices=face_indices, color=(0.0, 0.0, 0.0), show_wireframe=True)
+    scene.mesh(x, indices=face_indices, color=(1.0, 0.5, 0.0))
 
     camera.track_user_inputs(window, movement_speed=0.4, hold_key=ti.ui.RMB)
     canvas.scene(scene)

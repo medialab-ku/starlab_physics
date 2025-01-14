@@ -145,8 +145,8 @@ graph.add_edges_from(edges)
 partition_cycle = []
 partition_total = []
 
-for i in range(len(boundaries)):
-# for i in range(2):
+# for i in range(len(boundaries)):
+for i in range(2):
     graph_tmp = nx.MultiGraph()
     graph_tmp.add_edges_from(surface_edges[i])
     # euler_graph = nx.eulerize(graph_tmp)  # after adding edges, we eulerize
@@ -165,58 +165,58 @@ partition_rest = []
 
 #
 # for l in range(len(boundaries)):
-# for l in range(1):
-#     path_test = []
-#     for i in range(len(partition_cycle[l]) - 1):
-#         src, dest = partition_cycle[l][i], partition_cycle[l][i + 1]
-#         if nx.has_path(graph, src, dest):
-#             path = nx.shortest_path(graph, src, dest)
-#             # print(path)
-#             path_test.append(path)
-#             for j in range(len(path) - 1):
-#                 graph.remove_edge(path[j], path[j + 1])
-#
-#     # aa = []
-#     while True:
-#         if len(path_test) > 0:
-#             a = path_test.pop(0)
-#             if len(path_test) > 0:
-#                 if a[-1] == path_test[0][0]:
-#                     b = path_test.pop(0)
-#                     # print(path_test)
-#                     path_test.append(a[:-1] + b)
-#                 else:
-#                     partition_total.append(a)
-#             else:
-#                 partition_total.append(a)
-#         else:
-#             break
+for l in range(1):
+    path_test = []
+    for i in range(len(partition_cycle[l]) - 1):
+        src, dest = partition_cycle[l][i], partition_cycle[l][i + 1]
+        if nx.has_path(graph, src, dest):
+            path = nx.shortest_path(graph, src, dest)
+            # print(path)
+            path_test.append(path)
+            for j in range(len(path) - 1):
+                graph.remove_edge(path[j], path[j + 1])
+
+    # aa = []
+    while True:
+        if len(path_test) > 0:
+            a = path_test.pop(0)
+            if len(path_test) > 0:
+                if a[-1] == path_test[0][0]:
+                    b = path_test.pop(0)
+                    # print(path_test)
+                    path_test.append(a[:-1] + b)
+                else:
+                    partition_total.append(a)
+            else:
+                partition_total.append(a)
+        else:
+            break
 
 # print(aa)
 
 
-for a in range(5):
-    longest_path_size = 0
-    longest_path = []
-    for i in range(len(partition_cycle[0]) - 1):
-        for j in range(i + 1, len(partition_cycle[0])):
-            src, dest = partition_cycle[0][i], partition_cycle[0][j]
-            if nx.has_path(graph, src, dest):
-                path = nx.shortest_path(graph, src, dest)
-                if longest_path_size < len(path):
-                    longest_path_size = len(path)
-                    longest_path = path
-                    # partition_total.append(path)
-                    # for k in range(len(path) - 1):
-                    #     graph.remove_edge(path[k], path[k + 1])
-
-    longest_path = list(map(int, longest_path))
-    if longest_path_size > 0:
-        partition_total.append(longest_path)
-        for k in range(len(longest_path) - 1):
-            graph.remove_edge(longest_path[k], longest_path[k + 1])
-
-    else: break
+# for a in range(5):
+#     longest_path_size = 0
+#     longest_path = []
+#     for i in range(len(partition_cycle[0]) - 1):
+#         for j in range(i + 1, len(partition_cycle[0])):
+#             src, dest = partition_cycle[0][i], partition_cycle[0][j]
+#             if nx.has_path(graph, src, dest):
+#                 path = nx.shortest_path(graph, src, dest)
+#                 if longest_path_size < len(path):
+#                     longest_path_size = len(path)
+#                     longest_path = path
+#                     # partition_total.append(path)
+#                     # for k in range(len(path) - 1):
+#                     #     graph.remove_edge(path[k], path[k + 1])
+#
+#     longest_path = list(map(int, longest_path))
+#     if longest_path_size > 0:
+#         partition_total.append(longest_path)
+#         for k in range(len(longest_path) - 1):
+#             graph.remove_edge(longest_path[k], longest_path[k + 1])
+#
+#     else: break
 
 edges_test = np.array(graph.edges())
 edges_test = np.reshape(edges_test, (-1))

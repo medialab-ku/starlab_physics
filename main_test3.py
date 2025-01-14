@@ -1,5 +1,3 @@
-from turtledemo.sorting_animate import partition
-
 import meshio
 import networkx as nx
 from PIL.ImagePalette import random
@@ -13,6 +11,7 @@ from tqdm import tqdm
 import time
 
 from test2 import partitioned_set
+from test7 import solve_Jacobi
 
 ti.init(arch=ti.gpu)
 
@@ -89,7 +88,7 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-x_np_temp, edges, faces = import_mesh("models/OBJ/square.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+x_np_temp, edges, faces = import_mesh("models/OBJ/even_plane.obj",  scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = x_np_temp.shape[0]
 num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
@@ -197,26 +196,26 @@ partition_rest = []
 #
 # print(partition_total)
 #
-for a in range(1):
-    longest_path_size = 0
-    longest_path = []
-    for i in range(len(partition_cycle[0]) - 1):
-        for j in range(i + 1, len(partition_cycle[0])):
-            src, dest = partition_cycle[0][i], partition_cycle[0][j]
-            if nx.has_path(graph, src, dest):
-                path = nx.shortest_path(graph, src, dest)
-                if longest_path_size < len(path):
-                    longest_path_size = len(path)
-                    longest_path = path
-                    # partition_total.append(path)
-                    # for k in range(len(path) - 1):
-                    #     graph.remove_edge(path[k], path[k + 1])
-
-    if longest_path_size > 0:
-        partition_total.append(longest_path)
-        for k in range(len(longest_path) - 1):
-            graph.remove_edge(longest_path[k], longest_path[k + 1])
+# for a in range(1):
+#     longest_path_size = 0
+#     longest_path = []
+#     for i in range(len(partition_cycle[0]) - 1):
+#         for j in range(i + 1, len(partition_cycle[0])):
+#             src, dest = partition_cycle[0][i], partition_cycle[0][j]
+#             if nx.has_path(graph, src, dest):
+#                 path = nx.shortest_path(graph, src, dest)
+#                 if longest_path_size < len(path):
+#                     longest_path_size = len(path)
+#                     longest_path = path
+#                     # partition_total.append(path)
+#                     # for k in range(len(path) - 1):
+#                     #     graph.remove_edge(path[k], path[k + 1])
 #
+#     if longest_path_size > 0:
+#         partition_total.append(longest_path)
+#         for k in range(len(longest_path) - 1):
+#             graph.remove_edge(longest_path[k], longest_path[k + 1])
+# #
 #     else: break
 
 
@@ -618,6 +617,11 @@ def compute_grad_and_hessian_spring(x: ti.template(), k: float):
         hii[v1] += B
         hij[i] = B
 
+@ti.kernel
+def solve_Jacobi(x: ti.template()):
+    for vi in range(num_particles):
+        x[vi] += hess[vi].inverse() @ grad[vi]
+
 # @ti.func
 # def BlockThomasAlgorithm(a: ti.template(), b: ti.template(), c: ti.template(), x: ti.template(), d: ti.template()):
 
@@ -884,9 +888,11 @@ def forward():
     # center = ti.math.vec3(0.0, -3.5, 0.0)
 
     for _ in range(num_iters):
-        # print(it)
-        for j in range(len(partition_total)):
-            substep_Euler_GS(j, x_k, k)
+
+        compute_grad_and_hessian_momentum(x)
+        compute_grad_and_hessian_attachment(x)
+
+        solve_Jacobi()
 
     compute_v()
 

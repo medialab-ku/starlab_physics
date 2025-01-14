@@ -145,8 +145,8 @@ graph.add_edges_from(edges)
 partition_cycle = []
 partition_total = []
 
-# for i in range(len(boundaries)):
-for i in range(2):
+for i in range(len(boundaries)):
+# for i in range(2):
     graph_tmp = nx.MultiGraph()
     graph_tmp.add_edges_from(surface_edges[i])
     # euler_graph = nx.eulerize(graph_tmp)  # after adding edges, we eulerize
@@ -155,7 +155,8 @@ for i in range(2):
         path = []
         for edge in path_tmp:
             path.append(int(edge[0]))
-        path.append(path_tmp[-1][1])
+
+        # path.append(path_tmp[-1][1])
         partition_cycle.append(path)
         partition_total.append(path)
 
@@ -163,97 +164,6 @@ for i in range(2):
 
 partition_rest = []
 
-for l in range(1):
-    path_test = []
-    for i in range(len(partition_cycle[l]) - 1):
-        src, dest = partition_cycle[l][i], partition_cycle[l][i + 1]
-        if nx.has_path(graph, src, dest):
-            path = nx.shortest_path(graph, src, dest)
-            # print(path)
-            path_test.append(path)
-            for j in range(len(path) - 1):
-                graph.remove_edge(path[j], path[j + 1])
-
-    # aa = []
-    while True:
-        if len(path_test) > 0:
-            a = path_test.pop(0)
-            if len(path_test) > 0:
-                if a[-1] == path_test[0][0]:
-                    b = path_test.pop(0)
-                    # print(path_test)
-                    path_test.append(a[:-1] + b)
-                else:
-                    partition_total.append(a)
-            else:
-                partition_total.append(a)
-        else:
-            break
-#
-# for a in range(15):
-#     longest_path_size = 0
-#     longest_path = []
-#     for i in range(len(partition_cycle[0]) - 1):
-#         for j in range(i + 1, len(partition_cycle[0])):
-#             src, dest = partition_cycle[0][i], partition_cycle[0][j]
-#             if nx.has_path(graph, src, dest):
-#                 path = nx.shortest_path(graph, src, dest)
-#                 if longest_path_size < len(path):
-#                     longest_path_size = len(path)
-#                     longest_path = path
-#                     # partition_total.append(path)
-#                     # for k in range(len(path) - 1):
-#                     #     graph.remove_edge(path[k], path[k + 1])
-#
-#     if longest_path_size > 0:
-#         partition_total.append(longest_path)
-#         for k in range(len(longest_path) - 1):
-#             graph.remove_edge(longest_path[k], longest_path[k + 1])
-#
-#     else: break
-
-
-# for k in range(len(partition_cycle)):
-#     set = len(partition_cycle[k]) // 4
-#     offset = len(partition_cycle[k]) // 2
-#     for i in range(set):
-#         src, dest = partition_cycle[k][i], partition_cycle[k][i + offset]
-#         if nx.has_path(graph, src, dest):
-#             path = nx.shortest_path(graph, src, dest)
-#             partition_rest.append(path)
-#             partition_total.append(path)
-#
-#             for i in range(len(path) - 1):
-#                 graph.remove_edge(path[i], path[i + 1])
-
-
-#                     path_tmp = len(nx.shortest_path(graph, vi, vj)) - 1
-
-# for b in range(len(boundaries)):
-#     print("lev: ", b)
-#     while True:
-#         path_max = 0
-#         src, dest = -1, -1
-#         for i in range(len(boundaries[b]) - 1):
-#             for j in range(i + 1, len(boundaries[b]) - 1):
-#                 vi, vj = boundaries[b][i], boundaries[b][j]
-#                 if nx.has_path(graph, vi, vj):
-#                     path_tmp = len(nx.shortest_path(graph, vi, vj)) - 1
-#                     if path_max < path_tmp:
-#                         path_max = path_tmp
-#                         src, dest = vi, vj
-#
-#
-#
-#         if path_max == 0:
-#             break
-#         path = nx.shortest_path(graph, src, dest)
-#         partition_cycle.append(path)
-#
-#         for i in range(len(path) - 1):
-#             graph.remove_edge(path[i], path[i + 1])
-
-# partition_cycle = partition_rest
 
 edges_test = np.array(graph.edges())
 edges_test = np.reshape(edges_test, (-1))
@@ -268,62 +178,6 @@ end = -1
 partition_level = []
 
 offset = 0
-# for t in range(1):
-#
-#     if len(boundaries[0]) <1:
-#         print("fuck")
-#         offset += 1
-#
-#     for bi in boundaries[offset]:
-#         start = bi
-#         end = -1
-#         short = 1e3
-#         path = [start]
-#
-#         for i in range(offset + 1, len(boundaries)):
-#
-#             if len(boundaries[i]) < 1:
-#                 print("fuck")
-#
-#             for bj in boundaries[i]:
-#                 # print(bj)
-#                 if nx.has_path(graph, path[-1], bj):
-#                     path_tmp = len(nx.shortest_path(graph, path[-1], bj)) - 1
-#                     # print(path_tmp)
-#                     if path_tmp < short:
-#                         short = path_tmp
-#                         start = bj
-#                         end = bj
-#
-#             if end == -1:
-#                 boundaries[i - 1].remove(path[-1])
-#                 break
-#
-#             if short > 1:
-#                 break
-#             else:
-#                 graph.remove_edge(path[-1], end)
-#                 path.append(end)
-#                 end = -1
-#                 short = 1e3
-#
-#         # print(path)
-#
-#         if len(path) > 1:
-#             partition_cycle.append(path)
-
-
-# print(partition_level)
-# print(nx.shortest_path(graph, 11, 57))
-# print(partition_cycle)
-# print(np.array(graph.edges))
-
-
-# partition_cycle = partition_level
-# for e in graph.edges:
-#     path = [e[0], e[1]]
-#     # print(path)
-#     partition_total.append(path)
 
 num_max_partition = len(partition_total)
 num_edges_per_partition_np = np.array([len(partition_total[i]) - 1 for i in range(num_max_partition)])
@@ -331,7 +185,6 @@ num_max_edges_per_partition = max(num_edges_per_partition_np)
 
 num_edges_per_partition = ti.field(dtype=int, shape=num_max_partition)
 num_edges_per_partition.from_numpy(num_edges_per_partition_np)
-
 # print(num_edges_per_partition)
 partitioned_set_np = np.zeros([num_max_partition, num_max_edges_per_partition], dtype=int)
 cnt = 0
@@ -345,7 +198,7 @@ for i in range(num_max_partition):
         cnt += 1
 
 a = np.array(a)
-b = np.array(graph.edges).reshape(-1)
+# b = np.array(graph.edges).reshape(-1)
 
 # a = np.append(a, b)
 # num_edges = cnt + len(graph.edges)
@@ -538,7 +391,7 @@ def compute_grad_and_hessian_attachment(x: ti.template(), k: float):
 
     id3 = ti.Matrix.identity(dt=float, n=3)
     # ids = ti.Vector([i for i in range(num_particles_x)], dt=int)
-    ids = ti.Vector([0, 1, 2 , 3], dt=int)
+    ids = ti.Vector([0, 1], dt=int)
     # print(ids)
     for i in range(ids.n):
         grad[ids[i]] += k * (x[ids[i]] - x0[ids[i]])
@@ -669,16 +522,14 @@ def substep_Euler(Px: ti.template(), x: ti.template()):
         for i in range(size_pi):
             ei = partitioned_set[pi, i]
             vi = indices[2 * ei + 0]
-            P_grad[vi] += x_part[pi, i]
+            P_grad[vi] = x_part[pi, i]
 
         ei = partitioned_set[pi, size_pi - 1]
         vi = indices[2 * ei + 1]
-        Px[vi] += x_part[pi, size_pi]
+        Px[vi] = x_part[pi, size_pi]
 
     for i in range(num_particles):
-        if num_dup[i] > 0:
-            Px[i] /= num_dup[i]
-        else:
+        if num_dup[i] == 0:
             Px[i] = ti.math.inverse(hii[i]) @ x[i]
 
 @ti.kernel

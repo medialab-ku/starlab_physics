@@ -89,7 +89,7 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-verts, edges, faces = import_mesh("models/OBJ/plane_8.obj", scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+verts, edges, faces = import_mesh("models/OBJ/even_plane.obj", scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = verts.shape[0]
 num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
@@ -123,7 +123,7 @@ for i in range(num_faces - 1):
             face_adj_list[i] = np.append(face_adj_list[i], j)
             face_adj_list[j] = np.append(face_adj_list[j], i)
 
-num_partition = 2
+num_partition = 10
 n_cuts, membership = pymetis.part_graph(num_partition, adjacency=face_adj_list)
 print(f"n_cuts : {n_cuts} / membership : {membership}")
 
@@ -1025,7 +1025,7 @@ while window.running:
     # scene.particles(x, radius=0.05, per_vertex_color=colors)
 
     if enable_lines:
-        scene.lines(x, indices=indices_original, color=(0.0, 0.0, 0.0), width=1.0)
+        # scene.lines(x, indices=indices_original, color=(0.0, 0.0, 0.0), width=1.0)
         scene.particles(barycentric_x_field, radius=0.05, per_vertex_color=barycentric_x_color_field)
     if enable_lines2:
         scene.lines(x, indices=indices, color=(1.0, 0.0, 0.0), width=1.0)

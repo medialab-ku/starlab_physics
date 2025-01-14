@@ -12,8 +12,6 @@ import random
 from tqdm import tqdm
 import time
 
-from test2 import partitioned_set
-
 ti.init(arch=ti.gpu)
 
 window = ti.ui.Window("PBD framework", (1024, 768), fps_limit=200)
@@ -89,13 +87,15 @@ def import_mesh(path, scale, translate, rotate):
 
     return x_np_temp, edges, faces
 
-verts, edges, faces = import_mesh("models/OBJ/plane_8.obj", scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
+verts, edges, faces = import_mesh("models/OBJ/even_plane.obj", scale = 3.0, translate = [0.0, 0.0, 0.0], rotate = [1., 0., 0., 0.0])
 
 num_particles = verts.shape[0]
 num_max_partition = (num_particles_x - 1) * (num_particles_y - 1)
 # num_partition = ti.field(int, shape=1)
 num_verts, num_edges, num_faces = verts.shape[0], edges.shape[0], faces.shape[0]
 
+
+print(num_edges)
 ########################################################################################################################
 # create face partitions and offsets
 # Sehyeon Park
@@ -115,7 +115,7 @@ for i in range(num_edges - 1):
             edge_adj_list[j] = np.append(edge_adj_list[j], i)
 print("edge_adj_list :", edge_adj_list)
 
-num_partition = 2
+num_partition = 167
 n_cuts, membership = pymetis.part_graph(num_partition, adjacency=edge_adj_list)
 print(f"n_cuts : {n_cuts} / membership : {membership}")
 
