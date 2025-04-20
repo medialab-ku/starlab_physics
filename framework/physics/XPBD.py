@@ -85,10 +85,10 @@ class Solver:
             self.mesh_dy.y_tilde[i] = self.mesh_dy.y[i]
 
         # for Euler path...
-        for i in range(self.euler_path_len):
-            self.mesh_dy.y_euler[i] = (self.mesh_dy.x_euler[i] +
-                                       self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt))
-            self.mesh_dy.y_tilde_euler[i] = self.mesh_dy.y_euler[i]
+        # for i in range(self.euler_path_len):
+        #     self.mesh_dy.y_euler[i] = (self.mesh_dy.x_euler[i] +
+        #                                self.mesh_dy.fixed_euler[i] * (self.mesh_dy.v_euler[i] * dt + self.g * dt * dt))
+        #     self.mesh_dy.y_tilde_euler[i] = self.mesh_dy.y_euler[i]
 
     @ti.kernel
     def update_y(self):
@@ -104,8 +104,8 @@ class Solver:
             self.mesh_dy.v[i] = self.mesh_dy.fixed[i] * (1.0 - damping) * (self.mesh_dy.y[i] - self.mesh_dy.x[i]) / dt
 
         # for Euler path...
-        for i in range(self.euler_path_len):
-            self.mesh_dy.v_euler[i] = self.mesh_dy.fixed_euler[i] * (1.0 - damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
+        # for i in range(self.euler_path_len):
+        #     self.mesh_dy.v_euler[i] = self.mesh_dy.fixed_euler[i] * (1.0 - damping) * (self.mesh_dy.y_euler[i] - self.mesh_dy.x_euler[i]) / dt
 
 
     @ti.kernel
@@ -115,10 +115,10 @@ class Solver:
             self.mesh_dy.x[i] += dt * self.mesh_dy.v[i]
 
         # for Euler path...
-        for i in range(self.euler_path_len):
-            self.mesh_dy.x_euler[i] += dt * self.mesh_dy.v_euler[i]
-        for i in range(self.euler_edge_len):
-            self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[i] + self.mesh_dy.x_euler[i+1])
+        # for i in range(self.euler_path_len):
+        #     self.mesh_dy.x_euler[i] += dt * self.mesh_dy.v_euler[i]
+        # for i in range(self.euler_edge_len):
+        #     self.mesh_dy.colored_edge_pos_euler[i] = 0.5 * (self.mesh_dy.x_euler[i] + self.mesh_dy.x_euler[i+1])
 
     @ti.kernel
     def aggregate_duplicates(self):
@@ -142,6 +142,7 @@ class Solver:
         compliance_bending = self.stiffness_bending * dt * dt
 
         self.solve_spring_constraints_jacobi_x(compliance_stretch, compliance_bending)
+
 
     def solve_constraints_gauss_seidel_x(self, dt):
         compliance_stretch = self.stiffness_stretch * dt * dt
@@ -215,8 +216,7 @@ class Solver:
     @ti.kernel
     def solve_spring_constraints_jacobi_x(self, compliance_stretch: ti.f32, compliance_bending: ti.f32):
         # project x_(t+1) by solving constraints in parallel way
-        ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv,
-                       self.mesh_dy.dx, self.mesh_dy.nc)
+        ti.block_local(self.mesh_dy.l0, self.mesh_dy.eid_field, self.mesh_dy.fixed, self.mesh_dy.m_inv, self.mesh_dy.dx, self.mesh_dy.nc)
         for i in range(self.num_edges_dy):
             l0 = self.mesh_dy.l0[i]
             v0, v1 = self.mesh_dy.eid_field[i, 0], self.mesh_dy.eid_field[i, 1]
@@ -398,10 +398,10 @@ class Solver:
                 self.solve_constraints_gauss_seidel_x(dt_sub)
             elif self.selected_solver_type == 2:
                 self.solve_constraints_parallel_gauss_seidel_x(dt_sub)
-            elif self.selected_solver_type == 3:
-                self.solve_constraints_euler_path_gauss_seidel_x(dt_sub)
-            elif self.selected_solver_type == 4:
-                self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
+            # elif self.selected_solver_type == 3:
+            #     self.solve_constraints_euler_path_gauss_seidel_x(dt_sub)
+            # elif self.selected_solver_type == 4:
+            #     self.solve_constraints_euler_path_tridiagonal_x(dt_sub)
 
             self.compute_v(damping=self.damping, dt=dt_sub)
             self.update_x(dt_sub)
