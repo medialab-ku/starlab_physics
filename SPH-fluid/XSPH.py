@@ -229,13 +229,15 @@ class XSPHSolver(SPHBase):
 
         dx_old = 0.0
         dx_init = 0.0
+
+        self.ps.LB
         for _ in range(max_iter):
             self.compute_densities()
             self.compute_inertia()
 
             self.compute_elasticity()
             self.compute_pressure_forces()
-            # self.compute_dynamic_collision()
+            self.compute_dynamic_collision()
             self.compute_static_collision()
             self.compute_non_penetration()
             self.compute_search_dir()
