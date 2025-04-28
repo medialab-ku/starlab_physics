@@ -108,7 +108,7 @@ class ParticleSystem:
             mesh = self.load_dynamic_object(dynamic)
             vertices = np.vstack((vertices, mesh.points))
             tetrs_tmp = np.array(mesh.cells[0].data, dtype=int) + self.num_dynamic_vertices
-            faces_tmp = extract_faces(tetrs_tmp)
+            faces_tmp = extract_faces(tetrs_tmp, mesh.points)
             edges_tmp = extract_edges(faces_tmp)
 
             tetra = np.vstack((tetra, tetrs_tmp))
@@ -118,7 +118,7 @@ class ParticleSystem:
 
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
-
+        print(tetra)
         # print(self.num_dynamic_vertices)
         # print(edges.shape)
 
@@ -145,9 +145,18 @@ class ParticleSystem:
             self.edges_dy = ti.field(int, shape=edges.shape[0])
             self.edges_dy.from_numpy(edges)
 
-            self.l0 = ti.field(float, shape=(self.edges_dy.shape[0]//2))
-            self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
 
+            if tetra.shape[0] > 0:
+                self.V0 = ti.field(float, shape=tetra.shape[0])
+                self.tet_ids = ti.field(int, shape=(tetra.shape[0], 4))
+                self.tet_ids.from_numpy(tetra)
+
+                self.invDm = ti.Matrix.field(n=3, m=3, dtype=float, shape=tetra.shape[0])
+            # self.l0 = ti.field(float, shape=(self.edges_dy.shape[0]//2))
+            # self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
+                self.init_FEM()
+
+            print(self.mass_dy)
             # rigid_particle_num += mesh.vertices.shape[0]
         #
         #
@@ -383,6 +392,21 @@ class ParticleSystem:
             l0[e] = (x[v0] - x[v1]).norm()
             mass[v0] += 0.5 * l0[e]
             mass[v1] += 0.5 * l0[e]
+
+    @ti.kernel
+    def init_FEM(self):
+
+        num_tets = self.tet_ids.shape[0]
+        self.mass_dy.fill(0.0)
+        for i in range(num_tets):
+            Dm_i = ti.Matrix.cols([self.x_dy[self.tet_ids[i, j]] - self.x_dy[self.tet_ids[i, 0]] for j in ti.static(range(1, 4))])
+            self.invDm[i] = Dm_i.inverse()
+            V0_i = ti.abs(Dm_i.determinant()) / 6.0
+            for j in ti.static(range(4)):
+                self.mass_dy[self.tet_ids[i, j]] += 0.25 * V0_i
+            self.V0[i] = V0_i
+
+
 
 
     @ti.kernel

@@ -8,7 +8,7 @@
 		"density0": 1000,
 		"simulationMethod": 5,
 		"gravitation": [0.0, -9.81, 0.0],
-		"timeStepSize": 1e-3,
+		"timeStepSize": 1e-2,
 		"stiffness": 1e5,
 		"exponent": 2,
 		"boundaryHandlingMethod": 0,
@@ -33,16 +33,6 @@
 
 	"DynamicObjects":
 	[
-		{
-			"objectId": 0,
-			"type": 1,
-			"geometryFile": "./data/models/MSH/cube.msh",
-			"translation": [2.5, 1.8, 2.5],
-			"scale": [1.0, 1.0, 1.0],
-			"rotationAxis": [1, 0, 0],
-			"rotationAngle": 0
-		},
-
 		{
 			"objectId": 0,
 			"type": 1,

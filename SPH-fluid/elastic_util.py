@@ -90,6 +90,34 @@ def compute_diag_d2Psidx2_ARAP_filter(F, B, mu, la):
         lambda1 = 1.0
     if s0 + s1 < 2.0:
         lambda0 = 1.0
+
+    U0, U1, U2 = U[:, 0], U[:, 1], U[:, 2]
+    V0, V1, V2 = V[:, 0], V[:, 1], V[:, 2]
+    Q0 = V1.outer_product(U2) - V2.outer_product(U1)
+    Q1 = V2.outer_product(U0) - V0.outer_product(U2)
+    Q2 = V1.outer_product(U0) - V0.outer_product(U1)
+    W0 = compute_dFdx_T_N(B, Q0) ** 2
+    W1 = compute_dFdx_T_N(B, Q1) ** 2
+    W2 = compute_dFdx_T_N(B, Q2) ** 2
+    diag_h4 = lambda0 * W0 + lambda1 * W1 + lambda2 * W2
+    X = compute_diag_dFdx_T_dFdx(B)
+    return mu * (2.0 * X + diag_h4)
+
+@ti.func
+def compute_d2Psidx2_ARAP_filter(F, B, mu, la):
+    U, sig, V = ssvd(F)
+    s0 = sig[0, 0]
+    s1 = sig[1, 1]
+    s2 = sig[2, 2]
+    lambda0 = 2.0 / (s1 + s2)
+    lambda1 = 2.0 / (s0 + s2)
+    lambda2 = 2.0 / (s0 + s1)
+    if s1 + s2 < 2.0:
+        lambda0 = 1.0
+    if s0 + s2 < 2.0:
+        lambda1 = 1.0
+    if s0 + s1 < 2.0:
+        lambda0 = 1.0
     U0, U1, U2 = U[:, 0], U[:, 1], U[:, 2]
     V0, V1, V2 = V[:, 0], V[:, 1], V[:, 2]
     Q0 = V1.outer_product(U2) - V2.outer_product(U1)

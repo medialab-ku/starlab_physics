@@ -157,7 +157,6 @@ def compute_H3(F):
                       [-F21, 0, F01, F20, 0, -F00, 0, 0, 0],
                       [F11, -F01, 0, -F10, F00, 0, 0, 0, 0]],float)
 
-
 @ti.func
 def compute_dtdx_t(t, cord):
     t0 = t[0]

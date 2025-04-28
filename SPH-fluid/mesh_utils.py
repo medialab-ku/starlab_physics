@@ -24,18 +24,33 @@ def extract_edges(faces):
     edges = np.array(list(edge_set))
     return edges
 
-def extract_faces(tetras):
-
+def extract_faces(tetras, points):
     num_tets = tetras.shape[0]
-    face_set = set()
+    count = {}
+    face_list = []
     for t in range(num_tets):
         tet = tetras[t]
-        face_set.add(tuple(sorted([tet[0], tet[1], tet[2]])))
-        face_set.add(tuple(sorted([tet[1], tet[2], tet[3]])))
-        face_set.add(tuple(sorted([tet[2], tet[3], tet[0]])))
-        face_set.add(tuple(sorted([tet[3], tet[0], tet[1]])))
+        for j in range(4):
+            x, y, z = tuple(sorted([tet[j % 4], tet[(j + 1) % 4], tet[(j + 2) % 4]]))
+            if (x, y, z) not in count:
+                count[(x, y, z)] = 1
+            else:
+                count[(x, y, z)] += 1
 
-    # print(face_set)
+            v12 = points[tet[(j + 1) % 4]] - points[tet[j % 4]]
+            v13 = points[tet[(j + 2) % 4]] - points[tet[j % 4]]
+            v14 = points[tet[(j + 3) % 4]] - points[tet[j % 4]]
+            if np.dot(np.cross(v12, v13), v14) >= 0:
+                face_list.append(tuple([tet[j % 4], tet[(j + 1) % 4], tet[(j + 2) % 4]]))
+            else:
+                face_list.append(tuple([tet[j % 4], tet[(j + 2) % 4], tet[(j + 1) % 4]]))
 
-    faces = np.array(list(face_set))
-    return faces
+    faces = np.array(list(face_list))
+    unique = []
+    for face in faces:
+        x, y, z = tuple(sorted(face))
+        if count[(x, y, z)] == 1:
+            unique.append(face)
+
+    faces_unique = np.array(unique)
+    return faces_unique
