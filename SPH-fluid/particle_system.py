@@ -1,6 +1,7 @@
 import taichi as ti
 import numpy as np
 import trimesh as tm
+import meshio as mio
 from functools import reduce
 from config_builder import SimConfig
 from WCSPH import WCSPHSolver
@@ -79,7 +80,7 @@ class ParticleSystem:
             edges = np.vstack((edges, edges_tmp))
             faces = np.vstack((faces, faces_tmp))
 
-            num_static_vertices += vertices.shape[0]
+            num_static_vertices += mesh.vertices.shape[0]
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
 
@@ -96,22 +97,29 @@ class ParticleSystem:
         dynamic_objects = self.cfg.get_dynamic_objects()
         self.num_dynamic_vertices = 0
         vertices = np.empty((0, 3))
+        tetra = np.empty((0, 4), dtype=int)
         faces = np.empty((0, 3), dtype=int)
         edges = np.empty((0, 2), dtype=int)
+        # tetra = np.append(tet_indices_np, tet_indices_np_temp, axis=0)
         for dynamic in dynamic_objects:
+
+            # print("test")
+            # print(self.num_dynamic_vertices)
             mesh = self.load_dynamic_object(dynamic)
-            vertices = np.vstack((vertices, mesh.vertices))
-            edges_tmp = extract_edges(mesh.faces) + self.num_dynamic_vertices
-            faces_tmp = mesh.faces + self.num_dynamic_vertices
+            vertices = np.vstack((vertices, mesh.points))
+            tetrs_tmp = np.array(mesh.cells[0].data, dtype=int) + self.num_dynamic_vertices
+            faces_tmp = extract_faces(tetrs_tmp)
+            edges_tmp = extract_edges(faces_tmp)
+
+            tetra = np.vstack((tetra, tetrs_tmp))
             edges = np.vstack((edges, edges_tmp))
             faces = np.vstack((faces, faces_tmp))
-            self.num_dynamic_vertices += vertices.shape[0]
+            self.num_dynamic_vertices += mesh.points.shape[0]
 
-        # print(faces[0])
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
-        # print(faces)
 
+        # print(self.num_dynamic_vertices)
         # print(edges.shape)
 
         if self.num_dynamic_vertices > 0:
@@ -575,6 +583,8 @@ class ParticleSystem:
     def load_static_object(self, static_object):
         obj_id = static_object["objectId"]
         mesh = tm.load(static_object["geometryFile"])
+        center = mesh.vertices.sum(axis=0) / mesh.vertices.shape[0]
+        mesh.vertices -= center
         mesh.apply_scale(static_object["scale"])
         offset = np.array(static_object["translation"])
         mesh.vertices += offset
@@ -587,14 +597,17 @@ class ParticleSystem:
 
     def load_dynamic_object(self, dynamic_object):
         obj_id = dynamic_object["objectId"]
-        mesh = tm.load(dynamic_object["geometryFile"])
-        mesh.apply_scale(dynamic_object["scale"])
+        mesh = mio.read(dynamic_object["geometryFile"])
+        # mesh.apply_scale(dynamic_object["scale"])
+        center = mesh.points.sum(axis=0) / mesh.points.shape[0]
+        mesh.points -= center
         offset = np.array(dynamic_object["translation"])
-        mesh.vertices += offset
-        angle = dynamic_object["rotationAngle"] / 360 * 2 * 3.1415926
-        direction = dynamic_object["rotationAxis"]
-        rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
-        mesh.apply_transform(rot_matrix)
+        mesh.points += offset
+
+        # angle = dynamic_object["rotationAngle"] / 360 * 2 * 3.1415926
+        # direction = dynamic_object["rotationAxis"]
+        # rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
+        # mesh.apply_transform(rot_matrix)
 
         return mesh
 

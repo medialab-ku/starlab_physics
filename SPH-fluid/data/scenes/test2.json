@@ -60,7 +60,7 @@
 			"objectId": 0,
 			"type": 1,
 			"geometryFile": "./data/models/plane_32.obj",
-			"translation": [2.5, 1.0, 2.5],
+			"translation": [2.5, -1.0, 2.5],
 			"scale": [1.0, 1.0, 1.0],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0

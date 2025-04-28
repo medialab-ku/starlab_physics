@@ -119,7 +119,7 @@ if __name__ == "__main__":
             # scene.particles(ps.x_static, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
             # scene.mesh(vertices=ps.x_st, indices=ps.faces_st, color=(1.0, 1.0, 1.0))
             # scene.mesh(vertices=ps.x_st, indices=ps.faces_st, color=(0.0, 0.0, 0.0), show_wireframe=True)
-
+            # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 0.5, 1.0))
             # scene.mesh(vertices=ps.x_dy, indices=ps.faces_dy, color=(1.0, 0.5, 1.0))
             # scene.mesh(vertices=ps.x_dy, indices=ps.faces_dy, color=(0.0, 0.0, 0.0), show_wireframe=True)
 

@@ -230,7 +230,6 @@ class XSPHSolver(SPHBase):
         dx_old = 0.0
         dx_init = 0.0
 
-        self.ps.LB
         for _ in range(max_iter):
             self.compute_densities()
             self.compute_inertia()
