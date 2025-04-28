@@ -108,7 +108,7 @@ class ParticleSystem:
             mesh = self.load_dynamic_object(dynamic)
             vertices = np.vstack((vertices, mesh.points))
             tetrs_tmp = np.array(mesh.cells[0].data, dtype=int) + self.num_dynamic_vertices
-            faces_tmp = extract_faces(tetrs_tmp)
+            faces_tmp = extract_faces(tetrs_tmp, mesh.points)
             edges_tmp = extract_edges(faces_tmp)
 
             tetra = np.vstack((tetra, tetrs_tmp))

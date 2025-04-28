@@ -123,6 +123,9 @@ if __name__ == "__main__":
             # scene.mesh(vertices=ps.x_dy, indices=ps.faces_dy, color=(1.0, 0.5, 1.0))
             # scene.mesh(vertices=ps.x_dy, indices=ps.faces_dy, color=(0.0, 0.0, 0.0), show_wireframe=True)
 
+            # Test
+            scene.mesh(vertices=ps.x_dy, indices=ps.faces_dy, color=(1.0, 0.5, 1.0))
+
             scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
             scene.lines(vertices= ps.x_dy, indices=ps.edges_dy, color=(1.0, 1.0, 1.0), width= 1.0)
             scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
