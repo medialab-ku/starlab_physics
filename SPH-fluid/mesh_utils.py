@@ -23,9 +23,7 @@ def extract_edges(faces):
         edge_list.append(tuple([face[2], face[0]]))
 
     edges = np.array(list(edge_list))
-    edges_unique, counts= np.unique(edges, axis=0, return_counts=True)
-    # edges_unique = edges_unique[counts == 1]
-    return edges_unique
+    return edges
 
 def extract_faces(tetras, points):
     num_tets = tetras.shape[0]

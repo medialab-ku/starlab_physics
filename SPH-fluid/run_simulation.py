@@ -6,6 +6,7 @@ from taichi.examples.rendering.rasterizer import width
 
 from config_builder import SimConfig
 from particle_system import ParticleSystem
+from util.export_mesh import Exporter
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.8, default_fp=ti.float32)
 
@@ -79,6 +80,12 @@ if __name__ == "__main__":
     cnt_ply = 0
 
     runSim = False
+    PRINTMESH = True
+
+    if PRINTMESH:
+        exporter = Exporter(folder="./data/output", frameInterval=10)
+        exporter.set_faces(ps.faces_dy)
+
     while window.running:
 
         if window.get_event(ti.ui.PRESS):
@@ -95,6 +102,9 @@ if __name__ == "__main__":
 
                 solver.initialize()
                 runSim = False
+
+        if PRINTMESH:
+            exporter.export("scene.obj", ps.x_dy, MODE="SINGLE")
 
         if runSim:
             for i in range(substeps):

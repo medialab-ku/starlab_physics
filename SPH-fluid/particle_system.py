@@ -84,7 +84,6 @@ class ParticleSystem:
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
 
-        print(faces.shape)
         if num_static_vertices > 0:
             self.x_st = ti.Vector.field(self.dim, float, shape=num_static_vertices)
             self.x_st.from_numpy(vertices)
@@ -108,7 +107,7 @@ class ParticleSystem:
             mesh = self.load_dynamic_object(dynamic)
             vertices = np.vstack((vertices, mesh.points))
             tetrs_tmp = np.array(mesh.cells[0].data, dtype=int) + self.num_dynamic_vertices
-            faces_tmp = extract_faces(tetrs_tmp, mesh.points)
+            faces_tmp = extract_faces(tetrs_tmp, vertices)
             edges_tmp = extract_edges(faces_tmp)
 
             tetra = np.vstack((tetra, tetrs_tmp))
@@ -118,7 +117,6 @@ class ParticleSystem:
 
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
-
 
         if self.num_dynamic_vertices > 0:
             self.mass_dy = ti.field(float, shape=self.num_dynamic_vertices)
