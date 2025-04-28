@@ -2,5 +2,10 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/SPH-fluid/util/PyMesh" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/SPH-fluid/util/PyMesh/third_party/Clipper" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/SPH-fluid/util/PyMesh/third_party/TetWild" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/SPH-fluid/util/PyMesh/third_party/WindingNumber" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/SPH-fluid/util/PyMesh/third_party/carve" vcs="Git" />
   </component>
 </project>
