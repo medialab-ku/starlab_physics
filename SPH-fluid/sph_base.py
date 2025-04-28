@@ -519,6 +519,10 @@ class SPHBase:
             self.ps.grad_dy[p_i] = density * self.ps.mass_dy[p_i] * (self.ps.x_dy[p_i] - self.ps.xHat_dy[p_i])
             self.ps.diagH_dy[p_i] = density * self.ps.mass_dy[p_i] * I_3x3
 
+        k = 1e3
+        self.ps.grad_dy[0] = k * (self.ps.x_dy[0] - self.ps.x_0_dy[0])
+        self.ps.diagH_dy[0] = k  * I_3x3
+
     @ti.func
     def compute_pressure_task(self, p_i, p_j, ret):
 
@@ -633,60 +637,60 @@ class SPHBase:
         num_static_faces = self.ps.faces_st.shape[0] // 3
         dHat = 2 * self.ps.particle_radius
         Kappa = 1e5
-        for P in ti.grouped(self.ps.x):
-            xP = self.ps.x[P]
-            for j in range(num_static_faces):
-                T0, T1, T2 = self.ps.faces_st[3 * j + 0], self.ps.faces_st[3 * j + 1], self.ps.faces_st[3 * j + 2]
-                xT0, xT1, xT2 = self.ps.x_st[T0], self.ps.x_st[T1], self.ps.x_st[T2]
-                type = d_type_PT(xP, xT0, xT1, xT2)
-                # print(type)
-                bary = ti.math.vec3(0.0)
-                if type == 0:
-                    bary[0] = 1.0
-
-                elif type == 1:
-                    bary[1] = 1.0
-
-                elif type == 2:
-                    bary[2] = 1.0
-
-                elif type == 3:
-                    a = d_PE(xP, xT0, xT1)
-                    bary[0] = a[0]
-                    bary[1] = a[1]
-
-                elif type == 4:
-                    a = d_PE(xP, xT1, xT2)
-                    bary[1] = a[0]
-                    bary[2] = a[1]
-
-                elif type == 5:
-                    a = d_PE(xP, xT0, xT2)
-                    bary[0] = a[0]
-                    bary[2] = a[1]
-
-                    # print(bary[0], bary[2])
-
-                elif type == 6:
-                    bary = d_PT(xP, xT0, xT1, xT2)
-
-                proj = bary[0] * xT0 + bary[1] * xT1 + bary[2] * xT2
-                d = (xP - proj).norm()
-
-                # if d < 1e-5:
-                #
-
-                n = (xP - proj) / d
-
-                if d <= dHat:
-                    dbdx = self.barrier_grad(d, dHat)
-                    d2bdx2 = self.barrier_hess(d, dHat)
-
-                    nnT = n.outer_product(n)
-                    d2d_dx2 = (I_3x3 - nnT) / d
-                    test = (abs(d2bdx2) * nnT + abs(dbdx) * d2d_dx2)
-                    self.ps.diagH[P] += Kappa * test
-                    self.ps.grad[P] += Kappa * dbdx * n
+        # for P in ti.grouped(self.ps.x):
+        #     xP = self.ps.x[P]
+        #     for j in range(num_static_faces):
+        #         T0, T1, T2 = self.ps.faces_st[3 * j + 0], self.ps.faces_st[3 * j + 1], self.ps.faces_st[3 * j + 2]
+        #         xT0, xT1, xT2 = self.ps.x_st[T0], self.ps.x_st[T1], self.ps.x_st[T2]
+        #         type = d_type_PT(xP, xT0, xT1, xT2)
+        #         # print(type)
+        #         bary = ti.math.vec3(0.0)
+        #         if type == 0:
+        #             bary[0] = 1.0
+        #
+        #         elif type == 1:
+        #             bary[1] = 1.0
+        #
+        #         elif type == 2:
+        #             bary[2] = 1.0
+        #
+        #         elif type == 3:
+        #             a = d_PE(xP, xT0, xT1)
+        #             bary[0] = a[0]
+        #             bary[1] = a[1]
+        #
+        #         elif type == 4:
+        #             a = d_PE(xP, xT1, xT2)
+        #             bary[1] = a[0]
+        #             bary[2] = a[1]
+        #
+        #         elif type == 5:
+        #             a = d_PE(xP, xT0, xT2)
+        #             bary[0] = a[0]
+        #             bary[2] = a[1]
+        #
+        #             # print(bary[0], bary[2])
+        #
+        #         elif type == 6:
+        #             bary = d_PT(xP, xT0, xT1, xT2)
+        #
+        #         proj = bary[0] * xT0 + bary[1] * xT1 + bary[2] * xT2
+        #         d = (xP - proj).norm()
+        #
+        #         # if d < 1e-5:
+        #         #
+        #
+        #         n = (xP - proj) / d
+        #
+        #         if d <= dHat:
+        #             dbdx = self.barrier_grad(d, dHat)
+        #             d2bdx2 = self.barrier_hess(d, dHat)
+        #
+        #             nnT = n.outer_product(n)
+        #             d2d_dx2 = (I_3x3 - nnT) / d
+        #             test = (abs(d2bdx2) * nnT + abs(dbdx) * d2d_dx2)
+        #             self.ps.diagH[P] += Kappa * test
+        #             self.ps.grad[P] += Kappa * dbdx * n
 
         for P in ti.grouped(self.ps.x_dy):
             xP = self.ps.x_dy[P]

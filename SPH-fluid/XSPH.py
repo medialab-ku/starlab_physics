@@ -1,5 +1,6 @@
 from sph_base import SPHBase
 from distance import *
+from elastic_util import *
 
 class XSPHSolver(SPHBase):
     def __init__(self, particle_system):
@@ -157,37 +158,32 @@ class XSPHSolver(SPHBase):
             if self.ps.is_dynamic_rigid_body(p_j):
                 self.ps.acceleration[p_j] += -f_v * self.density_0 / self.ps.density[p_j]
 
+    @ti.func
+    def as_diag(self, a):
+
+        return ti.math.mat3([[a[0], 0, 0], [0, a[1], 0], [0, 0, a[2]]])
+
     @ti.kernel
-    def compute_elasticity(self):
+    def compute_elasticity(self, YM: float, PR: float):
 
-        k = 1e6 * self.dt[None] * self.dt[None]
-        num_edges = self.ps.edges_dy.shape[0] // 2
+        mu = YM / (2.0 * (1.0 + PR))
+        la = YM * PR / ((1.0 + PR) * (1.0 - 2.0 * PR))
+
+        # print(mu, la)
+        # k = 1e6 * self.dt[None] * self.dt[None]
+        num_tets = self.ps.tet_ids.shape[0]
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        for e in range(num_edges):
+        for i in range(num_tets):
+            coef = self.ps.V0[i] * self.dt[None] * self.dt[None]
+            Ds = ti.Matrix.cols([self.ps.x_dy[self.ps.tet_ids[i, j]] - self.ps.x_dy[self.ps.tet_ids[i, 0]] for j in ti.static(range(1, 4))])
+            B = self.ps.invDm[i]
+            F = Ds @ B
 
-            v0, v1 = self.ps.edges_dy[2 * e + 0], self.ps.edges_dy[2 * e + 1]
-            x01 = self.ps.x_dy[v0] - self.ps.x_dy[v1]
-            l = x01.norm()
-            l0 = self.ps.l0[e]
-            n = x01 / l
-            nnT = n.outer_product(n)
-            alpha = abs(l - l0) / l
+            dEdx = coef * compute_dPsidx_ARAP(F, B, mu, la)
+            for j in ti.static(range(4)):
+                self.ps.grad_dy[self.ps.tet_ids[i, j]] += dEdx[3 * j: 3 * j + 3]
 
-            self.ps.grad_dy[v0] += k * (l - l0) * n
-            self.ps.grad_dy[v1] -= k * (l - l0) * n
 
-            self.ps.diagH_dy[v0] += k * (alpha * I_3x3 + (1.0 - alpha) * nnT)
-            self.ps.diagH_dy[v1] += k * (alpha * I_3x3 + (1.0 - alpha) * nnT)
-
-        # ids = ti.Vector([0, 1, 2, 3], dtype=int)
-
-        k = 1e6
-        for i in range(4):
-            self.ps.grad_dy[i] += k * (self.ps.x_dy[i] - self.ps.x_0_dy[i])
-            self.ps.diagH_dy[i] += k * I_3x3
-
-        # self.ps.grad_dy[1] += k * (self.ps.x_dy[1] - self.ps.x_0_dy[i])
-        # self.ps.diagH_dy[1] += k * I_3x3
 
 
 
@@ -225,19 +221,20 @@ class XSPHSolver(SPHBase):
         self.enforce_boundary_3D(self.ps.material_fluid)
 
         opt_iter = 0
-        max_iter = int(1e1)
+        max_iter = int(10)
 
         dx_old = 0.0
         dx_init = 0.0
-
+        YM = 1e3
+        PR = 0.0
         for _ in range(max_iter):
             self.compute_densities()
             self.compute_inertia()
 
-            self.compute_elasticity()
+            self.compute_elasticity(YM, PR)
             self.compute_pressure_forces()
-            self.compute_dynamic_collision()
-            self.compute_static_collision()
+            # self.compute_dynamic_collision()
+            # self.compute_static_collision()
             self.compute_non_penetration()
             self.compute_search_dir()
 
