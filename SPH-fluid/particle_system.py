@@ -119,8 +119,6 @@ class ParticleSystem:
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
 
-        # print(self.num_dynamic_vertices)
-        # print(edges.shape)
 
         if self.num_dynamic_vertices > 0:
             self.mass_dy = ti.field(float, shape=self.num_dynamic_vertices)
