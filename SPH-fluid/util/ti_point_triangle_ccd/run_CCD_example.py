@@ -19,7 +19,7 @@ if __name__ == '__main__':
     t1 = ti.Vector([1.0, 1.0, 1.0], dt=ti.f64)
     t2 = ti.Vector([-1.0, 1.0, 0.0], dt=ti.f64)
 
-    # movement (not moving)
+    # movement
     dp = ti.Vector([0.0, 3.0, -2.0], dt=ti.f64)
     dt0 = ti.Vector([0.0, 3.0, 0.0], dt=ti.f64)
     dt1 = ti.Vector([0.0, 3.0, -1.0], dt=ti.f64)
