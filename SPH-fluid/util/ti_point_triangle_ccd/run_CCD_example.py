@@ -16,14 +16,14 @@ if __name__ == '__main__':
     # initial point
     p = ti.Vector([0.0, 0.0, 1.0], dt=ti.f64)
     t0 = ti.Vector([0.0, -1.0, 0.0], dt=ti.f64)
-    t1 = ti.Vector([1.0, 1.0, 0.0], dt=ti.f64)
+    t1 = ti.Vector([1.0, 1.0, 1.0], dt=ti.f64)
     t2 = ti.Vector([-1.0, 1.0, 0.0], dt=ti.f64)
 
     # movement (not moving)
-    dp = ti.Vector([0.0, 0.0, -4.0], dt=ti.f64)
-    dt0 = ti.Vector([0.0, 0.0, 0.0], dt=ti.f64)
-    dt1 = ti.Vector([0.0, 0.0, 0.0], dt=ti.f64)
-    dt2 = ti.Vector([0.0, 0.0, 0.0], dt=ti.f64)
+    dp = ti.Vector([0.0, 3.0, -2.0], dt=ti.f64)
+    dt0 = ti.Vector([0.0, 3.0, 0.0], dt=ti.f64)
+    dt1 = ti.Vector([0.0, 3.0, -1.0], dt=ti.f64)
+    dt2 = ti.Vector([0.0, 3.0, 0.0], dt=ti.f64)
 
     # array initialization
     triangles[0, 0] = t0; triangles[0, 1] = t1; triangles[0, 2] = t2
