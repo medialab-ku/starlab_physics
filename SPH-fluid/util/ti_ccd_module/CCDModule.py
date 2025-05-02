@@ -248,7 +248,7 @@ class CCDModule:
         N = edges_a.shape[0]; M = edges_b.shape[0]
         min_toc = ti.cast(1.0, ti.f64)
 
-        for i, j in ti.ndrange(N, M):  # 2차원 병렬 루프
+        for i, j in ti.ndrange(N, M):
             ea0 = edges_a[i, 0]; ea1 = edges_a[i, 1]; dea0 = moves_a[i, 0]; dea1 = moves_a[i, 1]
             eb0 = edges_b[j, 0]; eb1 = edges_b[j, 1]; deb0 = moves_b[j, 0]; deb1 = moves_b[j, 1]
 
