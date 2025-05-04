@@ -1,15 +1,12 @@
 import taichi as ti
 import numpy as np
 import trimesh as tm
-import meshio as mio
 from functools import reduce
 from config_builder import SimConfig
 from WCSPH import WCSPHSolver
 from DFSPH import DFSPHSolver
 from XSPH import XSPHSolver
-
 from mesh_utils import *
-from IISPH import IISPHSolver
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
 @ti.data_oriented
@@ -40,7 +37,6 @@ class ParticleSystem:
 
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
-        self.dHat = 0.1 * self.support_radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim
 
         self.particle_num = ti.field(int, shape=())
@@ -65,110 +61,6 @@ class ParticleSystem:
             self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
 
-        static_objects = self.cfg.get_static_objects()
-        num_static_vertices = 0
-        vertices = np.empty((0, 3))
-        faces = np.empty((0, 3), dtype=int)
-        edges = np.empty((0, 2), dtype=int)
-
-        for static in static_objects:
-            mesh = self.load_static_object(static)
-            vertices = np.vstack((vertices, mesh.vertices))
-            edges_tmp = extract_edges(mesh.faces) + num_static_vertices
-            faces_tmp = mesh.faces + num_static_vertices
-
-            edges = np.vstack((edges, edges_tmp))
-            faces = np.vstack((faces, faces_tmp))
-
-            num_static_vertices += mesh.vertices.shape[0]
-        faces = faces.reshape(-1)
-        edges = edges.reshape(-1)
-
-        print(faces.shape)
-        if num_static_vertices > 0:
-            self.x_st = ti.Vector.field(self.dim, float, shape=num_static_vertices)
-            self.x_st.from_numpy(vertices)
-            self.faces_st = ti.field(int, shape=faces.shape[0])
-            self.faces_st.from_numpy(faces)
-
-            self.edges_st = ti.field(int, shape=edges.shape[0])
-            self.edges_st.from_numpy(edges)
-
-        dynamic_objects = self.cfg.get_dynamic_objects()
-        self.num_dynamic_vertices = 0
-        vertices = np.empty((0, 3))
-        tetra = np.empty((0, 4), dtype=int)
-        faces = np.empty((0, 3), dtype=int)
-        edges = np.empty((0, 2), dtype=int)
-        # tetra = np.append(tet_indices_np, tet_indices_np_temp, axis=0)
-        for dynamic in dynamic_objects:
-
-            # print("test")
-            # print(self.num_dynamic_vertices)
-            mesh = self.load_dynamic_object(dynamic)
-            vertices = np.vstack((vertices, mesh.points))
-            tetrs_tmp = np.array(mesh.cells[0].data, dtype=int) + self.num_dynamic_vertices
-            faces_tmp = extract_faces(tetrs_tmp, mesh.points)
-            edges_tmp = extract_edges(faces_tmp)
-
-            tetra = np.vstack((tetra, tetrs_tmp))
-            edges = np.vstack((edges, edges_tmp))
-            faces = np.vstack((faces, faces_tmp))
-            self.num_dynamic_vertices += mesh.points.shape[0]
-
-        faces = faces.reshape(-1)
-        edges = edges.reshape(-1)
-        print(tetra)
-        # print(self.num_dynamic_vertices)
-        # print(edges.shape)
-
-        if self.num_dynamic_vertices > 0:
-            self.mass_dy = ti.field(float, shape=self.num_dynamic_vertices)
-            self.x_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
-            self.v_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
-            self.xHat_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
-            self.xOld_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
-
-            self.grad_dy = ti.Vector.field(self.dim, dtype=float, shape=self.num_dynamic_vertices)
-            self.diagH_dy = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=self.num_dynamic_vertices)
-            self.dx_dy = ti.Vector.field(self.dim, dtype=float, shape=self.num_dynamic_vertices)
-
-            self.x_dy.from_numpy(vertices)
-            self.v_dy.fill(0.0)
-
-            self.x_0_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
-            self.x_0_dy.copy_from(self.x_dy)
-
-            self.faces_dy = ti.field(int, shape=faces.shape[0])
-            self.faces_dy.from_numpy(faces)
-
-            self.edges_dy = ti.field(int, shape=edges.shape[0])
-            self.edges_dy.from_numpy(edges)
-
-
-            if tetra.shape[0] > 0:
-                self.V0 = ti.field(float, shape=tetra.shape[0])
-                self.tet_ids = ti.field(int, shape=(tetra.shape[0], 4))
-                self.tet_ids.from_numpy(tetra)
-
-                self.invDm = ti.Matrix.field(n=3, m=3, dtype=float, shape=tetra.shape[0])
-            # self.l0 = ti.field(float, shape=(self.edges_dy.shape[0]//2))
-            # self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
-                self.init_FEM()
-
-            print(self.mass_dy)
-            # rigid_particle_num += mesh.vertices.shape[0]
-        #
-        #
-        # if rigid_particle_num > 0:
-        #     self.x_static = ti.Vector.field(self.dim, float, shape=rigid_particle_num)
-        #     self.x_static.from_numpy()
-        #     # rigid_body["particleNum"] = voxelized_points_np.shape[0]
-        #     # rigid_body["voxelizedPoints"] = voxelized_points_np
-        #     # self.object_collection[rigid_body["objectId"]] = rigid_body
-        #     # rigid_particle_num += voxelized_points_np.shape[0]
-
-        # print("static objects: ", static_objects)
         #### Process Rigid Blocks ####
         rigid_blocks = self.cfg.get_rigid_blocks()
         rigid_particle_num = 0
@@ -186,11 +78,40 @@ class ParticleSystem:
             rigid_body["voxelizedPoints"] = voxelized_points_np
             self.object_collection[rigid_body["objectId"]] = rigid_body
             rigid_particle_num += voxelized_points_np.shape[0]
-        
+
+        static_objects = self.cfg.get_static_objects()
+        self.num_static_vertices = 0
+        vertices = np.empty((0, 3))
+        faces = np.empty((0, 3), dtype=int)
+        edges = np.empty((0, 2), dtype=int)
+
+        for static in static_objects:
+            mesh = self.load_static_object(static)
+            vertices = np.vstack((vertices, mesh.vertices))
+            edges_tmp = extract_edges(mesh.faces) + self.num_static_vertices
+            faces_tmp = mesh.faces + self.num_static_vertices
+
+            edges = np.vstack((edges, edges_tmp))
+            faces = np.vstack((faces, faces_tmp))
+
+            self.num_static_vertices += mesh.vertices.shape[0]
+        faces = faces.reshape(-1)
+        edges = edges.reshape(-1)
+
+        # print(faces.shape)
+        if self.num_static_vertices > 0:
+            self.x_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
+            self.x_st.from_numpy(vertices)
+            self.faces_st = ti.field(int, shape=faces.shape[0])
+            self.faces_st.from_numpy(faces)
+
+            self.edges_st = ti.field(int, shape=edges.shape[0])
+            self.edges_st.from_numpy(edges)
+
         self.fluid_particle_num = fluid_particle_num
         self.solid_particle_num = rigid_particle_num
         self.particle_max_num = fluid_particle_num + rigid_particle_num
-        self.num_rigid_bodies = len(rigid_blocks) + len(rigid_bodies)
+        self.num_rigid_bodies = len(rigid_blocks)+len(rigid_bodies)
 
         #### TODO: Handle the Particle Emitter ####
         # self.particle_max_num += emitted particles
@@ -210,19 +131,17 @@ class ParticleSystem:
 
         # Particle related properties
         self.object_id = ti.field(dtype=int, shape=self.particle_max_num)
-        self.x = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+        self.x   = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+        self.xTmp = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.xHat = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.xOld = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.ld = ti.field(dtype=float, shape=self.particle_max_num)
-        self.x_0 = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
 
         self.grad  = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.diagH = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=self.particle_max_num)
         self.dx    = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-
+        self.diagH = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=self.particle_max_num)
+        self.x_0 = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
+        self.v = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.acceleration = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.proj = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.m_V = ti.field(dtype=float, shape=self.particle_max_num)
         self.m = ti.field(dtype=float, shape=self.particle_max_num)
         self.density = ti.field(dtype=float, shape=self.particle_max_num)
@@ -231,16 +150,13 @@ class ParticleSystem:
         self.color = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic = ti.field(dtype=int, shape=self.particle_max_num)
 
-
-        if self.cfg.get_cfg("simulationMethod") >= 4:
+        if self.cfg.get_cfg("simulationMethod") == 4:
             self.dfsph_factor = ti.field(dtype=float, shape=self.particle_max_num)
             self.density_adv = ti.field(dtype=float, shape=self.particle_max_num)
 
         # Buffer for sort
         self.object_id_buffer = ti.field(dtype=int, shape=self.particle_max_num)
         self.x_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.xHat_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
-        self.xOld_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.x_0_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.v_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
         self.acceleration_buffer = ti.Vector.field(self.dim, dtype=float, shape=self.particle_max_num)
@@ -252,7 +168,7 @@ class ParticleSystem:
         self.color_buffer = ti.Vector.field(3, dtype=int, shape=self.particle_max_num)
         self.is_dynamic_buffer = ti.field(dtype=int, shape=self.particle_max_num)
 
-        if self.cfg.get_cfg("simulationMethod") >= 4:
+        if self.cfg.get_cfg("simulationMethod") == 4:
             self.dfsph_factor_buffer = ti.field(dtype=float, shape=self.particle_max_num)
             self.density_adv_buffer = ti.field(dtype=float, shape=self.particle_max_num)
 
@@ -382,34 +298,6 @@ class ParticleSystem:
                       )
 
     @ti.kernel
-    def init_l0_and_mass(self, l0: ti.template(), mass: ti.template(), x: ti.template(), edges: ti.template()):
-
-        num_edges = edges.shape[0] // 2
-        mass.fill(0.0)
-
-        for e in range(num_edges):
-            v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
-            l0[e] = (x[v0] - x[v1]).norm()
-            mass[v0] += 0.5 * l0[e]
-            mass[v1] += 0.5 * l0[e]
-
-    @ti.kernel
-    def init_FEM(self):
-
-        num_tets = self.tet_ids.shape[0]
-        self.mass_dy.fill(0.0)
-        for i in range(num_tets):
-            Dm_i = ti.Matrix.cols([self.x_dy[self.tet_ids[i, j]] - self.x_dy[self.tet_ids[i, 0]] for j in ti.static(range(1, 4))])
-            self.invDm[i] = Dm_i.inverse()
-            V0_i = ti.abs(Dm_i.determinant()) / 6.0
-            for j in ti.static(range(4)):
-                self.mass_dy[self.tet_ids[i, j]] += 0.25 * V0_i
-            self.V0[i] = V0_i
-
-
-
-
-    @ti.kernel
     def _add_particles(self,
                       object_id: int,
                       new_particles_num: int,
@@ -487,58 +375,52 @@ class ParticleSystem:
             self.object_id_buffer[new_index] = self.object_id[I]
             self.x_0_buffer[new_index] = self.x_0[I]
             self.x_buffer[new_index] = self.x[I]
-            self.xHat_buffer[new_index] = self.xHat[I]
-            self.xOld_buffer[new_index] = self.xOld[I]
             self.v_buffer[new_index] = self.v[I]
-            # self.acceleration_buffer[new_index] = self.acceleration[I]
+            self.acceleration_buffer[new_index] = self.acceleration[I]
             self.m_V_buffer[new_index] = self.m_V[I]
             self.m_buffer[new_index] = self.m[I]
-            # self.density_buffer[new_index] = self.density[I]
+            self.density_buffer[new_index] = self.density[I]
             self.pressure_buffer[new_index] = self.pressure[I]
             self.material_buffer[new_index] = self.material[I]
             self.color_buffer[new_index] = self.color[I]
             self.is_dynamic_buffer[new_index] = self.is_dynamic[I]
 
-            if ti.static(self.simulation_method >= 4):
+            if ti.static(self.simulation_method == 4):
                 self.dfsph_factor_buffer[new_index] = self.dfsph_factor[I]
                 self.density_adv_buffer[new_index] = self.density_adv[I]
-
-
         
         for I in ti.grouped(self.x):
             self.grid_ids[I] = self.grid_ids_buffer[I]
             self.object_id[I] = self.object_id_buffer[I]
             self.x_0[I] = self.x_0_buffer[I]
             self.x[I] = self.x_buffer[I]
-            self.xHat[I] = self.xHat_buffer[I]
-            self.xOld[I] = self.xOld_buffer[I]
             self.v[I] = self.v_buffer[I]
-            # self.acceleration[I] = self.acceleration_buffer[I]
+            self.acceleration[I] = self.acceleration_buffer[I]
             self.m_V[I] = self.m_V_buffer[I]
             self.m[I] = self.m_buffer[I]
-            # self.density[I] = self.density_buffer[I]
+            self.density[I] = self.density_buffer[I]
             self.pressure[I] = self.pressure_buffer[I]
             self.material[I] = self.material_buffer[I]
             self.color[I] = self.color_buffer[I]
             self.is_dynamic[I] = self.is_dynamic_buffer[I]
 
-            if ti.static(self.simulation_method >= 4):
+            if ti.static(self.simulation_method == 4):
                 self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
                 self.density_adv[I] = self.density_adv_buffer[I]
-
+    
 
     def initialize_particle_system(self):
         self.update_grid_id()
         self.prefix_sum_executor.run(self.grid_particles_num)
         self.counting_sort()
+    
 
     @ti.func
     def for_all_neighbors(self, p_i, task: ti.template(), ret: ti.template()):
-
         center_cell = self.pos_to_index(self.x[p_i])
         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
             grid_index = self.flatten_grid_index(center_cell + offset)
-            for p_j in range(self.grid_particles_num[ti.max(0, grid_index - 1)], self.grid_particles_num[grid_index]):
+            for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
                 if p_i[0] != p_j and (self.x[p_i] - self.x[p_j]).norm() < self.support_radius:
                     task(p_i, p_j, ret)
 
@@ -610,6 +492,7 @@ class ParticleSystem:
         center = mesh.vertices.sum(axis=0) / mesh.vertices.shape[0]
         mesh.vertices -= center
         mesh.apply_scale(static_object["scale"])
+        mesh.vertices += center
         offset = np.array(static_object["translation"])
         mesh.vertices += offset
         angle = static_object["rotationAngle"] / 360 * 2 * 3.1415926
@@ -619,29 +502,13 @@ class ParticleSystem:
 
         return mesh
 
-    def load_dynamic_object(self, dynamic_object):
-        obj_id = dynamic_object["objectId"]
-        mesh = mio.read(dynamic_object["geometryFile"])
-        # mesh.apply_scale(dynamic_object["scale"])
-        center = mesh.points.sum(axis=0) / mesh.points.shape[0]
-        mesh.points -= center
-        offset = np.array(dynamic_object["translation"])
-        mesh.points += offset
-
-        # angle = dynamic_object["rotationAngle"] / 360 * 2 * 3.1415926
-        # direction = dynamic_object["rotationAxis"]
-        # rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
-        # mesh.apply_transform(rot_matrix)
-
-        return mesh
-
-
     def compute_cube_particle_num(self, start, end):
         num_dim = []
         for i in range(self.dim):
             num_dim.append(
                 np.arange(start[i], end[i], self.particle_diameter))
-        return reduce(lambda x, y: x * y, [len(n) for n in num_dim])
+        return reduce(lambda x, y: x * y,
+                                   [len(n) for n in num_dim])
 
     def add_cube(self,
                  object_id,
@@ -656,7 +523,9 @@ class ParticleSystem:
 
         num_dim = []
         for i in range(self.dim):
-            num_dim.append(np.arange(lower_corner[i], lower_corner[i] + cube_size[i], self.particle_diameter))
+            num_dim.append(
+                np.arange(lower_corner[i], lower_corner[i] + cube_size[i],
+                          self.particle_diameter))
         num_new_particles = reduce(lambda x, y: x * y,
                                    [len(n) for n in num_dim])
         print('particle num ', num_new_particles)

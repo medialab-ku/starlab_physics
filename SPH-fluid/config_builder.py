@@ -36,16 +36,9 @@ class SimConfig:
         else:
             return []
 
-    def get_static_objects(self):
 
+    def get_static_objects(self):
         if "StaticObjects" in self.config:
             return self.config["StaticObjects"]
-        else:
-            return []
-
-    def get_dynamic_objects(self):
-
-        if "DynamicObjects" in self.config:
-            return self.config["DynamicObjects"]
         else:
             return []

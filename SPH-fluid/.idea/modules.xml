@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/SPH-fluid.iml" filepath="$PROJECT_DIR$/.idea/SPH-fluid.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/SPH_Taichi.iml" filepath="$PROJECT_DIR$/.idea/SPH_Taichi.iml" />
     </modules>
   </component>
 </project>

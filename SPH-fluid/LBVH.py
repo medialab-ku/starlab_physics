@@ -149,7 +149,6 @@ class LBVH:
         # print()
 
         dim = primitives.shape[0] // self.num_leafs
-
         _min_g = ti.math.vec3(1e5)
         _max_g = -ti.math.vec3(1e5)
         padding = ti.math.vec3(pad)
@@ -311,7 +310,7 @@ class LBVH:
 
             if dim == 3:
                 # print("test")
-                v0, v1, v2 = primitives[3 * self._ids[i] + 0], primitives[3 * self._ids[i] + 1], primitives[3 * self._ids[i] + 1]
+                v0, v1, v2 = primitives[3 * self._ids[i] + 0], primitives[3 * self._ids[i] + 1], primitives[3 * self._ids[i] + 2]
                 self.nodes[i]._min = ti.min(x[v0], x[v1], x[v2]) - padding
                 self.nodes[i]._max = ti.max(x[v0], x[v1], x[v2]) + padding
 
@@ -332,7 +331,6 @@ class LBVH:
 
                 idx = self.nodes[idx].parent
                 self.nodes[idx].a = 1
-
     @ti.func
     def node_overlap(self, n0, n1):
         min0, max0 = self.nodes[n0]._min, self.nodes[n0]._min
@@ -382,17 +380,19 @@ class LBVH:
     def traverse_bvh_single_test(self, min0, max0, type, i, cache, num):
 
         stack = ti.Vector([-1 for j in range(32)])
+        # print(self.num_leafs)
         stack[0] = self.num_leafs
         stack_counter = 1
-
+        # print("start")
         while stack_counter > 0:
 
             stack_counter -= 1
             idx = stack[stack_counter]
             min1, max1 = self.nodes[idx]._min, self.nodes[idx]._max
-
+            # print(idx)
             if self.aabb_overlap(min0, max0, min1, max1):
                 if idx < self.num_leafs:
+                    # print("test")
                     n = ti.atomic_add(num[None], 1)
                     cache[n] = ti.math.ivec3([i, self._ids[idx], type])
                     # ti.atomic_add(num[None], 1)
@@ -405,6 +405,7 @@ class LBVH:
                     stack[stack_counter] = right
                     stack_counter += 1
 
+        # print("end")
 
     @ti.func
     def traverse_bvh_test(self, min0, max0):
@@ -448,7 +449,6 @@ class LBVH:
     def build(self, x, primitives, pad):
 
         self.assign_morton(x, primitives, pad)
-
         a = self.morton_code.to_numpy()
         cp_arr = cp.asarray(a)
         idx = cp.argsort(a)
@@ -457,11 +457,10 @@ class LBVH:
         b = cp.asnumpy(idx)
         self.morton_code.from_numpy(a)
         self._ids.from_numpy(b)
-
-        # self.init_id()
-        # self.radix_sort()
         self.assign_internal_nodes()
         self.assign_aabb(x, primitives, pad)
+        # print(self.nodes[self.num_leafs].left, self.nodes[self.num_leafs].right)
+
 
     def draw_bvh_aabb_test(self, scene, n):
         self.update_aabb_x_and_line0(n)

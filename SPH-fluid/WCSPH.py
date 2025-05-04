@@ -11,9 +11,10 @@ class WCSPHSolver(SPHBase):
 
         self.stiffness = 50000.0
         self.stiffness = self.ps.cfg.get_cfg("stiffness")
-
+        
         self.surface_tension = 0.01
         self.dt[None] = self.ps.cfg.get_cfg("timeStepSize")
+    
 
     @ti.func
     def compute_densities_task(self, p_i, p_j, ret: ti.template()):
@@ -28,6 +29,7 @@ class WCSPHSolver(SPHBase):
             x_j = self.ps.x[p_j]
             ret += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
 
+
     @ti.kernel
     def compute_densities(self):
         # for p_i in range(self.ps.particle_num[None]):
@@ -39,6 +41,7 @@ class WCSPHSolver(SPHBase):
             self.ps.for_all_neighbors(p_i, self.compute_densities_task, den)
             self.ps.density[p_i] += den
             self.ps.density[p_i] *= self.density_0
+    
 
     @ti.func
     def compute_pressure_forces_task(self, p_i, p_j, ret: ti.template()):
@@ -50,12 +53,8 @@ class WCSPHSolver(SPHBase):
             density_j = self.ps.density[p_j] * self.density_0 / self.density_0  # TODO: The density_0 of the neighbor may be different when the fluid density is different
             dpj = self.ps.pressure[p_j] / (density_j * density_j)
             # Compute the pressure force contribution, Symmetric Formula
-            r = (x_i - x_j).norm()
-            n = (x_i - x_j) / r
-            if r <1e-5:
-                n = ti.math.vec3([0.0, 0.0, 0.0])
-
-            ret += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) * self.spiky_kernel_derivative(r) * n
+            ret += -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
+                * self.cubic_kernel_derivative(x_i-x_j)
         elif self.ps.material[p_j] == self.ps.material_solid:
             # Boundary neighbors
             dpj = self.ps.pressure[p_i] / self.density_0 ** 2
@@ -63,11 +62,11 @@ class WCSPHSolver(SPHBase):
             x_j = self.ps.x[p_j]
             # Compute the pressure force contribution, Symmetric Formula
             f_p = -self.density_0 * self.ps.m_V[p_j] * (dpi + dpj) \
-                  * self.cubic_kernel_derivative(x_i - x_j)
+                * self.cubic_kernel_derivative(x_i-x_j)
             ret += f_p
             if self.ps.is_dynamic_rigid_body(p_j):
                 self.ps.acceleration[p_j] += -f_p * self.density_0 / self.ps.density[p_j]
-
+    
     @ti.kernel
     def compute_pressure_forces(self):
         for p_i in ti.grouped(self.ps.x):
@@ -85,10 +84,11 @@ class WCSPHSolver(SPHBase):
             self.ps.for_all_neighbors(p_i, self.compute_pressure_forces_task, dv)
             self.ps.acceleration[p_i] += dv
 
+
     @ti.func
     def compute_non_pressure_forces_task(self, p_i, p_j, ret: ti.template()):
         x_i = self.ps.x[p_i]
-
+        
         ############## Surface Tension ###############
         if self.ps.material[p_j] == self.ps.material_fluid:
             # Fluid neighbors
@@ -99,9 +99,9 @@ class WCSPHSolver(SPHBase):
             if r2 > diameter2:
                 ret -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(r.norm())
             else:
-                ret -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(
-                    ti.Vector([self.ps.particle_diameter, 0.0, 0.0]).norm())
-
+                ret -= self.surface_tension / self.ps.m[p_i] * self.ps.m[p_j] * r * self.cubic_kernel(ti.Vector([self.ps.particle_diameter, 0.0, 0.0]).norm())
+            
+        
         ############### Viscosoty Force ###############
         d = 2 * (self.ps.dim + 2)
         x_j = self.ps.x[p_j]
@@ -109,19 +109,21 @@ class WCSPHSolver(SPHBase):
         r = x_i - x_j
         v_xy = (self.ps.v[p_i] -
                 self.ps.v[p_j]).dot(r)
-
+        
         if self.ps.material[p_j] == self.ps.material_fluid:
-            f_v = d * self.viscosity * (self.ps.m[p_j] / (self.ps.density[p_j])) * v_xy / (r.norm() ** 2 + 0.01 * self.ps.support_radius ** 2) * self.cubic_kernel_derivative(r)
+            f_v = d * self.viscosity * (self.ps.m[p_j] / (self.ps.density[p_j])) * v_xy / (
+                r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
             ret += f_v
         elif self.ps.material[p_j] == self.ps.material_solid:
             boundary_viscosity = 0.0
             # Boundary neighbors
             ## Akinci2012
             f_v = d * boundary_viscosity * (self.density_0 * self.ps.m_V[p_j] / (self.ps.density[p_i])) * v_xy / (
-                    r.norm() ** 2 + 0.01 * self.ps.support_radius ** 2) * self.cubic_kernel_derivative(r)
+                r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
             ret += f_v
             if self.ps.is_dynamic_rigid_body(p_j):
                 self.ps.acceleration[p_j] += -f_v * self.density_0 / self.ps.density[p_j]
+
 
     @ti.kernel
     def compute_non_pressure_forces(self):
@@ -137,6 +139,7 @@ class WCSPHSolver(SPHBase):
                 self.ps.for_all_neighbors(p_i, self.compute_non_pressure_forces_task, d_v)
                 self.ps.acceleration[p_i] = d_v
 
+
     @ti.kernel
     def advect(self):
         # Symplectic Euler
@@ -144,6 +147,7 @@ class WCSPHSolver(SPHBase):
             if self.ps.is_dynamic[p_i]:
                 self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
+
 
     def substep(self):
         self.compute_densities()

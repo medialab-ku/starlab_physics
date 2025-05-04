@@ -2,12 +2,10 @@ import os
 import argparse
 import taichi as ti
 import numpy as np
-from taichi.examples.rendering.rasterizer import width
-
 from config_builder import SimConfig
 from particle_system import ParticleSystem
 
-ti.init(arch=ti.gpu, device_memory_fraction=0.8, default_fp=ti.float32)
+ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
 
 if __name__ == "__main__":
@@ -77,28 +75,31 @@ if __name__ == "__main__":
 
     cnt = 0
     cnt_ply = 0
-
     runSim = False
+
+    if ps.cfg.get_cfg("simulationMethod") == 5:
+        solver.build_static_LBVH()
     while window.running:
 
         if window.get_event(ti.ui.PRESS):
             if window.event.key == ' ':
                 runSim = not runSim
+                # print("test")
 
             if window.event.key == 'r':
-
                 ps.x.copy_from(ps.x_0)
                 ps.v.fill(0.0)
-
-                ps.x_dy.copy_from(ps.x_0_dy)
-                ps.v_dy.fill(0.0)
-
                 solver.initialize()
+                if ps.cfg.get_cfg("simulationMethod") == 5:
+                    solver.build_static_LBVH()
                 runSim = False
 
+        # for i in range(substeps):
         if runSim:
+            # print(runSim)
             for i in range(substeps):
                 solver.step()
+
 
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
         if ps.dim == 2:
@@ -107,47 +108,38 @@ if __name__ == "__main__":
         elif ps.dim == 3:
             camera.track_user_inputs(window, movement_speed=movement_speed, hold_key=ti.ui.LMB)
             scene.set_camera(camera)
-
-            scene.point_light((4.0, 4.0, 4.0), color=(1.0, 1.0, 1.0))
-            scene.point_light((4.0, 4.0, 0.0), color=(1.0, 1.0, 1.0))
-            scene.point_light((0.0, 4.0, 0.0), color=(1.0, 1.0, 1.0))
-            scene.point_light((0.0, 4.0, 4.0), color=(1.0, 1.0, 1.0))
-            # scene.point_light((2.0, 3.0, 2.0), color=(1.0, 1.0, 1.0))
-            # scene.point_light((2.0, 3.0, 2.0), color=(1.0, 1.0, 1.0))
-
+            scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
-            # scene.particles(ps.x_static, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
-            # scene.mesh(vertices=ps.x_st, indices=ps.faces_st, color=(1.0, 1.0, 1.0))
-            # scene.mesh(vertices=ps.x_st, indices=ps.faces_st, color=(0.0, 0.0, 0.0), show_wireframe=True)
-            # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 0.5, 1.0))
-            scene.mesh(vertices=ps.x_dy, indices=ps.faces_dy, color=(1.0, 0.5, 1.0))
-            # scene.mesh(vertices=ps.x_dy, indices=ps.faces_dy, color=(1.0, 1.0, 1.0), show_wireframe=True)
-
-            scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
-            scene.lines(vertices= ps.x_dy, indices=ps.edges_dy, color=(1.0, 1.0, 1.0), width= 1.0)
             scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
             canvas.scene(scene)
-    
-        # if output_frames:
-        #     if cnt % output_interval == 0:
-        #         window.write_image(f"{scene_name}_output_img/{cnt:06}.png")
-        #
-        # if cnt % output_interval == 0:
-        #     if output_ply:
-        #         obj_id = 0
-        #         obj_data = ps.dump(obj_id=obj_id)
-        #         np_pos = obj_data["position"]
-        #         writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
-        #         writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
-        #         writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
-        #     if output_obj:
-        #         for r_body_id in ps.object_id_rigid_body:
-        #             with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
-        #                 e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
-        #                 f.write(e)
-        #     cnt_ply += 1
-        #
-        # cnt += 1
+            # solver.LBVH.draw_bvh_aabb_test(scene,  solver.LBVH.num_leafs)
+            # solver.LBVH.draw_bvh_aabb_test(scene,  2)
+
+            if ps.num_static_vertices > 0:
+                # scene.mesh(ps.x_st, ps.faces_st, color=(1.5, 1.0, 0.0))
+                # scene.mesh(ps.x_st, ps.faces_st, color=(1.0, 1.0, 1.0), show_wireframe= True)
+                scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
+                # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
+        if output_frames:
+            if cnt % output_interval == 0:
+                window.write_image(f"{scene_name}_output_img/{cnt:06}.png")
+        
+        if cnt % output_interval == 0:
+            if output_ply:
+                obj_id = 0
+                obj_data = ps.dump(obj_id=obj_id)
+                np_pos = obj_data["position"]
+                writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
+                writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
+                writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
+            if output_obj:
+                for r_body_id in ps.object_id_rigid_body:
+                    with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
+                        e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
+                        f.write(e)
+            cnt_ply += 1
+
+        cnt += 1
         # if cnt > 6000:
         #     break
         window.show()

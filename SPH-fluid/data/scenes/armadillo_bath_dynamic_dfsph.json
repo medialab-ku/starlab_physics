@@ -16,7 +16,6 @@
 		"exportPly": false,
 		"exportObj": false
 	},
-
 	"RigidBodies": [
 		{
             "objectId": 1,
