@@ -8,7 +8,7 @@
 		"density0": 1000.0,
 		"simulationMethod": 5,
 		"gravitation": [0.0, -9.81, 0.0],
-		"timeStepSize": 4e-3,
+		"timeStepSize": 3e-3,
 		"stiffness": 1e4,
 		"exponent": 7,
 		"boundaryHandlingMethod": 0,
@@ -20,8 +20,8 @@
 	"FluidBlocks": [
 		{
             "objectId": 0,
-			"start": [1.5, 1.5, 1.5],
-			"end": [2.5, 2.5, 2.5],
+			"start": [1.4, 1.4, 1.4],
+			"end": [2.6, 2.6, 2.6],
 			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
