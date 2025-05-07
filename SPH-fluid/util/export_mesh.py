@@ -36,7 +36,7 @@ class Exporter:
         faces = faces.reshape(-1, 3)
         self.faces = faces + 1
 
-    def export(self, filename, vertices, MODE="SINGLE"):
+    def export_mesh(self, filename, vertices, MODE="SINGLE"):
         self.vertices = vertices
         self.frame += 1
 

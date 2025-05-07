@@ -100,7 +100,7 @@ if __name__ == "__main__":
                 runSim = False
 
         if PRINTMESH:
-            exporter.export("scene.obj", ps.x, MODE="PARTICLE")
+            exporter.export_mesh("scene.obj", ps.x, MODE="PARTICLE")
 
         # for i in range(substeps):
         if runSim:
