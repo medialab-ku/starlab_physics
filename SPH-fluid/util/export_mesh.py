@@ -2,6 +2,8 @@
 import os
 import shutil
 import numpy as np
+import trimesh
+import open3d as o3d
 
 class Exporter:
     def __init__(self, folder, frameInterval):
@@ -46,18 +48,40 @@ class Exporter:
         else:
             vertices = np.array(vertices)
 
-        if MODE == "SINGLE":
-            output_filename = os.path.join(self.folder, filename)
-        elif MODE == "MULTI":
+        if MODE == "SINGLE" or MODE == "MULTI":
+            if MODE == "SINGLE":
+                output_filename = os.path.join(self.folder, filename)
+            elif MODE == "MULTI":
+                name, ext = os.path.splitext(filename)
+                output_filename = os.path.join(self.folder, f"{name}{self.frame}{ext}")
+            else:
+                raise ValueError("MODE must be either 'SINGLE' or 'MULTI'")
+
+            with open(output_filename, 'w') as f:
+                for v in vertices:
+                    f.write(f"v {v[0]} {v[1]} {v[2]}\n")
+                for face in self.faces:
+                    f.write(f"f {face[0]} {face[1]} {face[2]}\n")
+
+        if MODE == "PARTICLE":
             name, ext = os.path.splitext(filename)
             output_filename = os.path.join(self.folder, f"{name}{self.frame}{ext}")
-        else:
-            raise ValueError("MODE must be either 'SINGLE' or 'MULTI'")
 
-        with open(output_filename, 'w') as f:
-            for v in vertices:
-                f.write(f"v {v[0]} {v[1]} {v[2]}\n")
-            for face in self.faces:
-                f.write(f"f {face[0]} {face[1]} {face[2]}\n")
+            # ToDo Trimesh
+            # cloud = trimesh.points.PointCloud(vertices)
+            # hull = cloud.convex_hull
+            # hull.export(output_filename)
 
-        # print(f"Exported: {output_filename}")
+            # ToDo open3d
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(vertices)
+            pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+            mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=9)
+
+            densities = np.asarray(densities)
+            density_thresh = np.percentile(densities, 10)
+            vertices_to_remove = densities < density_thresh
+            mesh.remove_vertices_by_mask(vertices_to_remove)
+
+            o3d.io.write_triangle_mesh(output_filename, mesh)
+

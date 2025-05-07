@@ -4,6 +4,7 @@ import taichi as ti
 import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
+from util.export_mesh import Exporter
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
@@ -76,11 +77,15 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
     runSim = False
+    PRINTMESH = True
+
+    if PRINTMESH:
+        exporter = Exporter(folder="./data/output", frameInterval=100)
+        # exporter.set_faces(ps.faces_st)
 
     if ps.cfg.get_cfg("simulationMethod") == 5:
         solver.build_static_LBVH()
     while window.running:
-
         if window.get_event(ti.ui.PRESS):
             if window.event.key == ' ':
                 runSim = not runSim
@@ -93,6 +98,9 @@ if __name__ == "__main__":
                 if ps.cfg.get_cfg("simulationMethod") == 5:
                     solver.build_static_LBVH()
                 runSim = False
+
+        if PRINTMESH:
+            exporter.export("scene.obj", ps.x, MODE="PARTICLE")
 
         # for i in range(substeps):
         if runSim:
