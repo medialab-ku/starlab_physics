@@ -80,7 +80,7 @@ if __name__ == "__main__":
     PRINTMESH = True
 
     if PRINTMESH:
-        exporter = Exporter(folder="./data/output", frameInterval=100)
+        exporter = Exporter(folder="./data/output", frameInterval=20)
         # exporter.set_faces(ps.faces_st)
 
     if ps.cfg.get_cfg("simulationMethod") == 5:
@@ -100,7 +100,8 @@ if __name__ == "__main__":
                 runSim = False
 
         if PRINTMESH:
-            exporter.export_mesh("scene.obj", ps.x, MODE="PARTICLE")
+            # exporter.export_mesh("scene.obj", ps.x, MODE="PARTICLE")
+            exporter.export_ply("scene.ply", ps.x, MODE="MULTI")
 
         # for i in range(substeps):
         if runSim:

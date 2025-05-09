@@ -124,6 +124,32 @@ class Exporter:
             mesh.triangles = o3d.utility.Vector3iVector(triangles_mc)
             o3d.io.write_triangle_mesh(output_filename, mesh)
 
+    def export_ply(self, filename, vertices, MODE="SINGLE"):
+        self.vertices = vertices
+        self.frame += 1
+
+        if self.frame % self.frameInterval != 0:
+            return
+
+        if hasattr(vertices, 'to_numpy'):
+            vertices = vertices.to_numpy()
+        else:
+            vertices = np.array(vertices)
+
+        if MODE == "SINGLE" or MODE == "MULTI":
+            if MODE == "SINGLE":
+                output_filename = os.path.join(self.folder, filename)
+            elif MODE == "MULTI":
+                name, ext = os.path.splitext(filename)
+                output_filename = os.path.join(self.folder, f"{name}{self.frame}{ext}")
+            else:
+                raise ValueError("MODE must be either 'SINGLE' or 'MULTI'")
+
+            pcd = o3d.t.geometry.PointCloud()
+            pcd.point.positions = vertices
+            o3d.io.write_point_cloud(output_filename, pcd.to_legacy())
+            print(f"Saved {vertices.shape[0]} particles to {output_filename}")
+
 
 def compute_density_kdtree(particle_pos, grid_res=64, k=2, sigma=0.03):
     x = np.linspace(0, 1, grid_res, endpoint=False) + 0.5 * 1.0 / grid_res
