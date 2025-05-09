@@ -145,9 +145,11 @@ class Exporter:
             else:
                 raise ValueError("MODE must be either 'SINGLE' or 'MULTI'")
 
-            pcd = o3d.t.geometry.PointCloud()
-            pcd.point.positions = vertices
-            o3d.io.write_point_cloud(output_filename, pcd.to_legacy())
+            mesh = o3d.geometry.TriangleMesh()
+            mesh.vertices = o3d.utility.Vector3dVector(vertices.astype(np.float64))
+            mesh.triangles = o3d.utility.Vector3iVector([])
+            o3d.io.write_triangle_mesh(output_filename, mesh)
+            print(f"Saved {len(vertices)} vertices to {output_filename}")
             print(f"Saved {vertices.shape[0]} particles to {output_filename}")
 
 
