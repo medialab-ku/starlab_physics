@@ -13,58 +13,64 @@ import taichi as ti
 
 ti.init(arch=ti.gpu, default_fp=ti.f32)
 
-screen_res = (1000, 1000)
-screen_to_world_ratio = 10.0
+screen_res = (1500, 1500)
+screen_to_world_ratio = 100.0
 boundary = (
     screen_res[0] / screen_to_world_ratio,
     screen_res[1] / screen_to_world_ratio,
 )
-cell_size = 2.51
+
+print(boundary)
+h = 0.1
+
+cell_size = 1.5 * h
 cell_recpr = 1.0 / cell_size
 
 def round_up(f, s):
     return (math.floor(f * cell_recpr / s) + 1) * s
 
 grid_size = (round_up(boundary[0], 1), round_up(boundary[1], 1))
+print(grid_size)
 
 dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles_x = 1
-num_fluids = num_particles_x * 1
+num_particles_x = 50
+num_fluids = num_particles_x * 50
 
-num_solid = 5
+num_solid = 3
 num_particles = num_fluids + num_solid
 num_indices = num_solid - 1
 
+num_st = 4
+num_indices_st = num_st
+
 max_num_particles_per_cell = 100
 max_num_neighbors = 100
-dt = 0.01
+dt = 1e-3
 epsilon = 1e-5
-particle_radius = 3.0
+particle_radius = 1.0
 particle_radius_in_world = particle_radius / screen_to_world_ratio
 
 # PBF params
-h_ = 1.1
-rho0 = 1.0
-lambda_epsilon = 100.0
-pbf_num_iters = 50
-corr_deltaQ_coeff = 0.3
-corrK = 0.001
+# h = 0.01
+rho0 = 1e3
 # Need ti.pow()
 # corrN = 4.0
-neighbor_radius = h_ * 1.05
+neighbor_radius = h * 1.2
 
-poly6_factor = 315.0 / 64.0 / math.pi
+poly6_factor = 4.0 / math.pi
 spiky_grad_factor = -45.0 / math.pi
 
 x_old = ti.Vector.field(dim, float)
 mass = ti.field(float)
-x  = ti.Vector.field(dim, float)
+x     = ti.Vector.field(dim, float)
+x_st  = ti.Vector.field(dim, float)
 x_tmp  = ti.Vector.field(dim, float)
 x0 = ti.Vector.field(dim, float)
 xWorld = ti.Vector.field(dim, float)
+xWorld_st = ti.Vector.field(dim, float)
 xHat = ti.Vector.field(dim, float)
 v = ti.Vector.field(dim, float)
 vHat = ti.Vector.field(dim, float)
@@ -81,16 +87,17 @@ grad_fij = ti.Vector.field(dim, float)
 dx   = ti.Vector.field(dim, float)
 grad = ti.Vector.field(dim, float)
 indices = ti.field(int)
+indices_st = ti.field(int)
 l0 = ti.field(float)
-
-
 
 colors = ti.Vector.field(3, float)
 # 0: x-pos, 1: timestep in sin()
 board_states = ti.Vector.field(2, float)
 
 ti.root.dense(ti.i, num_particles).place(x_old, x, x_tmp, x0, xHat, v, vHat, xWorld, colors, mass)
+ti.root.dense(ti.i, num_st).place(x_st, xWorld_st)
 ti.root.dense(ti.i, 2 * num_indices).place(indices)
+ti.root.dense(ti.i, 2 * num_indices_st).place(indices_st)
 ti.root.dense(ti.i, num_indices).place(l0, h_e)
 grid_snode = ti.root.dense(ti.ij, grid_size)
 grid_snode.place(grid_num_particles)
@@ -102,12 +109,17 @@ ti.root.dense(ti.i, num_particles).place(rho, dx, hii, grad)
 ti.root.place(board_states)
 
 pair = ti.Vector.field(dim, int)
+pair_st = ti.Vector.field(dim, int)
 h_c  = ti.Matrix.field(dim, dim, float)
+h_c_st  = ti.Matrix.field(dim, dim, float)
 n_c  = ti.field(int)
+n_c_st  = ti.field(int)
 a_c  = ti.field(float)
-num_max_pairs = int(1e3)
+a_c_st  = ti.field(float)
+num_max_pairs = int(2 ** 20)
 ti.root.dense(ti.i, num_max_pairs).place(pair, h_c, a_c)
-ti.root.dense(ti.i, 1).place(n_c)
+ti.root.dense(ti.i, num_max_pairs).place(pair_st, h_c_st, a_c_st)
+ti.root.dense(ti.i, 1).place(n_c, n_c_st)
 
 Ax = ti.Vector.field(dim, float)
 Ap = ti.Vector.field(dim, float)
@@ -165,8 +177,9 @@ def barrier_hess(d: float, dHat: float):
 def poly6_value(s, h):
     result = 0.0
     if 0 <= s and s < h:
-        x = (h * h - s * s) / (h * h * h)
-        result = poly6_factor * x * x * x
+        x = (h * h - s * s)
+        result = (poly6_factor / ti.pow(h, 8)) * x * x * x
+
     return result
 
 
@@ -196,16 +209,6 @@ def spiky_hessian(r, h):
         x = (h - r) / (h ** 6)
         result = -2.0 * spiky_grad_factor * x
     return result
-
-@ti.func
-def compute_scorr(pos_ji):
-    # Eq (13)
-    x = poly6_value(pos_ji.norm(), h_) / poly6_value(corr_deltaQ_coeff * h_, h_)
-    # pow(x, 4)
-    x = x * x
-    x = x * x
-    return (-corrK) * x
-
 
 @ti.func
 def get_cell(pos):
@@ -266,7 +269,7 @@ def computeVTilta():
         # xHat[i] = confine_position_to_boundary(xHat[i])
 
 @ti.kernel
-def neighbour_search(x: ti.template()):
+def neighbour_search(x: ti.template(), radius: float):
     # clear neighbor lookup table
     for I in ti.grouped(grid_num_particles):
         grid_num_particles[I] = 0
@@ -290,33 +293,55 @@ def neighbour_search(x: ti.template()):
             if is_in_grid(cell_to_check):
                 for j in range(grid_num_particles[cell_to_check]):
                     p_j = grid2particles[cell_to_check, j]
-                    if nb_i < max_num_neighbors and p_j != p_i and (pos_i - x[p_j]).norm() < neighbor_radius:
-                        particle_neighbors[p_i, nb_i] = p_j
-                        nb_i += 1
+                    if p_j != p_i and (pos_i - x[p_j]).norm() < radius:
+                        if nb_i < max_num_neighbors:
+                            particle_neighbors[p_i, nb_i] = p_j
+                            nb_i += 1
+                        else:
+                            print("test")
         particle_num_neighbors[p_i] = nb_i
 
 @ti.kernel
 def collision_pairs(x: ti.template(), dHat: float):
     n_c[0] = 0
+    # for vi in range(num_fluids):
+    #     # vi = (num_particles - num_solid) + si
+    #     for ei in range(num_indices):
+    #         v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
+    #         if vi != v0 and vi != v1:
+    #             x10 = x[v1] - x[v0]
+    #             xi0 = x[vi] - x[v0]
+    #             alpha = x10.dot(xi0) / x10.dot(x10)
+    #             # print(alpha)
+    #             alpha = ti.math.clamp(alpha, 0.0, 1.0)
+    #
+    #             # if alpha > 0.0 and alpha < 1.0:
+    #             p = alpha * x[v1] + (1.0 - alpha) * x[v0]
+    #             d = (x[vi] - p).norm()
+    #             # print(d)
+    #             if d <= dHat:
+    #                 nc = ti.atomic_add(n_c[0], 1)
+    #                 pair[nc] = ti.math.ivec2([vi, ei])
+
+    n_c_st[0] = 0
     for vi in range(num_fluids):
         # vi = (num_particles - num_solid) + si
-        for ei in range(num_indices):
-            v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
-            if vi != v0 and vi != v1:
-                x10 = x[v1] - x[v0]
-                xi0 = x[vi] - x[v0]
-                alpha = x10.dot(xi0) / x10.dot(x10)
-                # print(alpha)
-                alpha = ti.math.clamp(alpha, 0.0, 1.0)
+        for ei in range(num_indices_st):
+            v0, v1 = indices_st[2 * ei + 0], indices_st[2 * ei + 1]
 
-                # if alpha > 0.0 and alpha < 1.0:
-                p = alpha * x[v1] + (1.0 - alpha) * x[v0]
-                d = (x[vi] - p).norm()
-                # print(d)
-                if d <= dHat:
-                    nc = ti.atomic_add(n_c[0], 1)
-                    pair[nc] = ti.math.ivec2([vi, ei])
+            x10 = x_st[v1] - x_st[v0]
+            xi0 = x[vi] - x_st[v0]
+            alpha = x10.dot(xi0) / x10.dot(x10)
+            # print(alpha)
+            alpha = ti.math.clamp(alpha, 0.0, 1.0)
 
+            # if alpha > 0.0 and alpha < 1.0:
+            p = alpha * x_st[v1] + (1.0 - alpha) * x_st[v0]
+            d = (x[vi] - p).norm()
+            # print(d)
+            if d <= dHat:
+                nc = ti.atomic_add(n_c_st[0], 1)
+                pair_st[nc] = ti.math.ivec2([vi, ei])
     # return numCollision
 
 
@@ -344,46 +369,23 @@ def computeInertiaPotential(a: ti.template()) -> float:
 @ti.kernel
 def solvePressure(k: float, dHat: float, fix: bool):
 
+    # print(poly6_value(0, dHat))
     # print(poly6_value(0.0, dHat))
-
-
     id2 = ti.math.mat2([[1.0, 0.0], [0.0, 1.0]])
     coeff = k * (dt ** 2)
     for p_i in range(num_fluids):
-
-        rho0 = mass[p_i] * poly6_value(0.0, dHat)
         pos_i = x[p_i]
         dEdx_i = ti.Vector([0.0, 0.0])
         d2Edx2_i = ti.math.mat2(0.0)
+        c = ti.max(rho[p_i] - rho0, 0)
+        # dEdc = 3 * c ** 2
+        # d2Edc2 = 6 *  c
         #
-        c = mass[p_i] * poly6_value(0.0, dHat)
-        # for p_j in range(p_i + 1, num_fluids):
-        # rho[p_i] = 0.0
-        for j in range(particle_num_neighbors[p_i]):
-            p_j = particle_neighbors[p_i, j]
-            if p_j < 0:
-                break
-
-            pos_ji = pos_i - x[p_j]
-            r = pos_ji.norm()
-            c += mass[p_j] * poly6_value(r, dHat)
-
-        # Eq(1)
-        # c = rho - 1.0
-
-        # if c > 1.01 * rho0:
-        #     print("fuck")
-
-        # dEdc = abs(barrier_grad_sl(c, rho0, 1.01 * rho0))
-        # d2Edc2 = abs(barrier_hess_sl(c,  rho0, 1.01 *  rho0))
-        # if c > 1.0:
-
-
-        dEdc = 3 * (c - rho0) ** 2
-        d2Edc2 = 6 *  (c - rho0)
-
-        dEdc = max(c - rho0, 0)
+        dEdc = c
         d2Edc2 = 1.0
+        # if c < 1e-8:
+        #     dEdc = 0.0
+        #     d2Edc2 = 0.0
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
@@ -392,27 +394,90 @@ def solvePressure(k: float, dHat: float, fix: bool):
 
             pos_ji = pos_i - x[p_j]
             r = pos_ji.norm()
+
+            if r < 1e-8:
+                r = 1e-8
+
             n = pos_ji / r
             dWdr = spiky_gradient(r, dHat)
             d2Wdr2 = spiky_hessian(r, dHat)
-            dcdx_j = dWdr * n
+            dcdx_j = mass[p_j] * dWdr * n
             dEdx_j = coeff * dEdc * dcdx_j
             dEdx_i += dEdx_j
-
-            nnT = n.outer_product(n)
-            alpha = abs(dWdr / r)
-            beta = abs(d2Wdr2 - dWdr / r)
-            d2cdx2_j = alpha * id2 + beta * nnT
-            d2Edx2_j = coeff * mass[p_j] * (d2Edc2 * dcdx_j.outer_product(dcdx_j) + abs(dEdc) * d2cdx2_j)
+            d2cdx2_j = (d2Wdr2 * n.outer_product(n))
+            d2Edx2_j = coeff * (d2Edc2 * dcdx_j.outer_product(dcdx_j) + dEdc * d2cdx2_j)
             d2Edx2_i += d2Edx2_j
 
             grad[p_j] -= dEdx_j
             hii[p_j] += d2Edx2_j
-            h_fij[p_i, j] = coeff * mass[p_j]  * abs(dEdc) * d2cdx2_j
-            grad_fij[p_i, j] = ti.sqrt(coeff * (d2Edc2 * mass[p_j])) * dcdx_j
+            h_fij[p_i, j] = coeff * dEdc * d2cdx2_j
+            grad_fij[p_i, j] = ti.sqrt(coeff * d2Edc2) * dcdx_j
         #
         grad[p_i] += dEdx_i
         hii[p_i] += d2Edx2_i
+
+@ti.kernel
+def solvePP(k: float, dHat: float, fix: int):
+
+    id2 = ti.math.mat2([[1.0, 0.0], [0.0, 1.0]])
+    coeff = k
+    for p_i in range(num_fluids):
+        pos_i = x[p_i]
+
+        dens0 = dens = mass[p_i] * poly6_value(0.0, dHat)
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+
+            pos_ji = pos_i - x[p_j]
+            d = pos_ji.norm()
+            dens += mass[p_j] * poly6_value(d, dHat)
+
+        c = dens - dens0 if dens >= dens0 else 0.0
+
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+
+            dEdc = 3 * c ** 2
+            d2Ed2c = 6 * c
+
+            pos_ji = pos_i - x[p_j]
+            d = pos_ji.norm()
+            n = pos_ji / d
+            dcdx = mass[p_j] * spiky_gradient(d, dHat) * n
+            d2cdx2 = mass[p_j] * spiky_hessian(d, dHat) * n.outer_product(n)
+            test = k * (d2Ed2c * dcdx.outer_product(dcdx))
+
+            grad[p_i] += k * dEdc * dcdx
+            grad[p_j] -= k * dEdc * dcdx
+
+            hii[p_i] += test
+            hii[p_j] += test
+
+            h_fij[p_i, j] = k * ti.math.mat2(0.0)
+            grad_fij[p_i, j] = ti.sqrt(k * d2Ed2c) * dcdx
+
+
+@ti.kernel
+def computePotentialPP(x: ti.template(), k: float, dHat: float) -> float:
+
+    value = 0.0
+    for p_i in range(num_fluids):
+        pos_i = x[p_i]
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+
+            pos_ji = pos_i - x[p_j]
+            d = pos_ji.norm()
+            if d <= dHat:
+                value += k * (dHat - d) ** 3
+
+    return value
 
 @ti.kernel
 def solvePressure_UL(k: float, dHat: float, fix: bool):
@@ -420,6 +485,7 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
     coeff = k * (dt ** 2)
     for p_i in range(num_fluids):
         pos_i = x_old[p_i]
+        rho0 = 1.8 * mass[p_i] * poly6_value(0, dHat)
         dEdx_i = ti.Vector([0.0, 0.0])
         d2Edx2_i = ti.math.mat2(0.0)
 
@@ -433,12 +499,12 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
             xji = x[p_i] - x[p_j]
             r = xji_old.norm()
             n = xji_old / r
-            dWdr = spiky_gradient(r, dHat)
+            dWdr = mass[p_j] * spiky_gradient(r, dHat)
             c += dWdr * n.dot(xji - xji_old)
 
-        # Eq(1)
-        # if c > 1.0:
-        dEdc = max(c - 1.0, 0)
+        c = max(c - rho0, 0)
+        dEdc = c
+
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
             if p_j < 0:
@@ -449,7 +515,7 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
             n = xji_old / r
             dWdr = spiky_gradient(r, dHat)
 
-            dcdx_j = dWdr * n
+            dcdx_j = mass[p_j] * dWdr * n
             dEdx_j = coeff * dEdc * dcdx_j
             dEdx_i += dEdx_j
 
@@ -597,19 +663,21 @@ def computePressurePotential(x: ti.template(), k: float, dHat: float, fix: bool)
     return ret
 
 @ti.kernel
-def computeDensity(x: ti.template()):
+def computeDensity(x: ti.template(), h: float):
 
+    max_rho = 0.0
     for p_i in range(num_fluids):
         pos_i = x[p_i]
-        rho[p_i] = poly6_value(0, h_)
+        rho[p_i] = mass[p_i] * poly6_value(0, h)
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
             if p_j < 0:
                 break
             pos_ji = pos_i - x[p_j]
             r = pos_ji.norm()
-            rho[p_i] += poly6_value(r, h_)
-
+            rho[p_i] += mass[p_j] * poly6_value(r, h)
+        ti.atomic_max(max_rho, rho[p_i])
+    # print(max_rho, rho0)
         # rho[p_i] += poly6_value(0.0, h_)
 
 @ti.kernel
@@ -635,10 +703,15 @@ def computeDistance():
 
 
 @ti.kernel
-def solveCollision(dHat: float, k: float):
+def solveCollision(dHat: float, k: float, use_gn: int):
     id2 = ti.math.mat2([[1.0, 0.0], [0.0, 1.0]])
     # numCollision = 0
     # n_c[0] = 0
+    # print(use_gn)
+    coef = k
+    if n_c[0] > 0:
+        print(n_c[0])
+
     for i in range(n_c[0]):
         vi, ei = pair[i]
         v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
@@ -653,7 +726,6 @@ def solveCollision(dHat: float, k: float):
         # print(d)
         if d <= dHat:
             n = (x[vi] - p) / d
-
             dbdx = barrier_grad(d, dHat)
             d2bdx2 = barrier_hess(d, dHat)
 
@@ -669,9 +741,13 @@ def solveCollision(dHat: float, k: float):
 
             nnT = n.outer_product(n)
             d2d_dx2 = (id2 - nnT) / d
-            test = k * (abs(d2bdx2) * nnT)
+            test = k * (d2bdx2 * nnT)
+            #
+            # if use_gn > 0:
+            #     print("test")
+            # print("test")
+            test = k * (d2bdx2 * nnT + use_gn * abs(dbdx / d) * (id2 - nnT))
 
-            test = k * ((abs(d2bdx2) - abs(dbdx / d)) * nnT + abs(dbdx / d) * id2)
             hii[vi] += test
             hii[v0] += alpha * test
             hii[v1] += (1.0 - alpha) * test
@@ -680,6 +756,55 @@ def solveCollision(dHat: float, k: float):
             h_c[i] = test
         else:
             h_c[i] = ti.math.mat2(0.0)
+
+    for i in range(n_c_st[0]):
+        vi, ei = pair_st[i]
+        v0, v1 = indices_st[2 * ei + 0], indices_st[2 * ei + 1]
+        x10 = x_st[v1] - x_st[v0]
+        xi0 = x[vi] - x_st[v0]
+        alpha = x10.dot(xi0) / x10.dot(x10)
+        alpha = ti.math.clamp(alpha, 0.0, 1.0)
+
+        # print(alpha)
+        # if alpha > 0.0 and alpha < 1.0:
+        p = alpha * x_st[v1] + (1.0 - alpha) * x_st[v0]
+        d = (x[vi] - p).norm()
+        # print(d)
+        if d <= dHat:
+            n = (x[vi] - p) / d
+
+            dbdx = barrier_grad(d, dHat)
+            d2bdx2 = barrier_hess(d, dHat)
+            # dbdx = -3 * (dHat - d) ** 2
+            # d2bdx2 = 6 * (dHat - d)
+
+
+            # dbdx = spiky_gradient(d, dHat)
+            # d2bdx2 = spiky_hessian(d, dHat)
+
+            # dbdx = d - dHat
+            # d2bdx2 = barrier_hess(d, dHat)
+
+            grad[vi] += coef * dbdx * n
+            # grad[v0] -= k * alpha * dbdx * n
+            # grad[v1] -= k * (1.0 - alpha) * dbdx * n
+            # print(abs(dbdx) / d)
+            nnT = n.outer_product(n)
+            d2d_dx2 = (id2 - nnT) / d
+
+            test = coef * ((d2bdx2) * nnT)
+
+            # if use_gn:
+            #     test = coef * ((d2bdx2 - dbdx / d) * nnT)
+
+            hii[vi] += test
+            # hii[v0] += alpha * test
+            # hii[v1] += (1.0 - alpha) * test
+
+            a_c_st[i] = alpha
+            h_c_st[i] = test
+        else:
+            h_c_st[i] = ti.math.mat2(0.0)
 
 @ti.kernel
 def solveNonPenetration(dHat: float, k: float):
@@ -741,6 +866,24 @@ def computeCollisionPotential(x: ti.template(), dHat: float, k: float) -> float:
         alpha = ti.math.clamp(alpha, 0.0, 1.0)
         # if alpha > 0.0 and alpha < 1.0:
         p = alpha * x[v1] + (1.0 - alpha) * x[v0]
+        d = (x[vi] - p).norm()
+        if d <= dHat:
+            ti.atomic_add(value, k * barrier(d, dHat))
+
+    for i in range(n_c_st[0]):
+        vi, ei = pair_st[i]
+        # for vi in range(num_fluids):
+        #     for ei in range(num_indices):
+
+        v0, v1 = indices_st[2 * ei + 0], indices_st[2 * ei + 1]
+        x10 = x_st[v1] - x_st[v0]
+        xi0 = x[vi] - x_st[v0]
+        alpha = x10.dot(xi0) / x10.dot(x10)
+        # print(alpha)
+
+        alpha = ti.math.clamp(alpha, 0.0, 1.0)
+        # if alpha > 0.0 and alpha < 1.0:
+        p = alpha * x_st[v1] + (1.0 - alpha) * x_st[v0]
         d = (x[vi] - p).norm()
         if d <= dHat:
             ti.atomic_add(value, k * barrier(d, dHat))
@@ -874,11 +1017,11 @@ def matFreeAx(Ax: ti.template(), a: ti.template()):
     for i in range(num_particles):
         Ax[i] = mass[i] * a[i]
 
-    for i in range(num_indices):
-        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
-        x01 = a[v0] - a[v1]
-        Ax[v0] += h_e[i] @ x01
-        Ax[v1] -= h_e[i] @ x01
+    # for i in range(num_indices):
+    #     v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
+    #     x01 = a[v0] - a[v1]
+    #     Ax[v0] += h_e[i] @ x01
+    #     Ax[v1] -= h_e[i] @ x01
     #
     offset = num_particles - num_solid
     fixed_ids = ti.Vector([offset, num_solid - 1 + offset], dt=int)
@@ -888,40 +1031,52 @@ def matFreeAx(Ax: ti.template(), a: ti.template()):
         Ax[vi] += k_fix * a[vi]
     #
     #
-    for i in range(n_c[0]):
-        vi, ei = pair[i]
-        v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
-
-        alpha = a_c[i]
-        p = alpha * a[v0] + (1.0 - alpha) * a[v1]
-        xip = a[vi] - p
-        Ax[vi] += h_c[i] @ xip
-        Ax[v0] -= alpha * h_c[i] @ xip
-        Ax[v1] -= (1.0 - alpha) * h_c[i] @ xip
-    # # #
-    # # #
-    # for p_i in range(num_fluids):
-    #     ai = a[p_i]
-    #     alpha = 0.0
-    #     grad_i = ti.math.vec2(0.0)
-    #     for j in range(particle_num_neighbors[p_i]):
-    #         p_j = particle_neighbors[p_i, j]
-    #         if p_j < 0:
-    #             break
-    #         aij = ai - a[p_j]
-    #         Ax[p_i] += h_fij[p_i, j] @ aij
-    #         Ax[p_j] -= h_fij[p_i, j] @ aij
-    #         alpha += grad_fij[p_i, j].dot(aij)
-    #         grad_i += grad_fij[p_i, j]
-    #     #
-    #     #
-    #     for j in range(particle_num_neighbors[p_i]):
-    #         p_j = particle_neighbors[p_i, j]
-    #         if p_j < 0:
-    #             break
-    #         Ax[p_j] -= alpha * grad_fij[p_i, j]
+    # for i in range(n_c[0]):
+    #     vi, ei = pair[i]
+    #     v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
     #
-    #     Ax[p_i] += alpha * grad_i
+    #     alpha = a_c[i]
+    #     p = alpha * a[v0] + (1.0 - alpha) * a[v1]
+    #     xip = a[vi] - p
+    #     Ax[vi] += h_c[i] @ xip
+    #     Ax[v0] -= alpha * h_c[i] @ xip
+    #     Ax[v1] -= (1.0 - alpha) * h_c[i] @ xip
+
+    for i in range(n_c_st[0]):
+        vi, ei = pair_st[i]
+        # print(vi, ei)
+        # v0, v1 = indices_st[2 * ei + 0], indices_st[2 * ei + 1]
+        #
+        # alpha = a_c_st[i]
+        # # print(alpha)
+        # p = alpha * x_st[v0] + (1.0 - alpha) * x_st[v1]
+        xip = a[vi]
+        Ax[vi] += h_c_st[i] @ xip
+        # Ax[v0] -= alpha * h_c[i] @ xip
+        # Ax[v1] -= (1.0 - alpha) * h_c[i] @ xip
+
+    for p_i in range(num_fluids):
+        ai = a[p_i]
+        alpha = 0.0
+        grad_i = ti.math.vec2(0.0)
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+            aij = ai - a[p_j]
+            Ax[p_i] += h_fij[p_i, j] @ aij
+            Ax[p_j] -= h_fij[p_i, j] @ aij
+            alpha += grad_fij[p_i, j].dot(aij)
+            grad_i += grad_fij[p_i, j]
+        #
+        #
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+            Ax[p_j] -= alpha * grad_fij[p_i, j]
+        Ax[p_i] += alpha * grad_i
+
 
 @ti.kernel
 def matFreeAx2(Ax: ti.template(), a: ti.template()):
@@ -990,6 +1145,7 @@ def solvePCG(x: ti.template(), b: ti.template(), tol, matFreeAx):
 
     #
     if rs_old < tol:
+        # print('test')
         x.fill(0.0)
         return itrCnt
 
@@ -1014,102 +1170,189 @@ def solvePCG(x: ti.template(), b: ti.template(), tol, matFreeAx):
 
 
     if itrCnt == maxPCGIter:
-        print("failed to converge...")
+        print("PCG failed to converge...")
 
     # print("PCG iter: ", itrCnt)
     x.copy_from(s)
 
     return itrCnt
 
-def run_pbf(show_plot):
 
-    k_col = 1e3
-    k_el = 1e5
-    k_p = 1e5
+@ti.func
+def distance_point_to_segment(p, a, b):
+    ab = b - a
+    ap = p - a
+    t = ap.dot(ab) / (ab.dot(ab) + 1e-8)
+    t_clamped = ti.min(1.0, ti.max(0.0, t))
+    projection = a + t_clamped * ab
+    return (p - projection).norm()
+
+@ti.func
+def find_alpha_within_distance(xP, dxP, xA, xB, d, alpha_min, alpha_max, max_iter: int):
+    for i in range(max_iter):
+        mid = 0.5 * (alpha_min + alpha_max)
+        pos = xP + mid * dxP
+        dist = distance_point_to_segment(pos, xA, xB)
+        if dist <= d:
+            alpha_max = mid  # try earlier
+        else:
+            alpha_min = mid  # try later
+
+    return alpha_max  # smallest al
+
+@ti.kernel
+def filterStepSize(x: ti.template(), dx: ti.template(), dHat: float) -> float:
+
+    alpha = 1.0
+    for i in range(num_fluids):
+        xP, dxP = x[i], dx[i]
+        for ei in range(num_indices_st):
+            A, B = indices_st[2 * ei + 0], indices_st[2 * ei + 1]
+            xA, xB = x_st[A], x_st[B]
+            dAB = xB - xA
+            rhs = xA - xP
+            # Construct matrix M = [dxP | -dAB]
+            M = ti.Matrix.cols([dxP, -dAB])
+
+            det = M.determinant()
+            if abs(det) > 1e-8:
+                invM = M.inverse()
+                alpha_beta = invM @ rhs
+                alpha_tmp, beta = alpha_beta[0], alpha_beta[1]
+                if 0.0 <= beta <= 1.0 and 0.0 <= alpha_tmp <= 1.0:
+                    ti.atomic_min(alpha, 0.5 * alpha_tmp)
+
+    # cnt = 0
+
+    # alpha_k = 1.0
+    # for p_i in range(num_fluids):
+    #     xA, dxA = x[p_i], dx[p_i]
+    #     for j in range(particle_num_neighbors[p_i]):
+    #         p_j = particle_neighbors[p_i, j]
+    #         if p_j < 0:
+    #             break
+    #         xB, dxB = x[p_j], dx[p_j]
+    #
+    #         xAB = xB - xA
+    #         dAB = dxB - dxA
+    #
+    #         t = dAB.dot(dAB)
+    #         if  t > 1e-16:
+    #             alpha_tmp = xAB.dot(dAB) / t
+    #             if 0 <= alpha_tmp <= 1.0:
+    #                 ti.atomic_min(alpha_k, 0.5 * alpha_tmp)
+
+    # print(alpha_k)
+
+    # ti.atomic_min(alpha, alpha_k)
+    #     cnt += 1
+    #
+    # if cnt > 0:
+    #     print(cnt)
+
+    return alpha
+
+def run_pbf(show_plot, use_gn):
+
+    k_col = 1e6
+    k_el = 1e6
+
+    # print( neighbor_radius ** 6)
+    k_p = 1e1 * (h ** 6)
+    # print(k_p)
     optIter = 0
-    maxIter = int(1e2)
-    dHat = 1.0
+    maxIter = int(10)
+    dHat = 0.1
 
     computeVTilta()
     v.copy_from(vHat)
     computeXTilta()
+
     logg = []
     # print(dHat)
     pcgIter = 0
 
-
+    # print(use_gn)
     # collision_pairs(x, dHat)
+    # neighbour_search(x, neighbor_radius)
+
+    a = 0
+    if use_gn:
+        a = 1
+
+    if use_gn:
+        neighbour_search(x, h)
+        computeDensity(x, h)
+        # k_p = 1e3 * (neighbor_radius ** 6) / mass[0]
+
     for _ in range(maxIter):
         E = 0
         E += computeInertiaPotential(x)
-        E += computeElasticPotential(x, k_el)
+        # E += computeElasticPotential(x, k_el)
         collision_pairs(x, dHat)
         E += computeCollisionPotential(x, dHat, k_col)
+        E += computePotentialPP(x, neighbor_radius, k_p)
 
-        # neighbour_search(x)
         solveInertia(x, xHat)
-        # solvePressure(k_p, dHat, False)
-        # # solvePressure_UL(k_p, h_, False)
-        solveElasticity(k_el)
-        solveCollision(dHat, k_col)
+        # solvePP(k_p, neighbor_radius, a)
+        if use_gn:
+            solvePressure_UL(k_p, h, use_gn)
+        else:
+            neighbour_search(x, h)
+            computeDensity(x, h)
+            solvePressure(k_p, h, use_gn)
+
+        solveCollision(dHat, k_col, a)
 
         b.copy_from(grad)
         scale(-1.0, b)
 
-        pcgIter += solvePCG(dx, b, 1e-4, matFreeAx)
+        # applyPrecondition(dx, b)
+
+        pcgIter += solvePCG(dx, b, 1e-8, matFreeAx)
         optIter += 1
         dx_inf_new = inf_norm(dx)
 
         logg.append(E)
-        # print(alpha)
-
-        # matFreeAx(Ax, dx)
-        # pAp = dot(Ax, dx)
-        # alpha = min(0.5 * dHat / inf_norm(dx), -dot(dx, grad) / pAp)
-        # alpha = min(0.5 * dHat / inf_norm(dx), 1.0)
         alpha = 1.0
-        #
+        # alpha = filterStepSize(x, dx, dHat)
+        # if alpha < 1.0:
+        #     print(alpha)
         lsIter = 0
-        for _ in range(100):
-
-            add_pcg(x_tmp, x, alpha, dx)
-            E_tmp = 0
-            E_tmp += computeInertiaPotential(x_tmp)
-            E_tmp += computeElasticPotential(x_tmp, k_el)
-            collision_pairs(x_tmp, dHat)
-            E_tmp += computeCollisionPotential(x_tmp, dHat, k_col)
-            if E_tmp <= E:
-                break
-        # # #
-            alpha *= 0.5
-            lsIter += 1
-        # # # # # # # # # # #
+        # for _ in range(100):
+        #     add_pcg(x_tmp, x, alpha, dx)
+        #     E_tmp = 0
+        #     E_tmp += computeInertiaPotential(x_tmp)
+        #
+        #     neighbour_search(x_tmp, neighbor_radius)
+        #     E_tmp += computePotentialPP(x_tmp, k_p, neighbor_radius)
+        #
+        #     collision_pairs(x_tmp, dHat)
+        #     E_tmp += computeCollisionPotential(x_tmp, dHat, k_col)
+        #
+        #     if E_tmp <= E:
+        #         break
+        #
+        #     alpha *= 0.5
+        #     lsIter += 1
+        #
+        #
         # if lsIter > 0:
         #     print("LS Iter: ", lsIter)
         #     print("alpha: ", alpha)
+
         add_pcg(x, x, alpha, dx)
-
-        # x_tmp.copy_from(x)
-        # E_tmp = 0
-        # E_tmp += computeInertiaPotential(x_tmp)
-        # E_tmp += computeElasticPotential(x_tmp, k_el)
-        # collision_pairs(x_tmp, dHat)
-        # E_tmp += computeCollisionPotential(x_tmp, dHat, k_col)
-
-        # if E_tmp > E:
-        #     print("warning")
-
-        if dx_inf_new < 3e-2:
+        if dx_inf_new < 1e-2 * dt:
             break
 
         dx_inf_old = dx_inf_new
 
-    if optIter == maxIter:
-        print("failed to converge...")
-        plt.plot(np.array(logg))
-        plt.yscale('log')
-        plt.show()
-        exit()
+    # if optIter == maxIter:
+    #     print("failed to converge...")
+    #     plt.plot(np.array(logg))
+    #     plt.yscale('log')
+    #     plt.show()
+    #     exit()
 
     if show_plot:
         # print("test")
@@ -1131,7 +1374,7 @@ def run_pbf(show_plot):
     computeVelocity()
     # shrink()
 
-    return optIter, avg_pcg_iter
+    return optIter, pcgIter
 
 
 @ti.kernel
@@ -1140,6 +1383,10 @@ def render_kernel(ratio: float, res_x: float, res_y: float):
     for i in x:
         xWorld[i][0] = (ratio / res_x) * x[i][0]
         xWorld[i][1] = (ratio / res_y) * x[i][1]
+
+    for i in x_st:
+        xWorld_st[i][0] = (ratio / res_x) * x_st[i][0]
+        xWorld_st[i][1] = (ratio / res_y) * x_st[i][1]
 
 
 def render(gui):
@@ -1161,20 +1408,20 @@ def render(gui):
 def init_particles() -> float:
 
     mass.fill(0.0)
-    delta = h_ * 1.0
-
-    rho_f = 1e5
+    delta = h * 0.9
+    # rho_f = 1e1
     center = ti.math.vec2(0.0)
+    # print(rho0 * (h ** 2))
+    eta = 0.5
     for i in range(num_fluids):
         x[i] = ti.Vector([i % num_particles_x, i // num_particles_x]) * delta
-        mass[i] = rho_f
-
-        if i // num_particles_x < 0.5 * num_particles_x:
-            colors[i] = ti.math.vec3(135 / 255, 206/ 255, 235/ 255)
-            mass[i] = rho_f
-        else:
-            mass[i] = rho_f
-            colors[i] = ti.math.vec3(1.0, 0.0, 0.0)
+        mass[i] = rho0 * ((eta * h) ** 2)
+        # if i // num_particles_x < 0.5 * num_particles_x:
+        colors[i] = ti.math.vec3(135 / 255, 206/ 255, 235/ 255)
+        # mass[i] = rho_f
+        # else:
+        #     mass[i] = rho_f
+        #     colors[i] = ti.math.vec3(1.0, 0.0, 0.0)
 
         center += x[i]
         for c in ti.static(range(dim)):
@@ -1188,17 +1435,17 @@ def init_particles() -> float:
         x0[i] = x[i]
 
     center = 0.5 * ti.math.vec2([boundary[0], boundary[1]])
-    r = 0.2 * ti.Vector([0.0, boundary[1]])
+    r = 0.23 * ti.Vector([0.0, boundary[1]])
     delta_theta = (2 * ti.math.pi) / (num_solid)
     # delta_theta *= 0.8
-    offset = ti.math.pi / (num_solid + 0.3)
+    offset = ti.math.pi / (num_solid)
     # offset = 0.0
     for si in range(num_solid):
         i = (num_particles - num_solid) + si
         theta = si * delta_theta + offset
         rot = ti.math.mat2([ti.cos(theta), -ti.sin(theta), ti.sin(theta), ti.cos(theta)])
 
-        x[i] = rot @ r + center
+        x[i] = rot @ r + center + ti.Vector([0.0, 0.3])
         x0[i] = x[i]
         # center += x[i]
         colors[i] = ti.math.vec3([1.0, 1.0, 1.0])
@@ -1213,7 +1460,7 @@ def init_particles() -> float:
 
 
     size = 1.0
-    rho = 1e2
+    rho = 1
 
     l_min = 1e3
     for si in range(num_indices):
@@ -1224,6 +1471,25 @@ def init_particles() -> float:
         ti.atomic_min(l_min, l0[si])
         mass[i]     += rho * 0.5 * l0[si]
         mass[i + 1] += rho * 0.5 * l0[si]
+
+    r = 0.45 * ti.Vector([0.0, boundary[1]])
+    delta_theta = (2 * ti.math.pi) / (num_st)
+    # delta_theta *= 0.8
+    offset = ti.math.pi / (num_st)
+    # offset = 0.0
+    for si in range(num_st):
+        theta = si * delta_theta + offset
+        rot = ti.math.mat2([ti.cos(theta), -ti.sin(theta), ti.sin(theta), ti.cos(theta)])
+        x_st[si] = rot @ r + center
+
+    for si in range(num_st - 1):
+        i = si
+        indices_st[2 * si + 0] = i
+        indices_st[2 * si + 1] = i + 1
+
+    indices_st[2 * (num_st - 1) + 0] = 0
+    indices_st[2 * (num_st - 1) + 1] = num_st - 1
+
 
     return l_min
     #
@@ -1264,6 +1530,9 @@ def main():
     canvas.set_background_color((0.2, 0.2, 0.2))
     run = False
     show_plot = False
+    log = []
+    a = []
+    use_gn = False
     while window.running:
 
         if window.get_event(ti.ui.PRESS):
@@ -1271,9 +1540,28 @@ def main():
                 run = not run
 
             if window.event.key == 'r':
+                print("reset...")
                 l_min = init_particles()
                 run = False
                 frame_cnt = 0
+                log.append(a)
+                # print(log)
+                # print(len(log))
+                a = []
+            if window.event.key == 'v':
+                num_data = len(log)
+                # print(num_data)
+                for i in range(num_data):
+                    # print(len(log[i]))
+                    plt.plot(np.array(log[i]), label=i)
+                    # plt.yscale('log')
+                    plt.legend()
+                plt.show()
+
+            if window.event.key == 'g':
+                use_gn = not use_gn
+
+                print(use_gn)
 
             if window.event.key == 's':
                 show_plot = True
@@ -1283,10 +1571,13 @@ def main():
 
         if run:
             # move_board()
-            optIter, avg_pcg_iter = run_pbf(show_plot)
+            optIter, avg_pcg_iter = run_pbf(show_plot, use_gn)
+            # print(optIter, avg_pcg_iter)
+            a.append(avg_pcg_iter)
             show_plot = False
             frame_cnt += 1
 
+            # print(frame_cnt)
 
         # neighbour_search(x)
         # computeDensity(x)
@@ -1311,8 +1602,9 @@ def main():
         # colors.from_numpy(a)
 
         render_kernel(screen_to_world_ratio, screen_res[0], screen_res[1])
-        canvas.circles(xWorld, radius=0.003, per_vertex_color=colors)
-        canvas.lines(xWorld, indices=indices, color=(1.0, 1.0, 1.0), width=0.003)
+        canvas.circles(xWorld, radius=0.002, per_vertex_color=colors)
+        # canvas.lines(xWorld, indices=indices, color=(1.0, 1.0, 1.0), width=0.003)
+        canvas.lines(xWorld_st, indices=indices_st, color=(1.0, 0.0, 0.0), width=0.001)
         window.show()
         #
         # if run:

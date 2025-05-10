@@ -612,7 +612,7 @@ class XSPHSolver(SPHBase):
             self.compute_inertia()
             # self.num_collision_p.fill(0)
             # self.compute_densities(self.ps.x)
-            # self.compute_pressure(k)
+            self.compute_pressure(k)
             self.compute_pressure_gn(k)
             self.compute_collision_static(pad)
             self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
