@@ -22,7 +22,7 @@ boundary = (
 
 print(boundary)
 
-h = 0.04
+h = 0.08
 
 cell_size = 1.5 * h
 cell_recpr = 1.0 / cell_size
@@ -37,17 +37,18 @@ dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles_x = 100
-num_fluids = num_particles_x * 100
+num_particles_x = 5
+num_fluids = num_particles_x * 5
 
-num_solid = 3
+num_solid = 20
 num_particles = num_fluids + num_solid
-num_indices = num_solid - 1
+num_indices = num_solid
+num_bending = num_indices
 
 num_st = 4
 num_indices_st = num_st
 
-max_num_particles_per_cell = 100
+max_num_particles_per_cell = 150
 max_num_neighbors = 100
 dt = 1e-3
 epsilon = 1e-5
@@ -83,13 +84,16 @@ particle_neighbors = ti.field(int)
 rho = ti.field(float)
 hii  = ti.Matrix.field(dim, dim, float)
 h_e  = ti.Matrix.field(dim, dim, float)
+h_b  = ti.Matrix.field(dim, dim, float)
 h_fij = ti.Matrix.field(dim, dim, float)
 grad_fij = ti.Vector.field(dim, float)
 dx   = ti.Vector.field(dim, float)
 grad = ti.Vector.field(dim, float)
 indices = ti.field(int)
+indices_b = ti.field(int)
 indices_st = ti.field(int)
 l0 = ti.field(float)
+l0_b = ti.field(float)
 
 colors = ti.Vector.field(3, float)
 # 0: x-pos, 1: timestep in sin()
@@ -97,9 +101,9 @@ board_states = ti.Vector.field(2, float)
 
 ti.root.dense(ti.i, num_particles).place(x_old, x, x_tmp, x0, xHat, v, vHat, xWorld, colors, mass)
 ti.root.dense(ti.i, num_st).place(x_st, xWorld_st)
-ti.root.dense(ti.i, 2 * num_indices).place(indices)
+ti.root.dense(ti.i, 2 * num_indices).place(indices, indices_b)
 ti.root.dense(ti.i, 2 * num_indices_st).place(indices_st)
-ti.root.dense(ti.i, num_indices).place(l0, h_e)
+ti.root.dense(ti.i, num_indices).place(l0, l0_b, h_e, h_b)
 grid_snode = ti.root.dense(ti.ij, grid_size)
 grid_snode.place(grid_num_particles)
 grid_snode.dense(ti.k, max_num_particles_per_cell).place(grid2particles)
@@ -325,7 +329,7 @@ def collision_pairs(x: ti.template(), dHat: float):
     #                 pair[nc] = ti.math.ivec2([vi, ei])
 
     n_c_st[0] = 0
-    for vi in range(num_fluids):
+    for vi in range(num_particles):
         # vi = (num_particles - num_solid) + si
         for ei in range(num_indices_st):
             v0, v1 = indices_st[2 * ei + 0], indices_st[2 * ei + 1]
@@ -500,11 +504,13 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
             xji_old = pos_i - x_old[p_j]
             xji = x[p_i] - x[p_j]
             r = xji_old.norm()
+            if r < 1e-5:
+                r = 1e-5
             n = xji_old / r
             dWdr = (mass[p_j] / ti.max(rho[p_j], rho0)) * spiky_gradient(r, dHat)
             div_v += dWdr * n.dot(xji - xji_old)
 
-        dEdc = (J_n * (1.0 + div_v) - 1.0)
+        dEdc = (J_n * (1.0 - div_v) - 1.0)
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
@@ -525,12 +531,12 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
             d2Edx2_j = coeff * (dcdx_j.outer_product(dcdx_j))
             d2Edx2_i += d2Edx2_j
 
-            grad[p_j] -= dEdx_j
+            grad[p_j] += dEdx_j
             hii[p_j] += d2Edx2_j
             h_fij[p_i, j] = ti.math.mat2(0.0)
             grad_fij[p_i, j] = ti.sqrt(coeff) * dcdx_j
         #
-        grad[p_i] += dEdx_i
+        grad[p_i] -= dEdx_i
         hii[p_i] += d2Edx2_i
 
 @ti.kernel
@@ -712,8 +718,8 @@ def solveCollision(dHat: float, k: float, use_gn: int):
     # n_c[0] = 0
     # print(use_gn)
     coef = k
-    if n_c[0] > 0:
-        print(n_c[0])
+    # if n_c[0] > 0:
+    #     print(n_c[0])
 
     for i in range(n_c[0]):
         vi, ei = pair[i]
@@ -749,7 +755,7 @@ def solveCollision(dHat: float, k: float, use_gn: int):
             # if use_gn > 0:
             #     print("test")
             # print("test")
-            test = k * (d2bdx2 * nnT + use_gn * abs(dbdx / d) * (id2 - nnT))
+            test = k * (d2bdx2 * nnT)
 
             hii[vi] += test
             hii[v0] += alpha * test
@@ -907,7 +913,7 @@ def solveElasticity(k: float):
     offset = num_particles - num_solid
     id2 = ti.math.mat2([[1.0, 0.0], [0.0, 1.0]])
 
-    coeff = k * (dt ** 2)
+    coeff = k
     for i in range(num_indices):
         v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
 
@@ -925,13 +931,30 @@ def solveElasticity(k: float):
         hii[v1] += value
         h_e[i] = value
 
+    for i in range(num_indices):
+        v0, v1 = indices_b[2 * i + 0], indices_b[2 * i + 1]
 
-    fixed_ids = ti.Vector([offset, num_solid - 1 + offset], dt=int)
-    k_fix = 1e7
-    for i in range(2):
-        vi = fixed_ids[i]
-        grad[vi] += k_fix * (x[vi] - x0[vi])
-        hii[vi] += k_fix * id2
+        l = (x[v0] - x[v1]).norm()
+        n = (x[v0] - x[v1]) / l
+        grad[v0] += coeff * (l - l0_b[i]) * n
+        grad[v1] -= coeff * (l - l0_b[i]) * n
+        nnT = n.outer_product(n)
+        # dndx = (id2 - nnT) / l
+        alpha = abs(l - l0_b[i]) / l
+        value = coeff * (alpha * id2 + (1.0 - alpha) * nnT)
+        # value = coeff * (nnT)
+
+        hii[v0] += value
+        hii[v1] += value
+        h_b[i] = value
+
+
+    # fixed_ids = ti.Vector([offset, num_solid - 1 + offset], dt=int)
+    # k_fix = 1e7
+    # for i in range(2):
+    #     vi = fixed_ids[i]
+    #     grad[vi] += k_fix * (x[vi] - x0[vi])
+    #     hii[vi] += k_fix * id2
 
 @ti.kernel
 def computeElasticPotential(a: ti.template(), k: float) -> float:
@@ -1011,7 +1034,8 @@ def computeVelocity():
 def shrink():
 
     for i in range(num_indices):
-        l0[i] *= 0.99
+        l0[i] *= 0.9
+        l0_b[i] *= 0.9
 
 
 @ti.kernel
@@ -1020,30 +1044,36 @@ def matFreeAx(Ax: ti.template(), a: ti.template()):
     for i in range(num_particles):
         Ax[i] = (mass[i]/ (dt ** 2)) * a[i]
 
-    # for i in range(num_indices):
-    #     v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
-    #     x01 = a[v0] - a[v1]
-    #     Ax[v0] += h_e[i] @ x01
-    #     Ax[v1] -= h_e[i] @ x01
+    for i in range(num_indices):
+        v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
+        x01 = a[v0] - a[v1]
+        Ax[v0] += h_e[i] @ x01
+        Ax[v1] -= h_e[i] @ x01
+
+    for i in range(num_indices):
+        v0, v1 = indices_b[2 * i + 0], indices_b[2 * i + 1]
+        x01 = a[v0] - a[v1]
+        Ax[v0] += h_b[i] @ x01
+        Ax[v1] -= h_b[i] @ x01
     #
     offset = num_particles - num_solid
     fixed_ids = ti.Vector([offset, num_solid - 1 + offset], dt=int)
-    k_fix = 1e7
-    for i in range(2):
-        vi = fixed_ids[i]
-        Ax[vi] += k_fix * a[vi]
+    # k_fix = 1e7
+    # for i in range(2):
+    #     vi = fixed_ids[i]
+    #     Ax[vi] += k_fix * a[vi]
     #
     #
-    # for i in range(n_c[0]):
-    #     vi, ei = pair[i]
-    #     v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
-    #
-    #     alpha = a_c[i]
-    #     p = alpha * a[v0] + (1.0 - alpha) * a[v1]
-    #     xip = a[vi] - p
-    #     Ax[vi] += h_c[i] @ xip
-    #     Ax[v0] -= alpha * h_c[i] @ xip
-    #     Ax[v1] -= (1.0 - alpha) * h_c[i] @ xip
+    for i in range(n_c[0]):
+        vi, ei = pair[i]
+        v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
+
+        alpha = a_c[i]
+        p = alpha * a[v0] + (1.0 - alpha) * a[v1]
+        xip = a[vi] - p
+        Ax[vi] += h_c[i] @ xip
+        Ax[v0] -= alpha * h_c[i] @ xip
+        Ax[v1] -= (1.0 - alpha) * h_c[i] @ xip
 
     for i in range(n_c_st[0]):
         vi, ei = pair_st[i]
@@ -1261,11 +1291,11 @@ def run_pbf(show_plot, use_gn):
     k_el = 1e6
 
     # print( neighbor_radius ** 6)
-    k_p = 1e5 * (h ** 2)
+    k_p = 1e7 * (h ** 2)
     # print(k_p)
     optIter = 0
     maxIter = int(1e3)
-    dHat = 0.01
+    dHat = 0.05
 
     computeVTilta()
     v.copy_from(vHat)
@@ -1306,7 +1336,7 @@ def run_pbf(show_plot, use_gn):
             solvePressure(k_p, h, use_gn)
 
         solveCollision(dHat, k_col, a)
-
+        solveElasticity(k_el)
         b.copy_from(grad)
         scale(-1.0, b)
 
@@ -1438,7 +1468,7 @@ def init_particles() -> float:
         x0[i] = x[i]
 
     center = 0.5 * ti.math.vec2([boundary[0], boundary[1]])
-    r = 0.23 * ti.Vector([0.0, boundary[1]])
+    r = 0.1 * ti.Vector([0.0, boundary[1]])
     delta_theta = (2 * ti.math.pi) / (num_solid)
     # delta_theta *= 0.8
     offset = ti.math.pi / (num_solid)
@@ -1463,19 +1493,32 @@ def init_particles() -> float:
 
 
     size = 1.0
-    rho = 1
+    rho = 1e1
 
     l_min = 1e3
+    offset = int(num_particles - num_solid)
+    # spring
     for si in range(num_indices):
-        i = (num_particles - num_solid) + si
-        indices[2 * si + 0] = i
-        indices[2 * si + 1] = i + 1
-        l0[si] = size * (x[i + 1] - x[i]).norm()
-        ti.atomic_min(l_min, l0[si])
-        mass[i]     += rho * 0.5 * l0[si]
-        mass[i + 1] += rho * 0.5 * l0[si]
+        v0 = int(si % num_indices + offset)
+        v1 = int((si + 1) % num_indices + offset)
 
-    r = 0.4 * ti.Vector([0.0, boundary[1]])
+        indices[2 * si + 0] = v0
+        indices[2 * si + 1] = v1
+        l0[si] = size * (x[v0] - x[v1]).norm()
+        mass[v0] += 0.5 * rho * l0[si]
+        mass[v1] += 0.5 * rho * l0[si]
+
+    # bending
+    for si in range(num_indices):
+        v0 = int(si % num_indices + offset)
+        v1 = int((si + 2) % num_indices + offset)
+
+        indices_b[2 * si + 0] = v0
+        indices_b[2 * si + 1] = v1
+        l0_b[si] = size * (x[v0] - x[v1]).norm()
+
+
+    r = 0.45 * ti.Vector([0.0, boundary[1]])
     delta_theta = (2 * ti.math.pi) / (num_st)
     # delta_theta *= 0.8
     offset = ti.math.pi / (num_st)
@@ -1496,9 +1539,6 @@ def init_particles() -> float:
 
     return l_min
     #
-    # indices[2 * (num_indices - 1) + 0] = num_particles - num_solid
-    # indices[2 * (num_indices - 1) + 1] = num_particles - 1
-    # l0[num_solid - 1] = size * (x[num_particles - 1] - x[num_particles - num_solid]).norm()
 
 
 
@@ -1535,7 +1575,11 @@ def main():
     show_plot = False
     log = []
     a = []
-    use_gn = False
+    use_gn = True
+
+    # for _ in range(5):
+    #     shrink()
+
     while window.running:
 
         if window.get_event(ti.ui.PRESS):
@@ -1567,9 +1611,9 @@ def main():
                 print(use_gn)
 
             if window.event.key == 's':
-                show_plot = True
+                # show_plot = True
             # if window.event.key == 's':
-            #    shrink()
+                shrink()
         # move_board()
 
         if run:
@@ -1606,7 +1650,8 @@ def main():
 
         render_kernel(screen_to_world_ratio, screen_res[0], screen_res[1])
         canvas.circles(xWorld, radius=0.001, per_vertex_color=colors)
-        # canvas.lines(xWorld, indices=indices, color=(1.0, 1.0, 1.0), width=0.003)
+        canvas.lines(xWorld, indices=indices, color=(1.0, 1.0, 1.0), width=0.001)
+        canvas.lines(xWorld, indices=indices_b, color=(0.0, 1.0, 1.0), width=0.001)
         canvas.lines(xWorld_st, indices=indices_st, color=(1.0, 0.0, 0.0), width=0.001)
         window.show()
         #
