@@ -21,7 +21,8 @@ boundary = (
 )
 
 print(boundary)
-h = 0.1
+
+h = 0.04
 
 cell_size = 1.5 * h
 cell_recpr = 1.0 / cell_size
@@ -36,8 +37,8 @@ dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles_x = 50
-num_fluids = num_particles_x * 50
+num_particles_x = 100
+num_fluids = num_particles_x * 100
 
 num_solid = 3
 num_particles = num_fluids + num_solid
@@ -354,8 +355,8 @@ def solveLinearSystem2():
 def solveInertia(q: ti.template(), qHat: ti.template()):
     id2 = ti.math.mat2([[1.0, 0.0], [0.0, 1.0]])
     for i in x:
-        grad[i] = mass[i] * (q[i] - qHat[i])
-        hii[i] = mass[i] * id2
+        grad[i] = (mass[i] / (dt ** 2)) * (q[i] - qHat[i])
+        hii[i] = (mass[i]/ (dt ** 2)) * id2
 
 @ti.kernel
 def computeInertiaPotential(a: ti.template()) -> float:
@@ -482,14 +483,15 @@ def computePotentialPP(x: ti.template(), k: float, dHat: float) -> float:
 @ti.kernel
 def solvePressure_UL(k: float, dHat: float, fix: bool):
 
-    coeff = k * (dt ** 2)
+    coeff = k
     for p_i in range(num_fluids):
         pos_i = x_old[p_i]
-        rho0 = 1.8 * mass[p_i] * poly6_value(0, dHat)
+        # rho0 = 1.8 * mass[p_i] * poly6_value(0, dHat)
         dEdx_i = ti.Vector([0.0, 0.0])
         d2Edx2_i = ti.math.mat2(0.0)
 
-        c = rho[p_i]
+        J_n = rho0 / ti.max(rho[p_i], rho0)
+        div_v = 0.0
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
             if p_j < 0:
@@ -499,11 +501,10 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
             xji = x[p_i] - x[p_j]
             r = xji_old.norm()
             n = xji_old / r
-            dWdr = mass[p_j] * spiky_gradient(r, dHat)
-            c += dWdr * n.dot(xji - xji_old)
+            dWdr = (mass[p_j] / ti.max(rho[p_j], rho0)) * spiky_gradient(r, dHat)
+            div_v += dWdr * n.dot(xji - xji_old)
 
-        c = max(c - rho0, 0)
-        dEdc = c
+        dEdc = (J_n * (1.0 + div_v) - 1.0)
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
@@ -512,10 +513,12 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
 
             xji_old = pos_i - x_old[p_j]
             r = xji_old.norm()
+            if r < 1e-5:
+                r = 1e-5
             n = xji_old / r
             dWdr = spiky_gradient(r, dHat)
 
-            dcdx_j = mass[p_j] * dWdr * n
+            dcdx_j = J_n * (mass[p_j] / ti.max(rho[p_j], rho0)) * dWdr * n
             dEdx_j = coeff * dEdc * dcdx_j
             dEdx_i += dEdx_j
 
@@ -1015,7 +1018,7 @@ def shrink():
 def matFreeAx(Ax: ti.template(), a: ti.template()):
 
     for i in range(num_particles):
-        Ax[i] = mass[i] * a[i]
+        Ax[i] = (mass[i]/ (dt ** 2)) * a[i]
 
     # for i in range(num_indices):
     #     v0, v1 = indices[2 * i + 0], indices[2 * i + 1]
@@ -1254,15 +1257,15 @@ def filterStepSize(x: ti.template(), dx: ti.template(), dHat: float) -> float:
 
 def run_pbf(show_plot, use_gn):
 
-    k_col = 1e6
+    k_col = 1e8
     k_el = 1e6
 
     # print( neighbor_radius ** 6)
-    k_p = 1e1 * (h ** 6)
+    k_p = 1e5 * (h ** 2)
     # print(k_p)
     optIter = 0
-    maxIter = int(10)
-    dHat = 0.1
+    maxIter = int(1e3)
+    dHat = 0.01
 
     computeVTilta()
     v.copy_from(vHat)
@@ -1309,7 +1312,7 @@ def run_pbf(show_plot, use_gn):
 
         # applyPrecondition(dx, b)
 
-        pcgIter += solvePCG(dx, b, 1e-8, matFreeAx)
+        pcgIter += solvePCG(dx, b, 1e-5, matFreeAx)
         optIter += 1
         dx_inf_new = inf_norm(dx)
 
@@ -1368,7 +1371,7 @@ def run_pbf(show_plot, use_gn):
     #     # exit()
 
     print("Opt Iter", optIter)
-    # print("avg. PCG Iter", (pcgIter // optIter))
+    print("avg. PCG Iter", (pcgIter // optIter))
 
     avg_pcg_iter = pcgIter // optIter
     computeVelocity()
@@ -1472,7 +1475,7 @@ def init_particles() -> float:
         mass[i]     += rho * 0.5 * l0[si]
         mass[i + 1] += rho * 0.5 * l0[si]
 
-    r = 0.45 * ti.Vector([0.0, boundary[1]])
+    r = 0.4 * ti.Vector([0.0, boundary[1]])
     delta_theta = (2 * ti.math.pi) / (num_st)
     # delta_theta *= 0.8
     offset = ti.math.pi / (num_st)
@@ -1602,7 +1605,7 @@ def main():
         # colors.from_numpy(a)
 
         render_kernel(screen_to_world_ratio, screen_res[0], screen_res[1])
-        canvas.circles(xWorld, radius=0.002, per_vertex_color=colors)
+        canvas.circles(xWorld, radius=0.001, per_vertex_color=colors)
         # canvas.lines(xWorld, indices=indices, color=(1.0, 1.0, 1.0), width=0.003)
         canvas.lines(xWorld_st, indices=indices_st, color=(1.0, 0.0, 0.0), width=0.001)
         window.show()
