@@ -1,0 +1,192 @@
+import bpy
+import os
+import math
+
+bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+
+obj_dir = os.path.expanduser("~/Desktop/starlab_physics/SPH-fluid/util/blender_water/output")
+baked_dir = os.path.join(obj_dir, "baked")
+
+start_index = 0
+step = 5
+material_name = "Water-2"
+last_rendered_object = {'name': None}
+previous_bake = {'object': None}
+
+def ensure_cached_collection():
+    if "cached" not in bpy.data.collections:
+        cached = bpy.data.collections.new("cached")
+        bpy.context.scene.collection.children.link(cached)
+    return bpy.data.collections.get("cached")
+
+def clear_cache_and_baked():
+    if not os.path.exists(baked_dir):
+        os.makedirs(baked_dir)
+
+    for filename in os.listdir(baked_dir):
+        if filename.endswith(".obj"):
+            try:
+                os.remove(os.path.join(baked_dir, filename))
+            except Exception:
+                pass
+
+    if "cached" not in bpy.data.collections:
+        bpy.data.collections.new("cached")
+
+    cached_col = ensure_cached_collection()
+    if cached_col:
+        for obj in list(cached_col.objects):
+            cached_col.objects.unlink(obj) 
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+def ensure_geo_node_group():
+    group_name = "AutoMeshConvert"
+    if group_name in bpy.data.node_groups:
+        bpy.data.node_groups.remove(bpy.data.node_groups[group_name], do_unlink=True)
+    node_group = bpy.data.node_groups.new(group_name, 'GeometryNodeTree')
+    interface = node_group.interface
+    interface.new_socket(name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+    interface.new_socket(name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+
+    nodes = node_group.nodes
+    links = node_group.links
+
+    input_node = nodes.new("NodeGroupInput")
+    input_node.location = (-600, 0)
+
+    p2v = nodes.new("GeometryNodePointsToVolume")
+    p2v.location = (-300, 0)
+    p2v.inputs["Radius"].default_value = 0.03
+    p2v.inputs["Density"].default_value = 1.0
+    p2v.inputs["Voxel Amount"].default_value = 150.0
+
+    v2m = nodes.new("GeometryNodeVolumeToMesh")
+    v2m.location = (0, 0)
+    v2m.inputs[1].default_value = 0.01
+    v2m.inputs[2].default_value = 0.0
+
+    merge = nodes.new("GeometryNodeMergeByDistance")
+    merge.location = (300, 0)
+    merge.inputs["Distance"].default_value = 0.01
+
+    output_node = nodes.new("NodeGroupOutput")
+    output_node.location = (600, 0)
+
+    links.new(input_node.outputs[0], p2v.inputs["Points"])
+    links.new(p2v.outputs["Volume"], v2m.inputs[0])
+    links.new(v2m.outputs["Mesh"], merge.inputs["Geometry"])
+    links.new(merge.outputs["Geometry"], output_node.inputs[0])
+
+    return node_group
+
+def write_baked_obj(obj, name):
+    baked_export_path = os.path.join(baked_dir, f"{name}_baked.obj")
+    with open(baked_export_path, 'w') as f:
+        for v in obj.data.vertices:
+            co = obj.matrix_world @ v.co
+            f.write(f"v {co.x} {co.y} {co.z}\n")
+        for poly in obj.data.polygons:
+            indices = [str(i + 1) for i in poly.vertices]
+            f.write(f"f {' '.join(indices)}\n")
+
+def import_full_obj(filepath, name):
+    verts = []
+    faces = []
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('v '):
+                parts = line.strip().split()
+                x, y, z = map(float, parts[1:4])
+                verts.append((x, y, z))
+            elif line.startswith('f '):
+                parts = line.strip().split()[1:]
+                face = [int(i) - 1 for i in parts]
+                faces.append(face)
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+def load_obj_vertex_only(filepath):
+    verts = []
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('v '):
+                parts = line.strip().split()
+                x, y, z = map(float, parts[1:4])
+                verts.append((x, y, z))
+    return verts
+
+def disable_previous_render():
+    prev_name = last_rendered_object['name']
+    if not prev_name:
+        return
+    for obj in bpy.data.objects:
+        if obj.name == prev_name:
+            obj.hide_render = True
+            obj.hide_viewport = True
+            obj.hide_set(True)
+            break
+    last_rendered_object['name'] = None
+
+def load_obj_for_frame(scene):
+    frame = scene.frame_current
+    obj_index = start_index + frame * step
+    name = f"scene{obj_index}"
+
+    disable_previous_render()
+    
+    for obj in bpy.data.objects:
+        if obj.name == name:
+            obj.hide_render = False
+            obj.hide_viewport = False
+            obj.hide_set(False)
+            last_rendered_object['name'] = obj.name
+            return
+    baked_path = os.path.join(baked_dir, f"{name}_baked.obj")
+    raw_path = os.path.join(obj_dir, f"{name}.obj")
+    mat = bpy.data.materials.get(material_name)
+    
+    if previous_bake['object']:
+            bpy.data.objects.remove(previous_bake['object'], do_unlink=True)
+            previous_bake['object'] = None
+
+    if os.path.exists(baked_path):
+        obj = import_full_obj(baked_path, name)
+        if mat:
+            obj.data.materials.append(mat)
+        obj.hide_render = False
+        obj.hide_viewport = False
+        obj.hide_set(False)
+        last_rendered_object['name'] = obj.name
+        
+    elif os.path.exists(raw_path):
+        verts = load_obj_vertex_only(raw_path)
+        mesh = bpy.data.meshes.new(name)
+        mesh.from_pydata(verts, [], [])
+        mesh.update()
+        obj = bpy.data.objects.new(name, mesh)
+        obj.rotation_euler[0] = math.radians(90)
+
+        node_group = ensure_geo_node_group()
+        mod = obj.modifiers.new(name="GeoNodes", type='NODES')
+        mod.node_group = node_group
+
+        bpy.context.collection.objects.link(obj)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.modifier_apply(modifier="GeoNodes")
+
+        write_baked_obj(obj, name)
+        previous_bake['object'] = obj
+        return
+    
+    else:
+        print(f"Missing obj: {name}")
+        return
+
+clear_cache_and_baked()
+bpy.context.scene.frame_set(0)
+bpy.app.handlers.frame_change_pre.clear()
+bpy.app.handlers.frame_change_pre.append(load_obj_for_frame)
