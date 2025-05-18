@@ -290,5 +290,12 @@ pyrightconfig.json
 
 # Big Data
 *.csv
+*.blend1
+*.blend
+
 Digital-human-taichi/seq_models/
 framework/results/
+SPH-fluid/data/output
+SPH-fluid/util/blender_water/output
+/SPH-fluid/util/libpartio.so.1
+/SPH-fluid/util/Partio
