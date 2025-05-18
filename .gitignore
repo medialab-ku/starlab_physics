@@ -298,4 +298,4 @@ framework/results/
 SPH-fluid/data/output
 SPH-fluid/util/blender_water/output
 /SPH-fluid/util/libpartio.so.1
-/SPH-fluid/util/Partio/
+/SPH-fluid/util/Partio
