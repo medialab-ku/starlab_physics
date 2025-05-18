@@ -45,6 +45,7 @@ class XSPHSolver(SPHBase):
         self.maxOptIter = int(self.ps.cfg.get_cfg("MaxOptIter"))
         self.tol = self.ps.cfg.get_cfg("tol")
         self.k_rho = self.ps.cfg.get_cfg("k_rho")
+        self.da_ratio = self.ps.cfg.get_cfg("da_ratio")
 
 
     @ti.func
@@ -654,11 +655,11 @@ class XSPHSolver(SPHBase):
 
 
     @ti.kernel
-    def filter_step_size_div(self, x: ti.template(), dx: ti.template(), h: float) -> float:
+    def filter_step_size_div(self, x: ti.template(), dx: ti.template(), h: float, rat: float) -> float:
 
         # h = self.ps.support_radius
         rho_max = 0.0
-        rat = 1.01
+        # rat = 1.01
         for p_i in ti.grouped(self.ps.x):
             ti.atomic_max(rho_max, self.ps.density[p_i])
 
@@ -726,10 +727,8 @@ class XSPHSolver(SPHBase):
         pad = 2.0 * self.ps.particle_diameter
 
         self.compute_inertia()
-        # self.num_collision_p.fill(0)
         self.compute_densities(self.ps.x, h)
         self.compute_pressure(k, h, eta=self.ps.eta)
-        # self.compute_pressure_gn(self.ps.x, k)
         self.compute_collision_static(pad)
         self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
 
@@ -739,7 +738,7 @@ class XSPHSolver(SPHBase):
             print("test")
 
         alpha = 1.0
-        alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h)
+        alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
 
         if alpha < 1.0:
             print(alpha)
@@ -809,9 +808,9 @@ class XSPHSolver(SPHBase):
                 print("test")
 
             alpha = 1.0
-            alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h)
-            # if alpha < 1.0:
-            #     print("alpha too small", alpha)
+            alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
+            if alpha < 1.0:
+                print("alpha too small", alpha)
                 # alpha = 1.0
             self.update_x(alpha)
             # beta += (1.0 - beta) * alpha

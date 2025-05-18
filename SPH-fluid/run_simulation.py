@@ -81,7 +81,7 @@ if __name__ == "__main__":
             if method == 5:
                 solver.tol = w.slider_float("opt tol", solver.tol, 0.0, 1.0)
                 solver.k_rho = w.slider_float("k rho", solver.k_rho, 0.0, 1e6)
-
+                solver.da_ratio = w.slider_float("da_ratio", solver.da_ratio, 0.0, 2.0)
 
 
             # solver.viscosity = w.slider_float("viscosity", solver.viscosity, 0.0, 1.0)
