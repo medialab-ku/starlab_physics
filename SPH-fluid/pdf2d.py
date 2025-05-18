@@ -520,6 +520,9 @@ def solvePressure_UL(k: float, dHat: float, fix: bool):
             div_v += dWdr * n.dot(xji - xji_old)
 
         dEdc = (J_n * (1.0 - div_v) - 1.0)
+        # if dEdc < 0.0:
+        #     print("cohesion")
+
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
@@ -1379,7 +1382,7 @@ def run_pbf(show_plot, use_gn, use_filter, eta):
     k_el = 1e7
 
     # print( neighbor_radius ** 6)
-    k_p = 1e7 * (h ** 6)
+    k_p = 1e5 * (h ** 2)
     # print(k_p)r
     optIter = 0
     maxIter = int(1e4)

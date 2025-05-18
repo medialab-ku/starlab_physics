@@ -15,19 +15,21 @@
 		"exportFrame": false,
 		"exportPly": false,
 		"exportObj": false,
-		"eta": 0.9,
+		"eta": 0.85,
 		"MaxOptIter": 1e4,
 		"tol": 5e-2,
-		"k_rho": 5e4,
-		"da_ratio": 1.01
+		"k_rho": 1e4,
+		"viscosity": 0.05,
+		"da_ratio": 1.01,
+		"use_gn": false
 	},
 
 	"FluidBlocks":
 	[
 	{
 		"objectId": 0,
-		"start": [1.4, 1.55, 1.4],
-		"end": [2.2, 3.0, 2.2],
+		"start": [1.4, 1.4, 1.4],
+		"end": [2.2, 2.2, 2.2],
 		"translation": [0.0, 0.0, 0.0],
 		"scale": [1, 1, 1],
 		"velocity": [0.0, 0.0, 0.0],
@@ -41,10 +43,13 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/cube.obj",
-			"translation": [2, 3.5, 2],
+			"translation": [2, 3.2, 2],
 			"scale": [1.0, 2.0, 1.0],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 90
 		}
+
+
+
 	]
 }
