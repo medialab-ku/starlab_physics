@@ -1,6 +1,9 @@
 # data -> output -> mesh -> change
+import sys
 import os
+sys.path.append(os.path.dirname(__file__))
 import shutil
+import partio
 import numpy as np
 import taichi as ti
 from scipy.spatial import cKDTree
@@ -151,6 +154,38 @@ class Exporter:
             o3d.io.write_triangle_mesh(output_filename, mesh)
             print(f"Saved {len(vertices)} vertices to {output_filename}")
             print(f"Saved {vertices.shape[0]} particles to {output_filename}")
+
+    def export_bgeo(self, filename, vertices, MODE="SINGLE"):
+        self.vertices = vertices
+        self.frame += 1
+
+        if self.frame % self.frameInterval != 0:
+            return
+
+        if hasattr(vertices, 'to_numpy'):
+            vertices = vertices.to_numpy()
+        else:
+            vertices = np.array(vertices)
+
+        if MODE == "SINGLE" or MODE == "MULTI":
+            if MODE == "SINGLE":
+                output_filename = os.path.join(self.folder, filename)
+            elif MODE == "MULTI":
+                name, ext = os.path.splitext(filename)
+                output_filename = os.path.join(self.folder, f"{name}{self.frame}{ext}")
+            else:
+                raise ValueError("MODE must be either 'SINGLE' or 'MULTI'")
+
+            parts = partio.create()
+            pos_attr = parts.addAttribute("position", partio.VECTOR, 3)
+
+            for v in vertices:
+                idx = parts.addParticle()
+                parts.set(pos_attr, idx, [float(v[0]), float(v[1]), float(v[2])])
+
+            partio.write(output_filename, parts)
+
+            print(f"Saved {len(vertices)} particles to {output_filename}")
 
 
 def compute_density_kdtree(particle_pos, grid_res=64, k=2, sigma=0.03):

@@ -101,7 +101,8 @@ if __name__ == "__main__":
 
         if PRINTMESH:
             # exporter.export_mesh("scene.obj", ps.x, MODE="PARTICLE")
-            exporter.export_ply("scene.obj", ps.x, MODE="MULTI")
+            # exporter.export_ply("scene.obj", ps.x, MODE="MULTI")
+            exporter.export_bgeo("scene.bgeo", ps.x, MODE="MULTI")
 
         # for i in range(substeps):
         if runSim:
