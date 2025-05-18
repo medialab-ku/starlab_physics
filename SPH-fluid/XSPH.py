@@ -7,6 +7,7 @@ from PCG import PCG
 from distance import *
 import matplotlib.pyplot as plt
 import numpy as np
+from util.ti_ccd_module.CCDModule import CCDModule
 
 
 class XSPHSolver(SPHBase):
@@ -53,6 +54,8 @@ class XSPHSolver(SPHBase):
         self.k_rho = self.ps.cfg.get_cfg("k_rho")
         self.da_ratio = self.ps.cfg.get_cfg("da_ratio")
         self.use_gn = bool(self.ps.cfg.get_cfg("use_gn"))
+
+        self.ccd = CCDModule()
 
 
     @ti.func
@@ -785,29 +788,42 @@ class XSPHSolver(SPHBase):
                         # print(alpha_tmp)
                         #     # alpha_tmp = (1.1 * rho0 - rho[p_i]) / div
                         ti.atomic_min(alpha_k, alpha_tmp)
-        
-        # alpha = 1.0
-        # h = 1.0 * self.ps.support_radius
-        # for p_i in ti.grouped(self.ps.x):
-        #     div = 0.0
-        #
-        #     # if self.ps.density[p_i] >= self.density_0:
-        #     for j in range(self.num_collision_p[p_i]):
-        #         p_j = self.collision_idx_p[p_i, j]
-        #         dxji = dx[p_i] - dx[p_j]
-        #         xji = x[p_i] - x[p_j]
-        #         r = xji.norm()
-        #         mass_j = self.ps.m_V[p_j] * self.density_0
-        #         n = xji / r
-        #         dWdr = self.spiky_kernel_derivative(r, h)
-        #         div += mass_j * dWdr * n.dot(dxji)
-        #
-        #     if div > 0.0 and self.ps.density[p_i] < self.density_0:
-        #         alpha_tmp = (self.density_0 - self.ps.density[p_i]) / div
-        #         ti.atomic_min(alpha, alpha_tmp)
 
         return alpha_k
-               
+
+    @ti.kernel
+    def filter_step_size_ccd(self, x: ti.template(), dx: ti.template()) -> float:
+
+        alpha = 1.0
+
+        eta = 0.01
+        thickness = 0
+
+        self.num_candidate[None] = 0
+        for P in self.ps.x:
+            xP = x[P]
+
+            _min0 = xP - dx[P]
+            _max0 = xP + dx[P]
+            self.LBVH.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info, self.num_candidate)
+
+
+        for i in range(self.num_candidate[None]):
+            info = self.candidate_info[i]
+            P = info[0]
+            j = info[1]
+
+            xP = x[P]
+            dxP = dx[P]
+            T0, T1, T2 = self.ps.faces_st[3 * j + 0], self.ps.faces_st[3 * j + 1], self.ps.faces_st[3 * j + 2]
+            xT0, xT1, xT2 = self.ps.x_st[T0], self.ps.x_st[T1], self.ps.x_st[T2]
+
+            toc = self.ccd. point_triangle_ccd(xP, xT0, xT1, xT2, dxP, ti.math.vec3(0.0), ti.math.vec3(0.0), ti.math.vec3(0.0), eta, thickness)
+            ti.atomic_min(alpha, toc)
+
+        return alpha
+
+
     # def line_search(self):
     #
     #     E_k = self.compute_pressure_potential()
@@ -859,7 +875,7 @@ class XSPHSolver(SPHBase):
         self.compute_xHat()
 
         optIter = 0
-        pad = 2.0 * self.ps.particle_diameter
+        pad = 1.0 * self.ps.particle_diameter
 
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
@@ -871,8 +887,6 @@ class XSPHSolver(SPHBase):
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
 
         self.precompute_viscosity(self.ps.xOld, self.viscosity, h)
-
-        # if self.use_gn:
 
         for _ in range(self.maxOptIter):
 
@@ -895,7 +909,16 @@ class XSPHSolver(SPHBase):
 
             alpha = 1.0
             if not self.use_gn:
-                alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
+                alpha_div = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
+                alpha = ti.min(alpha_div, alpha)
+
+            alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx)
+
+            if alpha_ccd < 1.0:
+                print("ccd")
+
+            alpha = ti.min(alpha_ccd, alpha)
+
             self.update_x(alpha)
             if dx_norm < self.tol * self.dt[None]:
                 break

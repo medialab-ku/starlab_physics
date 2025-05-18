@@ -47,8 +47,8 @@ class PCG:
             # if pAp < 0:
             #     print("A is negative definite!!")
 
-            # if pAp < 1e-16:
-            #     break
+            if pAp < 1e-16:
+                break
 
             alpha = rs_old / pAp
 
