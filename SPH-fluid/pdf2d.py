@@ -13,7 +13,7 @@ import taichi as ti
 
 ti.init(arch=ti.gpu, default_fp=ti.f32)
 
-screen_res = (1500, 1500)
+screen_res = (1000, 1000)
 screen_to_world_ratio = 100.0
 boundary = (
     screen_res[0] / screen_to_world_ratio,
@@ -37,8 +37,8 @@ dim = 2
 bg_color = 0x112F41
 particle_color = 0x068587
 boundary_color = 0xEBACA2
-num_particles_x = 40
-num_fluids = num_particles_x * 40
+num_particles_x = 30
+num_fluids = num_particles_x * 30
 
 num_solid = 30
 num_particles = num_fluids + num_solid
@@ -50,7 +50,7 @@ num_indices_st = num_st
 
 max_num_particles_per_cell = 150
 max_num_neighbors = 100
-dt = 1e-3
+dt = 5e-4
 epsilon = 1e-5
 particle_radius = 1.0
 particle_radius_in_world = particle_radius / screen_to_world_ratio
@@ -309,24 +309,24 @@ def neighbour_search(x: ti.template(), radius: float):
 @ti.kernel
 def collision_pairs(x: ti.template(), dHat: float):
     n_c[0] = 0
-    for vi in range(num_fluids):
-        # vi = (num_particles - num_solid) + si
-        for ei in range(num_indices):
-            v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
-            if vi != v0 and vi != v1:
-                x10 = x[v1] - x[v0]
-                xi0 = x[vi] - x[v0]
-                alpha = x10.dot(xi0) / x10.dot(x10)
-                # print(alpha)
-                alpha = ti.math.clamp(alpha, 0.0, 1.0)
-
-                # if alpha > 0.0 and alpha < 1.0:
-                p = alpha * x[v1] + (1.0 - alpha) * x[v0]
-                d = (x[vi] - p).norm()
-                # print(d)
-                if d <= dHat:
-                    nc = ti.atomic_add(n_c[0], 1)
-                    pair[nc] = ti.math.ivec2([vi, ei])
+    # for vi in range(num_fluids):
+    #     # vi = (num_particles - num_solid) + si
+    #     for ei in range(num_indices):
+    #         v0, v1 = indices[2 * ei + 0], indices[2 * ei + 1]
+    #         if vi != v0 and vi != v1:
+    #             x10 = x[v1] - x[v0]
+    #             xi0 = x[vi] - x[v0]
+    #             alpha = x10.dot(xi0) / x10.dot(x10)
+    #             # print(alpha)
+    #             alpha = ti.math.clamp(alpha, 0.0, 1.0)
+    #
+    #             # if alpha > 0.0 and alpha < 1.0:
+    #             p = alpha * x[v1] + (1.0 - alpha) * x[v0]
+    #             d = (x[vi] - p).norm()
+    #             # print(d)
+    #             if d <= dHat:
+    #                 nc = ti.atomic_add(n_c[0], 1)
+    #                 pair[nc] = ti.math.ivec2([vi, ei])
 
     n_c_st[0] = 0
     for vi in range(num_particles):
@@ -372,14 +372,11 @@ def computeInertiaPotential(a: ti.template()) -> float:
     return value
 
 @ti.kernel
-def solvePressure(k: float, dHat: float, fix: bool):
+def solvePressure(k: float, dHat: float, eta: float):
 
-    # print(poly6_value(0, dHat))
-    # print(poly6_value(0.0, dHat))
 
-    # print(rho0 / (mass[0] * poly6_value(0.0, dHat)))
-
-    id2 = ti.math.mat2([[1.0, 0.0], [0.0, 1.0]])
+    rho_min = mass[0] * poly6_value(0.0, dHat)
+    a = rho_min + eta * (rho0 - rho_min)
     coeff = k
     for p_i in range(num_fluids):
         pos_i = x[p_i]
@@ -388,18 +385,20 @@ def solvePressure(k: float, dHat: float, fix: bool):
         c = ti.max(rho[p_i] - rho0, 0.0)
         dEdc = 3 * c ** 2
         d2Edc2 = 6 *  c
-        #
-        # a = 100
-        # dEdc = (rho[p_i] - rho0 * poly6_value(0.0, dHat))
 
-        dEdc = 1.0
-        d2Edc2 = 0.0
         if rho[p_i] < rho0:
-            a = 1.2 * mass[0] * poly6_value(0.0, dHat)
+            # a = 1.2 * mrass[0] * poly6_value(0.0, dHat)
             # a = 0.6 * rho0
+            rho_min = mass[0] * poly6_value(0.0, dHat)
+            a = rho_min + eta * (rho0 - rho_min)
             t = (ti.max(rho[p_i] - a, 0.0))/( rho0 - a)
             dEdc = 3 * (t ** 2) - 2 * t ** 3
             d2Edc2 = 6 * t * (1.0 - t) / ( rho0 - a)
+
+            if d2Edc2  > 1e2:
+                # dEdc = d2Edc2 * 1e-3
+                print("test")
+
 
         for j in range(particle_num_neighbors[p_i]):
             p_j = particle_neighbors[p_i, j]
@@ -409,8 +408,8 @@ def solvePressure(k: float, dHat: float, fix: bool):
             pos_ji = pos_i - x[p_j]
             r = pos_ji.norm()
             #
-            # if r < 1e-8:
-            #     r = 1e-8
+            if r < 1e-8:
+                r = 1e-8
 
             n = pos_ji / r
             dWdr = spiky_gradient(r, dHat)
@@ -1307,7 +1306,7 @@ def find_alpha_within_distance(xP, dxP, xA, xB, d, alpha_min, alpha_max, max_ite
     return alpha_max  # smallest al
 
 @ti.kernel
-def filterStepSize(x: ti.template(), dx: ti.template(), dHat: float) -> float:
+def filterStepSize(x: ti.template(), dx: ti.template(), dHat: float, use_filter: bool) -> float:
 
     alpha = 1.0
     for i in range(num_fluids):
@@ -1329,26 +1328,42 @@ def filterStepSize(x: ti.template(), dx: ti.template(), dHat: float) -> float:
                     ti.atomic_min(alpha, 0.5 * alpha_tmp)
 
     # cnt = 0
+    rho_max = 0.0
+    for p_i in range(num_fluids):
+        ti.atomic_max(rho_max, rho[p_i])
 
-    # alpha_k = 1.0
-    # for p_i in range(num_fluids):
-    #     xA, dxA = x[p_i], dx[p_i]
-    #     for j in range(particle_num_neighbors[p_i]):
-    #         p_j = particle_neighbors[p_i, j]
-    #         if p_j < 0:
-    #             break
-    #         xB, dxB = x[p_j], dx[p_j]
-    #
-    #         xAB = xB - xA
-    #         dAB = dxB - dxA
-    #
-    #         t = dAB.dot(dAB)
-    #         if  t > 1e-16:
-    #             alpha_tmp = xAB.dot(dAB) / t
-    #             if 0 <= alpha_tmp <= 1.0:
-    #                 ti.atomic_min(alpha_k, 0.5 * alpha_tmp)
 
-    # print(alpha_k)
+    alpha_k = 1.0
+    for p_i in range(num_fluids):
+        xA, dxA = x[p_i], dx[p_i]
+        div = 0.0
+        for j in range(particle_num_neighbors[p_i]):
+            p_j = particle_neighbors[p_i, j]
+            if p_j < 0:
+                break
+            xB, dxB = x[p_j], dx[p_j]
+
+            r = (xA - xB).norm()
+            n = (xA - xB) / r
+            div += mass[p_j] * spiky_gradient(r, h) * n.dot(dxA - dxB)
+
+            if div > 0:
+                rho_adv = rho[p_i] + div
+                if rho_adv > 1.01 * rho_max:
+                    # print("test")
+                    alpha_tmp = ( 1.05 * rho_max - rho[p_i]) / div
+                    # print(alpha_tmp)
+                #     # alpha_tmp = (1.1 * rho0 - rho[p_i]) / div
+                    ti.atomic_min(alpha_k, alpha_tmp)
+
+    if use_filter and alpha_k < 1.0 and alpha_k < alpha:
+        alpha = alpha_k
+        # print(alpha_k)
+
+    #
+
+    # if alpha_k > 0.0:
+    #     print("test", alpha_k)
 
     # ti.atomic_min(alpha, alpha_k)
     #     cnt += 1
@@ -1358,16 +1373,16 @@ def filterStepSize(x: ti.template(), dx: ti.template(), dHat: float) -> float:
 
     return alpha
 
-def run_pbf(show_plot, use_gn):
+def run_pbf(show_plot, use_gn, use_filter, eta):
 
     k_col = 1e7
     k_el = 1e7
 
     # print( neighbor_radius ** 6)
-    k_p = 1e3 * (h ** 2)
+    k_p = 1e7 * (h ** 6)
     # print(k_p)r
     optIter = 0
-    maxIter = int(1e3)
+    maxIter = int(1e4)
     dHat = 0.05
 
     computeVTilta()
@@ -1404,9 +1419,9 @@ def run_pbf(show_plot, use_gn):
         if use_gn:
             solvePressure_UL(k_p, h, use_gn)
         else:
-            neighbour_search(x, h)
+            # neighbour_search(x, h)
             computeDensity(x, h)
-            solvePressure(k_p, h, use_gn)
+            solvePressure(k_p, h, eta)
             # solvePressure_UL2(k_p, h, use_gn)
 
         solveCollision(dHat, k_col, a)
@@ -1416,15 +1431,15 @@ def run_pbf(show_plot, use_gn):
 
         # applyPrecondition(dx, b)
 
-        pcgIter += solvePCG(dx, b, 1e-5, matFreeAx)
+        pcgIter += solvePCG(dx, b, 1e-4, matFreeAx)
         optIter += 1
         dx_inf_new = inf_norm(dx)
 
         logg.append(E)
         alpha = 1.0
-        alpha = filterStepSize(x, dx, dHat)
-        # if alpha < 1.0:
-        #     print(alpha)
+        alpha = filterStepSize(x, dx, dHat, use_filter)
+        if alpha < 1e-8:
+            print("alpha < 1e-8")
         lsIter = 0
         # for _ in range(100):
         #     add_pcg(x_tmp, x, alpha, dx)
@@ -1449,7 +1464,7 @@ def run_pbf(show_plot, use_gn):
         #     print("alpha: ", alpha)
 
         add_pcg(x, x, alpha, dx)
-        if dx_inf_new < 1e-1 * dt:
+        if dx_inf_new < 1e-2 * dt:
             break
 
         dx_inf_old = dx_inf_new
@@ -1515,7 +1530,7 @@ def render(gui):
 def init_particles() -> float:
 
     mass.fill(0.0)
-    delta = h * 0.9
+    delta = h * 0.7
     # rho_f = 1e1
     center = ti.math.vec2(0.0)
     # print(rho0 * (h ** 2))
@@ -1592,7 +1607,7 @@ def init_particles() -> float:
         l0_b[si] = size * (x[v0] - x[v1]).norm()
 
 
-    r = 0.45 * ti.Vector([0.0, boundary[1]])
+    r = 0.3 * ti.Vector([0.0, boundary[1]])
     delta_theta = (2 * ti.math.pi) / (num_st)
     # delta_theta *= 0.8
     offset = ti.math.pi / (num_st)
@@ -1635,27 +1650,56 @@ def compute_color_code(tol: float):
         # else:
         colors[c] = ti.math.vec3(135 / 255, 206/ 255, 235/ 255)
 
-
+use_gn = True
+eta = 0.0
 
 def main():
+    global use_gn
     global dHat
+    global eta
     frame_cnt = 0
     l_min = init_particles()
     print(f"boundary={boundary} grid={grid_size} cell_size={cell_size}")
     window = ti.ui.Window(name='PBF2D', res=screen_res, fps_limit=200, pos=(150, 150))
+    gui = window.get_gui()
     canvas = window.get_canvas()
     canvas.set_background_color((0.2, 0.2, 0.2))
     run = False
     show_plot = False
     log = []
     a = []
-    use_gn = True
+    use_filter = False
 
-    # for _ in range(5):
-    #     shrink()
+    def show_options():
+
+        global use_gn
+        global eta
+        # global pbf_num_iters
+        # global mass_ratio
+        # global use_heatmap
+        # global solver_type
+        # global dt_ui
+        # global g_ui
+        # global damping_ui
+        # global YM_ui
+        # global PR
+
+        # old_dHat = dHat_ui
+        # old_damping = damping_ui
+        # YM_old = YM_ui
+        # PR_old = PR
+        # mass_ratio_old = mass_ratio
+
+        with gui.sub_window("XPBD Settings", 0., 0., 0.3, 0.2) as w:
+            # dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
+            eta = w.slider_float("eta", eta, 0.0, 1.0)
+            # pbf_num_iters = w.slider_int("# iter", pbf_num_iters, 1, 100)
+            # solver_type = w.slider_int("solver type", solver_type, 0, 2)
+            # use_gn = w.checkbox("use_gn", use_gn)
 
     while window.running:
 
+        show_options()
         if window.get_event(ti.ui.PRESS):
             if window.event.key == ' ':
                 run = not run
@@ -1688,13 +1732,17 @@ def main():
                 # show_plot = True
             # if window.event.key == 's':
                 shrink()
+
+            if window.event.key == 'f':
+                use_filter = not use_filter
+
+                print(use_filter)
         # move_board()
 
         if run:
             # move_board()
-            optIter, avg_pcg_iter = run_pbf(show_plot, use_gn)
+            optIter, avg_pcg_iter = run_pbf(show_plot, use_gn, use_filter, eta)
             # print(optIter, avg_pcg_iter)
-            a.append(avg_pcg_iter)
             show_plot = False
             frame_cnt += 1
 
@@ -1702,7 +1750,7 @@ def main():
             # computeDensity(x, h)
             # max_den = getMaxDensity()
             # print(max_den/rho0)
-
+            a.append(avg_pcg_iter)
 
 
             # print(frame_cnt)

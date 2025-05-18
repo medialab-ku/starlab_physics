@@ -3,7 +3,7 @@
 	{
         "domainStart": [0.0, 0.0, 0.0],
         "domainEnd": [4, 10.0, 4],
-		"particleRadius": 0.015,
+		"particleRadius": 0.01,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
 		"simulationMethod": 5,
@@ -14,14 +14,18 @@
 		"boundaryHandlingMethod": 0,
 		"exportFrame": false,
 		"exportPly": false,
-		"exportObj": false
+		"exportObj": false,
+		"eta": 0.3,
+		"MaxOptIter": 1e4,
+		"tol": 1e-2,
+		"k_rho": 1e3
 	},
 
 	"FluidBlocks": [
 		{
             "objectId": 0,
-			"start": [1.4, 1.4, 1.4],
-			"end": [2.6, 2.6, 2.6],
+			"start": [1.4, 1.55, 1.4],
+			"end": [2.2, 3.0, 2.2],
 			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
@@ -34,8 +38,8 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/cube.obj",
-			"translation": [2, 5, 2],
-			"scale": [1.0, 4, 1.0],
+			"translation": [2, 3.5, 2],
+			"scale": [1.0, 2.0, 1.0],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 90
 		}

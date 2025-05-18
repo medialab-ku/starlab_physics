@@ -42,6 +42,11 @@ class XSPHSolver(SPHBase):
         self.collision_H_p = ti.Matrix.field(n=3, m=3, dtype=float, shape=(self.ps.fluid_particle_num, self.cache_size))
         self.collision_grad_p = ti.Vector.field(n=3, dtype=float, shape=(self.ps.fluid_particle_num, self.cache_size))
 
+        self.maxOptIter = int(self.ps.cfg.get_cfg("MaxOptIter"))
+        self.tol = self.ps.cfg.get_cfg("tol")
+        self.k_rho = self.ps.cfg.get_cfg("k_rho")
+
+
     @ti.func
     def barrier_grad(self, d: float, dHat: float):
         k = (-ti.log(d / dHat))
@@ -54,6 +59,39 @@ class XSPHSolver(SPHBase):
         dkdx = -1.0 / d
         d2kdx2 = 1.0 / (d ** 2)
         return (d2kdx2 * (d - dHat) + 4 * dkdx) * (d - dHat) + 2 * k
+
+    @ti.func
+    def poly6_value(self, s, h):
+        result = 0.0
+        poly6_factor = 4.0 / ti.math.pi
+        if 0 <= s and s < h:
+            x = (h * h - s * s)
+            result = (poly6_factor / ti.pow(h, 8)) * x * x * x
+
+        return result
+
+    @ti.func
+    def cubic_value(self, r_norm, h):
+        res = ti.cast(0.0, ti.f32)
+        # h = self.ps.support_radius
+        # value of cubic spline smoothing kernel
+        k = 1.0
+        if self.ps.dim == 1:
+            k = 4 / 3
+        elif self.ps.dim == 2:
+            k = 40 / 7 / ti.math.pi
+        elif self.ps.dim == 3:
+            k = 8 / ti.math.pi
+        k /= h ** self.ps.dim
+        q = r_norm / h
+        if q <= 1.0:
+            if q <= 0.5:
+                q2 = q * q
+                q3 = q2 * q
+                res = k * (6.0 * q3 - 6.0 * q2 + 1)
+            else:
+                res = k * 2 * ti.pow(1 - q, 3.0)
+        return res
 
     @ti.func
     def compute_densities_task(self, p_i, p_j, ret: ti.template()):
@@ -70,16 +108,16 @@ class XSPHSolver(SPHBase):
 
 
     @ti.kernel
-    def compute_densities(self, x: ti.template()):
+    def compute_densities(self, x: ti.template(), h: float):
         # for p_i in range(self.ps.particle_num[None]):
         a = self.ps
-        h = self.ps.support_radius
+        # h = self.ps.support_radius
 
         max_num = 0
         for p_i in ti.grouped(x):
             if self.ps.material[p_i] != self.ps.material_fluid:
                 continue
-            self.ps.density[p_i] = self.ps.m_V[p_i] * self.cubic_kernel(0.0)
+            self.ps.density[p_i] = self.ps.m_V[p_i] * self.density_0 * self.cubic_value(0.0, h)
             # for p_i in ti.grouped(self.ps.x):
             self.num_collision_p[p_i] = 0
             center_cell = a.pos_to_index(x[p_i])
@@ -88,16 +126,16 @@ class XSPHSolver(SPHBase):
                 for p_j in range(a.grid_particles_num[ti.max(0, grid_index - 1)], a.grid_particles_num[grid_index]):
                     if p_i[0] != p_j and (x[p_i] - x[p_j]).norm() < h:
                         x_i = x[p_i]
-                        h = self.ps.support_radius
+                        # h = self.ps.support_radius
                         if self.ps.material[p_j] == self.ps.material_fluid:
                             x_j = x[p_j]
                             r = (x_i - x_j).norm()
-                            self.ps.density[p_i] += self.ps.m_V[p_j] * self.cubic_kernel(r)
+                            self.ps.density[p_i] += self.ps.m_V[p_j] * self.density_0 * self.cubic_value(r, h)
                             ni = ti.atomic_add(self.num_collision_p[p_i], 1)
                             self.collision_idx_p[p_i, ni] = p_j
 
-            # ti.atomic_max(max_num, self.num_collision_p[p_i])
-            self.ps.density[p_i] *= self.density_0
+            ti.atomic_max(max_num, self.num_collision_p[p_i])
+            # self.ps.density[p_i] *= self.density_0
             if self.num_collision_p[p_i] > self.cache_size:
                 print("warning")
 
@@ -185,6 +223,7 @@ class XSPHSolver(SPHBase):
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         density = 1e1
         for p_i in ti.grouped(self.ps.x):
+            # self.ps.grad[p_i]  = self.density_0 * self.ps.m_V[p_i] * ti.math.vec3(0.0)
             self.ps.grad[p_i]  = self.density_0 * self.ps.m_V[p_i] * (self.ps.x[p_i] - self.ps.xHat[p_i])
             self.ps.diagH[p_i] = self.density_0 * self.ps.m_V[p_i] * I_3x3
 
@@ -287,47 +326,53 @@ class XSPHSolver(SPHBase):
 
 
     @ti.kernel
-    def compute_pressure(self, k: float):
-        h = 1.0 * self.ps.support_radius
-        I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        c_max = 0.0
+    def compute_pressure(self, k: float, h:float, eta: float):
+        # h = 1.0 * self.ps.support_radius
+        # print(eta)
+        mass_i = self.ps.m_V[0] * self.density_0
+        rho_min = mass_i * self.cubic_value(0.0, h)
+        a = rho_min + eta * (self.density_0 - rho_min)
+
+        # coef = (2.0 * eta) / (rho_min ** 2)
+
+        ratio = 1.0 / (self.density_0 - rho_min)
+
+        # coef = (self.density_0 - a)  * ratio
+        # coef = 1.0
+
+
+        e = 2.718
+
+        eps =  (self.density_0 - rho_min)
         for p_i in ti.grouped(self.ps.x):
-            c = ti.max(self.ps.density[p_i] / self.density_0 - 1.0, 0.0)
+
+            dEdc = 1.0
+            d2Edc2 = 0.0
+            #
+            t = (ti.max(self.ps.density[p_i] - a, 0.0)) / (self.density_0 - a)
+            if self.ps.density[p_i] < self.density_0:
+
+                dEdc = 3 * (t ** 2) - 2 * t ** 3
+                d2Edc2 = 6 * t * (1.0 - t) / (self.density_0 - a)
+
             for ni in range(self.num_collision_p[p_i]):
                 p_j = self.collision_idx_p[p_i, ni]
                 x_i = self.ps.x[p_i]
-                # h = self.ps.support_radius
                 if self.ps.material[p_j] == self.ps.material_fluid:
                     x_j = self.ps.x[p_j]
                     r = (x_i - x_j).norm()
-
-                    # dEdc = c
-                    # d2Edc2 = 1.0 if c >= 0 else 0
-
-                    # dEdc = (c ** 2)
-                    # d2Edc2 = 2 * c
-
-                    dEdc = 1.0 if c > 0 else 0
-                    d2Edc2 = 0
-
-                    mass_j = self.ps.m_V[p_j] * self.density_0
-                    # if r < 1e-12:
-                    #     r = 1e-12
-                    #     print("test")
-
-                    # r += 1e-4
                     n = (x_i - x_j) / r
+                    mass_j = self.ps.m_V[p_j] * self.density_0
 
                     dWdr = self.spiky_kernel_derivative(r, h)
-                    dcdx = mass_j * dWdr * n / self.density_0
+                    # dWdr = self.barrier_grad(r, h)
+                    dcdx = mass_j * dWdr * n
+
                     d2Wdr2 = self.spiky_kernel_hessian(r, h)
+                    # d2Wdr2 = self.barrier_hess(r, h)
 
                     nnT = n.outer_product(n)
-                    alpha = abs(dWdr / r)
-                    beta = abs(d2Wdr2 - dWdr / r)
-                    # if beta < 0.0:
-                    #     print("test")
-                    d2cdx2 = (mass_j / self.density_0) * (alpha * I_3x3 + beta * nnT)
+                    d2cdx2 = mass_j * d2Wdr2 * nnT
                     self.ps.grad[p_i] += k * dEdc * dcdx
                     self.ps.grad[p_j] -= k * dEdc * dcdx
 
@@ -337,16 +382,70 @@ class XSPHSolver(SPHBase):
                     self.collision_grad_p[p_i, ni] = ti.sqrt(k * d2Edc2) * dcdx
                     self.collision_H_p[p_i, ni] = k * dEdc * d2cdx2
 
-            c_max = max(c_max, c)
-
-        # print(c_max)
 
     @ti.kernel
-    def compute_pressure_gn(self, k: float):
+    def compute_pressure_gn(self, x: ti.template(),  k: float):
+
+        coeff = k
+        h = 1.0 * self.ps.support_radius
+        # for p_i in ti.grouped(self.ps.x):
+        #     # pos_i = x_old[p_i]
+        #     # rho0 = 1.8 * mass[p_i] * poly6_value(0, dHat)
+        #     dEdx_i = ti.Vector([0.0, 0.0])
+        #     d2Edx2_i = ti.math.mat2(0.0)
+        #
+        #     J_n = self.density_0 / ti.max(self.ps.density[p_i], self.density_0)
+        #     div_v = 0.0
+        #     for ni in range(self.num_collision_p[p_i]):
+        #         p_j = self.collision_idx_p[p_i, ni]
+        #         if p_j < 0:
+        #             break
+        #
+        #         xji_old = self.ps.xOld[p_i] - self.ps.xOld[p_j]
+        #         xji = x[p_i] - x[p_j]
+        #         r = xji_old.norm()
+        #         if r < 1e-5:
+        #             r = 1e-5
+        #         n = xji_old / r
+        #         m_j = self.ps.m_V[p_j] * self.density_0
+        #         dWdr = (m_j / ti.max(self.ps.density[p_j], self.density_0)) * self.spiky_kernel_derivative(r, h)
+        #         div_v += dWdr * n.dot(xji - xji_old)
+        #
+        #     dEdc = (J_n * (1.0 - div_v) - 1.0)
+        #
+        #     for ni in range(self.num_collision_p[p_i]):
+        #         p_j = self.collision_idx_p[p_i, ni]
+        #         if p_j < 0:
+        #             break
+        #
+        #         xji_old = self.ps.xOld[p_i] - self.ps.xOld[p_j]
+        #         r = xji_old.norm()
+        #         if r < 1e-5:
+        #             r = 1e-5
+        #         n = xji_old / r
+        #         dWdr = self.spiky_kernel_derivative(r, h)
+        #
+        #         m_j = self.ps.m_V[p_j] * self.density_0
+        #         dcdx_j = J_n * (m_j / ti.max(self.ps.density[p_j], self.density_0)) * dWdr * n
+        #         dEdx_j = coeff * dEdc * dcdx_j
+        #         dEdx_i += dEdx_j
+        #
+        #         d2Edx2_j = coeff * (dcdx_j.outer_product(dcdx_j))
+        #         d2Edx2_i += d2Edx2_j
+        #
+        #         self.ps.diagH[p_j] += dEdx_j
+        #         self.ps.diagH[p_j] += d2Edx2_j
+        #         self.collision_H_p[p_i, ni] = ti.math.mat3(0.0)
+        #         self.collision_grad_p[p_i, ni] = ti.sqrt(coeff) * dcdx_j
+        #     #
+        #     self.ps.diagH[p_i] -= dEdx_i
+        #     self.ps.diagH[p_i] += d2Edx2_i
 
         h = 1.0 * self.ps.support_radius
         for p_i in ti.grouped(self.ps.x):
             # before = self.ps.x[p_i]
+            J_n = self.density_0 / ti.max(self.ps.density[p_i], self.density_0)
+            div_v = 0.0
 
             density_i = self.ps.density[p_i]
             for ni in range(self.num_collision_p[p_i]):
@@ -406,9 +505,9 @@ class XSPHSolver(SPHBase):
             self.LBVH.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info,  self.num_candidate)
 
         # print(self.num_candidate[None] )
-        Kappa = 1e3 * self.dt[None] ** 2
+        Kappa = 1e3 * self.dt[None] * self.dt[None]
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        dHat = 2 * self.ps.particle_radius
+        dHat = 0.5 * pad
         self.num_collision[None] = 0
 
         for i in range(self.num_candidate[None]):
@@ -458,15 +557,15 @@ class XSPHSolver(SPHBase):
 
             n = (xP - proj) / d
             if d <= dHat:
-
-                # if d == 0:
+                #
+                # if d == 1e-4:
                 #     print("test")
                 dbdx = self.barrier_grad(d, dHat)
                 d2bdx2 = self.barrier_hess(d, dHat)
 
                 nnT = n.outer_product(n)
                 d2d_dx2 = (I_3x3 - nnT) / d
-                test = (abs(d2bdx2) * nnT + abs(dbdx) * d2d_dx2)
+                test = (d2bdx2 * nnT)
                 self.ps.diagH[P] += Kappa * test
                 self.ps.grad[P] += Kappa * dbdx * n
 
@@ -555,94 +654,191 @@ class XSPHSolver(SPHBase):
 
 
     @ti.kernel
-    def filter_step_size_div(self, x: ti.template(), dx: ti.template()) -> float:
-        
-        alpha = 1.0
-        h = 1.0 * self.ps.support_radius
-        for p_i in ti.grouped(self.ps.x):
-            div = 0.0
+    def filter_step_size_div(self, x: ti.template(), dx: ti.template(), h: float) -> float:
 
-            # if self.ps.density[p_i] >= self.density_0:
+        # h = self.ps.support_radius
+        rho_max = 0.0
+        rat = 1.01
+        for p_i in ti.grouped(self.ps.x):
+            ti.atomic_max(rho_max, self.ps.density[p_i])
+
+        alpha_k = 1.0
+        for p_i in ti.grouped(self.ps.x):
+            xA, dxA = x[p_i], dx[p_i]
+            div = 0.0
             for j in range(self.num_collision_p[p_i]):
                 p_j = self.collision_idx_p[p_i, j]
-                dxji = dx[p_i] - dx[p_j]
-                xji = x[p_i] - x[p_j]
-                r = xji.norm()
+                if p_j < 0:
+                    break
+                xB, dxB = x[p_j], dx[p_j]
+
+                r = (xA - xB).norm()
+                n = (xA - xB) / r
                 mass_j = self.ps.m_V[p_j] * self.density_0
-                n = xji / r
-                dWdr = self.spiky_kernel_derivative(r, h)
-                div += mass_j * dWdr * n.dot(dxji)
+                div += mass_j * self.spiky_kernel_derivative(r, h) * n.dot(dxA - dxB)
 
-            if div > 0.0 and self.ps.density[p_i] < self.density_0:
-                alpha_tmp = (self.density_0 - self.ps.density[p_i]) / div
-                ti.atomic_min(alpha, alpha_tmp)
+                if div > 0:
+                    rho_adv = self.ps.density[p_i] + div
+                    if rho_adv > rat * rho_max:
+                        # print("test")
+                        alpha_tmp = (rat * rho_max - self.ps.density[p_i]) / div
+                        # print(alpha_tmp)
+                        #     # alpha_tmp = (1.1 * rho0 - rho[p_i]) / div
+                        ti.atomic_min(alpha_k, alpha_tmp)
+        
+        # alpha = 1.0
+        # h = 1.0 * self.ps.support_radius
+        # for p_i in ti.grouped(self.ps.x):
+        #     div = 0.0
+        #
+        #     # if self.ps.density[p_i] >= self.density_0:
+        #     for j in range(self.num_collision_p[p_i]):
+        #         p_j = self.collision_idx_p[p_i, j]
+        #         dxji = dx[p_i] - dx[p_j]
+        #         xji = x[p_i] - x[p_j]
+        #         r = xji.norm()
+        #         mass_j = self.ps.m_V[p_j] * self.density_0
+        #         n = xji / r
+        #         dWdr = self.spiky_kernel_derivative(r, h)
+        #         div += mass_j * dWdr * n.dot(dxji)
+        #
+        #     if div > 0.0 and self.ps.density[p_i] < self.density_0:
+        #         alpha_tmp = (self.density_0 - self.ps.density[p_i]) / div
+        #         ti.atomic_min(alpha, alpha_tmp)
 
-        return alpha
+        return alpha_k
                
     def line_search(self):
 
         E_k = self.compute_pressure_potential()
 
-    def substep(self):
 
-
-        self.surface_tension = 0.01
-        self.viscosity = 0.005
+    def init_debug(self):
         self.compute_non_pressure_forces()
         self.advect()
         self.compute_xHat()
 
+    def step_debug(self):
+
+        h = 2.0 * self.ps.particle_diameter
+        k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
+        k = self.k_rho * self.dt[None] * self.dt[None]
+        pad = 2.0 * self.ps.particle_diameter
+
+        self.compute_inertia()
+        # self.num_collision_p.fill(0)
+        self.compute_densities(self.ps.x, h)
+        self.compute_pressure(k, h, eta=self.ps.eta)
+        # self.compute_pressure_gn(self.ps.x, k)
+        self.compute_collision_static(pad)
+        self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
+
+        dx_norm = self.inf_norm(self.ps.dx)
+
+        if dx_norm > h:
+            print("test")
+
+        alpha = 1.0
+        alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h)
+
+        if alpha < 1.0:
+            print(alpha)
+
+        self.update_x(alpha)
+        self.ps.xTmp.copy_from(self.ps.x)
+
+        return dx_norm
+
+
+    def substep(self):
+
+        self.surface_tension = 0.0
+        # self.viscosity = 0.000
+
+        v_norm = self.inf_norm(self.ps.v)
+
+        if v_norm * self.dt[None] > self.ps.support_radius:
+            print("test")
+
+        self.compute_non_pressure_forces()
+        self.advect()
+        self.compute_xHat()
+
+        # self.ps.x.copy_from(self.ps.xHat)
+
         # self.ps.x.copy_from
         optIter = 0
-        maxIter = int(1e3)
-        eps = 1e-2
-        tol = eps * self.dt[None]
-        pad = 1.0 * self.ps.particle_diameter
+        # maxIter = int(1e3)
+        # eps = 1e-2
+        # tol = self.tol * self.dt[None]
+        pad = 2.0 * self.ps.particle_diameter
 
         log_debug = []
         dx_norm_old = 0.0
 
-        self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
-        coef = 1e8
-        h = 1.0 * self.ps.support_radius
-        k = coef * self.dt[None] * self.dt[None] * (h ** 6)
-        self.compute_densities(self.ps.xOld)
-        for _ in range(maxIter):
+        # print(self.ps.eta)
+        # self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
+        # coef = 1e4
+        h = 2.0 * self.ps.particle_diameter
+        k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
+        # k = self.k_rho * self.dt[None] * self.dt[None]
 
+        # print(1.0 / (h ** 6))
+        # self.compute_inertia()
+
+        # beta = 0.0
+        # beta_max = 0.9
+        for _ in range(self.maxOptIter):
+
+            # if self.ps.debug and self.ps.test:
             self.compute_inertia()
             # self.num_collision_p.fill(0)
-            # self.compute_densities(self.ps.x)
-            self.compute_pressure(k)
-            self.compute_pressure_gn(k)
+            self.compute_densities(self.ps.x, h)
+            self.compute_pressure(k, h, eta=self.ps.eta)
+            # self.compute_pressure_gn(self.ps.x, k)
             self.compute_collision_static(pad)
             self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
 
+            # scale(self.ps.grad, -1.0, self.ps.grad)
+            # self.PCG.applyPrecondition(self.ps.dx, self.ps.diagH, self.ps.grad)
             # self.compute_search_dir()
-            dx_norm = self.inf_norm(self.ps.dx)
-            alpha = 1.0
-            # alpha = self.filter_step_size_div(self.ps.x, self.ps.dx)
 
+            dx_norm = self.inf_norm(self.ps.dx)
+
+            if dx_norm > h:
+                print("test")
+
+            alpha = 1.0
+            alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h)
             # if alpha < 1.0:
             #     print("alpha too small", alpha)
                 # alpha = 1.0
-
             self.update_x(alpha)
+            # beta += (1.0 - beta) * alpha
+
             # self.enforce_boundary_3D(self.ps.material_fluid)
-            if dx_norm < tol:
+            if dx_norm < self.tol * self.dt[None]:
                 break
+            #
+            # if self.ps.debug:
+            #     self.ps.xTmp.copy_from(self.ps.x)
+
+                # if beta > beta_max:
+            #     break
+
+
             optIter += 1
             dx_norm_old = dx_norm
             log_debug.append(dx_norm)
 
         print("opt Iter:", optIter)
         self.compute_velocity()
-        #
-        if optIter == maxIter:
+        if optIter == self.maxOptIter:
             print("Failed to converge...")
             plt.plot(np.array(log_debug))
             plt.yscale('log')
             plt.show()
-            exit()
+            # exit()
 
         # self.compute_densities()
         # self.compute_pressure_forces()

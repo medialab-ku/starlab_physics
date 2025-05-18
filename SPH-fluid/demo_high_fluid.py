@@ -156,7 +156,7 @@ if __name__ == "__main__":
     background_color = (0, 0, 0)  # 0xFFFFFF
     particle_color = (1, 1, 1)
 
-    cnt = 0
+    frame_cnt = 0
     cnt_ply = 0
     solver.initialize_solver()
     series_prefix = "output/object_{}_demo_test.ply"
@@ -192,10 +192,10 @@ if __name__ == "__main__":
             canvas.scene(scene)
     
         if output_frames:
-            if cnt % 2 == 0:
-                window.write_image(f"img_high_fluid_output/{cnt:04}.png")
+            if frame_cnt % 2 == 0:
+                window.write_image(f"img_high_fluid_output/{frame_cnt:04}.png")
         if output_ply:
-            if cnt % 20 == 0:
+            if frame_cnt % 20 == 0:
                 obj_id = 0
                 obj_data = ps.dump(obj_id=obj_id)
                 np_pos = obj_data["position"]
@@ -203,6 +203,6 @@ if __name__ == "__main__":
                 writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
                 writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
                 cnt_ply += 1
-        cnt += 1
+        frame_cnt += 1
         window.show()
     ti.profiler.print_kernel_profiler_info()

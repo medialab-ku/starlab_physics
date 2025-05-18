@@ -35,6 +35,67 @@ if __name__ == "__main__":
     solver.initialize()
 
     window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=False)
+    gui = window.get_gui()
+
+    method = config.get_cfg("simulationMethod")
+
+    frame_cnt = 0
+    cnt_ply = 0
+    runSim = False
+
+    stop_frame = False
+    end_frame = 1000
+
+
+    def show_options():
+        global ps
+        global frame_cnt
+        global solver
+        global method
+        global end_frame
+        global stop_frame
+
+        # global use_gn
+        # global eta
+        # global pbf_num_iters
+        # global mass_ratio
+        # global use_heatmap
+        # global solver_type
+        # global dt_ui
+        # global g_ui
+        # global damping_ui
+        # global YM_ui
+        # global PR
+
+        # old_dHat = dHat_ui
+        # old_damping = damping_ui
+        # YM_old = YM_ui
+        # PR_old = PR
+        # mass_ratio_old = mass_ratio
+
+        with gui.sub_window("Settings", 0., 0., 0.4, 0.2) as w:
+            # dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
+            ps.eta = w.slider_float("eta ", ps.eta, 0.0, 1.0)
+            solver.viscosity = w.slider_float("viscosity", solver.viscosity, 0.0, 1.0)
+
+            if method == 5:
+                solver.tol = w.slider_float("opt tol", solver.tol, 0.0, 1.0)
+                solver.k_rho = w.slider_float("k rho", solver.k_rho, 0.0, 1e6)
+
+
+
+            # solver.viscosity = w.slider_float("viscosity", solver.viscosity, 0.0, 1.0)
+            # pbf_num_iters = w.slider_int("# iter", pbf_num_iters, 1, 100)
+            # solver_type = w.slider_int("solver type", solver_type, 0, 2)
+
+
+            stop_frame = w.checkbox("stop frame ?", stop_frame)
+
+            if stop_frame:
+                end_frame = w.slider_int("end frame", end_frame, 0, int(1e5))
+
+            gui.text(f"# particle: {ps.particle_num}")
+            gui.text(f"Current frame: {frame_cnt}")
 
     scene = ti.ui.Scene()
     camera = ti.ui.Camera()
@@ -73,13 +134,11 @@ if __name__ == "__main__":
     for i, val in enumerate([0, 1, 0, 2, 1, 3, 2, 3, 4, 5, 4, 6, 5, 7, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7]):
         box_lines_indices[i] = val
 
-    cnt = 0
-    cnt_ply = 0
-    runSim = False
-
     if ps.cfg.get_cfg("simulationMethod") == 5:
         solver.build_static_LBVH()
     while window.running:
+
+        show_options()
 
         if window.get_event(ti.ui.PRESS):
             if window.event.key == ' ':
@@ -87,6 +146,7 @@ if __name__ == "__main__":
                 # print("test")
 
             if window.event.key == 'r':
+                frame_cnt = 0
                 ps.x.copy_from(ps.x_0)
                 ps.v.fill(0.0)
                 solver.initialize()
@@ -94,12 +154,15 @@ if __name__ == "__main__":
                     solver.build_static_LBVH()
                 runSim = False
 
+        if stop_frame and frame_cnt > end_frame:
+            runSim = False
+
         # for i in range(substeps):
         if runSim:
             # print(runSim)
             for i in range(substeps):
                 solver.step()
-
+            frame_cnt += 1
 
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
         if ps.dim == 2:
@@ -110,6 +173,9 @@ if __name__ == "__main__":
             scene.set_camera(camera)
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
+
+
+            scene.particles(ps.xTmp, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
             scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
             canvas.scene(scene)
             # solver.LBVH.draw_bvh_aabb_test(scene,  solver.LBVH.num_leafs)
@@ -121,10 +187,10 @@ if __name__ == "__main__":
                 scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
                 # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
         if output_frames:
-            if cnt % output_interval == 0:
-                window.write_image(f"{scene_name}_output_img/{cnt:06}.png")
+            if frame_cnt % output_interval == 0:
+                window.write_image(f"{scene_name}_output_img/{frame_cnt:06}.png")
         
-        if cnt % output_interval == 0:
+        if frame_cnt % output_interval == 0:
             if output_ply:
                 obj_id = 0
                 obj_data = ps.dump(obj_id=obj_id)
@@ -139,7 +205,6 @@ if __name__ == "__main__":
                         f.write(e)
             cnt_ply += 1
 
-        cnt += 1
         # if cnt > 6000:
         #     break
         window.show()

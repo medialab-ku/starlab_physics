@@ -38,7 +38,6 @@ class ParticleSystem:
         self.particle_diameter = 2 * self.particle_radius
         self.support_radius = self.particle_radius * 4.0  # support radius
         self.m_V0 = 0.8 * self.particle_diameter ** self.dim
-
         self.particle_num = ti.field(int, shape=())
 
         # Grid related properties
@@ -46,6 +45,10 @@ class ParticleSystem:
         self.grid_num = np.ceil(self.domain_size / self.grid_size).astype(int)
         print("grid size: ", self.grid_num)
         self.padding = self.grid_size
+
+        self.eta = self.cfg.get_cfg("eta")
+        self.test = False
+        self.debug = False
 
         # All objects id and its particle num
         self.object_collection = dict()
