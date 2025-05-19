@@ -36,6 +36,12 @@ class SimConfig:
         else:
             return []
 
+    def get_fluid_meshes(self):
+        if "FluidMeshes" in self.config:
+            return self.config["FluidMeshes"]
+        else:
+            return []
+
 
     def get_static_objects(self):
         if "StaticObjects" in self.config:

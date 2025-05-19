@@ -48,13 +48,12 @@ class XSPHSolver(SPHBase):
         self.Vij_val = ti.Matrix.field(n=3, m=3, dtype=float, shape=(self.ps.fluid_particle_num, self.cache_size))
         self.gn_grad = ti.Vector.field(n=3, dtype=float, shape=(self.ps.fluid_particle_num, self.cache_size))
 
-        self.viscosity = self.ps.cfg.get_cfg("viscosity")
+        self.viscosity  = self.ps.cfg.get_cfg("viscosity")
         self.maxOptIter = int(self.ps.cfg.get_cfg("MaxOptIter"))
-        self.tol = self.ps.cfg.get_cfg("tol")
-        self.k_rho = self.ps.cfg.get_cfg("k_rho")
-        self.da_ratio = self.ps.cfg.get_cfg("da_ratio")
-        self.use_gn = bool(self.ps.cfg.get_cfg("use_gn"))
-
+        self.tol        = self.ps.cfg.get_cfg("tol")
+        self.k_rho      = self.ps.cfg.get_cfg("k_rho")
+        self.da_ratio   = self.ps.cfg.get_cfg("da_ratio")
+        self.use_gn     = bool(self.ps.cfg.get_cfg("use_gn"))
         self.ccd = CCDModule()
 
 
@@ -693,7 +692,6 @@ class XSPHSolver(SPHBase):
             _max0 = xP + dx[P]
             self.LBVH.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info, self.num_candidate)
 
-
         for i in range(self.num_candidate[None]):
             info = self.candidate_info[i]
             P = info[0]
@@ -721,6 +719,7 @@ class XSPHSolver(SPHBase):
         self.compute_xHat()
 
         optIter = 0
+        pcgIter_total = 0
         pad = 1.0 * self.ps.particle_diameter
 
         log_debug = []
@@ -733,7 +732,6 @@ class XSPHSolver(SPHBase):
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
 
         self.precompute_viscosity(self.ps.xOld, self.viscosity, h)
-
         for _ in range(self.maxOptIter):
 
             self.compute_inertia()
@@ -746,10 +744,11 @@ class XSPHSolver(SPHBase):
             self.compute_viscosity()
             self.compute_collision_static(pad)
 
+            # pcgIter = 0
             if self.use_gn:
-                self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax2)
+                pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax2)
             else:
-                self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
+                pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
 
             dx_norm = self.inf_norm(self.ps.dx)
 
@@ -759,10 +758,6 @@ class XSPHSolver(SPHBase):
                 alpha = ti.min(alpha_div, alpha)
 
             alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx)
-
-            # if alpha_ccd < 1.0:
-            #     print("ccd")
-
             alpha = ti.min(alpha_ccd, alpha)
 
             self.update_x(alpha)
@@ -773,7 +768,7 @@ class XSPHSolver(SPHBase):
             dx_norm_old = dx_norm
             log_debug.append(dx_norm)
 
-        print("opt Iter:", optIter)
+        # print("opt Iter:", optIter)
         self.compute_velocity()
         if optIter == self.maxOptIter:
             print("Failed to converge...")
@@ -781,3 +776,5 @@ class XSPHSolver(SPHBase):
             plt.yscale('log')
             plt.show()
             exit()
+
+        return optIter, pcgIter_total

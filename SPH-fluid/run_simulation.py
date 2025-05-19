@@ -158,7 +158,8 @@ if __name__ == "__main__":
         if runSim:
             # print(runSim)
             for i in range(substeps):
-                solver.step()
+               optIter, pcgIter_total = solver.step()
+               print(optIter, pcgIter_total)
             frame_cnt += 1
 
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)

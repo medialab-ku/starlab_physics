@@ -89,3 +89,5 @@ class PCG:
 
         # add(x, x, alpha, self.p)
         scale(x, -1.0, x)
+
+        return itrCnt

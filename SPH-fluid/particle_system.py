@@ -64,6 +64,11 @@ class ParticleSystem:
             self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
 
+
+
+
+
+
         #### Process Rigid Blocks ####
         rigid_blocks = self.cfg.get_rigid_blocks()
         rigid_particle_num = 0
@@ -311,6 +316,7 @@ class ParticleSystem:
                       new_particles_material: ti.types.ndarray(),
                       new_particles_is_dynamic: ti.types.ndarray(),
                       new_particles_color: ti.types.ndarray()):
+
         for p in range(self.particle_num[None], self.particle_num[None] + new_particles_num):
             v = ti.Vector.zero(float, self.dim)
             x = ti.Vector.zero(float, self.dim)
