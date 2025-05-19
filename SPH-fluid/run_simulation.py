@@ -120,7 +120,7 @@ if __name__ == "__main__":
     canvas = window.get_canvas()
     radius = 0.002
     movement_speed = 0.02
-    background_color = (0, 0, 0)  # 0xFFFFFF
+    background_color = (1, 1, 1)  # 0xFFFFFF
     particle_color = (1, 1, 1)
 
     # Invisible objects
@@ -186,7 +186,6 @@ if __name__ == "__main__":
             scene.set_camera(camera)
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
-
 
             scene.particles(ps.xTmp, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
             scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)

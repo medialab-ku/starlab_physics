@@ -33,11 +33,11 @@ class PCG:
         self.p.copy_from(self.z)
         rs_old = dot(self.r, self.z)
 
+        itrCnt = 0
         if rs_old < 1e-16:
-            return
+            return itrCnt
 
         log_debug = []
-        itrCnt = 0
         maxPCGIter = int(1e4)
         for i in range(maxPCGIter):
 
@@ -77,12 +77,12 @@ class PCG:
             add(self.p, self.z, beta, self.p)
             rs_old = rs_new
 
-        if itrCnt == maxPCGIter:
-            print("PCG failed to converge...")
-            plt.plot(np.array(log_debug))
-            # plt.yscale('log')
-            plt.show()
-            exit()
+        # if itrCnt == maxPCGIter:
+        #     print("PCG failed to converge...")
+        #     plt.plot(np.array(log_debug))
+        #     # plt.yscale('log')
+        #     plt.show()
+        #     exit()
 
         # print("PCG iter: ", itrCnt)
         # x.copy_from(self.s)

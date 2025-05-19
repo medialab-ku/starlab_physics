@@ -771,11 +771,11 @@ class XSPHSolver(SPHBase):
 
         # print("opt Iter:", optIter)
         self.compute_velocity()
-        if optIter == self.maxOptIter:
-            print("Failed to converge...")
-            plt.plot(np.array(log_debug))
-            plt.yscale('log')
-            plt.show()
-            exit()
+        # if optIter == self.maxOptIter:
+        #     print("Failed to converge...")
+        #     plt.plot(np.array(log_debug))
+        #     plt.yscale('log')
+        #     plt.show()
+        #     exit()
 
         return optIter, pcgIter_total
