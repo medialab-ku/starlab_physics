@@ -15,6 +15,7 @@
 		"exportFrame": false,
 		"exportPly": false,
 		"exportObj": false,
+		"exportVtk": false,
 		"eta": 0.85,
 		"MaxOptIter": 1e4,
 		"tol": 5e-2,

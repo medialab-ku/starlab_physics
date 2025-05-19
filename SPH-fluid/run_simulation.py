@@ -4,6 +4,7 @@ import taichi as ti
 import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
+from export_mesh import Exporter
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
@@ -23,15 +24,22 @@ if __name__ == "__main__":
     output_interval = int(0.016 / config.get_cfg("timeStepSize"))
     output_ply = config.get_cfg("exportPly")
     output_obj = config.get_cfg("exportObj")
+    output_vtk = config.get_cfg("exportVtk")
     series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
     if output_frames:
         os.makedirs(f"{scene_name}_output_img", exist_ok=True)
     if output_ply:
-        os.makedirs(f"{scene_name}_output", exist_ok=True)
+        os.makedirs(f"{scene_name}_output_ply", exist_ok=True)
+    if output_obj:
+        os.makedirs(f"{scene_name}_output_obj", exist_ok=True)
+    if output_vtk:
+        os.makedirs(f"{scene_name}_output_vtk", exist_ok=True)
 
     ps = ParticleSystem(config, GGUI=True)
     solver = ps.build_solver()
     solver.initialize()
+
+    exporter = Exporter(f"{scene_name}_output_vtk", f"{scene_name}_output_obj", f"{scene_name}_output_ply", frameInterval=output_interval)
 
     window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=False)
     gui = window.get_gui()
@@ -52,6 +60,9 @@ if __name__ == "__main__":
         global method
         global end_frame
         global stop_frame
+        global output_obj
+        global output_ply
+        global output_vtk
 
         # global use_gn
         # global eta
@@ -71,7 +82,7 @@ if __name__ == "__main__":
         # PR_old = PR
         # mass_ratio_old = mass_ratio
 
-        with gui.sub_window("Settings", 0., 0., 0.4, 0.2) as w:
+        with gui.sub_window("Settings", 0., 0., 0.4, 0.31) as w:
             # dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
             ps.eta = w.slider_float("eta ", ps.eta, 0.0, 1.0)
             solver.viscosity = w.slider_float("viscosity", solver.viscosity, 0.0, 1.0)
@@ -88,6 +99,9 @@ if __name__ == "__main__":
 
 
             stop_frame = w.checkbox("stop frame ?", stop_frame)
+            output_ply = w.checkbox("output_ply", output_ply)
+            output_obj = w.checkbox("output_obj", output_obj)
+            output_vtk = w.checkbox("output_vtk", output_vtk)
 
             if stop_frame:
                 end_frame = w.slider_int("end frame", end_frame, 0, int(1e5))
@@ -185,24 +199,33 @@ if __name__ == "__main__":
                 # scene.mesh(ps.x_st, ps.faces_st, color=(1.0, 1.0, 1.0), show_wireframe= True)
                 scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
                 # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
+
         if output_frames:
             if frame_cnt % output_interval == 0:
                 window.write_image(f"{scene_name}_output_img/{frame_cnt:06}.png")
+
+        if output_obj:
+            exporter.export_ply("scene.obj", ps.x, MODE="MULTI")
+        if output_vtk:
+            exporter.export_vtk("scene.vtk", ps.x, MODE="MULTI")
+        if output_ply:
+            exporter.export_ply("scene.ply", ps.x, MODE="MULTI")
+
         
-        if frame_cnt % output_interval == 0:
-            if output_ply:
-                obj_id = 0
-                obj_data = ps.dump(obj_id=obj_id)
-                np_pos = obj_data["position"]
-                writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
-                writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
-                writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
-            if output_obj:
-                for r_body_id in ps.object_id_rigid_body:
-                    with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
-                        e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
-                        f.write(e)
-            cnt_ply += 1
+        # if frame_cnt % output_interval == 0:
+        #     if output_ply:
+        #         obj_id = 0
+        #         obj_data = ps.dump(obj_id=obj_id)
+        #         np_pos = obj_data["position"]
+        #         writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
+        #         writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
+        #         writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
+        #     if output_obj:
+        #         for r_body_id in ps.object_id_rigid_body:
+        #             with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
+        #                 e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
+        #                 f.write(e)
+        #     cnt_ply += 1
 
         # if cnt > 6000:
         #     break

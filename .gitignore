@@ -299,3 +299,7 @@ SPH-fluid/data/output
 SPH-fluid/util/blender_water/output
 /SPH-fluid/util/libpartio.so.1
 /SPH-fluid/util/Partio
+
+/SPH-fluid/test_output_obj
+/SPH-fluid/test_output_ply
+/SPH-fluid/test_output_vtk
