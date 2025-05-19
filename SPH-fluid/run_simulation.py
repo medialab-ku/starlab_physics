@@ -2,8 +2,10 @@ import os
 import argparse
 import taichi as ti
 import numpy as np
+from datetime import datetime
 from config_builder import SimConfig
 from particle_system import ParticleSystem
+from plot_json import JsonPlot
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
@@ -44,6 +46,7 @@ if __name__ == "__main__":
 
     stop_frame = False
     end_frame = 1000
+    is_plot_option = True
 
     def show_options():
         global ps
@@ -52,6 +55,7 @@ if __name__ == "__main__":
         global method
         global end_frame
         global stop_frame
+        global is_plot_option
 
         # global use_gn
         # global eta
@@ -88,6 +92,7 @@ if __name__ == "__main__":
 
 
             stop_frame = w.checkbox("stop frame ?", stop_frame)
+            is_plot_option = w.checkbox("plot option", is_plot_option)
 
             if stop_frame:
                 end_frame = w.slider_int("end frame", end_frame, 0, int(1e5))
@@ -134,6 +139,10 @@ if __name__ == "__main__":
 
     if ps.cfg.get_cfg("simulationMethod") == 5:
         solver.build_static_LBVH()
+
+    opt_iter_data = []
+    pcg_iter_data = []
+
     while window.running:
 
         show_options()
@@ -150,6 +159,29 @@ if __name__ == "__main__":
                 solver.initialize()
                 if ps.cfg.get_cfg("simulationMethod") == 5:
                     solver.build_static_LBVH()
+                if is_plot_option:
+                    now = datetime.now()
+                    filename = now.strftime("%Y%m%d_%H%M%S")
+                    params = {
+                        "eta": ps.eta,
+                        "viscosity": solver.viscosity,
+                        "tol": solver.tol,
+                        "k_rho": solver.k_rho,
+                        "da_ratio": solver.da_ratio,
+                        "use_gn": solver.use_gn,
+                        "use_div": solver.use_div,
+                    }
+                    residual_data = {
+                        "opt_iter": opt_iter_data,
+                        "pcg_iter": pcg_iter_data,
+                    }
+
+                    json_plot = JsonPlot(filename, params, residual_data)
+                    json_plot.plot_data()
+                    json_plot.export_json()
+                    opt_iter_data = []
+                    pcg_iter_data = []
+
                 runSim = False
 
         if stop_frame and frame_cnt > end_frame:
@@ -159,8 +191,11 @@ if __name__ == "__main__":
         if runSim:
             # print(runSim)
             for i in range(substeps):
-               optIter, pcgIter_total = solver.step()
-               print(optIter, pcgIter_total)
+                optIter, pcgIter_total = solver.step()
+                if is_plot_option:
+                    opt_iter_data.append(optIter)
+                    pcg_iter_data.append(pcgIter_total)
+
             frame_cnt += 1
 
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
