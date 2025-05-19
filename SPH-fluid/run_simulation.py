@@ -176,19 +176,21 @@ if __name__ == "__main__":
     if ps.cfg.get_cfg("simulationMethod") == 5:
         solver.build_static_LBVH()
 
-    mesh_path= "./data/models/cube.obj"
-    points = mesh_to_filled_particles(mesh_path, voxel_size=0.2)
-    n_particles = points.shape[0]
-    mesh_particles = ti.Vector.field(3, dtype=ti.f32, shape=n_particles)
-    color = ti.Vector.field(3, dtype=ti.f32, shape=n_particles)
-    mesh_particles.from_numpy(points)
-
-    @ti.kernel
-    def init_color():
-        for i in mesh_particles:
-            color[i] = ti.Vector([0.2, 0.6, 1.0])  # 밝은 파란색
-
-    init_color()
+    # mesh_path= "./data/models/cube.obj"
+    # points = mesh_to_filled_particles(mesh_path, voxel_size=0.2)
+    # offset = np.array([3.0, 3.0, 3.0], dtype=np.float32)
+    # points += offset
+    # n_particles = points.shape[0]
+    # mesh_particles = ti.Vector.field(3, dtype=ti.f32, shape=n_particles)
+    # color = ti.Vector.field(3, dtype=ti.f32, shape=n_particles)
+    # mesh_particles.from_numpy(points)
+    #
+    # @ti.kernel
+    # def init_color():
+    #     for i in mesh_particles:
+    #         color[i] = ti.Vector([0.2, 0.6, 1.0])  # 밝은 파란색
+    #
+    # init_color()
 
     while window.running:
 
@@ -253,7 +255,7 @@ if __name__ == "__main__":
         if output_ply:
             exporter.export_ply("scene.ply", ps.x, MODE="MULTI")
 
-        scene.particles(mesh_particles, radius=0.02, per_vertex_color=color)
+        # scene.particles(mesh_particles, radius=0.02, per_vertex_color=color)
         
         # if frame_cnt % output_interval == 0:
         #     if output_ply:

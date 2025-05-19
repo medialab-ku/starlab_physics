@@ -32,12 +32,12 @@ class PCG:
 
         self.p.copy_from(self.z)
         rs_old = dot(self.r, self.z)
-
+        itrCnt = 0
         if rs_old < 1e-16:
-            return
+            return itrCnt
 
         log_debug = []
-        itrCnt = 0
+
         maxPCGIter = int(1e4)
         for i in range(maxPCGIter):
 
