@@ -771,6 +771,8 @@ class XSPHSolver(SPHBase):
 
         print("opt/pcg iter:", optIter, pcgIter_total)
         self.compute_velocity()
+
+
         # if optIter == self.maxOptIter:
         #     print("Failed to converge...")
         #     plt.plot(np.array(log_debug))
@@ -778,4 +780,4 @@ class XSPHSolver(SPHBase):
         #     plt.show()
         #     exit()
 
-        return optIter, pcgIter_total
+        return optIter, pcgIter_total, log_debug

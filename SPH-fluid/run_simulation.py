@@ -6,10 +6,11 @@ from datetime import datetime
 from config_builder import SimConfig
 from particle_system import ParticleSystem
 from plot_json import JsonPlot
+import json
 from export_mesh import Exporter
+import matplotlib.pyplot as plt
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SPH Taichi')
@@ -86,7 +87,7 @@ if __name__ == "__main__":
         # PR_old = PR
         # mass_ratio_old = mass_ratio
 
-        with gui.sub_window("Settings", 0., 0., 0.4, 0.31) as w:
+        with gui.sub_window("Settings", 0., 0., 0.4, 0.4) as w:
             # dt_ui = w.slider_float("dt", dt_ui, 0.001, 0.101)
             ps.eta = w.slider_float("eta ", ps.eta, 0.0, 1.0)
             solver.viscosity = w.slider_float("viscosity", solver.viscosity, 0.0, 1.0)
@@ -156,7 +157,7 @@ if __name__ == "__main__":
 
     opt_iter_data = []
     pcg_iter_data = []
-
+    log_debug = None
     while window.running:
 
         show_options()
@@ -198,6 +199,11 @@ if __name__ == "__main__":
 
                 runSim = False
 
+            if window.event.key == 'p':
+                data = {"error": log_debug}
+                with open("data/error/error.json", "w") as f:
+                    json.dump(data, f, indent=2)
+
         if stop_frame and frame_cnt > end_frame:
             runSim = False
 
@@ -205,7 +211,12 @@ if __name__ == "__main__":
         if runSim:
             # print(runSim)
             for i in range(substeps):
-                optIter, pcgIter_total = solver.step()
+                optIter, pcgIter_total, log_debug = solver.step()
+
+                if optIter == solver.maxOptIter:
+                    print("failed to converge")
+                    runSim = False
+
                 if is_plot_option:
                     opt_iter_data.append(optIter)
                     pcg_iter_data.append(pcgIter_total)
@@ -247,21 +258,4 @@ if __name__ == "__main__":
                 window.write_image(f"{scene_name}_output_img/{frame_cnt:06}.png")
 
 
-        # if frame_cnt % output_interval == 0:
-        #     if output_ply:
-        #         obj_id = 0
-        #         obj_data = ps.dump(obj_id=obj_id)
-        #         np_pos = obj_data["position"]
-        #         writer = ti.tools.PLYWriter(num_vertices=ps.object_collection[obj_id]["particleNum"])
-        #         writer.add_vertex_pos(np_pos[:, 0], np_pos[:, 1], np_pos[:, 2])
-        #         writer.export_frame_ascii(cnt_ply, series_prefix.format(0))
-        #     if output_obj:
-        #         for r_body_id in ps.object_id_rigid_body:
-        #             with open(f"{scene_name}_output/obj_{r_body_id}_{cnt_ply:06}.obj", "w") as f:
-        #                 e = ps.object_collection[r_body_id]["mesh"].export(file_type='obj')
-        #                 f.write(e)
-        #     cnt_ply += 1
-
-        # if cnt > 6000:
-        #     break
         window.show()

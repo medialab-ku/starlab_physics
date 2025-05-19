@@ -16,7 +16,7 @@
 		"exportPly": false,
 		"exportObj": false,
 		"eta": 0.9,
-		"MaxOptIter": 1e4,
+		"MaxOptIter": 1e3,
 		"tol": 2e-2,
 		"k_rho": 3e5,
 		"viscosity": 0.01,
