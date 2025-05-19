@@ -6,7 +6,34 @@ from config_builder import SimConfig
 from particle_system import ParticleSystem
 from export_mesh import Exporter
 
+import open3d as o3d
+
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
+
+def mesh_to_filled_particles(mesh_path, voxel_size=0.05):
+    mesh_legacy = o3d.io.read_triangle_mesh(mesh_path)
+    mesh_legacy.compute_vertex_normals()
+    mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh_legacy)
+
+    scene = o3d.t.geometry.RaycastingScene()
+    _ = scene.add_triangles(mesh)
+
+    aabb = mesh_legacy.get_axis_aligned_bounding_box()
+    min_bound = aabb.min_bound
+    max_bound = aabb.max_bound
+
+    x = np.arange(min_bound[0], max_bound[0], voxel_size)
+    y = np.arange(min_bound[1], max_bound[1], voxel_size)
+    z = np.arange(min_bound[2], max_bound[2], voxel_size)
+    grid = np.stack(np.meshgrid(x, y, z, indexing='ij'), axis=-1).reshape(-1, 3)
+
+    query_points = o3d.core.Tensor(grid, dtype=o3d.core.Dtype.Float32)
+
+    occupancy = scene.compute_occupancy(query_points)
+    inside_mask = occupancy.numpy() == 1
+    inside_points = query_points[inside_mask]
+
+    return inside_points.numpy()
 
 
 if __name__ == "__main__":
@@ -148,6 +175,21 @@ if __name__ == "__main__":
 
     if ps.cfg.get_cfg("simulationMethod") == 5:
         solver.build_static_LBVH()
+
+    mesh_path= "./data/models/cube.obj"
+    points = mesh_to_filled_particles(mesh_path, voxel_size=0.2)
+    n_particles = points.shape[0]
+    mesh_particles = ti.Vector.field(3, dtype=ti.f32, shape=n_particles)
+    color = ti.Vector.field(3, dtype=ti.f32, shape=n_particles)
+    mesh_particles.from_numpy(points)
+
+    @ti.kernel
+    def init_color():
+        for i in mesh_particles:
+            color[i] = ti.Vector([0.2, 0.6, 1.0])  # 밝은 파란색
+
+    init_color()
+
     while window.running:
 
         show_options()
@@ -211,6 +253,7 @@ if __name__ == "__main__":
         if output_ply:
             exporter.export_ply("scene.ply", ps.x, MODE="MULTI")
 
+        scene.particles(mesh_particles, radius=0.02, per_vertex_color=color)
         
         # if frame_cnt % output_interval == 0:
         #     if output_ply:
