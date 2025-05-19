@@ -13,9 +13,9 @@
 		"exponent": 7,
 		"boundaryHandlingMethod": 0,
 		"exportFrame": false,
-		"exportPly": true,
-		"exportObj": true,
-		"exportVtk": true,
+		"exportPly": false,
+		"exportObj": false,
+		"exportVtk": false,
 		"eta": 0.85,
 		"MaxOptIter": 1e4,
 		"tol": 5e-2,
@@ -30,7 +30,8 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/cube.obj",
+			"start": [1.4, 2.0, 1.4],
+			"end": [2.2, 4.2, 2.2],
 			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
