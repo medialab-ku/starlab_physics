@@ -29,7 +29,6 @@ if __name__ == "__main__":
     if output_ply:
         os.makedirs(f"{scene_name}_output", exist_ok=True)
 
-
     ps = ParticleSystem(config, GGUI=True)
     solver = ps.build_solver()
     solver.initialize()
@@ -45,7 +44,6 @@ if __name__ == "__main__":
 
     stop_frame = False
     end_frame = 1000
-
 
     def show_options():
         global ps
@@ -84,7 +82,6 @@ if __name__ == "__main__":
                 solver.da_ratio = w.slider_float("da_ratio", solver.da_ratio, 0.0, 2.0)
                 solver.use_gn = w.checkbox("use gn", solver.use_gn)
 
-            # solver.viscosity = w.slider_float("viscosity", solver.viscosity, 0.0, 1.0)
             # pbf_num_iters = w.slider_int("# iter", pbf_num_iters, 1, 100)
             # solver_type = w.slider_int("solver type", solver_type, 0, 2)
 

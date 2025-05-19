@@ -266,123 +266,14 @@ class XSPHSolver(SPHBase):
             self.ps.grad[p_i]  = self.density_0 * self.ps.m_V[p_i] * (self.ps.x[p_i] - self.ps.xHat[p_i])
             self.ps.diagH[p_i] = self.density_0 * self.ps.m_V[p_i] * I_3x3
 
-    @ti.func
-    def compute_pressure_task(self, p_i, p_j, ret: ti.template()):
-
-        I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        c = self.ps.density[p_i] / self.density_0 - 1.0
-
-        x_i = self.ps.x[p_i]
-        # mass_i = self.ps.m_V[p_i] * self.density_0
-        h = self.ps.support_radius
-        coef = 1e8
-        k = coef * self.dt[None] * self.dt[None] * ((h ** 6))
-        if self.ps.material[p_j] == self.ps.material_fluid:
-            x_j = self.ps.x[p_j]
-            r = (x_i - x_j).norm()
-            if c >= 0:
-                # print("test")
-                dEdc = c ** 2
-                d2Edc2 = 2 * c
-
-                # dEdc = c
-                # d2Edc2 = 1.0
-
-                mass_j = self.ps.m_V[p_j] * self.density_0
-                # if r < 1e-5:
-                #     r = 1e-5
-                #     print("test")
-
-
-                # r += 1e-4
-                n = (x_i - x_j) / r
-
-                dWdr = self.spiky_kernel_derivative(r, h)
-                dcdx = mass_j * dWdr * n / self.density_0
-                d2Wdr2 = self.spiky_kernel_hessian(r, h)
-
-                nnT = n.outer_product(n)
-                alpha = abs(dWdr / r)
-                beta = (d2Wdr2 - dWdr / r)
-                # if beta < 0.0:
-                #     print("test")
-                d2cdx2 = (mass_j / self.density_0) * (alpha * I_3x3 + beta * nnT)
-                self.ps.grad[p_i] += k * dEdc * dcdx
-                self.ps.grad[p_j] -= k * dEdc * dcdx
-
-                # if c >=0:
-                self.ps.diagH[p_i] += k * (dEdc * d2cdx2 + d2Edc2 * dcdx.outer_product(dcdx))
-                self.ps.diagH[p_j] += k * (dEdc * d2cdx2 + d2Edc2 * dcdx.outer_product(dcdx))
-            # else:
-            # dHat = 0.5 * self.ps.particle_radius
-            # if r <= dHat:
-            #     factor = 45.0 / (ti.math.pi * (dHat ** 6))
-            #     # print(factor)
-            #     mass_j = self.ps.m_V[p_j] * self.density_0
-            #     Kappa = coef * self.dt[None] * self.dt[None] * (dHat ** 6)
-            #     # Kappa = 1e3 * self.dt[None] * self.dt[None]
-            #     dbdx = self.spiky_kernel_derivative(r, dHat)
-            #     d2bdx2 = self.spiky_kernel_hessian(r, dHat)
-            #     # dbdx = -factor * (r - dHat) ** 2
-            #     # d2bdx2 = 2.0 * factor *  (r - dHat)
-            #     # n = (x_i - x_j) / d
-            #     # if d < 0.1 * dHat:
-            #     #     d = 0.1 * dHat
-            #     n = (x_i - x_j) / r
-            #     nnT = n.outer_product(n)
-            #     d2d_dx2 = (I_3x3 - nnT) / r
-            #     test = (abs(d2bdx2) * nnT + abs(dbdx) * d2d_dx2)
-            #     self.ps.diagH[p_i] += Kappa * test
-            #     self.ps.diagH[p_j] += Kappa * test
-            #     self.ps.grad[p_i] += Kappa * dbdx * n
-            #     self.ps.grad[p_j] -= Kappa * dbdx * n
-
-    @ti.func
-    def compute_collision_particle_task(self, p_i, p_j, ret: ti.template()):
-
-        I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        Kappa = 1e4 * self.dt[None] * self.dt[None]
-        x_i = self.ps.x[p_i]
-        x_j = self.ps.x[p_j]
-        d = (x_i - x_j).norm()
-        dHat = self.ps.particle_diameter
-        if d <= dHat:
-            dbdx = self.barrier_grad(d, dHat)
-            d2bdx2 = self.barrier_hess(d, dHat)
-            # n = (x_i - x_j) / d
-            # if d < 0.1 * dHat:
-            #     d = 0.1 * dHat
-
-            n = (x_i - x_j) / d
-            nnT = n.outer_product(n)
-            d2d_dx2 = (I_3x3 - nnT) / d
-            test = (abs(d2bdx2) * nnT + abs(dbdx) * d2d_dx2)
-            self.ps.diagH[p_i] += Kappa * test
-            self.ps.diagH[p_j] += Kappa * test
-            self.ps.grad[p_i] += Kappa * dbdx * n
-            self.ps.grad[p_j] -= Kappa * dbdx * n
-
 
 
     @ti.kernel
     def compute_pressure(self, k: float, h:float, eta: float):
-        # h = 1.0 * self.ps.support_radius
-        # print(eta)
+
         mass_i = self.ps.m_V[0] * self.density_0
         rho_min = mass_i * self.cubic_value(0.0, h)
         a = rho_min + eta * (self.density_0 - rho_min)
-
-        # coef = (2.0 * eta) / (rho_min ** 2)
-
-        ratio = 1.0 / (self.density_0 - rho_min)
-
-        # coef = (self.density_0 - a)  * ratio
-        # coef = 1.0
-
-
-        e = 2.718
-
-        eps =  (self.density_0 - rho_min)
         for p_i in ti.grouped(self.ps.x):
 
             dEdc = 1.0
@@ -493,8 +384,6 @@ class XSPHSolver(SPHBase):
 
                 self.ps.diagH[p_i] += Vij
                 self.ps.diagH[p_j] += Vij
-
-
 
 
     @ti.kernel
@@ -675,9 +564,6 @@ class XSPHSolver(SPHBase):
                 Ax[p_i] += Hji @ xji
                 Ax[p_j] -= Hji @ xji
 
-            # if ti.math.isnan(value):
-            #     print("test")
-
             for j in range(self.num_collision_p[p_i]):
                 p_j = self.collision_idx_p[p_i, j]
                 grad = self.collision_grad_p[p_i, j]
@@ -824,46 +710,6 @@ class XSPHSolver(SPHBase):
         return alpha
 
 
-    # def line_search(self):
-    #
-    #     E_k = self.compute_pressure_potential()
-    #
-    #
-    # def init_debug(self):
-    #     self.compute_non_pressure_forces()
-    #     self.advect()
-    #     self.compute_xHat()
-    #
-    # def step_debug(self):
-    #
-    #     h = 2.0 * self.ps.particle_diameter
-    #     k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-    #     k = self.k_rho * self.dt[None] * self.dt[None]
-    #     pad = 2.0 * self.ps.particle_diameter
-    #
-    #     self.compute_inertia()
-    #     self.compute_densities(self.ps.x, h)
-    #     self.compute_pressure(k, h, eta=self.ps.eta)
-    #     self.compute_collision_static(pad)
-    #     self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
-    #
-    #     dx_norm = self.inf_norm(self.ps.dx)
-    #
-    #     if dx_norm > h:
-    #         print("test")
-    #
-    #     alpha = 1.0
-    #     alpha = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
-    #
-    #     if alpha < 1.0:
-    #         print(alpha)
-    #
-    #     self.update_x(alpha)
-    #     self.ps.xTmp.copy_from(self.ps.x)
-    #
-    #     return dx_norm
-    #
-
     def substep(self):
 
         v_norm = self.inf_norm(self.ps.v)
@@ -914,8 +760,8 @@ class XSPHSolver(SPHBase):
 
             alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx)
 
-            if alpha_ccd < 1.0:
-                print("ccd")
+            # if alpha_ccd < 1.0:
+            #     print("ccd")
 
             alpha = ti.min(alpha_ccd, alpha)
 
@@ -935,6 +781,3 @@ class XSPHSolver(SPHBase):
             plt.yscale('log')
             plt.show()
             exit()
-
-        # self.compute_densities()
-        # self.compute_pressure_forces()
