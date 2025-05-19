@@ -7,7 +7,33 @@ from WCSPH import WCSPHSolver
 from DFSPH import DFSPHSolver
 from XSPH import XSPHSolver
 from mesh_utils import *
+import open3d as o3d
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
+
+def mesh_to_filled_particles(mesh_path, voxel_size=0.05):
+    mesh_legacy = o3d.io.read_triangle_mesh(mesh_path)
+    mesh_legacy.compute_vertex_normals()
+    mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh_legacy)
+
+    scene = o3d.t.geometry.RaycastingScene()
+    _ = scene.add_triangles(mesh)
+
+    aabb = mesh_legacy.get_axis_aligned_bounding_box()
+    min_bound = aabb.min_bound
+    max_bound = aabb.max_bound
+
+    x = np.arange(min_bound[0], max_bound[0], voxel_size)
+    y = np.arange(min_bound[1], max_bound[1], voxel_size)
+    z = np.arange(min_bound[2], max_bound[2], voxel_size)
+    grid = np.stack(np.meshgrid(x, y, z, indexing='ij'), axis=-1).reshape(-1, 3)
+
+    query_points = o3d.core.Tensor(grid, dtype=o3d.core.Dtype.Float32)
+
+    occupancy = scene.compute_occupancy(query_points)
+    inside_mask = occupancy.numpy() == 1
+    inside_points = query_points[inside_mask]
+
+    return inside_points.numpy()
 
 @ti.data_oriented
 class ParticleSystem:
@@ -19,9 +45,9 @@ class ParticleSystem:
         self.domain_start = np.array(self.cfg.get_cfg("domainStart"))
 
         self.domain_end = np.array([1.0, 1.0, 1.0])
-        self.domian_end = np.array(self.cfg.get_cfg("domainEnd"))
+        self.domain_end = np.array(self.cfg.get_cfg("domainEnd"))
         
-        self.domain_size = self.domian_end - self.domain_start
+        self.domain_size = self.domain_end - self.domain_start
 
         self.dim = len(self.domain_size)
         assert self.dim > 1
@@ -59,15 +85,11 @@ class ParticleSystem:
         fluid_blocks = self.cfg.get_fluid_blocks()
         fluid_particle_num = 0
         for fluid in fluid_blocks:
-            particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
+            voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=0.05)
+            particle_num = voxelized_points.shape[0]
             fluid["particleNum"] = particle_num
             self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
-
-
-
-
-
 
         #### Process Rigid Blocks ####
         rigid_blocks = self.cfg.get_rigid_blocks()
@@ -197,20 +219,30 @@ class ParticleSystem:
         for fluid in fluid_blocks:
             obj_id = fluid["objectId"]
             offset = np.array(fluid["translation"])
-            start = np.array(fluid["start"]) + offset
-            end = np.array(fluid["end"]) + offset
             scale = np.array(fluid["scale"])
             velocity = fluid["velocity"]
             density = fluid["density"]
             color = fluid["color"]
-            self.add_cube(object_id=obj_id,
-                          lower_corner=start,
-                          cube_size=(end-start)*scale,
-                          velocity=velocity,
-                          density=density, 
-                          is_dynamic=1, # enforce fluid dynamic
-                          color=color,
-                          material=1) # 1 indicates fluid
+
+            voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=0.05)
+            voxelized_points *= scale
+            voxelized_points += offset
+
+            num_particles = voxelized_points.shape[0]
+
+            if velocity is None:
+                velocity_arr = np.zeros_like(voxelized_points, dtype=np.float32)
+            else:
+                velocity_arr = np.array([velocity for _ in range(num_particles)], dtype=np.float32)
+
+            material_arr = np.full(num_particles, 1, dtype=np.int32)
+            is_dynamic_arr = np.full(num_particles, 1, dtype=np.int32)
+            color_arr = np.stack([np.full(num_particles, c, dtype=np.int32) for c in color], axis=1)
+            density_arr = np.full(num_particles, density, dtype=np.float32)
+            pressure_arr = np.full(num_particles, 0, dtype=np.float32)
+
+            self.add_particles(obj_id, num_particles, voxelized_points, velocity_arr,
+                               density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
         
         # TODO: Handle rigid block
         # Rigid block
