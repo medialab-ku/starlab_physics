@@ -58,7 +58,7 @@ class ParticleSystem:
         self.material_solid = 0
         self.material_fluid = 1
 
-        self.particle_radius = 0.01  # particle radius
+        self.particle_radius = 0.005  # particle radius
         self.particle_radius = self.cfg.get_cfg("particleRadius")
 
         self.particle_diameter = 2 * self.particle_radius
@@ -80,7 +80,7 @@ class ParticleSystem:
         self.object_collection = dict()
         self.object_id_rigid_body = set()
 
-        voxel_size = 0.05
+        voxel_size = 0.03
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
         fluid_blocks = self.cfg.get_fluid_blocks()
