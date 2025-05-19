@@ -210,6 +210,13 @@ if __name__ == "__main__":
                     opt_iter_data.append(optIter)
                     pcg_iter_data.append(pcgIter_total)
 
+            if output_obj:
+                exporter.export_ply("scene.obj", ps.x, MODE="MULTI")
+            if output_vtk:
+                exporter.export_vtk("scene.vtk", ps.x, MODE="MULTI")
+            if output_ply:
+                exporter.export_ply("scene.ply", ps.x, MODE="MULTI")
+
             frame_cnt += 1
 
         ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
@@ -238,13 +245,6 @@ if __name__ == "__main__":
         if output_frames:
             if frame_cnt % output_interval == 0:
                 window.write_image(f"{scene_name}_output_img/{frame_cnt:06}.png")
-
-        if output_obj:
-            exporter.export_ply("scene.obj", ps.x, MODE="MULTI")
-        if output_vtk:
-            exporter.export_vtk("scene.vtk", ps.x, MODE="MULTI")
-        if output_ply:
-            exporter.export_ply("scene.ply", ps.x, MODE="MULTI")
 
 
         # if frame_cnt % output_interval == 0:
