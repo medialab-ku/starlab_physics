@@ -81,6 +81,7 @@ if __name__ == "__main__":
                 solver.k_rho = w.slider_float("k rho", solver.k_rho, 0.0, 1e6)
                 solver.da_ratio = w.slider_float("da_ratio", solver.da_ratio, 0.0, 2.0)
                 solver.use_gn = w.checkbox("use gn", solver.use_gn)
+                solver.use_div = w.checkbox("use div", solver.use_div)
 
             # pbf_num_iters = w.slider_int("# iter", pbf_num_iters, 1, 100)
             # solver_type = w.slider_int("solver type", solver_type, 0, 2)

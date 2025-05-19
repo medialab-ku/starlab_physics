@@ -54,6 +54,7 @@ class XSPHSolver(SPHBase):
         self.k_rho      = self.ps.cfg.get_cfg("k_rho")
         self.da_ratio   = self.ps.cfg.get_cfg("da_ratio")
         self.use_gn     = bool(self.ps.cfg.get_cfg("use_gn"))
+        self.use_div    = bool(self.ps.cfg.get_cfg("use_div"))
         self.ccd = CCDModule()
 
 
@@ -753,7 +754,7 @@ class XSPHSolver(SPHBase):
             dx_norm = self.inf_norm(self.ps.dx)
 
             alpha = 1.0
-            if not self.use_gn:
+            if self.use_div:
                 alpha_div = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
                 alpha = ti.min(alpha_div, alpha)
 
