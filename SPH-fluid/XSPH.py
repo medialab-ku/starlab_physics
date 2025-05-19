@@ -769,7 +769,7 @@ class XSPHSolver(SPHBase):
             dx_norm_old = dx_norm
             log_debug.append(dx_norm)
 
-        # print("opt Iter:", optIter)
+        print("opt/pcg iter:", optIter, pcgIter_total)
         self.compute_velocity()
         # if optIter == self.maxOptIter:
         #     print("Failed to converge...")

@@ -220,6 +220,7 @@ if __name__ == "__main__":
             camera.track_user_inputs(window, movement_speed=movement_speed, hold_key=ti.ui.LMB)
             scene.set_camera(camera)
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
+            scene.point_light((0.0, 0.0, 0.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
 
             scene.particles(ps.xTmp, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
