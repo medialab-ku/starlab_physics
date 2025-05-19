@@ -86,12 +86,15 @@ class ParticleSystem:
         fluid_blocks = self.cfg.get_fluid_blocks()
         fluid_particle_num = 0
         for fluid in fluid_blocks:
-            # particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
-            voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
-            particle_num = voxelized_points.shape[0]
+            if fluid["geometryFile"] == "":
+                particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
+            else:
+                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
+                particle_num = voxelized_points.shape[0]
 
-            fluid["particleNum"] = particle_num
-            self.object_collection[fluid["objectId"]] = fluid
+                fluid["particleNum"] = particle_num
+                self.object_collection[fluid["objectId"]] = fluid
+
             fluid_particle_num += particle_num
 
         #### Process Rigid Blocks ####
@@ -220,42 +223,50 @@ class ParticleSystem:
 
         # Fluid block
         for fluid in fluid_blocks:
-            obj_id = fluid["objectId"]
-            offset = np.array(fluid["translation"])
-            # start = np.array(fluid["start"]) + offset
-            # end = np.array(fluid["end"]) + offset
-            scale = np.array(fluid["scale"])
-            velocity = fluid["velocity"]
-            density = fluid["density"]
-            color = fluid["color"]
-            # self.add_cube(object_id=obj_id,
-            #               lower_corner=start,
-            #               cube_size=(end-start)*scale,
-            #               velocity=velocity,
-            #               density=density,
-            #               is_dynamic=1, # enforce fluid dynamic
-            #               color=color,
-            #               material=1) # 1 indicates fluid
-
-            voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
-            voxelized_points *= scale
-            voxelized_points += offset
-
-            num_particles = voxelized_points.shape[0]
-
-            if velocity is None:
-                velocity_arr = np.zeros_like(voxelized_points, dtype=np.float32)
+            if fluid["geometryFile"] == "":
+                obj_id = fluid["objectId"]
+                offset = np.array(fluid["translation"])
+                start = np.array(fluid["start"]) + offset
+                end = np.array(fluid["end"]) + offset
+                scale = np.array(fluid["scale"])
+                velocity = fluid["velocity"]
+                density = fluid["density"]
+                color = fluid["color"]
+                self.add_cube(object_id=obj_id,
+                              lower_corner=start,
+                              cube_size=(end - start) * scale,
+                              velocity=velocity,
+                              density=density,
+                              is_dynamic=1,  # enforce fluid dynamic
+                              color=color,
+                              material=1)  # 1 indicates fluid
             else:
-                velocity_arr = np.array([velocity for _ in range(num_particles)], dtype=np.float32)
+                obj_id = fluid["objectId"]
+                offset = np.array(fluid["translation"])
+                scale = np.array(fluid["scale"])
+                velocity = fluid["velocity"]
+                density = fluid["density"]
+                color = fluid["color"]
 
-            material_arr = np.full(num_particles, 1, dtype=np.int32)
-            is_dynamic_arr = np.full(num_particles, 1, dtype=np.int32)
-            color_arr = np.stack([np.full(num_particles, c, dtype=np.int32) for c in color], axis=1)
-            density_arr = np.full(num_particles, density, dtype=np.float32)
-            pressure_arr = np.full(num_particles, 0, dtype=np.float32)
+                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
+                voxelized_points *= scale
+                voxelized_points += offset
 
-            self.add_particles(obj_id, num_particles, voxelized_points, velocity_arr,
-                               density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
+                num_particles = voxelized_points.shape[0]
+
+                if velocity is None:
+                    velocity_arr = np.zeros_like(voxelized_points, dtype=np.float32)
+                else:
+                    velocity_arr = np.array([velocity for _ in range(num_particles)], dtype=np.float32)
+
+                material_arr = np.full(num_particles, 1, dtype=np.int32)
+                is_dynamic_arr = np.full(num_particles, 1, dtype=np.int32)
+                color_arr = np.stack([np.full(num_particles, c, dtype=np.int32) for c in color], axis=1)
+                density_arr = np.full(num_particles, density, dtype=np.float32)
+                pressure_arr = np.full(num_particles, 0, dtype=np.float32)
+
+                self.add_particles(obj_id, num_particles, voxelized_points, velocity_arr,
+                                   density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
 
         
         # TODO: Handle rigid block
