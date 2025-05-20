@@ -8,7 +8,7 @@ from particle_system import ParticleSystem
 from plot_json import JsonPlot
 import json
 from export_mesh import Exporter
-import matplotlib.pyplot as plt
+import time
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
@@ -157,6 +157,7 @@ if __name__ == "__main__":
 
     opt_iter_data = []
     pcg_iter_data = []
+    elapsed_time_data = []
     log_debug = None
     while window.running:
 
@@ -194,12 +195,16 @@ if __name__ == "__main__":
                         "opt_iter": opt_iter_data,
                         "pcg_iter": pcg_iter_data,
                     }
+                    elapsed_data = {
+                        "elapsed_time": elapsed_time_data
+                    }
 
-                    json_plot = JsonPlot(filename, params, residual_data)
+                    json_plot = JsonPlot(filename, params, residual_data, elapsed_data)
                     json_plot.plot_data()
                     json_plot.export_json()
                     opt_iter_data = []
                     pcg_iter_data = []
+                    elapsed_time_data = []
 
                 runSim = False
 
@@ -222,6 +227,8 @@ if __name__ == "__main__":
             # for idx in right_plane:
             #     ps.x_st[idx].z = ps.x0_st[idx].z + 0.5 * np.sin(np.pi * frame_cnt * solver.dt[None])
 
+            start_time = time.time()
+
             for i in range(substeps):
                 optIter, pcgIter_total, log_debug = solver.step()
 
@@ -232,6 +239,11 @@ if __name__ == "__main__":
                 if is_plot_option:
                     opt_iter_data.append(optIter)
                     pcg_iter_data.append(pcgIter_total)
+
+            end_time = time.time()
+
+            if frame_cnt > 0:
+                elapsed_time_data.append(end_time - start_time)
 
             if output_obj:
                 exporter.export_ply("scene.obj", ps.x, MODE="MULTI")
