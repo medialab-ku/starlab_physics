@@ -110,6 +110,11 @@ class ParticleSystem:
         if self.num_static_vertices > 0:
             self.x_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
             self.x_st.from_numpy(vertices)
+            ###################################################################
+            # only available to dragon_bath scene
+            self.x0_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
+            self.x0_st.from_numpy(vertices)
+            ###################################################################
             self.faces_st = ti.field(int, shape=faces.shape[0])
             self.faces_st.from_numpy(faces)
 

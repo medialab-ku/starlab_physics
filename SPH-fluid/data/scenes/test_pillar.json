@@ -1,0 +1,53 @@
+{
+	"Configuration":
+	{
+        "domainStart": [0.0, 0.0, 0.0],
+        "domainEnd": [10, 10.0, 10],
+		"particleRadius": 0.033,
+		"numberOfStepsPerRenderUpdate": 1,
+		"density0": 1000.0,
+		"simulationMethod": 5,
+		"gravitation": [0.0, -9.81, 0.0],
+		"timeStepSize": 1e-3,
+		"stiffness": 1e4,
+		"exponent": 7,
+		"boundaryHandlingMethod": 0,
+		"exportFrame": false,
+		"exportPly": false,
+		"exportObj": false,
+		"eta": 0.5,
+		"MaxOptIter": 1e3,
+		"tol": 2e-2,
+		"k_rho": 1e4,
+		"viscosity": 0.01,
+		"da_ratio": 1.01,
+		"use_gn": false,
+		"use_div": true
+	},
+
+	"FluidBlocks":
+	[
+		{
+			"objectId": 0,
+			"start": [2.03, 3.00, 2.03],
+			"end": [3.97, 9.00, 3.97],
+			"translation": [0.0, 0.0, 0.0],
+			"scale": [1, 1, 1],
+			"velocity": [0.0, 0.0, 0.0],
+			"density": 1000.0,
+			"color": [0, 0, 200]
+		}
+	],
+
+	"StaticObjects":
+	[
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/cube.obj",
+			"translation": [3, 5.0, 3],
+			"scale": [1.02, 4.5, 1.02],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0
+		}
+	]
+}

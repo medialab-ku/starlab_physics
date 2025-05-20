@@ -117,9 +117,9 @@ if __name__ == "__main__":
 
     scene = ti.ui.Scene()
     camera = ti.ui.Camera()
-    camera.position(5.5, 2.5, 4.0)
+    camera.position(10.0, 7.0, 10.0)
     camera.up(0.0, 1.0, 0.0)
-    camera.lookat(-1.0, 0.0, 0.0)
+    camera.lookat(0.0, 0.0, 0.0)
     camera.fov(70)
     scene.set_camera(camera)
 
@@ -170,6 +170,10 @@ if __name__ == "__main__":
             if window.event.key == 'r':
                 frame_cnt = 0
                 ps.x.copy_from(ps.x_0)
+                ###################################################################
+                # only available to dragon_bath scene
+                ps.x_st.copy_from(ps.x0_st)
+                ###################################################################
                 ps.v.fill(0.0)
                 solver.initialize()
                 if ps.cfg.get_cfg("simulationMethod") == 5:
@@ -210,6 +214,14 @@ if __name__ == "__main__":
         # for i in range(substeps):
         if runSim:
             # print(runSim)
+
+            # only available for dragon_bath scene
+            left_plane, right_plane = [0, 1, 4, 5], [2, 3, 6, 7]
+            for idx in left_plane:
+                ps.x_st[idx].z = ps.x0_st[idx].z + 1.0 * np.sin(np.pi * frame_cnt * solver.dt[None])
+            # for idx in right_plane:
+            #     ps.x_st[idx].z = ps.x0_st[idx].z + 0.5 * np.sin(np.pi * frame_cnt * solver.dt[None])
+
             for i in range(substeps):
                 optIter, pcgIter_total, log_debug = solver.step()
 
