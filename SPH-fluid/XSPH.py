@@ -346,6 +346,8 @@ class XSPHSolver(SPHBase):
             self.ps.diagH_dy[v0] += value
             self.ps.diagH_dy[v1] += value
 
+            self.ps.H_l[i] = value
+
         fixed_ids = ti.Vector([0, 1, 2, 3], dt=int)
         k_fix = 1e4 * self.dt[None]
         for i in range(4):
@@ -665,10 +667,13 @@ class XSPHSolver(SPHBase):
 
 
     @ti.kernel
-    def mat_free_Ax(self, Ax: ti.template(), x: ti.template()):
+    def mat_free_Ax(self, Ax: ti.template(), x: ti.template(), Ax_dy: ti.template(), x_dy: ti.template()):
 
         for p_i in ti.grouped(self.ps.x):
             Ax[p_i] = self.density_0 * self.ps.m_V[p_i] * x[p_i]
+
+        for p_i in ti.grouped(self.ps.x_dy):
+            Ax_dy[p_i] = self.density_0 * self.ps.mass_dy[p_i] * x_dy[p_i]
 
 
         #static collision
@@ -711,6 +716,35 @@ class XSPHSolver(SPHBase):
                 Hji = self.Vij_val[p_i, j]
                 Ax[p_i] += Hji @ xji
                 Ax[p_j] -= Hji @ xji
+
+
+        for i in range(self.ps.edges_dy.shape[0] // 2):
+            v0, v1 = self.ps.edges_dy[2 * i + 0], self.ps.edges_dy[2 * i + 1]
+            x01 = x_dy[v0] - x_dy[v1]
+            Ax_dy[v0] += self.ps.H_l[i] @ x01
+            Ax_dy[v1] -= self.ps.H_l[i] @ x01
+
+        fixed_ids = ti.Vector([0, 1, 2, 3], dt=int)
+        k_fix = 1e4 * self.dt[None]
+        for i in range(4):
+            vi = fixed_ids[i]
+            Ax_dy[vi] += k_fix * x_dy[vi]
+
+        for i in range(self.num_collision_dy[None]):
+            bary = self.collision_bary_dy[i]
+            info = self.collision_info_dy[i]
+            H = self.collision_H_dy[i]
+
+            if self.collision_type_dy[i] == 0:
+
+                p = bary[1] * x_dy[info[1]] + bary[2] * x_dy[info[2]] + bary[3] * x_dy[info[3]]
+                xip = x[info[0]] - p
+
+                Ax[info[0]]    += bary[0] * H @ xip
+                Ax_dy[info[1]] -= bary[1] * H @ xip
+                Ax_dy[info[2]] -= bary[2] * H @ xip
+                Ax_dy[info[3]] -= bary[3] * H @ xip
+
 
     @ti.kernel
     def mat_free_Ax2(self, Ax: ti.template(), x: ti.template()):
@@ -885,12 +919,14 @@ class XSPHSolver(SPHBase):
 
             # pcgIter = 0
             if self.use_gn:
-                pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax2)
+                pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH,
+                                                self.ps.dx_dy, self.ps.grad_dy, self.ps.diagH_dy, 1e-5, self.mat_free_Ax2)
             else:
-                pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH, 1e-5, self.mat_free_Ax)
+                pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH,
+                                                self.ps.dx_dy, self.ps.grad_dy, self.ps.diagH_dy, 1e-5, self.mat_free_Ax)
 
-            self.PCG.applyPrecondition(self.ps.dx_dy, self.ps.diagH_dy, self.ps.grad_dy)
-            scale(self.ps.dx_dy, -1.0, self.ps.dx_dy)
+            # self.PCG.applyPrecondition(self.ps.dx_dy, self.ps.diagH_dy, self.ps.grad_dy)
+            # scale(self.ps.dx_dy, -1.0, self.ps.dx_dy)
 
             dx_norm = self.inf_norm(self.ps.dx)
 
