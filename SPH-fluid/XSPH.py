@@ -291,6 +291,10 @@ class XSPHSolver(SPHBase):
                 if self.ps.material[p_j] == self.ps.material_fluid:
                     x_j = self.ps.x[p_j]
                     r = (x_i - x_j).norm()
+
+                    if r < 1e-6:
+                        r = 1e-6
+
                     n = (x_i - x_j) / r
                     mass_j = self.ps.m_V[p_j] * self.density_0
 
@@ -332,6 +336,10 @@ class XSPHSolver(SPHBase):
                         x_j = x[p_j]
                         x_ij = x_i - x_j
                         r = x_ij.norm()
+
+                        if r < 1e-6:
+                            r = 1e-6
+
                         n = x_ij / r
                         coef_ij = (k / (r * r + reg)) * (m_i * m_j) / (rho_i + self.ps.density[p_j])
                         dWdr = self.spiky_kernel_derivative(r, h)
@@ -683,14 +691,14 @@ class XSPHSolver(SPHBase):
         alpha = 1.0
 
         eta = 0.01
-        thickness = 0
+        thickness = 0.001
 
         self.num_candidate[None] = 0
         for P in self.ps.x:
             xP = x[P]
 
-            _min0 = xP - dx[P]
-            _max0 = xP + dx[P]
+            _min0 = ti.min(xP, xP + dx[P])
+            _max0 = ti.min(xP, xP + dx[P])
             self.LBVH.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info, self.num_candidate)
 
         for i in range(self.num_candidate[None]):

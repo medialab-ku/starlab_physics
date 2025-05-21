@@ -52,7 +52,7 @@ if __name__ == "__main__":
     frame_cnt = 0
     cnt_ply = 0
     runSim = False
-    animate = False
+    animate = True
     stop_frame = False
     end_frame = 1000
     is_plot_option = False
@@ -228,7 +228,7 @@ if __name__ == "__main__":
                 # only available for dragon_bath scene
                 left_plane, right_plane = [4, 5, 6, 7], [0, 1, 2, 3]
                 for idx in left_plane:
-                    ps.x_st[idx].z = ps.x0_st[idx].z + 1.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
+                    ps.x_st[idx].z = ps.x0_st[idx].z + 0.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
             # for idx in right_plane:
             #     ps.x_st[idx].z = ps.x0_st[idx].z + 0.5 * np.sin(np.pi * frame_cnt * solver.dt[None])
 
@@ -280,12 +280,12 @@ if __name__ == "__main__":
 
             if ps.num_static_vertices > 0:
                 # scene.mesh(ps.x_st, ps.faces_st, color=(1.5, 1.0, 0.0))
-                # scene.mesh(ps.x_st, ps.faces_st, color=(1.0, 1.0, 1.0), show_wireframe= True)
-                scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
+                scene.mesh(ps.x_st, ps.faces_st, color=(1.0, 1.0, 1.0), show_wireframe= True)
+                # scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
                 # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
 
-            # if ps.num_dynamic_vertices > 0:
-            scene.mesh(ps.x_dy, ps.faces_dy, color=(1.5, 1.0, 0.0))
+            if ps.num_dynamic_vertices > 0:
+                scene.mesh(ps.x_dy, ps.faces_dy, color=(1.5, 1.0, 0.0))
             # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
 
         if output_frames:

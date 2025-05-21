@@ -172,8 +172,8 @@ class ParticleSystem:
             self.edges_dy = ti.field(int, shape=edges.shape[0])
             self.edges_dy.from_numpy(edges)
 
-        print(self.x_dy)
-        print(self.faces_dy)
+        # print(self.x_dy)
+        # print(self.faces_dy)
 
         self.fluid_particle_num = fluid_particle_num
         self.solid_particle_num = rigid_particle_num
