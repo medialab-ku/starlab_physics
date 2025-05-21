@@ -722,7 +722,7 @@ class XSPHSolver(SPHBase):
         optIter = 0
         numLS = 0
         pcgIter_total = 0
-        pad = 1.2 * self.ps.particle_diameter
+        pad = 1.5 * self.ps.particle_diameter
 
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
@@ -762,6 +762,9 @@ class XSPHSolver(SPHBase):
                 alpha = ti.min(alpha_div, alpha)
 
             alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx)
+            if alpha_ccd < 1.0:
+                print("alpha_ccd", alpha_ccd)
+
             alpha = ti.min(alpha_ccd, alpha)
 
             self.update_x(alpha)

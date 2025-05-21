@@ -7,6 +7,7 @@ from WCSPH import WCSPHSolver
 from DFSPH import DFSPHSolver
 from XSPH import XSPHSolver
 from mesh_utils import *
+import meshio as mio
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
 @ti.data_oriented
@@ -63,9 +64,6 @@ class ParticleSystem:
             fluid["particleNum"] = particle_num
             self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
-
-
-
 
 
 
@@ -513,6 +511,22 @@ class ParticleSystem:
         direction = static_object["rotationAxis"]
         rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
         mesh.apply_transform(rot_matrix)
+
+        return mesh
+
+    def load_dynamic_object(self, dynamic_object):
+        obj_id = dynamic_object["objectId"]
+        mesh = mio.read(dynamic_object["geometryFile"])
+        # mesh.apply_scale(dynamic_object["scale"])
+        center = mesh.points.sum(axis=0) / mesh.points.shape[0]
+        mesh.points -= center
+        offset = np.array(dynamic_object["translation"])
+        mesh.points += offset
+
+        # angle = dynamic_object["rotationAngle"] / 360 * 2 * 3.1415926
+        # direction = dynamic_object["rotationAxis"]
+        # rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
+        # mesh.apply_transform(rot_matrix)
 
         return mesh
 

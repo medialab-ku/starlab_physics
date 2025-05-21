@@ -226,9 +226,9 @@ if __name__ == "__main__":
 
             if animate:
                 # only available for dragon_bath scene
-                left_plane, right_plane = [0, 1, 4, 5], [2, 3, 6, 7]
+                left_plane, right_plane = [4, 5, 6, 7], [0, 1, 2, 3]
                 for idx in left_plane:
-                    ps.x_st[idx].z = ps.x0_st[idx].z + 1.0 * np.sin(np.pi * frame_cnt * solver.dt[None])
+                    ps.x_st[idx].z = ps.x0_st[idx].z + 1.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
             # for idx in right_plane:
             #     ps.x_st[idx].z = ps.x0_st[idx].z + 0.5 * np.sin(np.pi * frame_cnt * solver.dt[None])
 
