@@ -55,7 +55,7 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/MSH/cube.msh",
+			"geometryFile": "./data/models/MSH/tet.msh",
 			"translation": [3, 5.0, 3],
 			"scale": [1.02, 4.5, 1.02],
 			"rotationAxis": [0, 1, 0],

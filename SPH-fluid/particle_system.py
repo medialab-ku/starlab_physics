@@ -119,6 +119,57 @@ class ParticleSystem:
             self.edges_st = ti.field(int, shape=edges.shape[0])
             self.edges_st.from_numpy(edges)
 
+        dynamic_objects = self.cfg.get_dynamic_objects()
+        self.num_dynamic_vertices = 0
+        vertices = np.empty((0, 3))
+        tetra = np.empty((0, 4), dtype=int)
+        faces = np.empty((0, 3), dtype=int)
+        edges = np.empty((0, 2), dtype=int)
+        # tetra = np.append(tet_indices_np, tet_indices_np_temp, axis=0)
+        for dynamic in dynamic_objects:
+            # print("test")
+            # print(self.num_dynamic_vertices)
+            mesh = self.load_dynamic_object(dynamic)
+            vertices = np.vstack((vertices, mesh.points))
+            tetrs_tmp = np.array(mesh.cells[0].data, dtype=int) + self.num_dynamic_vertices
+            faces_tmp = extract_faces(tetrs_tmp, mesh.points)
+            edges_tmp = extract_edges(faces_tmp)
+
+            tetra = np.vstack((tetra, tetrs_tmp))
+            edges = np.vstack((edges, edges_tmp))
+            faces = np.vstack((faces, faces_tmp))
+            self.num_dynamic_vertices += mesh.points.shape[0]
+
+        faces = faces.reshape(-1)
+        edges = edges.reshape(-1)
+        print(tetra)
+        # print(self.num_dynamic_vertices)
+        # print(edges.shape)
+
+        if self.num_dynamic_vertices > 0:
+            self.mass_dy = ti.field(float, shape=self.num_dynamic_vertices)
+            self.x_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
+            self.v_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
+            self.xHat_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
+            self.xOld_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
+
+            self.grad_dy = ti.Vector.field(self.dim, dtype=float, shape=self.num_dynamic_vertices)
+            self.diagH_dy = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=self.num_dynamic_vertices)
+            self.dx_dy = ti.Vector.field(self.dim, dtype=float, shape=self.num_dynamic_vertices)
+
+            self.x_dy.from_numpy(vertices)
+            self.v_dy.fill(0.0)
+
+            self.x_0_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
+            self.x_0_dy.copy_from(self.x_dy)
+
+            self.faces_dy = ti.field(int, shape=faces.shape[0])
+            self.faces_dy.from_numpy(faces)
+
+            self.edges_dy = ti.field(int, shape=edges.shape[0])
+            self.edges_dy.from_numpy(edges)
+
+
         self.fluid_particle_num = fluid_particle_num
         self.solid_particle_num = rigid_particle_num
         self.particle_max_num = fluid_particle_num + rigid_particle_num

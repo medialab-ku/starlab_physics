@@ -25,6 +25,7 @@ def extract_edges(faces):
     edges = np.array(list(edge_list))
     return edges
 
+
 def extract_faces(tetras, points):
     num_tets = tetras.shape[0]
     count = {}
