@@ -690,8 +690,8 @@ class XSPHSolver(SPHBase):
 
         alpha = 1.0
 
-        eta = 0.01
-        thickness = 0.001
+        eta = 0.02
+        thickness = 0.0001
 
         self.num_candidate[None] = 0
         for P in self.ps.x:
@@ -730,7 +730,7 @@ class XSPHSolver(SPHBase):
         optIter = 0
         numLS = 0
         pcgIter_total = 0
-        pad = 1.5 * self.ps.particle_diameter
+        pad = 1.2 * self.ps.particle_diameter
 
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
