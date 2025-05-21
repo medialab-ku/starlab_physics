@@ -56,8 +56,9 @@ class PCG:
                 print("PCG iter: ", itrCnt)
                 print("pAp: ", pAp)
                 print("alpha is a NaN!!")
-                exit()
-                break
+                return  itrCnt
+                # exit()
+                # break
             # print("alpha: ", alpha)
             add(x, x, alpha, self.p)
             add(self.r, self.r, -alpha, self.Ap)

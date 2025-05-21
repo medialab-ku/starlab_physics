@@ -2,13 +2,13 @@
 	"Configuration":
 	{
         "domainStart": [0.0, 0.0, 0.0],
-        "domainEnd": [10, 10.0, 10],
-		"particleRadius": 0.05,
+        "domainEnd": [6, 8.0, 10],
+		"particleRadius": 0.03,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
 		"simulationMethod": 5,
 		"gravitation": [0.0, -9.81, 0.0],
-		"timeStepSize": 1e-3,
+		"timeStepSize": 3e-3,
 		"stiffness": 1e4,
 		"exponent": 7,
 		"boundaryHandlingMethod": 0,
@@ -21,7 +21,7 @@
 		"k_rho": 1e4,
 		"viscosity": 0.01,
 		"da_ratio": 1.01,
-		"use_gn": false,
+		"use_gn": true,
 		"use_div": false
 	},
 
@@ -29,8 +29,8 @@
 	[
 		{
 			"objectId": 0,
-			"start": [3.03, 0.2, 6.97],
-			"end": [6.97, 3.00, 8.97],
+			"start": [2.05, 2.05, 3.05],
+			"end": [3.95, 3.95, 4.95],
 			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
@@ -44,10 +44,10 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/cube.obj",
-			"translation": [5, 2, 5],
-			"scale": [4.0, 2.0, 2.0],
+			"translation": [3, 4, 5],
+			"scale": [1, 2, 2],
 			"rotationAxis": [0, 1, 0],
-			"rotationAngle": 90
+			"rotationAngle": 0
 		}
 	]
 }

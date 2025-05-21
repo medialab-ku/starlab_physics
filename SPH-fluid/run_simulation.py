@@ -52,10 +52,10 @@ if __name__ == "__main__":
     frame_cnt = 0
     cnt_ply = 0
     runSim = False
-
+    animate = False
     stop_frame = False
     end_frame = 1000
-    is_plot_option = True
+    is_plot_option = False
 
     def show_options():
         global ps
@@ -68,6 +68,8 @@ if __name__ == "__main__":
         global output_ply
         global output_vtk
         global is_plot_option
+        global animate
+
 
         # global use_gn
         # global eta
@@ -108,6 +110,7 @@ if __name__ == "__main__":
             output_obj = w.checkbox("output_obj", output_obj)
             output_vtk = w.checkbox("output_vtk", output_vtk)
             is_plot_option = w.checkbox("plot option", is_plot_option)
+            animate = w.checkbox("animate", animate)
 
             if stop_frame:
                 end_frame = w.slider_int("end frame", end_frame, 0, int(1e5))
@@ -117,9 +120,9 @@ if __name__ == "__main__":
 
     scene = ti.ui.Scene()
     camera = ti.ui.Camera()
-    camera.position(10.0, 7.0, 10.0)
+    camera.position(-5.0, 4.0, 2.0)
     camera.up(0.0, 1.0, 0.0)
-    camera.lookat(0.0, 0.0, 0.0)
+    camera.lookat(3.0, 4.0, 5.0)
     camera.fov(70)
     scene.set_camera(camera)
 
@@ -220,10 +223,12 @@ if __name__ == "__main__":
         if runSim:
             # print(runSim)
 
-            # only available for dragon_bath scene
-            left_plane, right_plane = [0, 1, 4, 5], [2, 3, 6, 7]
-            for idx in left_plane:
-                ps.x_st[idx].z = ps.x0_st[idx].z + 1.0 * np.sin(np.pi * frame_cnt * solver.dt[None])
+
+            if animate:
+                # only available for dragon_bath scene
+                left_plane, right_plane = [0, 1, 4, 5], [2, 3, 6, 7]
+                for idx in left_plane:
+                    ps.x_st[idx].z = ps.x0_st[idx].z + 1.0 * np.sin(np.pi * frame_cnt * solver.dt[None])
             # for idx in right_plane:
             #     ps.x_st[idx].z = ps.x0_st[idx].z + 0.5 * np.sin(np.pi * frame_cnt * solver.dt[None])
 
@@ -263,6 +268,8 @@ if __name__ == "__main__":
             scene.set_camera(camera)
             scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.point_light((0.0, 0.0, 0.0), color=(1.0, 1.0, 1.0))
+
+            scene.point_light((2.0, 0.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
 
             scene.particles(ps.xTmp, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
