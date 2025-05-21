@@ -284,6 +284,10 @@ if __name__ == "__main__":
                 scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
                 # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
 
+            # if ps.num_dynamic_vertices > 0:
+            scene.mesh(ps.x_dy, ps.faces_dy, color=(1.5, 1.0, 0.0))
+            # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
+
         if output_frames:
             if frame_cnt % output_interval == 0:
                 window.write_image(f"{scene_name}_output_img/{frame_cnt:06}.png")
