@@ -720,6 +720,7 @@ class XSPHSolver(SPHBase):
         self.compute_xHat()
 
         optIter = 0
+        numLS = 0
         pcgIter_total = 0
         pad = 1.2 * self.ps.particle_diameter
 
@@ -756,6 +757,8 @@ class XSPHSolver(SPHBase):
             alpha = 1.0
             if self.use_div:
                 alpha_div = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
+                if alpha_div < 1.0:
+                    numLS += 1
                 alpha = ti.min(alpha_div, alpha)
 
             alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx)
@@ -769,7 +772,7 @@ class XSPHSolver(SPHBase):
             dx_norm_old = dx_norm
             log_debug.append(dx_norm)
 
-        print("opt/pcg iter:", optIter, pcgIter_total)
+        print("opt/pcg/LS iter:", optIter, pcgIter_total, numLS)
         self.compute_velocity()
 
 
