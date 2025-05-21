@@ -7,7 +7,7 @@ import numpy as np
 @ti.data_oriented
 class PCG:
 
-    def __init__(self, n):
+    def __init__(self, n, n_dy):
 
         self.Ax = ti.Vector.field(3, float)
         self.Ap = ti.Vector.field(3, float)
@@ -16,7 +16,15 @@ class PCG:
         self.z = ti.Vector.field(3, float)
         self.r = ti.Vector.field(3, float)
 
+        self.Ax_dy = ti.Vector.field(3, float)
+        self.Ap_dy = ti.Vector.field(3, float)
+        # self.s = ti.Vector.field(3, float)
+        self.p_dy = ti.Vector.field(3, float)
+        self.z_dy = ti.Vector.field(3, float)
+        self.r_dy = ti.Vector.field(3, float)
+
         ti.root.dense(ti.i, n).place(self.Ax, self.Ap, self.p, self.z, self.r)
+        ti.root.dense(ti.i, n_dy).place(self.Ax_dy, self.Ap_dy, self.p_dy, self.z_dy, self.r_dy)
 
     @ti.kernel
     def applyPrecondition(self, z: ti.template(), hii: ti.template(), r: ti.template()):

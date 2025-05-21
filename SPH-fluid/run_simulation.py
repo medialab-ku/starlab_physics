@@ -52,7 +52,7 @@ if __name__ == "__main__":
     frame_cnt = 0
     cnt_ply = 0
     runSim = False
-    animate = True
+    animate = False
     stop_frame = False
     end_frame = 1000
     is_plot_option = False
@@ -174,6 +174,10 @@ if __name__ == "__main__":
             if window.event.key == 'r':
                 frame_cnt = 0
                 ps.x.copy_from(ps.x_0)
+
+                if ps.num_dynamic_vertices > 0:
+                    ps.x_dy.copy_from(ps.x_0_dy)
+                    ps.v_dy.fill(0.0)
                 ###################################################################
                 # only available to dragon_bath scene
                 ps.x_st.copy_from(ps.x0_st)
@@ -222,8 +226,6 @@ if __name__ == "__main__":
         # for i in range(substeps):
         if runSim:
             # print(runSim)
-
-
             if animate:
                 # only available for dragon_bath scene
                 left_plane, right_plane = [4, 5, 6, 7], [0, 1, 2, 3]
@@ -286,6 +288,7 @@ if __name__ == "__main__":
 
             if ps.num_dynamic_vertices > 0:
                 scene.mesh(ps.x_dy, ps.faces_dy, color=(1.5, 1.0, 0.0))
+                scene.mesh(ps.x_dy, ps.faces_dy, color=(0.0, 0.0, 0.0), show_wireframe= True)
             # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
 
         if output_frames:

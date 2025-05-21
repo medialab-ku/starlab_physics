@@ -122,30 +122,26 @@ class ParticleSystem:
         dynamic_objects = self.cfg.get_dynamic_objects()
         self.num_dynamic_vertices = 0
         vertices = np.empty((0, 3))
-        tetra = np.empty((0, 4), dtype=int)
+        # tetra = np.empty((0, 4), dtype=int)
         faces = np.empty((0, 3), dtype=int)
         edges = np.empty((0, 2), dtype=int)
         # tetra = np.append(tet_indices_np, tet_indices_np_temp, axis=0)
         for dynamic in dynamic_objects:
             # print("test")
             # print(self.num_dynamic_vertices)
-            mesh = self.load_dynamic_object(dynamic)
-            vertices = np.vstack((vertices, mesh.points))
-            tetrs_tmp = np.array(mesh.cells[0].data, dtype=int) + self.num_dynamic_vertices
+            mesh = self.load_dynamic_object_codim(dynamic)
+            vertices = np.vstack((vertices, mesh.vertices))
+            edges_tmp = extract_edges(mesh.faces) + self.num_dynamic_vertices
+            faces_tmp = mesh.faces + self.num_dynamic_vertices
 
-            print(mesh.points)
-
-            faces_tmp = extract_faces(tetrs_tmp, mesh.points)
-            edges_tmp = extract_edges(faces_tmp)
-
-            tetra = np.vstack((tetra, tetrs_tmp))
             edges = np.vstack((edges, edges_tmp))
             faces = np.vstack((faces, faces_tmp))
-            self.num_dynamic_vertices += mesh.points.shape[0]
+
+            self.num_dynamic_vertices += mesh.vertices.shape[0]
 
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
-        print(tetra)
+        # print(tetra)
         # print(self.num_dynamic_vertices)
         # print(edges.shape)
 
@@ -172,6 +168,10 @@ class ParticleSystem:
             self.edges_dy = ti.field(int, shape=edges.shape[0])
             self.edges_dy.from_numpy(edges)
 
+            self.l0 =  ti.field(float, shape=edges.shape[0] // 2)
+            self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
+
+            print(self.mass_dy)
         # print(self.x_dy)
         # print(self.faces_dy)
 
@@ -475,7 +475,18 @@ class ParticleSystem:
             if ti.static(self.simulation_method == 4):
                 self.dfsph_factor[I] = self.dfsph_factor_buffer[I]
                 self.density_adv[I] = self.density_adv_buffer[I]
-    
+
+    @ti.kernel
+    def init_l0_and_mass(self, l0: ti.template(), mass: ti.template(), x: ti.template(), edges: ti.template()):
+
+        num_edges = edges.shape[0] // 2
+        mass.fill(0.0)
+
+        for e in range(num_edges):
+            v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
+            l0[e] = (x[v0] - x[v1]).norm()
+            mass[v0] += 0.5 * l0[e]
+            mass[v1] += 0.5 * l0[e]
 
     def initialize_particle_system(self):
         self.update_grid_id()
@@ -570,21 +581,41 @@ class ParticleSystem:
 
         return mesh
 
-    def load_dynamic_object(self, dynamic_object):
+    def load_dynamic_object_codim(self, dynamic_object):
         obj_id = dynamic_object["objectId"]
-        mesh = mio.read(dynamic_object["geometryFile"])
-        # mesh.apply_scale(dynamic_object["scale"])
-        center = mesh.points.sum(axis=0) / mesh.points.shape[0]
-        mesh.points -= center
+        mesh = tm.load(dynamic_object["geometryFile"])
+        center = mesh.vertices.sum(axis=0) / mesh.vertices.shape[0]
+        mesh.vertices -= center
+        mesh.apply_scale(dynamic_object["scale"])
+        mesh.vertices += center
         offset = np.array(dynamic_object["translation"])
-        mesh.points += offset
-
-        # angle = dynamic_object["rotationAngle"] / 360 * 2 * 3.1415926
-        # direction = dynamic_object["rotationAxis"]
-        # rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
-        # mesh.apply_transform(rot_matrix)
+        mesh.vertices += offset
+        angle = dynamic_object["rotationAngle"] / 360 * 2 * 3.1415926
+        direction = dynamic_object["rotationAxis"]
+        rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
+        mesh.apply_transform(rot_matrix)
 
         return mesh
+
+    # def load_dynamic_object(self, dynamic_object):
+    #     obj_id = dynamic_object["objectId"]
+    #     mesh = mio.read(dynamic_object["geometryFile"])
+    #     # mesh.apply_scale(dynamic_object["scale"])
+    #     center = mesh.points.sum(axis=0) / mesh.points.shape[0]
+    #     mesh.points -= center
+    #
+    #     scale = np.array(dynamic_object["scale"])
+    #     mesh.points *= scale[0]
+    #     mesh.points += center
+    #     offset = np.array(dynamic_object["translation"])
+    #     mesh.points += offset
+    #
+    #     # angle = dynamic_object["rotationAngle"] / 360 * 2 * 3.1415926
+    #     # direction = dynamic_object["rotationAxis"]
+    #     # rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
+    #     # mesh.apply_transform(rot_matrix)
+    #
+    #     return mesh
 
     def compute_cube_particle_num(self, start, end):
         num_dim = []

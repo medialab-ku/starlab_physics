@@ -15,7 +15,7 @@
 		"exportFrame": false,
 		"exportPly": false,
 		"exportObj": false,
-		"eta": 0.5,
+		"eta": 0.8,
 		"MaxOptIter": 1e3,
 		"tol": 2e-2,
 		"k_rho": 1e4,
@@ -25,17 +25,18 @@
 		"use_div": true
 	},
 
+
 	"FluidBlocks":
 	[
 		{
 			"objectId": 0,
-			"start": [2.03, 3.00, 2.03],
-			"end": [3.97, 9.00, 3.97],
+			"start": [4.2, 3.2, 4.2],
+			"end": [5.8, 4.8, 5.8],
 			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
 			"density": 1000.0,
-			"color": [0, 0, 200]
+			"color": [50, 100, 200]
 		}
 	],
 
@@ -44,10 +45,10 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/cube.obj",
-			"translation": [3, 5.0, 3],
-			"scale": [1.02, 4.5, 1.02],
+			"translation": [5, 5, 5],
+			"scale": [2.0, 4.0, 2.0],
 			"rotationAxis": [0, 1, 0],
-			"rotationAngle": 0
+			"rotationAngle": 90
 		}
 	],
 
@@ -55,9 +56,9 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/MSH/tet.msh",
-			"translation": [3, 5.0, 3],
-			"scale": [10, 10, 10],
+			"geometryFile": "./data/models/plane_3.obj",
+			"translation": [5, 3, 5],
+			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
 		}
