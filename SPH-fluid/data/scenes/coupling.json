@@ -56,7 +56,7 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/plane_8.obj",
+			"geometryFile": "./data/models/plane_32.obj",
 			"translation": [5, 3, 5],
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
