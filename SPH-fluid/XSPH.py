@@ -341,18 +341,18 @@ class XSPHSolver(SPHBase):
             nnT = n.outer_product(n)
             dndx = (I_3x3 - nnT) / l
             alpha = abs(l - self.ps.l0[i]) / l
-            value = coeff * nnT
+            value = coeff * (nnT + alpha * dndx)
             # value = coeff * (nnT)
 
-            self.ps.diagH_dy[v0] += value + alpha * dndx
-            self.ps.diagH_dy[v1] += value + alpha * dndx
+            self.ps.diagH_dy[v0] += value
+            self.ps.diagH_dy[v1] += value
 
             self.ps.H_l[i] = value
 
-        fixed_ids = ti.Vector([0, 1, 2, 3], dt=int)
+        # fixed_ids = ti.Vector([0, 1, 2, 3], dt=int)
         k_fix = 1e4 * self.dt[None]
-        for i in range(4):
-            vi = fixed_ids[i]
+        for i in range(self.ps.num_fixed_vids_field):
+            vi = self.ps.fixed_vids_field[i]
             self.ps.grad_dy[vi] += k_fix * (self.ps.x_dy[vi] - self.ps.x_0_dy[vi])
             self.ps.diagH_dy[vi] += k_fix * I_3x3
 
@@ -732,14 +732,15 @@ class XSPHSolver(SPHBase):
 
         for i in range(self.ps.edges_dy.shape[0] // 2):
             v0, v1 = self.ps.edges_dy[2 * i + 0], self.ps.edges_dy[2 * i + 1]
-            x01 = x_dy[v0] - x_dy[v1]
-            Ax_dy[v0] += self.ps.H_l[i] @ x01
-            Ax_dy[v1] -= self.ps.H_l[i] @ x01
+            x01 = x_dy[v1] - x_dy[v0]
+            Ax_dy[v0] -= self.ps.H_l[i] @ x01
+            Ax_dy[v1] += self.ps.H_l[i] @ x01
 
-        fixed_ids = ti.Vector([0, 1, 2, 3], dt=int)
+
+        # fixed_ids = ti.Vector([0, 1, 2, 3], dt=int)
         k_fix = 1e4 * self.dt[None]
-        for i in range(4):
-            vi = fixed_ids[i]
+        for i in range(self.ps.num_fixed_vids_field):
+            vi = self.ps.fixed_vids_field[i]
             Ax_dy[vi] += k_fix * x_dy[vi]
 
         for i in range(self.num_collision_dy[None]):
@@ -855,19 +856,21 @@ class XSPHSolver(SPHBase):
         return alpha_k
 
     @ti.kernel
-    def filter_step_size_ccd(self, x: ti.template(), dx: ti.template()) -> float:
+    def filter_step_size_ccd(self, x: ti.template(), dx: ti.template(), x_dy: ti.template(), dx_dy: ti.template()) -> float:
 
         alpha = 1.0
         eta = 0.02
         thickness = 0.0001
 
         self.num_candidate[None] = 0
+        self.num_candidate_dy[None] = 0
         for P in self.ps.x:
             xP = x[P]
 
             _min0 = ti.min(xP, xP + dx[P])
             _max0 = ti.min(xP, xP + dx[P])
             self.LBVH.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info, self.num_candidate)
+            self.LBVH_dy.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info_dy, self.num_candidate_dy)
 
         for i in range(self.num_candidate[None]):
             info = self.candidate_info[i]
@@ -882,6 +885,25 @@ class XSPHSolver(SPHBase):
             toc = self.ccd. point_triangle_ccd(xP, xT0, xT1, xT2, dxP, ti.math.vec3(0.0), ti.math.vec3(0.0), ti.math.vec3(0.0), eta, thickness)
             if toc > 0:
                 ti.atomic_min(alpha, toc)
+
+        for i in range(self.num_candidate_dy[None]):
+            info = self.candidate_info_dy[i]
+            P = info[0]
+            j = info[1]
+
+            xP = x[P]
+            dxP = dx[P]
+            T0, T1, T2 = self.ps.faces_dy[3 * j + 0], self.ps.faces_dy[3 * j + 1], self.ps.faces_dy[3 * j + 2]
+            xT0, xT1, xT2 = x_dy[T0], x_dy[T1], x_dy[T2]
+            dxT0, dxT1, dxT2 = dx_dy[T0], dx_dy[T1], dx_dy[T2]
+
+
+
+            toc = self.ccd.point_triangle_ccd(xP, xT0, xT1, xT2, dxP, dxT0, dxT1, dxT2, eta, thickness)
+            if toc > 0:
+                ti.atomic_min(alpha, toc)
+
+
 
         return alpha
 
@@ -901,13 +923,13 @@ class XSPHSolver(SPHBase):
         optIter = 0
         numLS = 0
         pcgIter_total = 0
-        pad = 1.0 * self.ps.particle_diameter
+        pad = 1.5 * self.ps.particle_diameter
 
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
         self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 1e4
+        k_el = 1e5
         if self.use_gn:
             self.compute_densities(self.ps.xOld, h)
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
@@ -935,7 +957,7 @@ class XSPHSolver(SPHBase):
                                                 self.ps.dx_dy, self.ps.grad_dy, self.ps.diagH_dy, 1e-5, self.mat_free_Ax2)
             else:
                 pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH,
-                                                self.ps.dx_dy, self.ps.grad_dy, self.ps.diagH_dy, 1e-5, self.mat_free_Ax)
+                                                self.ps.dx_dy, self.ps.grad_dy, self.ps.diagH_dy, 1e-4, self.mat_free_Ax)
 
             # self.PCG.applyPrecondition(self.ps.dx_dy, self.ps.diagH_dy, self.ps.grad_dy)
             # scale(self.ps.dx_dy, -1.0, self.ps.dx_dy)
@@ -954,10 +976,11 @@ class XSPHSolver(SPHBase):
             if self.use_div:
                 alpha_div = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
                 if alpha_div < 1.0:
+                    print(alpha_div)
                     numLS += 1
                 alpha = ti.min(alpha_div, alpha)
 
-            alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx)
+            alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx, self.ps.x_dy, self.ps.dx_dy)
             if alpha_ccd < 1.0:
                 print("alpha_ccd", alpha_ccd)
 

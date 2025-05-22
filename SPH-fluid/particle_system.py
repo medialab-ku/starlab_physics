@@ -121,11 +121,13 @@ class ParticleSystem:
 
         dynamic_objects = self.cfg.get_dynamic_objects()
         self.num_dynamic_vertices = 0
+        self.num_dynamic_vertices_prefix_sum = []
         vertices = np.empty((0, 3))
         # tetra = np.empty((0, 4), dtype=int)
         faces = np.empty((0, 3), dtype=int)
         edges = np.empty((0, 2), dtype=int)
         # tetra = np.append(tet_indices_np, tet_indices_np_temp, axis=0)
+        self.num_dynamic_vertices_prefix_sum.append(0)
         for dynamic in dynamic_objects:
             # print("test")
             # print(self.num_dynamic_vertices)
@@ -138,12 +140,38 @@ class ParticleSystem:
             faces = np.vstack((faces, faces_tmp))
 
             self.num_dynamic_vertices += mesh.vertices.shape[0]
+            self.num_dynamic_vertices_prefix_sum.append(self.num_dynamic_vertices)
 
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
         # print(tetra)
         # print(self.num_dynamic_vertices)
         # print(edges.shape)
+
+        ####################################################################### # 153 line
+        # Make vertices fixed!
+        self.fixed_vids = []
+        epsilon = 1e-5
+        for i in range(len(self.num_dynamic_vertices_prefix_sum) - 1):
+            start_vid, end_vid = self.num_dynamic_vertices_prefix_sum[i], self.num_dynamic_vertices_prefix_sum[i + 1]
+            for j in range(start_vid, end_vid):
+                # Write down any conditions that you want in the if statement below...
+                # This condition is based on plane_32.obj mesh. (No scale, No rotation, Translation [5,3,5])
+                if (4 - epsilon < vertices[j, 0] < 4 + epsilon or
+                        6 - epsilon < vertices[j, 0] < 6 + epsilon or  # the x coord condition
+                        4 - epsilon < vertices[j, 2] < 4 + epsilon or
+                        6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
+                    self.fixed_vids.append(j)
+
+        self.fixed_vids_np = np.array(self.fixed_vids)
+        self.fixed_vids_field = ti.field(dtype=int, shape=self.fixed_vids_np.shape[0])
+        self.num_fixed_vids_field = len(self.fixed_vids)
+        self.fixed_vids_field.from_numpy(self.fixed_vids_np)
+
+        print("The fixed vertices list : ", self.fixed_vids_field)
+        print("The fixed vertices list length : ", self.num_fixed_vids_field)
+
+        #######################################################################
 
         if self.num_dynamic_vertices > 0:
             self.mass_dy = ti.field(float, shape=self.num_dynamic_vertices)

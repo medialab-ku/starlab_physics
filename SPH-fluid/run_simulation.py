@@ -240,9 +240,9 @@ if __name__ == "__main__":
             for i in range(substeps):
                 optIter, pcgIter_total, log_debug = solver.step()
 
-                # if optIter == solver.maxOptIter:
-                #     print("failed to converge")
-                #     runSim = False
+                if optIter == solver.maxOptIter:
+                    print("failed to converge")
+                    runSim = False
 
                 if is_plot_option:
                     opt_iter_data.append(optIter)

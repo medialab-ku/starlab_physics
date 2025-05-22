@@ -3,7 +3,7 @@
 	{
         "domainStart": [0.0, 0.0, 0.0],
         "domainEnd": [10, 10.0, 10],
-		"particleRadius": 0.02,
+		"particleRadius": 0.01,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
 		"simulationMethod": 5,
@@ -16,7 +16,7 @@
 		"exportPly": false,
 		"exportObj": false,
 		"eta": 0.8,
-		"MaxOptIter": 5,
+		"MaxOptIter": 1e3,
 		"tol": 2e-2,
 		"k_rho": 1e4,
 		"viscosity": 0.01,
@@ -30,8 +30,8 @@
 	[
 		{
 			"objectId": 0,
-			"start": [4.3, 3.2, 4.3],
-			"end": [5.7, 8.22, 5.7],
+			"start": [4.7, 3.2, 4.7],
+			"end": [5.3, 6.0, 5.3],
 			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
@@ -57,7 +57,7 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/plane_32.obj",
-			"translation": [5, 3, 5],
+			"translation": [5, 3.1, 5],
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
