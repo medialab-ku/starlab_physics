@@ -151,7 +151,7 @@ class ParticleSystem:
         ####################################################################### # 153 line
         # Make vertices fixed!
         self.fixed_vids = []
-        epsilon = 1e-5
+        epsilon = 0.01
         for i in range(len(self.num_dynamic_vertices_prefix_sum) - 1):
             start_vid, end_vid = self.num_dynamic_vertices_prefix_sum[i], self.num_dynamic_vertices_prefix_sum[i + 1]
             for j in range(start_vid, end_vid):
@@ -510,7 +510,7 @@ class ParticleSystem:
 
         num_edges = edges.shape[0] // 2
         mass.fill(0.0)
-        density = 1
+        density = 1e2
         for e in range(num_edges):
             v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
             l0[e] = (x[v0] - x[v1]).norm()

@@ -232,8 +232,8 @@ if __name__ == "__main__":
                     [4, 5, 6, 7], [0, 1, 2, 3], [1, 3, 5, 7], [0, 2, 4, 6], [0, 1, 4, 5], [2, 3, 6, 7])
                 for idx in upper_plane:
                     # ps.x_st[idx].y = ps.x0_st[idx].y + 0.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
-                    if ps.x_st[idx].y > ps.x_st[lower_plane[0]].y:
-                        ps.x_st[idx].y = ps.x_st[idx].y - 0.01 * frame_cnt * solver.dt[None]
+                    if ps.x_st[idx].y > 1.02 * ps.x_st[lower_plane[0]].y:
+                        ps.x_st[idx].y -= 3.5 * solver.dt[None]
 
             start_time = time.time()
 

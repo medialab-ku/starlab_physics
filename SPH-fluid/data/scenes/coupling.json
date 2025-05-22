@@ -3,7 +3,7 @@
 	{
         "domainStart": [0.0, 0.0, 0.0],
         "domainEnd": [10, 10.0, 10],
-		"particleRadius": 0.03,
+		"particleRadius": 0.02,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
 		"simulationMethod": 5,
@@ -24,7 +24,6 @@
 		"use_gn": false,
 		"use_div": true
 	},
-
 
 	"FluidBlocks":
 	[
@@ -56,9 +55,9 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/plane_32.obj",
+			"geometryFile": "./data/models/even_plane.obj",
 			"translation": [5, 3, 5],
-			"scale": [1, 1, 1],
+			"scale": [4.0, 4.0, 4.0],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
 		}

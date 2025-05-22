@@ -573,7 +573,7 @@ class XSPHSolver(SPHBase):
             self.LBVH_dy.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info_dy, self.num_candidate_dy)
 
         # print(self.num_candidate[None] )
-        Kappa = 1e4 * self.dt[None] * self.dt[None]
+        Kappa = 1e5 * self.dt[None] * self.dt[None]
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         dHat = 0.5 * pad
         self.num_collision_dy[None] = 0
@@ -897,7 +897,7 @@ class XSPHSolver(SPHBase):
 
         alpha = 1.0
         eta = 0.02
-        thickness = 0.0001
+        thickness = 0.001
 
         self.num_candidate[None] = 0
         self.num_candidate_dy[None] = 0
@@ -960,13 +960,13 @@ class XSPHSolver(SPHBase):
         optIter = 0
         numLS = 0
         pcgIter_total = 0
-        pad = 1.5 * self.ps.particle_diameter
+        pad = 1.2 * self.ps.particle_diameter
 
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
         self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 1e4
+        k_el = 5e5
         if self.use_gn:
             self.compute_densities(self.ps.xOld, h)
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
