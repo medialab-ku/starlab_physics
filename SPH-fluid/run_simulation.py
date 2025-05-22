@@ -228,11 +228,14 @@ if __name__ == "__main__":
         if runSim:
             # print(runSim)
             if animate:
-                left_plane, right_plane, upper_plane, lower_plane, front_plane, rear_plane = (
-                    [4, 5, 6, 7], [0, 1, 2, 3], [1, 3, 5, 7], [0, 2, 4, 6], [0, 1, 4, 5], [2, 3, 6, 7])
-                for idx in upper_plane:
-                    # ps.x_st[idx].y = ps.x0_st[idx].y + 0.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
-                    if ps.x_st[idx].y > ps.x_st[lower_plane[0]].y:
+                # left_plane, right_plane, upper_plane, lower_plane, front_plane, rear_plane = (
+                #     [4, 5, 6, 7], [0, 1, 2, 3], [1, 3, 5, 7], [0, 2, 4, 6], [0, 1, 4, 5], [2, 3, 6, 7])
+                # for idx in upper_plane:
+                #     # ps.x_st[idx].y = ps.x0_st[idx].y + 0.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
+                #     if ps.x_st[idx].y > ps.x_st[lower_plane[0]].y:
+                #         ps.x_st[idx].y = ps.x_st[idx].y - 0.01 * frame_cnt * solver.dt[None]
+                for idx in range(ps.num_static_vertices_prefix_sum[1], ps.num_static_vertices_prefix_sum[2]):
+                    if ps.x0_st[idx].y - ps.x_st[idx].y <= 4:
                         ps.x_st[idx].y = ps.x_st[idx].y - 0.01 * frame_cnt * solver.dt[None]
 
             start_time = time.time()

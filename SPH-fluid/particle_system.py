@@ -8,7 +8,33 @@ from DFSPH import DFSPHSolver
 from XSPH import XSPHSolver
 from mesh_utils import *
 import meshio as mio
+import open3d as o3d
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
+
+def mesh_to_filled_particles(mesh_path, voxel_size=0.05):
+    mesh_legacy = o3d.io.read_triangle_mesh(mesh_path)
+    mesh_legacy.compute_vertex_normals()
+    mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh_legacy)
+
+    scene = o3d.t.geometry.RaycastingScene()
+    _ = scene.add_triangles(mesh)
+
+    aabb = mesh_legacy.get_axis_aligned_bounding_box()
+    min_bound = aabb.min_bound
+    max_bound = aabb.max_bound
+
+    x = np.arange(min_bound[0], max_bound[0], voxel_size)
+    y = np.arange(min_bound[1], max_bound[1], voxel_size)
+    z = np.arange(min_bound[2], max_bound[2], voxel_size)
+    grid = np.stack(np.meshgrid(x, y, z, indexing='ij'), axis=-1).reshape(-1, 3)
+
+    query_points = o3d.core.Tensor(grid, dtype=o3d.core.Dtype.Float32)
+
+    occupancy = scene.compute_occupancy(query_points)
+    inside_mask = occupancy.numpy() == 1
+    inside_points = query_points[inside_mask]
+
+    return inside_points.numpy()
 
 @ti.data_oriented
 class ParticleSystem:
@@ -55,14 +81,20 @@ class ParticleSystem:
         self.object_collection = dict()
         self.object_id_rigid_body = set()
 
+        voxel_size = 0.1
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
         fluid_blocks = self.cfg.get_fluid_blocks()
         fluid_particle_num = 0
         for fluid in fluid_blocks:
-            particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
-            fluid["particleNum"] = particle_num
-            self.object_collection[fluid["objectId"]] = fluid
+            if fluid["geometryFile"] == "":
+                particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
+            else:
+                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
+                particle_num = voxelized_points.shape[0]
+
+                fluid["particleNum"] = particle_num
+                self.object_collection[fluid["objectId"]] = fluid
             fluid_particle_num += particle_num
 
 
@@ -87,10 +119,11 @@ class ParticleSystem:
 
         static_objects = self.cfg.get_static_objects()
         self.num_static_vertices = 0
+        self.num_static_vertices_prefix_sum = []
         vertices = np.empty((0, 3))
         faces = np.empty((0, 3), dtype=int)
         edges = np.empty((0, 2), dtype=int)
-
+        self.num_static_vertices_prefix_sum.append(0)
         for static in static_objects:
             mesh = self.load_static_object(static)
             vertices = np.vstack((vertices, mesh.vertices))
@@ -101,6 +134,8 @@ class ParticleSystem:
             faces = np.vstack((faces, faces_tmp))
 
             self.num_static_vertices += mesh.vertices.shape[0]
+            self.num_static_vertices_prefix_sum.append(self.num_static_vertices)
+        print(self.num_static_vertices_prefix_sum)
         faces = faces.reshape(-1)
         edges = edges.reshape(-1)
 
@@ -148,31 +183,6 @@ class ParticleSystem:
         # print(self.num_dynamic_vertices)
         # print(edges.shape)
 
-        ####################################################################### # 153 line
-        # Make vertices fixed!
-        self.fixed_vids = []
-        epsilon = 1e-5
-        for i in range(len(self.num_dynamic_vertices_prefix_sum) - 1):
-            start_vid, end_vid = self.num_dynamic_vertices_prefix_sum[i], self.num_dynamic_vertices_prefix_sum[i + 1]
-            for j in range(start_vid, end_vid):
-                # Write down any conditions that you want in the if statement below...
-                # This condition is based on plane_32.obj mesh. (No scale, No rotation, Translation [5,3,5])
-                if (4 - epsilon < vertices[j, 0] < 4 + epsilon or
-                        6 - epsilon < vertices[j, 0] < 6 + epsilon or  # the x coord condition
-                        4 - epsilon < vertices[j, 2] < 4 + epsilon or
-                        6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
-                    self.fixed_vids.append(j)
-
-        self.fixed_vids_np = np.array(self.fixed_vids)
-        self.fixed_vids_field = ti.field(dtype=int, shape=self.fixed_vids_np.shape[0])
-        self.num_fixed_vids_field = len(self.fixed_vids)
-        self.fixed_vids_field.from_numpy(self.fixed_vids_np)
-
-        print("The fixed vertices list : ", self.fixed_vids_field)
-        print("The fixed vertices list length : ", self.num_fixed_vids_field)
-
-        #######################################################################
-
         if self.num_dynamic_vertices > 0:
             self.mass_dy = ti.field(float, shape=self.num_dynamic_vertices)
             self.x_dy = ti.Vector.field(self.dim, float, shape=self.num_dynamic_vertices)
@@ -201,6 +211,34 @@ class ParticleSystem:
             self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
 
             print(self.mass_dy)
+
+            ####################################################################### # 153 line
+            # Make vertices fixed!
+            self.fixed_vids = []
+            epsilon = 1e-5
+            for i in range(len(self.num_dynamic_vertices_prefix_sum) - 1):
+                start_vid, end_vid = self.num_dynamic_vertices_prefix_sum[i], self.num_dynamic_vertices_prefix_sum[
+                    i + 1]
+                for j in range(start_vid, end_vid):
+                    # Write down any conditions that you want in the if statement below...
+                    # This condition is based on plane_32.obj mesh. (No scale, No rotation, Translation [5,3,5])
+                    # if (4 - epsilon < vertices[j, 0] < 4 + epsilon or
+                    #     6 - epsilon < vertices[j, 0] < 6 + epsilon or  # the x coord condition
+                    #     4 - epsilon < vertices[j, 2] < 4 + epsilon or
+                    #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
+                    if (1.9 < vertices[j, 1]):
+                        self.fixed_vids.append(j)
+
+            self.fixed_vids_np = np.array(self.fixed_vids)
+            self.fixed_vids_field = ti.field(dtype=int, shape=self.fixed_vids_np.shape[0])
+            self.num_fixed_vids_field = len(self.fixed_vids)
+            self.fixed_vids_field.from_numpy(self.fixed_vids_np)
+
+            print("The fixed dynamic vertices list : ", self.fixed_vids_field)
+            print("The fixed dynamic vertices list length : ", self.num_fixed_vids_field)
+
+            #######################################################################
+
         # print(self.x_dy)
         # print(self.faces_dy)
 
@@ -283,22 +321,50 @@ class ParticleSystem:
 
         # Fluid block
         for fluid in fluid_blocks:
-            obj_id = fluid["objectId"]
-            offset = np.array(fluid["translation"])
-            start = np.array(fluid["start"]) + offset
-            end = np.array(fluid["end"]) + offset
-            scale = np.array(fluid["scale"])
-            velocity = fluid["velocity"]
-            density = fluid["density"]
-            color = fluid["color"]
-            self.add_cube(object_id=obj_id,
-                          lower_corner=start,
-                          cube_size=(end-start)*scale,
-                          velocity=velocity,
-                          density=density, 
-                          is_dynamic=1, # enforce fluid dynamic
-                          color=color,
-                          material=1) # 1 indicates fluid
+            if fluid["geometryFile"] == "":
+                obj_id = fluid["objectId"]
+                offset = np.array(fluid["translation"])
+                start = np.array(fluid["start"]) + offset
+                end = np.array(fluid["end"]) + offset
+                scale = np.array(fluid["scale"])
+                velocity = fluid["velocity"]
+                density = fluid["density"]
+                color = fluid["color"]
+                self.add_cube(object_id=obj_id,
+                              lower_corner=start,
+                              cube_size=(end - start) * scale,
+                              velocity=velocity,
+                              density=density,
+                              is_dynamic=1,  # enforce fluid dynamic
+                              color=color,
+                              material=1)  # 1 indicates fluid
+            else:
+                obj_id = fluid["objectId"]
+                offset = np.array(fluid["translation"])
+                scale = np.array(fluid["scale"])
+                velocity = fluid["velocity"]
+                density = fluid["density"]
+                color = fluid["color"]
+
+                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
+                voxelized_points *= scale
+                voxelized_points += offset
+
+                num_particles = voxelized_points.shape[0]
+
+                if velocity is None:
+                    velocity_arr = np.zeros_like(voxelized_points, dtype=np.float32)
+                else:
+                    velocity_arr = np.array([velocity for _ in range(num_particles)], dtype=np.float32)
+
+                material_arr = np.full(num_particles, 1, dtype=np.int32)
+                is_dynamic_arr = np.full(num_particles, 1, dtype=np.int32)
+                color_arr = np.stack([np.full(num_particles, c, dtype=np.int32) for c in color], axis=1)
+                density_arr = np.full(num_particles, density, dtype=np.float32)
+                pressure_arr = np.full(num_particles, 0, dtype=np.float32)
+
+                self.add_particles(obj_id, num_particles, voxelized_points, velocity_arr,
+                                   density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
         
         # TODO: Handle rigid block
         # Rigid block

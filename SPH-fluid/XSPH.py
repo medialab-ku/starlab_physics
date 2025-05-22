@@ -491,7 +491,7 @@ class XSPHSolver(SPHBase):
             self.LBVH.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info,  self.num_candidate)
 
         # print(self.num_candidate[None] )
-        Kappa = 1e4 * self.dt[None] * self.dt[None]
+        Kappa = 1e5 * self.dt[None] * self.dt[None]
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         dHat = 0.5 * pad
         self.num_collision[None] = 0
