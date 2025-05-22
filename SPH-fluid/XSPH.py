@@ -271,8 +271,8 @@ class XSPHSolver(SPHBase):
 
         for p_i in ti.grouped(self.ps.x_dy):
             # self.ps.grad[p_i]  = self.density_0 * self.ps.m_V[p_i] * ti.math.vec3(0.0)
-            self.ps.grad_dy[p_i] =  self.density_0 * self.ps.mass_dy[p_i] *(self.ps.x_dy[p_i] - self.ps.xHat_dy[p_i])
-            self.ps.diagH_dy[p_i] = self.density_0 * self.ps.mass_dy[p_i] * I_3x3
+            self.ps.grad_dy[p_i] = self.ps.mass_dy[p_i] * (self.ps.x_dy[p_i] - self.ps.xHat_dy[p_i])
+            self.ps.diagH_dy[p_i] = self.ps.mass_dy[p_i] * I_3x3
 
     @ti.kernel
     def compute_pressure(self, k: float, h:float, eta: float):
@@ -335,16 +335,17 @@ class XSPHSolver(SPHBase):
             x01 = x1 - x0
             l = x01.norm()
             n = x01 / l
+
             self.ps.grad_dy[v0] -= coeff * (l - self.ps.l0[i]) * n
             self.ps.grad_dy[v1] += coeff * (l - self.ps.l0[i]) * n
             nnT = n.outer_product(n)
-            # dndx = (id2 - nnT) / l
+            dndx = (I_3x3 - nnT) / l
             alpha = abs(l - self.ps.l0[i]) / l
             value = coeff * nnT
             # value = coeff * (nnT)
 
-            self.ps.diagH_dy[v0] += value
-            self.ps.diagH_dy[v1] += value
+            self.ps.diagH_dy[v0] += value + alpha * dndx
+            self.ps.diagH_dy[v1] += value + alpha * dndx
 
             self.ps.H_l[i] = value
 
@@ -575,7 +576,7 @@ class XSPHSolver(SPHBase):
         Kappa = 1e4 * self.dt[None] * self.dt[None]
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         dHat = 0.5 * pad
-        self.num_collision[None] = 0
+        self.num_collision_dy[None] = 0
 
         for i in range(self.num_candidate_dy[None]):
 
@@ -621,6 +622,9 @@ class XSPHSolver(SPHBase):
             d = (xP - proj).norm()
 
             n = (xP - proj) / d
+
+            # print(bary)
+
             if d <= dHat:
                 #
                 # if d == 1e-4:
@@ -634,8 +638,16 @@ class XSPHSolver(SPHBase):
                 self.ps.diagH[P] += Kappa * test
                 self.ps.grad[P] += Kappa * dbdx * n
 
-                idx = ti.atomic_add(self.num_collision[None], 1)
-                self.collision_H[idx] = Kappa * test
+                self.ps.diagH_dy[T0] -= bary[0] * Kappa * test
+                self.ps.diagH_dy[T1] -= bary[1] * Kappa * test
+                self.ps.diagH_dy[T2] -= bary[2] * Kappa * test
+
+                self.ps.grad_dy[T0] -= bary[0] * Kappa * dbdx * n
+                self.ps.grad_dy[T1] -= bary[1] * Kappa * dbdx * n
+                self.ps.grad_dy[T2] -= bary[2] * Kappa * dbdx * n
+
+                idx = ti.atomic_add(self.num_collision_dy[None], 1)
+                self.collision_H_dy[idx] = Kappa * test
                 self.collision_info_dy[idx] = ti.math.ivec4([P, T0, T1, T2])
                 self.collision_type_dy[idx] = 0
                 self.collision_bary_dy[idx] = ti.math.vec4([1.0, bary[0], bary[1], bary[2]])
@@ -673,7 +685,7 @@ class XSPHSolver(SPHBase):
             Ax[p_i] = self.density_0 * self.ps.m_V[p_i] * x[p_i]
 
         for p_i in ti.grouped(self.ps.x_dy):
-            Ax_dy[p_i] = self.density_0 * self.ps.mass_dy[p_i] * x_dy[p_i]
+            Ax_dy[p_i] = self.ps.mass_dy[p_i] * x_dy[p_i]
 
 
         #static collision
@@ -889,13 +901,13 @@ class XSPHSolver(SPHBase):
         optIter = 0
         numLS = 0
         pcgIter_total = 0
-        pad = 1.2 * self.ps.particle_diameter
+        pad = 1.0 * self.ps.particle_diameter
 
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
         self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 1e8
+        k_el = 1e4
         if self.use_gn:
             self.compute_densities(self.ps.xOld, h)
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
@@ -927,8 +939,16 @@ class XSPHSolver(SPHBase):
 
             # self.PCG.applyPrecondition(self.ps.dx_dy, self.ps.diagH_dy, self.ps.grad_dy)
             # scale(self.ps.dx_dy, -1.0, self.ps.dx_dy)
+            #
+            # self.PCG.applyPrecondition(self.ps.dx, self.ps.diagH, self.ps.grad)
+            # scale(self.ps.dx, -1.0, self.ps.dx)
 
             dx_norm = self.inf_norm(self.ps.dx)
+            dx_norm_dy = self.inf_norm(self.ps.dx_dy)
+
+
+            if dx_norm_dy > dx_norm:
+                dx_norm = dx_norm_dy
 
             alpha = 1.0
             if self.use_div:

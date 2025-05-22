@@ -119,6 +119,7 @@ if __name__ == "__main__":
             gui.text(f"Current frame: {frame_cnt}")
 
     scene = ti.ui.Scene()
+    scene.ambient_light((0.5, 0.5, 0.5))
     camera = ti.ui.Camera()
     camera.position(-5.0, 4.0, 2.0)
     camera.up(0.0, 1.0, 0.0)
@@ -239,9 +240,9 @@ if __name__ == "__main__":
             for i in range(substeps):
                 optIter, pcgIter_total, log_debug = solver.step()
 
-                if optIter == solver.maxOptIter:
-                    print("failed to converge")
-                    runSim = False
+                # if optIter == solver.maxOptIter:
+                #     print("failed to converge")
+                #     runSim = False
 
                 if is_plot_option:
                     opt_iter_data.append(optIter)
@@ -274,7 +275,7 @@ if __name__ == "__main__":
             scene.point_light((2.0, 0.0, 2.0), color=(1.0, 1.0, 1.0))
             scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
 
-            scene.particles(ps.xTmp, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
+            # scene.particles(ps.xTmp, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
             scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
             canvas.scene(scene)
             # solver.LBVH.draw_bvh_aabb_test(scene,  solver.LBVH.num_leafs)
@@ -287,8 +288,8 @@ if __name__ == "__main__":
                 # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
 
             if ps.num_dynamic_vertices > 0:
-                scene.mesh(ps.x_dy, ps.faces_dy, color=(1.5, 1.0, 0.0))
-                scene.mesh(ps.x_dy, ps.faces_dy, color=(0.0, 0.0, 0.0), show_wireframe= True)
+                # scene.mesh(ps.x_dy, ps.faces_dy, color=(1.5, 1.0, 0.0))
+                scene.mesh(ps.x_dy, ps.faces_dy, color=(1.0, 1.0, 1.0), show_wireframe= True)
             # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
 
         if output_frames:

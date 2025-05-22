@@ -482,12 +482,12 @@ class ParticleSystem:
 
         num_edges = edges.shape[0] // 2
         mass.fill(0.0)
-
+        density = 1
         for e in range(num_edges):
             v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
             l0[e] = (x[v0] - x[v1]).norm()
-            mass[v0] += 0.5 * l0[e]
-            mass[v1] += 0.5 * l0[e]
+            mass[v0] += density * 0.5 * l0[e]
+            mass[v1] += density * 0.5 * l0[e]
 
     def initialize_particle_system(self):
         self.update_grid_id()
