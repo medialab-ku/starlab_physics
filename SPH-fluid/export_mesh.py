@@ -16,7 +16,7 @@ class Exporter:
         self.output_vtk = output_vtk
         self.output_obj = output_obj
         self.output_ply = output_ply
-        folder = [self.output_vtk, self.output_obj, self.output_ply]
+        folder = [self.output_vtk, self.output_obj + "/static", self.output_obj + "/dynamic", self.output_ply]
 
         for idx in range(len(folder)):
             if not os.path.exists(folder[idx]):
@@ -32,9 +32,56 @@ class Exporter:
                     except Exception as e:
                         print(f'Failed to delete {file_path}. Reason: {e}')
 
+    def set_faces(self, faces):
+        self.faces = faces
+        if hasattr(faces, 'to_numpy'):
+            faces = faces.to_numpy()
+        else:
+            faces = np.array(faces)
+        faces = faces.reshape(-1, 3)
+        self.faces = faces + 1
+
+    def export_mesh(self, filename, vertices, MODE="SINGLE"):
+        self.vertices = vertices
+
+        if self.frame % self.frameInterval != 0:
+            return
+
+        if hasattr(vertices, 'to_numpy'):
+            vertices = vertices.to_numpy()
+        else:
+            vertices = np.array(vertices)
+
+        if MODE == "SINGLE1" or MODE == "MULTI1":
+            if MODE == "SINGLE1":
+                output_filename = os.path.join(self.output_obj, "static", filename)
+            elif MODE == "MULTI1":
+                name, ext = os.path.splitext(filename)
+                output_filename = os.path.join(self.output_obj, "static", f"{name}{self.frame}{ext}")
+
+            with open(output_filename, 'w') as f:
+                for v in vertices:
+                    f.write(f"v {v[0]} {v[1]} {v[2]}\n")
+                for face in self.faces:
+                    f.write(f"f {face[0]} {face[1]} {face[2]}\n")
+            print(f"mesh1, Saved {len(vertices)} vertices, {len(self.faces)} faces to {output_filename}")
+
+        if MODE == "SINGLE2" or MODE == "MULTI2":
+            if MODE == "SINGLE2":
+                output_filename = os.path.join(self.output_obj, "dynamic", filename)
+            elif MODE == "MULTI2":
+                name, ext = os.path.splitext(filename)
+                output_filename = os.path.join(self.output_obj, "dynamic", f"{name}{self.frame}{ext}")
+
+            with open(output_filename, 'w') as f:
+                for v in vertices:
+                    f.write(f"v {v[0]} {v[1]} {v[2]}\n")
+                for face in self.faces:
+                    f.write(f"f {face[0]} {face[1]} {face[2]}\n")
+            print(f"mesh2, Saved {len(vertices)} vertices, {len(self.faces)} faces to {output_filename}")
+
     def export_ply(self, filename, vertices, MODE="SINGLE"):
         self.vertices = vertices
-        self.frame += 1
 
         if self.frame % self.frameInterval != 0:
             return
@@ -68,7 +115,6 @@ class Exporter:
 
     def export_vtk(self, filename, vertices, MODE="SINGLE"):
         self.vertices = vertices
-        self.frame += 1
 
         if self.frame % self.frameInterval != 0:
             return
@@ -94,4 +140,7 @@ class Exporter:
         meshio.write(output_filename, mesh)
 
         print(f"Saved {len(vertices)} particles to {output_filename}")
+
+    def update(self):
+        self.frame += 1
 

@@ -163,6 +163,7 @@ if __name__ == "__main__":
     pcg_iter_data = []
     elapsed_time_data = []
     log_debug = None
+
     while window.running:
 
         show_options()
@@ -254,11 +255,15 @@ if __name__ == "__main__":
                 elapsed_time_data.append(end_time - start_time)
 
             if output_obj:
-                exporter.export_ply("scene.obj", ps.x, MODE="MULTI")
+                exporter.set_faces(ps.faces_st)
+                exporter.export_mesh("static.obj", ps.x_st, MODE="MULTI1")
+                exporter.set_faces(ps.faces_dy)
+                exporter.export_mesh("dynamic.obj", ps.x_dy, MODE="MULTI2")
             if output_vtk:
                 exporter.export_vtk("scene.vtk", ps.x, MODE="MULTI")
             if output_ply:
                 exporter.export_ply("scene.ply", ps.x, MODE="MULTI")
+            exporter.update()
 
             frame_cnt += 1
 
