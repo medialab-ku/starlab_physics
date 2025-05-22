@@ -200,7 +200,7 @@ class ParticleSystem:
             self.H_l = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=edges.shape[0] // 2)
             self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
 
-            print(self.mass_dy)
+            # print(self.mass_dy)
         # print(self.x_dy)
         # print(self.faces_dy)
 

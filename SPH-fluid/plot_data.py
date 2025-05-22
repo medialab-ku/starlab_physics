@@ -91,20 +91,33 @@ plt.rcParams.update(
     }
 )
 
-plt.figure(figsize=(8, 4))
+plt.figure(figsize=(6, 4))
 
-x_pos = range(len(bar_labels))
-plt.bar(x_pos, means, width=0.6, edgecolor="black")
 
-plt.xticks(x_pos, bar_labels, rotation=15)
-plt.ylabel(r"Average PCG iteration ($N \le 5000$)", fontsize=13, labelpad=8)
-plt.title(r"PCG iteration comparison", fontsize=14, pad=10)
+x0 = load_pcg_iter(file_paths[0])[16::16]
+x2 = load_pcg_iter(file_paths[2])[16::16]
+x4 = load_pcg_iter(file_paths[4])[16::16]
 
-plt.tight_layout()
+plt.plot(x0, label="$\\eta=0.9$", linestyle='-')
+plt.plot(x2, label="$\\eta=0.7$", linestyle='-')
+plt.plot(x4, label="$\\eta=0.5$", linestyle='-')
+plt.legend()
+# plt.plot(x_2, label="w/ filtering", linestyle='-', linewidth=1)
 
-os.makedirs("./figures", exist_ok=True)
-out_path = "./pcg_iter_avg.pdf"
-plt.savefig(out_path, format="pdf")
-print(f"그래프 저장 완료: {out_path}")
+
+# x_pos = range(len(bar_labels))
+# plt.bar(x_pos, means, width=0.6, edgecolor="black")
+#
+# plt.xticks(x_pos, bar_labels, rotation=15)
+plt.xlabel("Frame", fontsize=15)
+plt.ylabel(r"Solver iteration", fontsize=15)
+# plt.title(r"PCG iteration comparison", fontsize=14, pad=10)
+#
+# plt.tight_layout()
+#
+# os.makedirs("./figures", exist_ok=True)
+# out_path = "./pcg_iter_avg.pdf"
+plt.savefig("eta_solve_iter.pdf", format="pdf")
+# print(f"그래프 저장 완료: {out_path}")
 
 plt.show()

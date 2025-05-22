@@ -955,18 +955,16 @@ class XSPHSolver(SPHBase):
         self.advect()
         self.compute_xHat()
 
-        # self.ps.x_dy.copy_from(self.ps.xHat_dy)
-
         optIter = 0
         numLS = 0
         pcgIter_total = 0
-        pad = 1.2 * self.ps.particle_diameter
+        pad =1.2 * self.ps.particle_diameter
 
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
         self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 5e5
+        k_el = 1e6
         if self.use_gn:
             self.compute_densities(self.ps.xOld, h)
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
@@ -996,11 +994,6 @@ class XSPHSolver(SPHBase):
                 pcgIter_total += self.PCG.solve(self.ps.dx, self.ps.grad, self.ps.diagH,
                                                 self.ps.dx_dy, self.ps.grad_dy, self.ps.diagH_dy, 1e-4, self.mat_free_Ax)
 
-            # self.PCG.applyPrecondition(self.ps.dx_dy, self.ps.diagH_dy, self.ps.grad_dy)
-            # scale(self.ps.dx_dy, -1.0, self.ps.dx_dy)
-            #
-            # self.PCG.applyPrecondition(self.ps.dx, self.ps.diagH, self.ps.grad)
-            # scale(self.ps.dx, -1.0, self.ps.dx)
 
             dx_norm = self.inf_norm(self.ps.dx)
             dx_norm_dy = self.inf_norm(self.ps.dx_dy)
@@ -1022,6 +1015,9 @@ class XSPHSolver(SPHBase):
                 print("alpha_ccd", alpha_ccd)
 
             alpha = ti.min(alpha_ccd, alpha)
+
+
+
 
             self.update_x(alpha)
             if dx_norm < self.tol * self.dt[None]:
