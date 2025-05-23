@@ -303,6 +303,19 @@ class XSPHSolver(SPHBase):
             self.ps.diagH_dy[p_i] = self.ps.mass_dy[p_i] * I_3x3
 
     @ti.kernel
+    def compute_inertia_energy(self, x: ti.template(), x_dy: ti.template()) -> float:
+        value = 0.0
+        for p_i in ti.grouped(self.ps.x):
+            v_i = (x[p_i] - self.ps.xHat[p_i])
+            value += 0.5 * self.ps.m_V[p_i] * v_i.dot(v_i)
+
+        for p_i in ti.grouped(self.ps.x_dy):
+            v_i = (x_dy[p_i] - self.ps.xHat_dy[p_i])
+            value += 0.5 * self.ps.mass_dy[p_i] * v_i.dot(v_i)
+
+        return value
+
+    @ti.kernel
     def compute_pressure(self, k: float, h:float, eta: float):
 
         mass_i = self.ps.m_V[0] * self.density_0
@@ -422,6 +435,41 @@ class XSPHSolver(SPHBase):
             self.ps.grad_dy[vi] += k_fix * (self.ps.x_dy[vi] - self.ps.x_0_dy[vi])
             self.ps.diagH_dy[vi] += k_fix * I_3x3
 
+    @ti.kernel
+    def compute_elasticity_energy(self, x:ti.template(), k:float, k_b:float):
+        
+        value = 0.0 
+        coeff = k * self.dt[None] * self.dt[None]
+        coeff_b = k_b * self.dt[None] * self.dt[None]
+        for i in range(self.ps.edges_dy.shape[0] // 2):
+            v0, v1 = self.ps.edges_dy[2 * i], self.ps.edges_dy[2 * i + 1]
+
+            x0, x1 = x[v0], x[v1]
+            x01 = x1 - x0
+            l = x01.norm()
+        
+            value += 0.5 * coeff * (l - self.ps.l0[i]) ** 2
+           
+
+        for i in range(self.ps.edges_bd.shape[0] // 2):
+            v0, v1 = self.ps.edges_bd[2 * i], self.ps.edges_bd[2 * i + 1]
+
+            x0, x1 = x[v0], x[v1]
+            x01 = x1 - x0
+            l = x01.norm()
+            n = x01 / l
+
+            value += 0.5 * coeff_b * (l - self.ps.l0_bd[i]) ** 2
+        
+
+        # fixed_ids = ti.Vector([0, 1, 2, 3], dt=int)
+        k_fix = 1e4 * self.dt[None]
+        for i in range(self.ps.num_fixed_vids_field):
+            vi = self.ps.fixed_vids_field[i]
+            value += 0.5 * k_fix * (x[vi] - self.ps.x_0_dy[vi]).dot(x[vi] - self.ps.x_0_dy[vi])
+            # self.ps.diagH_dy[vi] += k_fix * I_3x3
+
+        return value
 
 
     @ti.kernel
@@ -1298,6 +1346,7 @@ class XSPHSolver(SPHBase):
             self.LBVH_dy.build(self.ps.x_dy, self.ps.dx_dy, self.ps.faces_dy, pad=pad)
 
             self.compute_inertia()
+            E_k += self.compute_inertia_energy(self.ps.x, self.ps.x_dy)
             if self.use_gn:
                 self.compute_pressure_gn(self.ps.x, self.k_rho * (self.dt[None] ** 2) * (h ** 3), h)
             else:
@@ -1312,6 +1361,7 @@ class XSPHSolver(SPHBase):
             self.compute_collision_dynamic(Kappa, pad=pad, Kappa_self=2.0 * Kappa, dHat_self=dHat_self)
             self.compute_collision_static(Kappa, pad)
             self.compute_elasticity(k_el, k_b)
+            E_k += self.compute_elasticity_dy(self.ps.x, k_el, k_b)
 
             # pcgIter = 0
             if self.use_gn:
