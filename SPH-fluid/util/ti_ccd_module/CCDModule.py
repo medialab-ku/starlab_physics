@@ -171,6 +171,7 @@ class CCDModule:
                 toc += toc_lower_bound
                 if toc > 1.0: toc = 1.0; break
 
+            # print(count)
         return toc
 
     @ti.func

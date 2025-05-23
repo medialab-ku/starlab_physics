@@ -113,3 +113,55 @@ def d_PE(p: ti.math.vec3, x0: ti.math.vec3, x1: ti.math.vec3) -> ti.math.vec2:
     test = ti.math.vec2([1.0 - t_clamped, t_clamped])
     # print(test)
     return test
+
+@ti.func
+def d_type_EE(v0: ti.math.vec3, v1: ti.math.vec3, v2: ti.math.vec3, v3: ti.math.vec3) -> ti.int32:
+    u, v, w = v1 - v0, v3 - v2, v0 - v2
+
+    a = u.dot(u)
+    b = u.dot(v)
+    c = v.dot(v)
+    d = u.dot(w)
+    e = v.dot(w)
+
+    D = a * c - b * b
+    tD = D
+    sN = 0.0
+    tN = 0.0
+    default_case = 8
+
+    sN = b * e - c * d
+    if sN <= 0.0:
+        tN = e
+        tD = c
+        default_case = 2
+
+    elif sN >= D:
+        tN = e + b
+        tD = c
+        default_case = 5
+    else:
+        tN = (a * e - b * d)
+        if tN > 0.0 and tN < tD and (u.cross(v).dot(w) < 1e-4 or u.cross(v).dot(u.cross(v)) < 1.0e-20 * a * c):
+            if sN < D / 2:
+                tN = e
+                tD = c
+                default_case = 2
+            else:
+                tN = e + b
+                tD = c
+                default_case = 5
+
+
+    if tN <= 0.0:
+        if -d <= 0.0: default_case = 0
+        elif -d >= a: default_case = 3
+        else: default_case = 6
+
+
+    elif tN >= tD:
+        if (-d + b) <= 0.0: default_case = 1
+        elif (-d + b) >= a: default_case = 4
+        else: default_case = 7
+
+    return default_case

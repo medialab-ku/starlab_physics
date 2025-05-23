@@ -211,10 +211,12 @@ class ParticleSystem:
             self.H_l = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=edges.shape[0] // 2)
             self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
 
-            # self.bending_l0 = ti.field(float)
-
-
-            print(self.mass_dy)
+            self.l0_bd = ti.field(float)
+            self.edges_bd = ti.field(dtype=ti.i32)
+            self.fid_np = faces.reshape(-1, 3)
+            self.initBendingIndices()
+            self.H_bd = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=self.edges_bd.shape[0] // 2)
+            # print(self.mass_dy)
 
             ####################################################################### # 153 line
             # Make vertices fixed!
@@ -231,7 +233,7 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
                     # if (0.0 == vertices[j, 1]):
 
-                    if vertices[j, 2] > 6.0:
+                    if vertices[j, 1] < 1.2:
                         self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
@@ -595,7 +597,7 @@ class ParticleSystem:
 
         num_edges = edges.shape[0] // 2
         mass.fill(0.0)
-        density = 1
+        density = 1e3
         for e in range(num_edges):
             v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
             l0[e] = (x[v0] - x[v1]).norm()
@@ -783,39 +785,25 @@ class ParticleSystem:
         self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
         bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
         # print("# bending: ", self.bending_constraint_count)
-        ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
-        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
+        ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.edges_bd)
+        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.l0_bd)
 
         for i in range(bending_indices_np.shape[0]):
-            self.bending_indices[2 * i] = bending_indices_np[i][0]
-            self.bending_indices[2 * i + 1] = bending_indices_np[i][1]
-
-        self.init_bengding_l0()
-
-    def initBendingIndices(self):
-        # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
-        self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
-        bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
-        # print("# bending: ", self.bending_constraint_count)
-        ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
-        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
-
-        for i in range(bending_indices_np.shape[0]):
-            self.bending_indices[2 * i] = bending_indices_np[i][0]
-            self.bending_indices[2 * i + 1] = bending_indices_np[i][1]
+            self.edges_bd[2 * i] = bending_indices_np[i][0]
+            self.edges_bd[2 * i + 1] = bending_indices_np[i][1]
 
         self.init_bengding_l0()
 
     @ti.kernel
     def init_bengding_l0(self):
         for bi in ti.ndrange(self.bending_constraint_count):
-            v0, v1 = self.bending_indices[2 * bi], self.bending_indices[2 * bi + 1]
-            self.bending_l0[bi] = (self.mesh.verts.x[v0] - self.mesh.verts.x[v1]).norm()
+            v0, v1 = self.edges_bd[2 * bi], self.edges_bd[2 * bi + 1]
+            self.l0_bd[bi] = (self.x_0_dy[v0] - self.x_0_dy[v1]).norm()
 
-    @ti.kernel
-    def bendinIndi(self):
-        for v in self.mesh.verts:
-            self.render_bending_vert[v.id] = ti.Vector([v.x[0], v.x[1], v.x[2]])
+    # @ti.kernel
+    # def bendinIndi(self):
+    #     for v in self.mesh.verts:
+    #         self.render_bending_vert[v.id] = ti.Vector([v.x[0], v.x[1], v.x[2]])
 
     def findTriNeighbors(self):
         # print("initBend")

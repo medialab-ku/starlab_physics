@@ -10,7 +10,7 @@ import json
 from export_mesh import Exporter
 import time
 
-ti.init(arch=ti.gpu, device_memory_fraction=0.5)
+ti.init(arch=ti.gpu, device_memory_fraction=0.8)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='SPH Taichi')
@@ -116,6 +116,7 @@ if __name__ == "__main__":
                 end_frame = w.slider_int("end frame", end_frame, 0, int(1e5))
 
             gui.text(f"# particle: {ps.particle_num}")
+            gui.text(f"# face: {ps.faces_dy.shape[0] // 3}")
             gui.text(f"Current frame: {frame_cnt}")
 
     scene = ti.ui.Scene()
@@ -291,9 +292,10 @@ if __name__ == "__main__":
             # scene.particles(ps.xTmp, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
             scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
             canvas.scene(scene)
-            # solver.LBVH.draw_bvh_aabb_test(scene,  solver.LBVH.num_leafs)
-            # solver.LBVH.draw_bvh_aabb_test(scene,  2)
-
+            # solver.LBVH_dy.draw_bvh_aabb_test(scene, 0)
+            
+            solver.LBVH_dy.draw_bvh_aabb_test(scene,  solver.LBVH_dy.num_leafs)
+            # print("num leafs: ", solver.LBVH_ee.num_leafs)
             if ps.num_static_vertices > 0:
                 # scene.mesh(ps.x_st, ps.faces_st, color=(1.5, 1.0, 0.0))
                 scene.mesh(ps.x_st, ps.faces_st, color=(1.0, 1.0, 1.0), show_wireframe= True)
@@ -303,6 +305,9 @@ if __name__ == "__main__":
             if ps.num_dynamic_vertices > 0:
                 # scene.mesh(ps.x_dy, ps.faces_dy, color=(1.2, 0.5, 0.0))
                 scene.mesh(ps.x_dy, ps.faces_dy, color=(1.0, 1.0, 1.0), show_wireframe= True)
+                scene.particles(ps.x_dy, radius=0.01, color=(1.0, 0.5, 0.0))
+
+                # scene.lines(vertices=ps.x_dy, indices=ps.edges_bd, color=(1.0, 0.0, 0.0), width=1.0)
             # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
 
         if output_frames:

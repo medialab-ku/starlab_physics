@@ -387,6 +387,10 @@ class LBVH:
         while stack_counter > 0:
 
             stack_counter -= 1
+
+            if stack_counter >= 32:
+                print("test")
+
             idx = stack[stack_counter]
             min1, max1 = self.nodes[idx]._min, self.nodes[idx]._max
             # print(idx)
@@ -394,6 +398,9 @@ class LBVH:
                 if idx < self.num_leafs:
                     # print("test")
                     n = ti.atomic_add(num[None], 1)
+                    
+
+
                     cache[n] = ti.math.ivec3([i, self._ids[idx], type])
                     # ti.atomic_add(num[None], 1)
                 else:
