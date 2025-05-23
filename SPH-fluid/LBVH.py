@@ -145,7 +145,7 @@ class LBVH:
         return ti.cast(xx << 2 | (yy << 1) | zz, ti.uint32)
 
     @ti.kernel
-    def assign_morton(self, x: ti.template(), primitives: ti.template(), pad: float):
+    def assign_morton(self, x: ti.template(), dx: ti.template(), primitives: ti.template(), pad: float):
         # print()
 
         dim = primitives.shape[0] // self.num_leafs
@@ -155,8 +155,12 @@ class LBVH:
 
         for i in range(self.num_leafs):
             for j in range(dim):
-                ti.atomic_min(_min_g, x[primitives[dim * i + j]])
-                ti.atomic_max(_max_g, x[primitives[dim * i + j]])
+
+                min_l = ti.min(x[primitives[dim * i + j]], x[primitives[dim * i + j]] + dx[primitives[dim * i + j]])
+                max_l = ti.min(x[primitives[dim * i + j]], x[primitives[dim * i + j]] + dx[primitives[dim * i + j]])
+
+                ti.atomic_min(_min_g, min_l)
+                ti.atomic_max(_max_g, max_l)
 
         _min_g -= padding
         _max_g += padding
@@ -295,7 +299,7 @@ class LBVH:
         # print(cnt)
 
     @ti.kernel
-    def assign_aabb(self, x: ti.template(), primitives: ti.template(), pad: float):
+    def assign_aabb(self, x: ti.template(), dx:ti.template(), primitives: ti.template(), pad: float):
 
         padding = ti.math.vec3(pad)
         # cnt = 0
@@ -305,8 +309,8 @@ class LBVH:
             if dim == 2:
                 # print("test")
                 v0, v1 = primitives[2 * self._ids[i] + 0], primitives[2 * self._ids[i] + 1]
-                self.nodes[i]._min = ti.min(x[v0], x[v1]) - padding
-                self.nodes[i]._max = ti.max(x[v0], x[v1]) + padding
+                self.nodes[i]._min = ti.min(x[v0], x[v1], x[v0] + dx[v0], x[v1] + dx[v1]) - padding
+                self.nodes[i]._max = ti.max(x[v0], x[v1], x[v0] + dx[v0], x[v1] + dx[v1]) + padding
 
             if dim == 3:
                 # print("test")
@@ -453,9 +457,9 @@ class LBVH:
                 nums[i] += 1
 
 
-    def build(self, x, primitives, pad):
+    def build(self, x, dx, primitives, pad):
 
-        self.assign_morton(x, primitives, pad)
+        self.assign_morton(x, dx, primitives, pad)
         a = self.morton_code.to_numpy()
         cp_arr = cp.asarray(a)
         idx = cp.argsort(a)
@@ -465,7 +469,7 @@ class LBVH:
         self.morton_code.from_numpy(a)
         self._ids.from_numpy(b)
         self.assign_internal_nodes()
-        self.assign_aabb(x, primitives, pad)
+        self.assign_aabb(x, dx, primitives, pad)
         # print(self.nodes[self.num_leafs].left, self.nodes[self.num_leafs].right)
 
 

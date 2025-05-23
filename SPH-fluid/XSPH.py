@@ -1121,7 +1121,7 @@ class XSPHSolver(SPHBase):
 
     def build_static_LBVH(self):
         pad = 0.5 * self.ps.particle_diameter
-        self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
+        self.LBVH.build(self.ps.x_st, self.ps.dx_st, self.ps.faces_st, pad=pad)
 
 
     @ti.kernel
@@ -1286,11 +1286,15 @@ class XSPHSolver(SPHBase):
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
 
         self.precompute_viscosity(self.ps.xOld, self.viscosity, h)
-        self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
+        self.LBVH.build(self.ps.x_st, self.ps.dx_st,self.ps.faces_st, pad=pad)
 
         for _ in range(self.maxOptIter):
 
             E_k = 0.0
+
+            self.ps.dx_dy.fill(0.0)
+            self.LBVH_dy.build(self.ps.x_dy, self.ps.dx_dy, self.ps.faces_dy, pad=pad)
+
             self.compute_inertia()
             if self.use_gn:
                 self.compute_pressure_gn(self.ps.x, self.k_rho * (self.dt[None] ** 2) * (h ** 3), h)
@@ -1301,7 +1305,7 @@ class XSPHSolver(SPHBase):
 
             self.compute_viscosity()
 
-            self.LBVH_dy.build(self.ps.x_dy, self.ps.faces_dy, pad=pad)
+
             # self.LBVH_ee.build(self.ps.x_dy, self.ps.edges_dy, pad=pad)
 
             self.compute_collision_dynamic(Kappa, pad=pad)
