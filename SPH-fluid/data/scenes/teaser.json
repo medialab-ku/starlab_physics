@@ -32,7 +32,7 @@
 			"objectId": 0,
 			"geometryFile": "./data/models/cylinder.obj",
 			"translation": [10.0, 10.0, 10.0],
-			"scale": [0.9, 0.9, 0.9],
+			"scale": [0.95, 1, 0.95],
 			"velocity": [0.0, 0.0, 0.0],
 			"density": 1000.0,
 			"color": [50, 100, 200]
@@ -53,7 +53,7 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/injector_piston.obj",
-			"translation": [10, 15, 10],
+			"translation": [10, 10, 10],
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
@@ -64,7 +64,7 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/hand_super_coarse.obj",
+			"geometryFile": "./data/models/hand_little_coarse.obj",
 			"translation": [10.0, 10.0, 10.0],
 			"scale": [1.0, 1.0, 1.0],
 			"rotationAxis": [0, 0, 1],
