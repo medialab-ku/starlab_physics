@@ -11,11 +11,18 @@ import meshio as mio
 import open3d as o3d
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
-def mesh_to_filled_particles(mesh_path, voxel_size=0.05):
+def mesh_to_filled_particles(mesh_path, voxel_size=0.05,
+                             scale=np.array([1.0, 1.0, 1.0], dtype=np.float64),
+                             offset=np.array([0.0, 0.0, 0.0], dtype=np.float64)):
+
     mesh_legacy = o3d.io.read_triangle_mesh(mesh_path)
     mesh_legacy.compute_vertex_normals()
-    mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh_legacy)
 
+    vertices = np.asarray(mesh_legacy.vertices).astype(np.float64)
+    vertices = vertices * scale + offset
+    mesh_legacy.vertices = o3d.utility.Vector3dVector(vertices)
+
+    mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh_legacy)
     scene = o3d.t.geometry.RaycastingScene()
     _ = scene.add_triangles(mesh)
 
@@ -91,7 +98,10 @@ class ParticleSystem:
                 particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
                 print("particle num: ", particle_num)
             else:
-                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
+                offset = np.array(fluid["translation"])
+                scale = np.array(fluid["scale"])
+                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size,
+                                                            scale=scale, offset=offset)
                 particle_num = voxelized_points.shape[0]
 
                 fluid["particleNum"] = particle_num
@@ -354,9 +364,8 @@ class ParticleSystem:
                 density = fluid["density"]
                 color = fluid["color"]
 
-                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
-                voxelized_points *= scale
-                voxelized_points += offset
+                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size,
+                                                            scale=scale, offset=offset)
 
                 num_particles = voxelized_points.shape[0]
 
