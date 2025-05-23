@@ -81,7 +81,7 @@ class ParticleSystem:
         self.object_collection = dict()
         self.object_id_rigid_body = set()
 
-        voxel_size = 0.1
+        voxel_size = 0.06
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
         fluid_blocks = self.cfg.get_fluid_blocks()
@@ -144,7 +144,7 @@ class ParticleSystem:
             self.x_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
             self.x_st.from_numpy(vertices)
             ###################################################################
-            # only available to dragon_bath scene
+            # only available to scenes that have moving static mesh
             self.x0_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
             self.x0_st.from_numpy(vertices)
             ###################################################################
@@ -226,7 +226,7 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 0] < 6 + epsilon or  # the x coord condition
                     #     4 - epsilon < vertices[j, 2] < 4 + epsilon or
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
-                    if (1.9 < vertices[j, 1]):
+                    if (0.0 == vertices[j, 1]):
                         self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
@@ -509,6 +509,19 @@ class ParticleSystem:
     @ti.func
     def is_dynamic_rigid_body(self, p):
         return self.material[p] == self.material_solid and self.is_dynamic[p]
+
+    @ti.kernel
+    def update_static_mesh_pos(self, frame_cnt: int, dt: ti.f32):
+        # left_plane, right_plane, upper_plane, lower_plane, front_plane, rear_plane = (
+        #     [4, 5, 6, 7], [0, 1, 2, 3], [1, 3, 5, 7], [0, 2, 4, 6], [0, 1, 4, 5], [2, 3, 6, 7])
+        # for idx in upper_plane:
+        #     # ps.x_st[idx].y = ps.x0_st[idx].y + 0.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
+        #     if ps.x_st[idx].y > ps.x_st[lower_plane[0]].y:
+        #         ps.x_st[idx].y = ps.x_st[idx].y - 0.01 * frame_cnt * solver.dt[None]
+
+        for idx in range(self.num_static_vertices_prefix_sum[1], self.num_static_vertices_prefix_sum[2]):
+            if self.x0_st[idx].y - self.x_st[idx].y <= 4:
+                self.x_st[idx].y = self.x_st[idx].y - 0.005 * frame_cnt * dt
     
 
     @ti.kernel

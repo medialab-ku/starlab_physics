@@ -3,7 +3,7 @@
 	{
         "domainStart": [0.0, 0.0, 0.0],
         "domainEnd": [10, 10.0, 10],
-		"particleRadius": 0.03,
+		"particleRadius": 0.02,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
 		"simulationMethod": 5,
@@ -15,12 +15,12 @@
 		"exportFrame": false,
 		"exportPly": false,
 		"exportObj": false,
-		"eta": 0.8,
+		"eta": 0.85,
 		"MaxOptIter": 1e3,
 		"tol": 2e-2,
 		"k_rho": 1e4,
-		"viscosity": 0.01,
-		"da_ratio": 1.01,
+		"viscosity": 0.25,
+		"da_ratio": 1.005,
 		"use_gn": false,
 		"use_div": true
 	},
@@ -52,8 +52,16 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/injector_piston.obj",
-			"translation": [5, 10, 5],
+			"translation": [5, 8.5, 5],
 			"scale": [1, 1, 1],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0
+		},
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/open_box.obj",
+			"translation": [5, 2.5, 5],
+			"scale": [2, 2, 2],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
 		}
@@ -63,8 +71,8 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/pouch.obj",
-			"translation": [5, 1, 5],
+			"geometryFile": "./data/models/plane_3.obj",
+			"translation": [5, 0, 5],
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
