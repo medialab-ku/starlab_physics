@@ -2,7 +2,7 @@
 	"Configuration":
 	{
         "domainStart": [0.0, 0.0, 0.0],
-        "domainEnd": [20, 20.0, 20],
+        "domainEnd": [20, 30.0, 20],
 		"particleRadius": 0.02,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
@@ -31,7 +31,7 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/cylinder.obj",
-			"translation": [10.0, 10.0, 10.0],
+			"translation": [10.0, 20.0, 10.0],
 			"scale": [0.95, 1, 0.95],
 			"velocity": [0.0, 0.0, 0.0],
 			"density": 1000.0,
@@ -44,7 +44,7 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/injector_body.obj",
-			"translation": [10, 10, 10],
+			"translation": [10, 20, 10],
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
@@ -53,7 +53,7 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/injector_piston.obj",
-			"translation": [10, 10, 10],
+			"translation": [10, 20, 10],
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
@@ -65,7 +65,7 @@
 		{
 			"objectId": 0,
 			"geometryFile": "./data/models/hand_little_coarse.obj",
-			"translation": [10.0, 10.0, 10.0],
+			"translation": [10.0, 20.0, 10.0],
 			"scale": [1.0, 1.0, 1.0],
 			"rotationAxis": [0, 0, 1],
 			"rotationAngle": 0

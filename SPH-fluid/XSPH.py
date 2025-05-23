@@ -1258,7 +1258,7 @@ class XSPHSolver(SPHBase):
         return alpha
 
     def substep(self):
-
+        
         v_norm = self.inf_norm(self.ps.v)
         if v_norm * self.dt[None] > 0.5 * self.ps.support_radius:
             print("cfl")
@@ -1273,12 +1273,12 @@ class XSPHSolver(SPHBase):
         pad = 1.2 * self.ps.particle_diameter
 
 
-        Kappa = 1e5 * self.dt[None] * self.dt[None]
+        Kappa = 1e6 * self.dt[None] * self.dt[None]
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 1e5
-        k_b = 1e5
+        k_el = 1e6
+        k_b = 1e6
 
 
         if self.use_gn:
@@ -1287,7 +1287,9 @@ class XSPHSolver(SPHBase):
 
         self.precompute_viscosity(self.ps.xOld, self.viscosity, h)
         self.LBVH.build(self.ps.x_st, self.ps.dx_st,self.ps.faces_st, pad=pad)
-
+        dHat_self = 3.5 * self.ps.l_min 
+        
+        # print("dHat_self", dHat_self)
         for _ in range(self.maxOptIter):
 
             E_k = 0.0
@@ -1307,9 +1309,7 @@ class XSPHSolver(SPHBase):
 
 
             # self.LBVH_ee.build(self.ps.x_dy, self.ps.edges_dy, pad=pad)
-
-            dHat_self = 2.0 * self.ps.l_min 
-            self.compute_collision_dynamic(Kappa, pad=pad, Kappa_self=Kappa, dHat_self=dHat_self)
+            self.compute_collision_dynamic(Kappa, pad=pad, Kappa_self=2.0 * Kappa, dHat_self=dHat_self)
             self.compute_collision_static(Kappa, pad)
             self.compute_elasticity(k_el, k_b)
 
@@ -1326,10 +1326,17 @@ class XSPHSolver(SPHBase):
             dx_norm_dy = self.inf_norm(self.ps.dx_dy)
 
 
+
+
             if dx_norm_dy > dx_norm:
                 dx_norm = dx_norm_dy
 
+
             alpha = 1.0
+            if dx_norm > dHat_self:
+                print("dx_norm too big")
+                alpha = ti.min(dHat_self / dx_norm, alpha)
+
             if self.use_div:
                 alpha_div = self.filter_step_size_div(self.ps.x, self.ps.dx, h, self.da_ratio)
                 if alpha_div < 1.0:

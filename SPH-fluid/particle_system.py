@@ -245,7 +245,7 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
                     # if (0.0 == vertices[j, 1]):
 
-                    if vertices[j, 1] > 6.95:
+                    if vertices[j, 1] > 16.95:
                         self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
