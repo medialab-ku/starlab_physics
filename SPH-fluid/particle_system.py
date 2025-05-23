@@ -18,8 +18,8 @@ def mesh_to_filled_particles(mesh_path, voxel_size=0.05,
     mesh_legacy = o3d.io.read_triangle_mesh(mesh_path)
     mesh_legacy.compute_vertex_normals()
 
-    vertices = np.asarray(mesh_legacy.vertices)
-    vertices = vertices * np.array(scale) + np.array(offset)
+    vertices = np.asarray(mesh_legacy.vertices).astype(np.float64)
+    vertices = vertices * scale + offset
     mesh_legacy.vertices = o3d.utility.Vector3dVector(vertices)
 
     mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh_legacy)
@@ -88,7 +88,7 @@ class ParticleSystem:
         self.object_collection = dict()
         self.object_id_rigid_body = set()
 
-        voxel_size = 0.1
+        voxel_size = 0.2
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
         fluid_blocks = self.cfg.get_fluid_blocks()
@@ -98,7 +98,10 @@ class ParticleSystem:
                 particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
                 print("particle num: ", particle_num)
             else:
-                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
+                offset = np.array(fluid["translation"])
+                scale = np.array(fluid["scale"])
+                voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size,
+                                                            scale=scale, offset=offset)
                 particle_num = voxelized_points.shape[0]
 
                 fluid["particleNum"] = particle_num
@@ -363,6 +366,8 @@ class ParticleSystem:
 
                 voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size,
                                                             scale=scale, offset=offset)
+                # voxelized_points *= scale
+                # voxelized_points += offset
 
                 num_particles = voxelized_points.shape[0]
 
