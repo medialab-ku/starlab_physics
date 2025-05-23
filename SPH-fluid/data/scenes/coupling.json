@@ -3,7 +3,7 @@
 	{
         "domainStart": [0.0, 0.0, 0.0],
         "domainEnd": [10, 10.0, 10],
-		"particleRadius": 0.015,
+		"particleRadius": 0.03,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
 		"simulationMethod": 5,
@@ -19,22 +19,23 @@
 		"MaxOptIter": 1e3,
 		"tol": 2e-2,
 		"k_rho": 1e4,
-		"viscosity": 0.15,
-		"da_ratio": 1.005,
+		"viscosity": 0.01,
+		"da_ratio": 1.01,
 		"use_gn": false,
 		"use_div": true
 	},
-
 
 	"FluidBlocks":
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/cylinder.obj",
-			"translation": [5.0, 5.0, 5.0],
-			"scale": [0.9, 0.9, 0.9],
+			"start": [4.03, 3.03, 4.03],
+			"end": [5.97, 6.97, 5.97],
+			"geometryFile": "",
+			"translation": [0.0, 0.0, 0.0],
+			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
-			"density": 1000.0,
+			"density": 5000.0,
 			"color": [50, 100, 200]
 		}
 	],
@@ -43,27 +44,11 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/injector_body.obj",
+			"geometryFile": "./data/models/cube_no_under_face.obj",
 			"translation": [5, 5, 5],
-			"scale": [1.0, 1.0, 1.0],
+			"scale": [1.0, 2.0, 1.0],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 90
-		},
-		{
-			"objectId": 0,
-			"geometryFile": "./data/models/injector_piston.obj",
-			"translation": [5, 10, 5],
-			"scale": [1, 1, 1],
-			"rotationAxis": [0, 1, 0],
-			"rotationAngle": 0
-		},
-		{
-			"objectId": 0,
-			"geometryFile": "./data/models/open_box.obj",
-			"translation": [5, 4, 5],
-			"scale": [2, 2, 2],
-			"rotationAxis": [0, 1, 0],
-			"rotationAngle": 0
 		}
 	],
 
@@ -71,10 +56,10 @@
 	[
 		{
 			"objectId": 0,
-			"geometryFile": "./data/models/hand_fix2.obj",
-			"translation": [5, 2, 5],
-			"scale": [10, 10, 10],
-			"rotationAxis": [0, 0, 1],
+			"geometryFile": "./data/models/XPlane20.obj",
+			"translation": [5, 3, 5],
+			"scale": [0.5, 0.5, 0.5],
+			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
 		}
 	]

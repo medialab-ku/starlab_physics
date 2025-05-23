@@ -241,7 +241,7 @@ if __name__ == "__main__":
                 #     # ps.x_st[idx].y = ps.x0_st[idx].y + 0.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
                 #     if ps.x_st[idx].y > 1.02 * ps.x_st[lower_plane[0]].y:
                 #         ps.x_st[idx].y -= 3.5 * solver.dt[None]
-                ps.update_static_mesh_pos(frame_cnt, solver.dt[None])
+                ps.update_static_mesh_pos(1.0, solver.dt[None])
 
             start_time = time.time()
 
@@ -301,7 +301,7 @@ if __name__ == "__main__":
                 # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
 
             if ps.num_dynamic_vertices > 0:
-                # scene.mesh(ps.x_dy, ps.faces_dy, color=(1.5, 1.0, 0.0))
+                # scene.mesh(ps.x_dy, ps.faces_dy, color=(1.2, 0.5, 0.0))
                 scene.mesh(ps.x_dy, ps.faces_dy, color=(1.0, 1.0, 1.0), show_wireframe= True)
             # scene.particles(ps.x_dy, radius=ps.particle_radius, color=(1.0, 1.0, 1.0))
 

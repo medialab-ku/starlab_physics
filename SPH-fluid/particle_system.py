@@ -81,7 +81,7 @@ class ParticleSystem:
         self.object_collection = dict()
         self.object_id_rigid_body = set()
 
-        voxel_size = 0.06
+        voxel_size = 0.1
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
         fluid_blocks = self.cfg.get_fluid_blocks()
@@ -89,6 +89,7 @@ class ParticleSystem:
         for fluid in fluid_blocks:
             if fluid["geometryFile"] == "":
                 particle_num = self.compute_cube_particle_num(fluid["start"], fluid["end"])
+                print("particle num: ", particle_num)
             else:
                 voxelized_points = mesh_to_filled_particles(fluid["geometryFile"], voxel_size=voxel_size)
                 particle_num = voxelized_points.shape[0]
@@ -210,6 +211,9 @@ class ParticleSystem:
             self.H_l = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=edges.shape[0] // 2)
             self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
 
+            # self.bending_l0 = ti.field(float)
+
+
             print(self.mass_dy)
 
             ####################################################################### # 153 line
@@ -217,8 +221,7 @@ class ParticleSystem:
             self.fixed_vids = []
             epsilon = 1e-5
             for i in range(len(self.num_dynamic_vertices_prefix_sum) - 1):
-                start_vid, end_vid = self.num_dynamic_vertices_prefix_sum[i], self.num_dynamic_vertices_prefix_sum[
-                    i + 1]
+                start_vid, end_vid = self.num_dynamic_vertices_prefix_sum[i], self.num_dynamic_vertices_prefix_sum[i + 1]
                 for j in range(start_vid, end_vid):
                     # Write down any conditions that you want in the if statement below...
                     # This condition is based on plane_32.obj mesh. (No scale, No rotation, Translation [5,3,5])
@@ -226,7 +229,9 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 0] < 6 + epsilon or  # the x coord condition
                     #     4 - epsilon < vertices[j, 2] < 4 + epsilon or
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
-                    if (0.0 == vertices[j, 1]):
+                    # if (0.0 == vertices[j, 1]):
+
+                    if vertices[j, 2] > 6.0:
                         self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
@@ -238,10 +243,10 @@ class ParticleSystem:
             print("The fixed dynamic vertices list length : ", self.num_fixed_vids_field)
 
             #######################################################################
-
             # print(self.mass_dy)
         # print(self.x_dy)
         # print(self.faces_dy)
+
 
         self.fluid_particle_num = fluid_particle_num
         self.solid_particle_num = rigid_particle_num
@@ -512,7 +517,7 @@ class ParticleSystem:
         return self.material[p] == self.material_solid and self.is_dynamic[p]
 
     @ti.kernel
-    def update_static_mesh_pos(self, frame_cnt: int, dt: ti.f32):
+    def update_static_mesh_pos(self, vel: float, dt: ti.f32):
         # left_plane, right_plane, upper_plane, lower_plane, front_plane, rear_plane = (
         #     [4, 5, 6, 7], [0, 1, 2, 3], [1, 3, 5, 7], [0, 2, 4, 6], [0, 1, 4, 5], [2, 3, 6, 7])
         # for idx in upper_plane:
@@ -522,7 +527,7 @@ class ParticleSystem:
 
         for idx in range(self.num_static_vertices_prefix_sum[1], self.num_static_vertices_prefix_sum[2]):
             if self.x0_st[idx].y - self.x_st[idx].y <= 4:
-                self.x_st[idx].y = self.x_st[idx].y - 0.005 * frame_cnt * dt
+                self.x_st[idx].y -= vel * dt
 
 
     @ti.kernel
@@ -772,3 +777,117 @@ class ParticleSystem:
         density_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), density if density is not None else 1000.)
         pressure_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), pressure if pressure is not None else 0.)
         self.add_particles(object_id, num_new_particles, new_positions, velocity_arr, density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
+
+    def initBendingIndices(self):
+        # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
+        self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
+        bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
+        # print("# bending: ", self.bending_constraint_count)
+        ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
+        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
+
+        for i in range(bending_indices_np.shape[0]):
+            self.bending_indices[2 * i] = bending_indices_np[i][0]
+            self.bending_indices[2 * i + 1] = bending_indices_np[i][1]
+
+        self.init_bengding_l0()
+
+    def initBendingIndices(self):
+        # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
+        self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
+        bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
+        # print("# bending: ", self.bending_constraint_count)
+        ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.bending_indices)
+        ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.bending_l0)
+
+        for i in range(bending_indices_np.shape[0]):
+            self.bending_indices[2 * i] = bending_indices_np[i][0]
+            self.bending_indices[2 * i + 1] = bending_indices_np[i][1]
+
+        self.init_bengding_l0()
+
+    @ti.kernel
+    def init_bengding_l0(self):
+        for bi in ti.ndrange(self.bending_constraint_count):
+            v0, v1 = self.bending_indices[2 * bi], self.bending_indices[2 * bi + 1]
+            self.bending_l0[bi] = (self.mesh.verts.x[v0] - self.mesh.verts.x[v1]).norm()
+
+    @ti.kernel
+    def bendinIndi(self):
+        for v in self.mesh.verts:
+            self.render_bending_vert[v.id] = ti.Vector([v.x[0], v.x[1], v.x[2]])
+
+    def findTriNeighbors(self):
+        # print("initBend")
+        # print(self.fid_np)
+        # print(self.fid_np.shape)
+        num_f = np.rint(self.fid_np.shape[0]).astype(int)
+        edgeTable = np.zeros((num_f * 3, self.fid_np.shape[1]), dtype=int)
+        # print(edgeTable.shape)
+
+        for f in range(self.fid_np.shape[0]):
+            eT = np.zeros((3, 3))
+            v1, v2, v3 = np.sort(self.fid_np[f])
+            e1, e2, e3 = 3 * f, 3 * f + 1, 3 * f + 2
+            eT[0, :] = [v1, v2, e1]
+            eT[1, :] = [v1, v3, e2]
+            eT[2, :] = [v2, v3, e3]
+
+            edgeTable[3 * f:3 * f + 3, :] = eT
+
+        ind = np.lexsort((edgeTable[:, 1], edgeTable[:, 0]))
+        edgeTable = edgeTable[ind]
+        # print(edgeTable)
+
+        neighbors = np.zeros((num_f * 3), dtype=int)
+        neighbors.fill(-1)
+
+        ii = 0
+        bending_constraint_count = 0
+        while (ii < 3 * num_f - 1):
+            e0 = edgeTable[ii, :]
+            e1 = edgeTable[ii + 1, :]
+
+            if (e0[0] == e1[0] and e0[1] == e1[1]):
+                neighbors[e0[2]] = e1[2]
+                neighbors[e1[2]] = e0[2]
+
+                bending_constraint_count = bending_constraint_count + 1
+                ii = ii + 2
+            else:
+                ii = ii + 1
+
+        # print(bending_constraint_count, "asdf!!")
+        return bending_constraint_count, neighbors
+
+    def getBendingPair(self, bend_count, neighbors):
+
+        num_f = np.rint(self.fid_np.shape[0]).astype(int)
+        pairs = np.zeros((bend_count, 2), dtype=int)
+
+        count = 0
+        # print(neighbors)
+
+        for f in range(num_f):
+            for i in range(3):
+                eid = 3 * f + i
+                neighbor_edge = neighbors[eid]
+
+                if neighbor_edge >= 0:
+                    # print(eid,neighbor_edge,neighbors[neighbor_edge])
+                    neighbors[neighbor_edge] = -1
+                    # find not shared vertex in common edge of adjacent triangles
+                    v = np.sort(self.fid_np[f])
+
+                    neighbor_fid = int(np.floor(neighbor_edge / 3.0 + 1e-4) + 1e-4)
+                    neighbor_eid_local = neighbor_fid % 3
+
+                    w = np.sort(self.fid_np[neighbor_fid])
+
+                    pairs[count, 0] = v[~np.isin(v, w)]
+                    pairs[count, 1] = w[~np.isin(w, v)]
+
+                    count = count + 1
+
+        # print("검산!!!",count == bend_count)
+        return pairs

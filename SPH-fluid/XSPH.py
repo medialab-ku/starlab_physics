@@ -505,7 +505,7 @@ class XSPHSolver(SPHBase):
 
 
     @ti.kernel
-    def compute_collision_static(self, pad: float):
+    def compute_collision_static(self, Kappa: float, pad: float):
 
         self.num_candidate[None] = 0
         for P in self.ps.x:
@@ -516,7 +516,6 @@ class XSPHSolver(SPHBase):
             self.LBVH.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info,  self.num_candidate)
 
         # print(self.num_candidate[None] )
-        Kappa = 1e5 * self.dt[None] * self.dt[None]
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         dHat = 0.5 * pad
         self.num_collision[None] = 0
@@ -563,9 +562,6 @@ class XSPHSolver(SPHBase):
 
             proj = bary[0] * xT0 + bary[1] * xT1 + bary[2] * xT2
             d = (xP - proj).norm()
-
-
-
             n = (xP - proj) / d
             if d <= dHat:
                 #
@@ -585,9 +581,14 @@ class XSPHSolver(SPHBase):
                 self.collision_info[idx] = ti.math.ivec4([P, -1, -1, -1])
                 self.collision_type[idx] = 0
                 self.collision_bary[idx] = ti.math.vec4([1.0, 0.0, 0.0, 0.0])
+    #
+    # @ti.kernel
+    # def compute_collision_static_energy(self, pad: float):
+    #
+
 
     @ti.kernel
-    def compute_collision_dynamic(self, pad: float):
+    def compute_collision_dynamic(self, Kappa: float, pad: float):
 
         self.num_candidate_dy[None] = 0
         for P in self.ps.x:
@@ -598,7 +599,7 @@ class XSPHSolver(SPHBase):
             self.LBVH_dy.traverse_bvh_single_test(_min0, _max0, 0, P, self.candidate_info_dy, self.num_candidate_dy)
 
         # print(self.num_candidate[None] )
-        Kappa = 1e5 * self.dt[None] * self.dt[None]
+        # Kappa = 1e5 * self.dt[None] * self.dt[None]
         I_3x3 = ti.math.mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         dHat = 0.5 * pad
         self.num_collision_dy[None] = 0
@@ -696,8 +697,8 @@ class XSPHSolver(SPHBase):
     @ti.kernel
     def update_x(self, alpha: float):
 
-        for p_i in ti.grouped(self.ps.x):
-            self.ps.x[p_i] += alpha * self.ps.dx[p_i]
+        # for p_i in ti.grouped(self.ps.x):
+        #     self.ps.x[p_i] += alpha * self.ps.dx[p_i]
 
         for p_i in ti.grouped(self.ps.x_dy):
             self.ps.x_dy[p_i] += alpha * self.ps.dx_dy[p_i]
@@ -965,15 +966,12 @@ class XSPHSolver(SPHBase):
             if toc > 0:
                 ti.atomic_min(alpha, toc)
 
-
-
         return alpha
-
 
     def substep(self):
 
         v_norm = self.inf_norm(self.ps.v)
-        if v_norm * self.dt[None] > self.ps.support_radius:
+        if v_norm * self.dt[None] > 0.5 * self.ps.support_radius:
             print("test")
 
         self.compute_non_pressure_forces()
@@ -984,32 +982,38 @@ class XSPHSolver(SPHBase):
         numLS = 0
         pcgIter_total = 0
         pad =1.2 * self.ps.particle_diameter
-
+        Kappa = 1e5 * self.dt[None] * self.dt[None]
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
-        self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 1e6
+        k_el = 1e5
+
+
         if self.use_gn:
             self.compute_densities(self.ps.xOld, h)
             self.precompute_pressure_gn(self.ps.xOld, self.k_rho * self.dt[None] * self.dt[None] * (h ** 3), h)
 
         self.precompute_viscosity(self.ps.xOld, self.viscosity, h)
+        self.LBVH.build(self.ps.x_st, self.ps.faces_st, pad=pad)
+
         for _ in range(self.maxOptIter):
 
+            E_k = 0.0
             self.compute_inertia()
             if self.use_gn:
                 self.compute_pressure_gn(self.ps.x, self.k_rho * (self.dt[None] ** 2) * (h ** 3), h)
             else:
                 self.compute_densities(self.ps.x, h)
+                E_k += self.compute_pressure_energy(k, h, eta=self.ps.eta)
                 self.compute_pressure(k, h, eta=self.ps.eta)
 
             self.compute_viscosity()
-            self.compute_collision_static(pad)
-            self.compute_elasticity(k_el)
 
             self.LBVH_dy.build(self.ps.x_dy, self.ps.faces_dy, pad=pad)
-            self.compute_collision_dynamic(pad=pad)
+            self.compute_collision_dynamic(Kappa, pad=pad)
+            self.compute_collision_static(Kappa, pad)
+            self.compute_elasticity(k_el)
+
 
             # pcgIter = 0
             if self.use_gn:
@@ -1036,10 +1040,11 @@ class XSPHSolver(SPHBase):
                 alpha = ti.min(alpha_div, alpha)
 
             alpha_ccd = self.filter_step_size_ccd(self.ps.x, self.ps.dx, self.ps.x_dy, self.ps.dx_dy)
-            if alpha_ccd < 1.0:
-                print("alpha_ccd", alpha_ccd)
-
+            # if alpha_ccd < 1.0:
+            #     print("alpha_ccd", alpha_ccd)
             alpha = ti.min(alpha_ccd, alpha)
+
+
             self.update_x(alpha)
             if dx_norm < self.tol * self.dt[None]:
                 break
