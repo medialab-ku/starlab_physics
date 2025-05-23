@@ -219,7 +219,7 @@ class ParticleSystem:
             # print(self.mass_dy)
 
             ####################################################################### # 153 line
-            # Make vertices fixed!
+            # Make dynamic vertices fixed!
             self.fixed_vids = []
             epsilon = 1e-5
             for i in range(len(self.num_dynamic_vertices_prefix_sum) - 1):
@@ -233,7 +233,7 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
                     # if (0.0 == vertices[j, 1]):
 
-                    if vertices[j, 2] > 2.0:
+                    if vertices[j, 1] > 7.0:
                         self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
@@ -597,7 +597,7 @@ class ParticleSystem:
 
         num_edges = edges.shape[0] // 2
         mass.fill(0.0)
-        density = 1e3
+        density = 1e2
         for e in range(num_edges):
             v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
             l0[e] = (x[v0] - x[v1]).norm()

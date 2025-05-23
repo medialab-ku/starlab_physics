@@ -1273,12 +1273,12 @@ class XSPHSolver(SPHBase):
         pad = 1.2 * self.ps.particle_diameter
 
 
-        Kappa = 1e7 * self.dt[None] * self.dt[None]
+        Kappa = 1e5 * self.dt[None] * self.dt[None]
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 1e7
-        k_b = 1e7
+        k_el = 1e5
+        k_b = 1e5
 
 
         if self.use_gn:
