@@ -1,0 +1,21 @@
+{
+    "params": {
+        "eta": 0.8500000238418579,
+        "viscosity": 0.009999999776482582,
+        "tol": 0.019999999552965164,
+        "k_rho": 1000000.0,
+        "da_ratio": 1.0099999904632568,
+        "use_gn": true,
+        "use_div": false
+    },
+    "residual_data": {
+        "opt_iter": [],
+        "pcg_iter": []
+    },
+    "elapsed_data": {
+        "elapsed_time": []
+    },
+    "avg_density": {
+        "density": []
+    }
+}

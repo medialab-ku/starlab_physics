@@ -161,6 +161,7 @@ if __name__ == "__main__":
 
     opt_iter_data = []
     pcg_iter_data = []
+    density_frame_data = []
     elapsed_time_data = []
     log_debug = None
 
@@ -208,12 +209,17 @@ if __name__ == "__main__":
                         "elapsed_time": elapsed_time_data
                     }
 
-                    json_plot = JsonPlot(filename, params, residual_data, elapsed_data)
+                    density_data = {
+                        "density": density_frame_data
+                    }
+
+                    json_plot = JsonPlot(filename, params, residual_data, elapsed_data, density_data)
                     json_plot.plot_data()
                     json_plot.export_json()
                     opt_iter_data = []
                     pcg_iter_data = []
                     elapsed_time_data = []
+                    density_frame_data = []
 
                 runSim = False
 
@@ -239,7 +245,7 @@ if __name__ == "__main__":
             start_time = time.time()
 
             for i in range(substeps):
-                optIter, pcgIter_total, log_debug = solver.step()
+                optIter, pcgIter_total, log_debug, avg_density = solver.step()
 
                 if optIter == solver.maxOptIter:
                     print("failed to converge")
@@ -248,6 +254,7 @@ if __name__ == "__main__":
                 if is_plot_option:
                     opt_iter_data.append(optIter)
                     pcg_iter_data.append(pcgIter_total)
+                    density_frame_data.append(avg_density)
 
             end_time = time.time()
 

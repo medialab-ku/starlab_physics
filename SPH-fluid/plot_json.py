@@ -4,11 +4,12 @@ import json
 import os
 
 class JsonPlot:
-    def __init__(self, filename, params, residual_data, elapsed_time):
+    def __init__(self, filename, params, residual_data, elapsed_time, avg_density):
         self.filename = filename
         self.params = params
         self.residual_data = residual_data
         self.elapsed_time = elapsed_time
+        self.avg_density = avg_density
         self.output_dir = os.path.join(os.getcwd(), "data", "results")
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -16,7 +17,8 @@ class JsonPlot:
         json_data = {
             "params": self.params,
             "residual_data": self.residual_data,
-            "elapsed_data": self.elapsed_time
+            "elapsed_data": self.elapsed_time,
+            "avg_density": self.avg_density
         }
         json_path = os.path.join(self.output_dir, self.filename + ".json")
 
@@ -28,17 +30,18 @@ class JsonPlot:
 
         color1 = 'tab:blue'
         ax1.set_xlabel("Frame")
-        ax1.set_ylabel("# Iteration")
-        ax1.plot(self.residual_data["pcg_iter"], color="blue", label="PCG Iteration")
-        ax1.plot(self.residual_data["opt_iter"], color="green", label="Optimization Iteration", linestyle="--")
+        # ax1.set_ylabel("# Iteration")
+        # ax1.plot(self.residual_data["pcg_iter"], color="blue", label="PCG Iteration")
+        # ax1.plot(self.residual_data["opt_iter"], color="green", label="Optimization Iteration", linestyle="--")
+        ax1.plot(self.avg_density["density"], color="green", label="avg density", linestyle="--")
         ax1.tick_params(axis='y')
         ax1.grid(True, alpha=0.3)
 
-        ax2 = ax1.twinx()  # 두 번째 y축 공유
-        color2 = 'tab:green'
-        ax2.set_ylabel("Elapsed Time (s)")
-        ax2.plot(self.elapsed_time["elapsed_time"], color="orange", label="Elapsed Time", linewidth=1, linestyle='--')
-        ax2.tick_params(axis='y')
+        # ax2 = ax1.twinx()  # 두 번째 y축 공유
+        # color2 = 'tab:green'
+        # ax2.set_ylabel("Elapsed Time (s)")
+        # ax2.plot(self.elapsed_time["elapsed_time"], color="orange", label="Elapsed Time", linewidth=1, linestyle='--')
+        # ax2.tick_params(axis='y')
 
         plt.title("PCG Iteration vs Elapsed Time per Frame")
         fig.tight_layout()

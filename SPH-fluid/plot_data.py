@@ -1,6 +1,7 @@
 import json
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 
 # def load_pcg_iter_from_json(json_path):
 #     with open(json_path, 'r') as f:
@@ -57,6 +58,13 @@ file_paths = [
     "./data/results/20250520_155657.json",
 ]
 
+density_file_paths = [
+
+    "./data/results/20250523_053508.json",
+    "./data/results/20250523_051402.json",
+    "./data/results/20250523_051957.json",
+
+]
 bar_labels = [os.path.basename(p).split(".")[0] for p in file_paths]
 
 N_SAMPLES = 5000
@@ -65,7 +73,21 @@ N_SAMPLES = 5000
 def load_pcg_iter(json_path):
     with open(json_path, "r") as f:
         data = json.load(f)
+    pcg_iter = data["residual_data"]["pcg_iter"]
+    return pcg_iter
+
+
+
+def load_opt_iter(json_path):
+    with open(json_path, "r") as f:
+        data = json.load(f)
     pcg_iter = data["residual_data"]["opt_iter"]
+    return pcg_iter
+
+def load_density(json_path):
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    pcg_iter = data["avg_density"]["density"]
     return pcg_iter
 
 
@@ -91,33 +113,51 @@ plt.rcParams.update(
     }
 )
 
-plt.figure(figsize=(6, 4))
+plt.figure(figsize=(6, 3))
 
+#
+x0 = np.array(load_pcg_iter(density_file_paths[0]))
+y0 =  np.array(load_opt_iter(density_file_paths[0]))
 
-x0 = load_pcg_iter(file_paths[0])[16::16]
-x2 = load_pcg_iter(file_paths[2])[16::16]
-x4 = load_pcg_iter(file_paths[4])[16::16]
-
-plt.plot(x0, label="$\\eta=0.9$", linestyle='-')
-plt.plot(x2, label="$\\eta=0.7$", linestyle='-')
-plt.plot(x4, label="$\\eta=0.5$", linestyle='-')
-plt.legend()
+z = x0 / y0
+# x2 = load_pcg_iter(file_paths[2])[16::16]
+# x4 = load_pcg_iter(file_paths[4])[16::16]
+#
+plt.plot(z)
+# plt.ylim(0, 50)
+# plt.plot(x2, label="$\\eta=0.7$", linestyle='-')
+# plt.plot(x4, label="$\\eta=0.5$", linestyle='-')
+# plt.legend()
 # plt.plot(x_2, label="w/ filtering", linestyle='-', linewidth=1)
+plt.ylabel(r"Avg. PCG iteration", fontsize=15, labelpad=10)
+plt.xlabel("Frame", fontsize=15, labelpad=10)
+# plt.legend()
+
 
 
 # x_pos = range(len(bar_labels))
 # plt.bar(x_pos, means, width=0.6, edgecolor="black")
 #
 # plt.xticks(x_pos, bar_labels, rotation=15)
-plt.xlabel("Frame", fontsize=15)
-plt.ylabel(r"Solver iteration", fontsize=15)
+
+# d0 = load_density(density_file_paths[0])
+# d1 = load_density(density_file_paths[1])
+# d2 = load_density(density_file_paths[2])
+# plt.plot(d0, label="Ours, k=$1\\textrm{e}^4$", linestyle='-')
+# plt.plot(d2, label="Xie et al., k=$1\\textrm{e}^4$", linestyle='-')
+# plt.plot(d1, label="Xie et al,, k=$1\\textrm{e}^5$", linestyle='-')
+# plt.xlabel("Frame", fontsize=15, labelpad=10)
+# plt.ylabel(r"Avg. density", fontsize=15, labelpad=10)
+# plt.legend()
+
+
 # plt.title(r"PCG iteration comparison", fontsize=14, pad=10)
 #
-# plt.tight_layout()
+plt.tight_layout()
 #
 # os.makedirs("./figures", exist_ok=True)
 # out_path = "./pcg_iter_avg.pdf"
-plt.savefig("eta_solve_iter.pdf", format="pdf")
+# plt.savefig("avg_density.pdf", format="pdf")
 # print(f"그래프 저장 완료: {out_path}")
 
 plt.show()

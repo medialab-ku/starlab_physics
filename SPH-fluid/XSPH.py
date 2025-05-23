@@ -126,6 +126,16 @@ class XSPHSolver(SPHBase):
             x_j = self.ps.x[p_j]
             ret += self.ps.m_V[p_j] * self.cubic_kernel((x_i - x_j).norm())
 
+    @ti.kernel
+    def avg_density(self) -> float:
+
+        total = 0.0
+        for p_i in ti.grouped(self.ps.x):
+            total += self.ps.density[p_i]
+
+        total /= self.ps.fluid_particle_num
+
+        return total
 
     @ti.kernel
     def compute_densities(self, x: ti.template(), h: float):
@@ -322,6 +332,22 @@ class XSPHSolver(SPHBase):
                     self.collision_grad_p[p_i, ni] = ti.sqrt(k * d2Edc2) * dcdx
                     self.collision_H_p[p_i, ni] = k * dEdc * d2cdx2
 
+    @ti.kernel
+    def compute_pressure_energy(self, k: float, h: float, eta: float) -> float:
+
+        value = 0.0
+
+        mass_i = self.ps.m_V[0] * self.density_0
+        rho_min = mass_i * self.cubic_value(0.0, h)
+        a = rho_min + eta * (self.density_0 - rho_min)
+        for p_i in ti.grouped(self.ps.x):
+            t = (ti.max(self.ps.density[p_i] - a, 0.0)) / (self.density_0 - a)
+            if self.ps.density[p_i] < self.density_0:
+                value += k * (self.density_0 - a) * (t ** 3 - 0.5 * t ** 4)
+            else:
+                value += k * (self.ps.density[p_i] - self.density_0)
+
+        return value
 
     @ti.kernel
     def compute_elasticity(self, k:float):
@@ -422,7 +448,6 @@ class XSPHSolver(SPHBase):
         for p_i in ti.grouped(self.ps.x):
             # dEdc = 1.0
             # d2Edc2 = 0.0
-
             v_i = (self.ps.x[p_i] - self.ps.xOld[p_i]) / self.dt[None]
             for ni in range(self.Vij_num[p_i]):
                 p_j = self.Vij_idx[p_i, ni]
@@ -1015,10 +1040,6 @@ class XSPHSolver(SPHBase):
                 print("alpha_ccd", alpha_ccd)
 
             alpha = ti.min(alpha_ccd, alpha)
-
-
-
-
             self.update_x(alpha)
             if dx_norm < self.tol * self.dt[None]:
                 break
@@ -1030,6 +1051,8 @@ class XSPHSolver(SPHBase):
         print("opt/pcg/LS iter:", optIter, pcgIter_total, numLS)
         self.compute_velocity()
 
+        self.compute_densities(self.ps.x, h)
+        avg_density = self.avg_density()
 
         # if optIter == self.maxOptIter:
         #     print("Failed to converge...")
@@ -1038,4 +1061,4 @@ class XSPHSolver(SPHBase):
         #     plt.show()
         #     exit()
 
-        return optIter, pcgIter_total, log_debug
+        return optIter, pcgIter_total, log_debug, avg_density
