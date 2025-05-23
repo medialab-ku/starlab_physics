@@ -628,7 +628,7 @@ class XSPHSolver(SPHBase):
 
 
     @ti.kernel
-    def compute_collision_dynamic(self, Kappa: float, pad: float):
+    def compute_collision_dynamic(self, Kappa: float, pad: float, Kappa_self: float, dHat_self: float):
     
         self.num_candidate_dy[None] = 0
         for P in self.ps.x:
@@ -732,7 +732,7 @@ class XSPHSolver(SPHBase):
                 self.collision_type_dy[idx] = 0
                 self.collision_bary_dy[idx] = ti.math.vec4([1.0, bary[0], bary[1], bary[2]])
 
-        dHat_self = 0.5 * pad
+        # dHat_self = 0.5 * pad
         self.num_collision_self[None] = 0
         for i in range(self.num_candidate_self[None]):
 
@@ -1308,7 +1308,8 @@ class XSPHSolver(SPHBase):
 
             # self.LBVH_ee.build(self.ps.x_dy, self.ps.edges_dy, pad=pad)
 
-            self.compute_collision_dynamic(Kappa, pad=pad)
+            dHat_self = 2.0 * self.ps.l_min 
+            self.compute_collision_dynamic(Kappa, pad=pad, Kappa_self=Kappa, dHat_self=dHat_self)
             self.compute_collision_static(Kappa, pad)
             self.compute_elasticity(k_el, k_b)
 

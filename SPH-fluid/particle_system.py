@@ -221,7 +221,7 @@ class ParticleSystem:
 
             self.l0 =  ti.field(float, shape=edges.shape[0] // 2)
             self.H_l = ti.Matrix.field(self.dim, self.dim, dtype=float, shape=edges.shape[0] // 2)
-            self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
+            self.l_min = self.init_l0_and_mass(self.l0, self.mass_dy, self.x_0_dy, self.edges_dy)
 
             self.l0_bd = ti.field(float)
             self.edges_bd = ti.field(dtype=ti.i32)
@@ -245,7 +245,7 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
                     # if (0.0 == vertices[j, 1]):
 
-                    if vertices[j, 1] > 7.0:
+                    if vertices[j, 1] > 6.95:
                         self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
@@ -604,17 +604,20 @@ class ParticleSystem:
                 self.density_adv[I] = self.density_adv_buffer[I]
 
     @ti.kernel
-    def init_l0_and_mass(self, l0: ti.template(), mass: ti.template(), x: ti.template(), edges: ti.template()):
+    def init_l0_and_mass(self, l0: ti.template(), mass: ti.template(), x: ti.template(), edges: ti.template()) -> float:
 
         num_edges = edges.shape[0] // 2
         mass.fill(0.0)
         density = 1e2
+        min_val = 1e5
         for e in range(num_edges):
             v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
             l0[e] = (x[v0] - x[v1]).norm()
+            ti.atomic_min(min_val, l0[e])
             mass[v0] += density * 0.5 * l0[e]
             mass[v1] += density * 0.5 * l0[e]
 
+        return min_val
     def initialize_particle_system(self):
         self.update_grid_id()
         self.prefix_sum_executor.run(self.grid_particles_num)
