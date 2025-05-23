@@ -228,7 +228,11 @@ if __name__ == "__main__":
         if runSim:
             # print(runSim)
             if animate:
+<<<<<<< Updated upstream
                 ps.update_static_mesh_pos(frame_cnt, solver.dt[None])
+=======
+                ps.update_static_mesh_pos(1.0, solver.dt[None])
+>>>>>>> Stashed changes
 
             start_time = time.time()
 

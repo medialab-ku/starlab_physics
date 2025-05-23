@@ -213,21 +213,53 @@ class ParticleSystem:
             print(self.mass_dy)
 
             ####################################################################### # 153 line
-            # Make vertices fixed!
+            # Make vertices of dynamic meshes fixed!
+            # FIXME: WARNING! THIS CODE IS ONLY AVAILABLE TO A "SINGLE" DYNAMIC OBJECT!!! GONNA FIX IT LATER...
             self.fixed_vids = []
+            self.front_vids, self.rear_vids, self.upper_vids, self.lower_vids, self.left_vids, self.right_vids = [], [], [], [], [], []
+
             epsilon = 1e-5
             for i in range(len(self.num_dynamic_vertices_prefix_sum) - 1):
                 start_vid, end_vid = self.num_dynamic_vertices_prefix_sum[i], self.num_dynamic_vertices_prefix_sum[
                     i + 1]
                 for j in range(start_vid, end_vid):
                     # Write down any conditions that you want in the if statement below...
-                    # This condition is based on plane_32.obj mesh. (No scale, No rotation, Translation [5,3,5])
                     # if (4 - epsilon < vertices[j, 0] < 4 + epsilon or
                     #     6 - epsilon < vertices[j, 0] < 6 + epsilon or  # the x coord condition
                     #     4 - epsilon < vertices[j, 2] < 4 + epsilon or
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
-                    if (0.0 == vertices[j, 1]):
-                        self.fixed_vids.append(j)
+                    self.fixed_vids.append(j)
+
+                    # This condition is based on plane_32.obj mesh. (No scale, No rotation, Translation [5,3,5])
+                    if 4-epsilon < vertices[j,0] < 4+epsilon:
+                        self.front_vids.append(j)
+                    if 6-epsilon < vertices[j,0] < 6+epsilon:
+                        self.rear_vids.append(j)
+                    if 4-epsilon < vertices[j,1] < 4+epsilon:
+                        self.lower_vids.append(j)
+                    if 6-epsilon < vertices[j,1] < 6+epsilon:
+                        self.upper_vids.append(j)
+                    if 4-epsilon < vertices[j,2] < 4+epsilon:
+                        self.right_vids.append(j)
+                    if 6-epsilon < vertices[j,2] < 6+epsilon:
+                        self.left_vids.append(j)
+
+            self.num_front_vids, self.num_rear_vids, self.num_upper_vids, self.num_lower_vids, self.num_left_vids, self.num_right_vids = (
+                len(self.front_vids), len(self.rear_vids), len(self.upper_vids), len(self.lower_vids), len(self.left_vids), len(self.right_vids))
+
+            print("front_vids: ", self.front_vids)
+            print("rear_vids: ", self.rear_vids)
+            print("upper_vids: ", self.upper_vids)
+            print("lower_vids: ", self.lower_vids)
+            print("left_vids: ", self.left_vids)
+            print("right_vids: ", self.right_vids)
+
+            self.front_vids_field = ti.field(dtype=int, shape=self.num_front_vids)
+            self.rear_vids_field = ti.field(dtype=int, shape=self.num_rear_vids)
+            self.upper_vids_field = ti.field(dtype=int, shape=self.num_upper_vids)
+            self.lower_vids_field = ti.field(dtype=int, shape=self.num_lower_vids)
+            self.left_vids_field = ti.field(dtype=int, shape=self.num_left_vids)
+            self.right_vids_field = ti.field(dtype=int, shape=self.num_right_vids)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
             self.fixed_vids_field = ti.field(dtype=int, shape=self.fixed_vids_np.shape[0])

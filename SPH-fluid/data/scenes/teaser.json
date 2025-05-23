@@ -56,6 +56,7 @@
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
+<<<<<<< Updated upstream
 		},
 		{
 			"objectId": 0,
@@ -64,6 +65,8 @@
 			"scale": [2, 2, 2],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
+=======
+>>>>>>> Stashed changes
 		}
 	],
 
@@ -71,11 +74,19 @@
 	[
 		{
 			"objectId": 0,
+<<<<<<< Updated upstream
 			"geometryFile": "./data/models/plane_3.obj",
 			"translation": [5, 0, 5],
 			"scale": [1, 1, 1],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0
+=======
+			"geometryFile": "./data/models/cube.obj",
+			"translation": [5, 5, 5],
+			"scale": [1, 1, 1],
+			"rotationAxis": [0, 0, 1],
+			"rotationAngle": 0.0
+>>>>>>> Stashed changes
 		}
 	]
 }
