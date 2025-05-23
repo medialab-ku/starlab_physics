@@ -1,0 +1,81 @@
+{
+	"Configuration":
+	{
+        "domainStart": [0.0, 0.0, 0.0],
+        "domainEnd": [10, 10.0, 10],
+		"particleRadius": 0.02,
+		"numberOfStepsPerRenderUpdate": 1,
+		"density0": 1000.0,
+		"simulationMethod": 5,
+		"gravitation": [0.0, -9.81, 0.0],
+		"timeStepSize": 1e-3,
+		"stiffness": 1e4,
+		"exponent": 7,
+		"boundaryHandlingMethod": 0,
+		"exportFrame": false,
+		"exportPly": false,
+		"exportObj": false,
+		"eta": 0.85,
+		"MaxOptIter": 1e3,
+		"tol": 2e-2,
+		"k_rho": 1e4,
+		"viscosity": 0.25,
+		"da_ratio": 1.005,
+		"use_gn": false,
+		"use_div": true
+	},
+
+
+	"FluidBlocks":
+	[
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/cylinder.obj",
+			"translation": [5.0, 5.0, 5.0],
+			"scale": [0.9, 0.9, 0.9],
+			"velocity": [0.0, 0.0, 0.0],
+			"density": 1000.0,
+			"color": [50, 100, 200]
+		}
+	],
+
+	"StaticObjects":
+	[
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/injector_body.obj",
+			"translation": [5, 5, 5],
+			"scale": [1.0, 1.0, 1.0],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 90
+		},
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/injector_piston.obj",
+			"translation": [5, 8.5, 5],
+			"scale": [1, 1, 1],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0
+		},
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/open_box.obj",
+			"translation": [5, 2.5, 5],
+			"scale": [2, 2, 2],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0
+		}
+	],
+
+	"DynamicObjects":
+	[
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/plane_3.obj",
+			"translation": [5, 0, 5],
+			"scale": [1, 1, 1],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0
+		}
+	]
+}
