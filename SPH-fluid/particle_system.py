@@ -153,7 +153,9 @@ class ParticleSystem:
         # print(faces.shape)
         if self.num_static_vertices > 0:
             self.x_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
+            self.dx_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
             self.x_st.from_numpy(vertices)
+            self.dx_st.fill(0.0)
             ###################################################################
             # only available to scenes that have moving static mesh
             self.x0_st = ti.Vector.field(self.dim, float, shape=self.num_static_vertices)
