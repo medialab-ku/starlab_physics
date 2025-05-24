@@ -3,7 +3,7 @@
 	{
         "domainStart": [0.0, 0.0, 0.0],
         "domainEnd": [20, 30.0, 20],
-		"particleRadius": 0.033,
+		"particleRadius": 0.03,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000.0,
 		"simulationMethod": 5,
@@ -17,7 +17,7 @@
 		"exportObj": false,
 		"eta": 0.85,
 		"MaxOptIter": 1e3,
-		"tol": 2e-2,
+		"tol": 3e-2,
 		"k_rho": 1e4,
 		"viscosity": 0.15,
 		"da_ratio": 1.001,

@@ -14,7 +14,15 @@
 		"boundaryHandlingMethod": 0,
 		"exportFrame": false,
 		"exportPly": false,
-		"exportObj": false
+		"exportObj": false,
+		"eta": 0.85,
+		"MaxOptIter": 1e3,
+		"tol": 3e-2,
+		"k_rho": 1e4,
+		"viscosity": 0.15,
+		"da_ratio": 1.001,
+		"use_gn": false,
+		"use_div": true
 	},
 	"RigidBodies": [
 		{
@@ -32,6 +40,7 @@
 	],
 	"FluidBlocks": [
 		{
+			"geometryFile": "",
             "objectId": 0,
 			"start": [0.1, 0.1, 0.5],
 			"end": [1.2, 2.9, 1.6],
@@ -40,6 +49,28 @@
 			"velocity": [0.0, -1.0, 0.0],
 			"density": 1000.0,
 			"color": [50, 100, 200]
+		}
+	],
+	"StaticObjects":
+	[
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/cube.obj",
+			"translation": [0, 0, 0],
+			"scale": [0.01, 0.01, 0.01],
+			"rotationAxis": [0, 1, 0],
+			"rotationAngle": 0
+		}
+	],
+	"DynamicObjects":
+	[
+		{
+			"objectId": 0,
+			"geometryFile": "./data/models/square.obj",
+			"translation": [0, 0, 0],
+			"scale": [0.01, 0.01, 0.01],
+			"rotationAxis": [0, 0, 1],
+			"rotationAngle": 0
 		}
 	]
 }

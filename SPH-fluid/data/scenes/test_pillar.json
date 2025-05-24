@@ -29,6 +29,7 @@
 	[
 		{
 			"objectId": 0,
+			"geometryFile": "",
 			"start": [2.03, 3.00, 2.03],
 			"end": [3.97, 9.00, 3.97],
 			"translation": [0.0, 0.0, 0.0],

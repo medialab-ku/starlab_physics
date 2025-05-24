@@ -51,23 +51,22 @@ import numpy as np
 # plt.show()
 
 file_paths = [
-    "./data/results/20250520_144315.json",
-    "./data/results/20250520_150616.json",
-    "./data/results/20250520_152134.json",
-    "./data/results/20250520_153718.json",
-    "./data/results/20250520_155657.json",
+    # "./data/results/20250520_144315.json",
+    # "./data/results/20250520_150616.json",
+    # "./data/results/20250520_152134.json",
+    # "./data/results/20250520_153718.json",
+    # "./data/results/20250520_155657.json",
+    "./data/results/20250524_141522.json"
 ]
 
 density_file_paths = [
 
-    "./data/results/20250523_053508.json",
-    "./data/results/20250523_051402.json",
-    "./data/results/20250523_051957.json",
-
+        # "./data/results/20250523_053508.json",
+        # "./data/results/20250523_051402.json",
+        # "./data/results/20250523_051957.json",
+    "./data/results/20250524_141522.json"
 ]
 bar_labels = [os.path.basename(p).split(".")[0] for p in file_paths]
-
-N_SAMPLES = 5000
 
 
 def load_pcg_iter(json_path):
@@ -76,19 +75,23 @@ def load_pcg_iter(json_path):
     pcg_iter = data["residual_data"]["pcg_iter"]
     return pcg_iter
 
-
-
 def load_opt_iter(json_path):
     with open(json_path, "r") as f:
         data = json.load(f)
-    pcg_iter = data["residual_data"]["opt_iter"]
-    return pcg_iter
+    opt_iter = data["residual_data"]["opt_iter"]
+    return opt_iter
+
+def load_elapesd_time(json_path):
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    elapesd_time = data["elapsed_data"]["elapsed_time"]
+    return elapesd_time
 
 def load_density(json_path):
     with open(json_path, "r") as f:
         data = json.load(f)
-    pcg_iter = data["avg_density"]["density"]
-    return pcg_iter
+    density = data["avg_density"]["density"]
+    return density
 
 
 def truncated_mean(seq, limit):
@@ -98,11 +101,20 @@ def truncated_mean(seq, limit):
     return sum(seq[:k]) / k
     # return max(seq[:k])
 
+opt_iter = load_opt_iter(file_paths[0])
+N_SAMPLES = len(opt_iter)
 
-means = [
-    truncated_mean(load_pcg_iter(path), N_SAMPLES)
-    for path in file_paths
-]
+means = truncated_mean(opt_iter, N_SAMPLES)
+min_value = min(opt_iter)
+max_value = max(opt_iter)
+print("Avg. Optimization iteration:", means, "/", "Min iteration:", min_value, "/", "Max iteration:", max_value)
+
+elapsed_time = load_elapesd_time(file_paths[0])
+N_SAMPLES = len(elapsed_time)
+means = truncated_mean(elapsed_time, N_SAMPLES)
+min_value = min(elapsed_time)
+max_value = max(elapsed_time)
+print("Avg. elapsed time:", means, "/", "Min elapsed time:", min_value, "/", "Max elapsed time:", max_value)
 
 plt.rcParams.update(
     {
@@ -117,7 +129,7 @@ plt.figure(figsize=(6, 3))
 
 #
 x0 = np.array(load_pcg_iter(density_file_paths[0]))
-y0 =  np.array(load_opt_iter(density_file_paths[0]))
+y0 = np.array(load_opt_iter(density_file_paths[0]))
 
 z = x0 / y0
 # x2 = load_pcg_iter(file_paths[2])[16::16]
@@ -129,7 +141,7 @@ plt.plot(z)
 # plt.plot(x4, label="$\\eta=0.5$", linestyle='-')
 # plt.legend()
 # plt.plot(x_2, label="w/ filtering", linestyle='-', linewidth=1)
-plt.ylabel(r"Avg. PCG iteration", fontsize=15, labelpad=10)
+plt.ylabel(r"Avg. Optimization iteration", fontsize=15, labelpad=10)
 plt.xlabel("Frame", fontsize=15, labelpad=10)
 # plt.legend()
 

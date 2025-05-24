@@ -88,7 +88,7 @@ class ParticleSystem:
         self.object_collection = dict()
         self.object_id_rigid_body = set()
 
-        voxel_size = 0.09
+        voxel_size = 0.085
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
         fluid_blocks = self.cfg.get_fluid_blocks()
@@ -245,8 +245,8 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
                     # if (0.0 == vertices[j, 1]):
 
-                    if vertices[j, 1] > 17.0:
-                        self.fixed_vids.append(j)
+                    # if vertices[j, 1] > 17.0:
+                    self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
             self.fixed_vids_field = ti.field(dtype=int, shape=self.fixed_vids_np.shape[0])

@@ -122,9 +122,9 @@ if __name__ == "__main__":
     scene = ti.ui.Scene()
     scene.ambient_light((0.5, 0.5, 0.5))
     camera = ti.ui.Camera()
-    camera.position(-5.0, 4.0, 2.0)
+    camera.position(-5.0, 3.0, 2.0)
     camera.up(0.0, 1.0, 0.0)
-    camera.lookat(3.0, 4.0, 5.0)
+    camera.lookat(0.0, 0.0, 0.0)
     camera.fov(70)
     scene.set_camera(camera)
 
@@ -242,7 +242,7 @@ if __name__ == "__main__":
                 #     # ps.x_st[idx].y = ps.x0_st[idx].y + 0.2 * np.sin(np.pi * frame_cnt * solver.dt[None])
                 #     if ps.x_st[idx].y > 1.02 * ps.x_st[lower_plane[0]].y:
                 #         ps.x_st[idx].y -= 3.5 * solver.dt[None]
-                ps.update_static_mesh_pos(1.0, solver.dt[None])
+                ps.update_static_mesh_pos(0.4, solver.dt[None])
 
             start_time = time.time()
 
@@ -294,7 +294,7 @@ if __name__ == "__main__":
             canvas.scene(scene)
             # solver.LBVH_dy.draw_bvh_aabb_test(scene, 0)
             
-            solver.LBVH_dy.draw_bvh_aabb_test(scene,  solver.LBVH_dy.num_leafs)
+            # solver.LBVH_dy.draw_bvh_aabb_test(scene,  solver.LBVH_dy.num_leafs)
             # print("num leafs: ", solver.LBVH_ee.num_leafs)
             if ps.num_static_vertices > 0:
                 # scene.mesh(ps.x_st, ps.faces_st, color=(1.5, 1.0, 0.0))
