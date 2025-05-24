@@ -235,7 +235,12 @@ if __name__ == "__main__":
             start_time = time.time()
 
             for i in range(substeps):
+
+                start_time = time.time()
                 optIter, pcgIter_total, log_debug = solver.step()
+                end_time = time.time()
+
+                print("end_time - start_time", end_time - start_time)
 
                 if optIter == solver.maxOptIter:
                     print("failed to converge")
@@ -280,8 +285,8 @@ if __name__ == "__main__":
 
             if ps.num_static_vertices > 0:
                 # scene.mesh(ps.x_st, ps.faces_st, color=(1.5, 1.0, 0.0))
-                # scene.mesh(ps.x_st, ps.faces_st, color=(1.0, 1.0, 1.0), show_wireframe= True)
-                scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
+                scene.mesh(ps.x_st, ps.faces_st, color=(1.0, 1.0, 1.0), show_wireframe= True)
+                # scene.lines(vertices=ps.x_st, indices=ps.edges_st, color=(1.0, 1.0, 1.0), width=1.0)
                 # scene.lines(vertices=solver.LBVH.pos, indices=solver.LBVH.code_edge, color=(1.0, 0.0, 0.0), width=1.0)
 
         if output_frames:
