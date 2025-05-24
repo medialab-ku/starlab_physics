@@ -88,7 +88,7 @@ class ParticleSystem:
         self.object_collection = dict()
         self.object_id_rigid_body = set()
 
-        voxel_size = 0.05
+        voxel_size = 0.09
         #========== Compute number of particles ==========#
         #### Process Fluid Blocks ####
         fluid_blocks = self.cfg.get_fluid_blocks()
@@ -245,7 +245,7 @@ class ParticleSystem:
                     #     6 - epsilon < vertices[j, 2] < 6 + epsilon):  # the z coord condition
                     # if (0.0 == vertices[j, 1]):
 
-                    if vertices[j, 1] > 16.95:
+                    if vertices[j, 1] > 17.0:
                         self.fixed_vids.append(j)
 
             self.fixed_vids_np = np.array(self.fixed_vids)
@@ -539,7 +539,7 @@ class ParticleSystem:
         #         ps.x_st[idx].y = ps.x_st[idx].y - 0.01 * frame_cnt * solver.dt[None]
 
         for idx in range(self.num_static_vertices_prefix_sum[1], self.num_static_vertices_prefix_sum[2]):
-            if self.x0_st[idx].y - self.x_st[idx].y <= 4:
+            if self.x0_st[idx].y - self.x_st[idx].y <= 7:
                 self.x_st[idx].y -= vel * dt
 
 
@@ -608,7 +608,7 @@ class ParticleSystem:
 
         num_edges = edges.shape[0] // 2
         mass.fill(0.0)
-        density = 1e2
+        density = 1e1
         min_val = 1e5
         for e in range(num_edges):
             v0, v1 = edges[2 * e + 0], edges[2 * e + 1]
@@ -798,7 +798,7 @@ class ParticleSystem:
         # https://carmencincotti.com/2022-09-05/the-most-performant-bending-constraint-of-xpbd/
         self.bending_constraint_count, neighbor_set = self.findTriNeighbors()
         bending_indices_np = self.getBendingPair(self.bending_constraint_count, neighbor_set)
-        # print("# bending: ", self.bending_constraint_count)
+        print("# bending: ", self.bending_constraint_count)
         ti.root.dense(ti.i, bending_indices_np.shape[0] * 2).place(self.edges_bd)
         ti.root.dense(ti.i, bending_indices_np.shape[0]).place(self.l0_bd)
 
@@ -825,7 +825,7 @@ class ParticleSystem:
         # print(self.fid_np.shape)
         num_f = np.rint(self.fid_np.shape[0]).astype(int)
         edgeTable = np.zeros((num_f * 3, self.fid_np.shape[1]), dtype=int)
-        # print(edgeTable.shape)
+        print(edgeTable.shape)
 
         for f in range(self.fid_np.shape[0]):
             eT = np.zeros((3, 3))

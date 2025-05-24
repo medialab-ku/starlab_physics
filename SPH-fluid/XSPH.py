@@ -436,7 +436,7 @@ class XSPHSolver(SPHBase):
             self.ps.diagH_dy[vi] += k_fix * I_3x3
 
     @ti.kernel
-    def compute_elasticity_energy(self, x:ti.template(), k:float, k_b:float):
+    def compute_elasticity_energy(self, x:ti.template(), k:float, k_b:float) -> float:
         
         value = 0.0 
         coeff = k * self.dt[None] * self.dt[None]
@@ -1321,12 +1321,12 @@ class XSPHSolver(SPHBase):
         pad = 1.2 * self.ps.particle_diameter
 
 
-        Kappa = 1e6 * self.dt[None] * self.dt[None]
+        Kappa = 1e5 * self.dt[None] * self.dt[None]
         log_debug = []
         h = 2.0 * self.ps.particle_diameter
         k = self.k_rho * self.dt[None] * self.dt[None] * (h ** 6)
-        k_el = 1e6
-        k_b = 1e6
+        k_el = 1e5
+        k_b = 1e3
 
 
         if self.use_gn:
@@ -1335,7 +1335,7 @@ class XSPHSolver(SPHBase):
 
         self.precompute_viscosity(self.ps.xOld, self.viscosity, h)
         self.LBVH.build(self.ps.x_st, self.ps.dx_st,self.ps.faces_st, pad=pad)
-        dHat_self = 3.5 * self.ps.l_min 
+        dHat_self = 0.03
         
         # print("dHat_self", dHat_self)
         for _ in range(self.maxOptIter):
@@ -1361,7 +1361,7 @@ class XSPHSolver(SPHBase):
             self.compute_collision_dynamic(Kappa, pad=pad, Kappa_self=2.0 * Kappa, dHat_self=dHat_self)
             self.compute_collision_static(Kappa, pad)
             self.compute_elasticity(k_el, k_b)
-            E_k += self.compute_elasticity_dy(self.ps.x, k_el, k_b)
+            E_k += self.compute_elasticity_energy(self.ps.x, k_el, k_b)
 
             # pcgIter = 0
             if self.use_gn:
